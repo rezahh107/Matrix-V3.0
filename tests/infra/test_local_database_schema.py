@@ -1,5 +1,6 @@
 # file: tests/infra/test_local_database_schema.py
 import sqlite3
+from contextlib import contextmanager
 from pathlib import Path
 
 import pandas as pd
@@ -23,6 +24,28 @@ def test_schema_meta_initialized(tmp_path):
     assert row[1] == "1.0.3"
     assert row[2] == "1.0.2"
     assert isinstance(row[3], str) and row[3]
+
+
+def test_initialize_once_uses_context_manager(tmp_path, monkeypatch):
+    db = LocalDatabase(tmp_path / "ctx.sqlite")
+    calls = {"enter": 0, "exit": 0}
+
+    @contextmanager
+    def fake_open_connection():
+        calls["enter"] += 1
+        conn = sqlite3.connect(db.path)
+        try:
+            yield conn
+        finally:
+            calls["exit"] += 1
+            conn.close()
+
+    monkeypatch.setattr(db, "_open_connection", fake_open_connection)
+
+    db._initialize_once()
+
+    assert calls["enter"] == 1
+    assert calls["exit"] == 1
 
 
 def test_schema_version_mismatch_raises(tmp_path):

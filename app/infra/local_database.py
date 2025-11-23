@@ -155,33 +155,33 @@ class LocalDatabase:
         """
 
         with self._open_connection() as conn:
-        self._ensure_schema_meta_table(conn)
-        existing_version = self._get_schema_version(conn)
-        if existing_version is None:
-            self._ensure_schema(conn)
-            self._ensure_schema_meta_row(conn, version=_SCHEMA_VERSION)
-            # NEW: keep year meta support from main
-            self._ensure_year_meta(conn)
-        elif existing_version < 2:
-            raise SchemaVersionMismatchError(
-                expected_version=_SCHEMA_VERSION,
-                actual_version=existing_version,
-                message="نسخهٔ Schema بسیار قدیمی است و پشتیبانی نمی‌شود؛ پایگاه داده را بازسازی کنید.",
-            )
-        elif existing_version < _SCHEMA_VERSION:
-            self._migrate_schema(conn, from_version=existing_version)
-        elif existing_version > _SCHEMA_VERSION:
-            raise SchemaVersionMismatchError(
-                expected_version=_SCHEMA_VERSION,
-                actual_version=existing_version,
-                message="نسخهٔ Schema پایگاه داده از نسخهٔ برنامه جدیدتر است.",
-            )
+            self._ensure_schema_meta_table(conn)
+            existing_version = self._get_schema_version(conn)
+            if existing_version is None:
+                self._ensure_schema(conn)
+                self._ensure_schema_meta_row(conn, version=_SCHEMA_VERSION)
+                # NEW: keep year meta support from main
+                self._ensure_year_meta(conn)
+            elif existing_version < 2:
+                raise SchemaVersionMismatchError(
+                    expected_version=_SCHEMA_VERSION,
+                    actual_version=existing_version,
+                    message="نسخهٔ Schema بسیار قدیمی است و پشتیبانی نمی‌شود؛ پایگاه داده را بازسازی کنید.",
+                )
+            elif existing_version < _SCHEMA_VERSION:
+                self._migrate_schema(conn, from_version=existing_version)
+            elif existing_version > _SCHEMA_VERSION:
+                raise SchemaVersionMismatchError(
+                    expected_version=_SCHEMA_VERSION,
+                    actual_version=existing_version,
+                    message="نسخهٔ Schema پایگاه داده از نسخهٔ برنامه جدیدتر است.",
+                )
 
-        self._ensure_schema(conn)
-        # NEW: ensure year meta also after migrations/schema ensure
-        self._ensure_year_meta(conn)
-        self._validate_schema_version(conn)
-        conn.commit()
+            self._ensure_schema(conn)
+            # NEW: ensure year meta also after migrations/schema ensure
+            self._ensure_year_meta(conn)
+            self._validate_schema_version(conn)
+            conn.commit()
 
     def _recover_corrupt_database(self) -> None:
         """پشتیبان‌گیری از فایل خراب و بازسازی پایگاه داده.
