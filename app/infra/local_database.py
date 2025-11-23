@@ -111,37 +111,85 @@ class LocalDatabase:
     def initialize(self) -> None:
         """ایجاد Schema و اعتبارسنجی نسخه به‌صورت idempotent."""
 
-        with self._open_connection() as conn:
-            try:
-                self._ensure_schema_meta_table(conn)
-                existing_version = self._get_schema_version(conn)
-                if existing_version is None:
-                    self._ensure_schema(conn)
-                    self._ensure_schema_meta_row(conn, version=_SCHEMA_VERSION)
-                    self._ensure_year_meta(conn)
-                elif existing_version < 2:
-                    raise SchemaVersionMismatchError(
-                        expected_version=_SCHEMA_VERSION,
-                        actual_version=existing_version,
-                        message="نسخهٔ Schema بسیار قدیمی است و پشتیبانی نمی‌شود؛ پایگاه داده را بازسازی کنید.",
-                    )
-                elif existing_version < _SCHEMA_VERSION:
-                    self._migrate_schema(conn, from_version=existing_version)
-                elif existing_version > _SCHEMA_VERSION:
-                    raise SchemaVersionMismatchError(
-                        expected_version=_SCHEMA_VERSION,
-                        actual_version=existing_version,
-                        message="نسخهٔ Schema پایگاه داده از نسخهٔ برنامه جدیدتر است.",
-                    )
-                self._ensure_schema(conn)
-                self._ensure_year_meta(conn)
-                self._validate_schema_version(conn)
-                conn.commit()
-            except SchemaVersionMismatchError:
-                raise
-            except sqlite3.Error as exc:  # pragma: no cover - خطاهای غیرمنتظره
-                raise DatabaseOperationError("خطا در آماده‌سازی پایگاه داده.") from exc
+        try:
+            self._initialize_once()
+        except SchemaVersionMismatchError:
+            raise
+        except sqlite3.DatabaseError as exc:  # pragma: no cover - خطای پایگاه دادهٔ خراب
+            if self._is_corruption_error(exc):
+                logger.warning(
+                    "Local DB appears corrupted at %s; backing up and recreating", self.path
+                )
+                self._recover_corrupt_database()
+                return
+            raise DatabaseOperationError("خطا در آماده‌سازی پایگاه داده.") from exc
+        except sqlite3.Error as exc:  # pragma: no cover - خطاهای غیرمنتظره
+            raise DatabaseOperationError("خطا در آماده‌سازی پایگاه داده.") from exc
         logger.debug("Local DB schema ensured at %s", self.path)
+
+    def _initialize_once(self) -> None:
+        """اجرای یک‌بارهٔ مسیر ساخت/مهاجرت Schema بدون بازیابی.
+
+        این تابع یک اتصال جدید باز می‌کند، نسخهٔ Schema را می‌سنجد، در صورت
+        نیاز مهاجرت می‌دهد و سپس اعتبارسنجی می‌کند. وظیفهٔ بازیابی پایگاه
+        دادهٔ خراب بر عهدهٔ ``initialize`` است.
+        """
+
+        with self._open_connection() as conn:
+        self._ensure_schema_meta_table(conn)
+        existing_version = self._get_schema_version(conn)
+        if existing_version is None:
+            self._ensure_schema(conn)
+            self._ensure_schema_meta_row(conn, version=_SCHEMA_VERSION)
+            # NEW: keep year meta support from main
+            self._ensure_year_meta(conn)
+        elif existing_version < 2:
+            raise SchemaVersionMismatchError(
+                expected_version=_SCHEMA_VERSION,
+                actual_version=existing_version,
+                message="نسخهٔ Schema بسیار قدیمی است و پشتیبانی نمی‌شود؛ پایگاه داده را بازسازی کنید.",
+            )
+        elif existing_version < _SCHEMA_VERSION:
+            self._migrate_schema(conn, from_version=existing_version)
+        elif existing_version > _SCHEMA_VERSION:
+            raise SchemaVersionMismatchError(
+                expected_version=_SCHEMA_VERSION,
+                actual_version=existing_version,
+                message="نسخهٔ Schema پایگاه داده از نسخهٔ برنامه جدیدتر است.",
+            )
+
+        self._ensure_schema(conn)
+        # NEW: ensure year meta also after migrations/schema ensure
+        self._ensure_year_meta(conn)
+        self._validate_schema_version(conn)
+        conn.commit()
+
+    def _recover_corrupt_database(self) -> None:
+        """پشتیبان‌گیری از فایل خراب و بازسازی پایگاه داده.
+
+        - اگر فایل فعلی وجود داشته باشد، با پسوند ``.corrupt`` بکاپ می‌شود
+          تا اطلاعات قبلی از دست نرود.
+        - سپس مسیر فایل پاک و ``_initialize_once`` دوباره اجرا می‌شود تا
+          Schema سالم ساخته شود.
+        """
+        if self.path.exists():
+            backup = self.path.with_suffix(self.path.suffix + ".corrupt")
+            try:
+                self.path.replace(backup)
+            except OSError:
+                logger.exception("Failed to backup corrupt DB at %s", self.path)
+                raise DatabaseOperationError("خطا در آماده‌سازی پایگاه داده.")
+        self._initialize_once()
+
+    @staticmethod
+    def _is_corruption_error(exc: sqlite3.Error) -> bool:
+        """تشخیص پیام‌های خطای مرتبط با خراب بودن فایل SQLite."""
+        message = str(exc).lower()
+        return (
+            "file is not a database" in message
+            or "malformed" in message
+        )
+
 
     def insert_run(self, record: RunRecord) -> int:
         """درج ردیف جدید در جدول ``runs`` و بازگرداندن شناسه."""
