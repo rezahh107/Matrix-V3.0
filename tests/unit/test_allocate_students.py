@@ -444,11 +444,9 @@ def test_canonicalize_pool_frame_reports_join_key_duplicates(
     summary = normalized.attrs[POOL_DUPLICATE_SUMMARY_ATTR]
 
     assert not duplicate_report.empty
-    assert duplicate_report["کد کارمندی پشتیبان"].tolist() == [
-        "EMP-001",
-        "EMP-001",
-        "EMP-002",
-    ]
+    assert duplicate_report["کد کارمندی پشتیبان"].tolist() == ["EMP-001", "EMP-001"]
+    assert summary["duplicate_scope"] == "per_mentor"
+    assert normalized.attrs.get("pool_duplicate_scope") == "per_mentor"
     assert stats.join_key_duplicates == len(duplicate_report)
     assert summary["total"] == len(duplicate_report)
     assert isinstance(summary["sample"], list)
@@ -462,9 +460,30 @@ def test_canonicalize_pool_frame_allows_distinct_mentors_same_join_keys(
     normalized = canonicalize_pool_frame(_base_pool, policy=policy, sanitize_pool=False)
     duplicate_report = normalized.attrs[POOL_JOIN_KEY_DUPLICATES_ATTR]
 
+    assert duplicate_report.empty
+    assert normalized.attrs["pool_duplicate_scope"] == "per_mentor"
+    summary = normalized.attrs[POOL_DUPLICATE_SUMMARY_ATTR]
+    assert summary["duplicate_scope"] == "per_mentor"
+    assert summary["total"] == 0
+
+
+def test_canonicalize_pool_frame_reports_key_level_duplicates_when_requested(
+    _base_pool: pd.DataFrame,
+) -> None:
+    policy = load_policy()
+
+    normalized = canonicalize_pool_frame(
+        _base_pool, policy=policy, sanitize_pool=False, include_distinct_mentor_duplicates=True
+    )
+    duplicate_report = normalized.attrs[POOL_JOIN_KEY_DUPLICATES_ATTR]
+    summary = normalized.attrs[POOL_DUPLICATE_SUMMARY_ATTR]
+
     assert not duplicate_report.empty
     assert duplicate_report["کد کارمندی پشتیبان"].tolist() == ["EMP-001", "EMP-002"]
     assert duplicate_report["duplicate_group_size"].dropna().unique().tolist() == [2]
+    assert duplicate_report.attrs.get("duplicate_scope") == "per_key"
+    assert normalized.attrs.get("pool_duplicate_scope") == "per_key"
+    assert summary["duplicate_scope"] == "per_key"
 
 
 def test_build_join_key_duplicate_report_counts_only_repeated_mentor_rows(
@@ -500,12 +519,74 @@ def test_build_join_key_duplicate_report_counts_only_repeated_mentor_rows(
         "کد کارمندی پشتیبان": "EMP-999",
     }
 
-    report = _build_join_key_duplicate_report(repeated, join_keys, mentor_column)
+    report = _build_join_key_duplicate_report(
+        repeated, join_keys, mentor_column, include_distinct_mentors=False
+    )
 
     assert not report.empty
-    assert set(report[mentor_column].unique()) == {"EMP-001", "EMP-002", "EMP-999"}
-    assert report["duplicate_group_size"].dropna().unique().tolist() == [6]
+    assert set(report[mentor_column].unique()) == {"EMP-001", "EMP-002"}
+    assert sorted(report["duplicate_group_size"].dropna().unique().tolist()) == [2, 3]
     assert set(report.columns) == set(join_keys + [mentor_column, "duplicate_group_size"])
+
+
+def test_build_join_key_duplicate_report_handles_multiple_groups_per_mode() -> None:
+    policy = load_policy()
+    join_keys = policy.join_keys
+    mentor_column = "کد کارمندی پشتیبان"
+    rows = [
+        {
+            "کدرشته": 1101,
+            "جنسیت": 0,
+            "دانش آموز فارغ": 0,
+            "مرکز گلستان صدرا": 1,
+            "مالی حکمت بنیاد": 0,
+            "کد مدرسه": 4001,
+            mentor_column: "EMP-A",
+        },
+        {
+            "کدرشته": 1101,
+            "جنسیت": 0,
+            "دانش آموز فارغ": 0,
+            "مرکز گلستان صدرا": 1,
+            "مالی حکمت بنیاد": 0,
+            "کد مدرسه": 4001,
+            mentor_column: "EMP-B",
+        },
+        {
+            "کدرشته": 2201,
+            "جنسیت": 1,
+            "دانش آموز فارغ": 0,
+            "مرکز گلستان صدرا": 2,
+            "مالی حکمت بنیاد": 0,
+            "کد مدرسه": 5001,
+            mentor_column: "EMP-C",
+        },
+        {
+            "کدرشته": 2201,
+            "جنسیت": 1,
+            "دانش آموز فارغ": 0,
+            "مرکز گلستان صدرا": 2,
+            "مالی حکمت بنیاد": 0,
+            "کد مدرسه": 5001,
+            mentor_column: "EMP-C",
+        },
+    ]
+    frame = pd.DataFrame(rows)
+
+    per_mentor = _build_join_key_duplicate_report(frame, join_keys, mentor_column)
+    per_key = _build_join_key_duplicate_report(
+        frame, join_keys, mentor_column, include_distinct_mentors=True
+    )
+
+    assert per_mentor[mentor_column].tolist() == ["EMP-C", "EMP-C"]
+    assert per_mentor["duplicate_group_size"].dropna().unique().tolist() == [2]
+
+    assert per_key[mentor_column].tolist() == ["EMP-A", "EMP-B", "EMP-C", "EMP-C"]
+    group_sizes = per_key.groupby(join_keys, sort=False)["duplicate_group_size"].first()
+    assert group_sizes.to_dict() == {
+        tuple(rows[0][k] for k in join_keys): 2,
+        tuple(rows[2][k] for k in join_keys): 2,
+    }
 
 
 def test_build_join_key_duplicate_report_missing_columns_returns_empty() -> None:
@@ -530,9 +611,13 @@ def test_build_join_key_duplicate_report_missing_columns_returns_empty() -> None
     )
 
     report = _build_join_key_duplicate_report(frame, join_keys, mentor_column)
+    with_distinct = _build_join_key_duplicate_report(
+        frame, join_keys, mentor_column, include_distinct_mentors=True
+    )
 
-    assert report.empty
-    assert report.columns.tolist() == join_keys + [mentor_column, "duplicate_group_size"]
+    for candidate in (report, with_distinct):
+        assert candidate.empty
+        assert candidate.columns.tolist() == join_keys + [mentor_column, "duplicate_group_size"]
 
 
 def test_sanitize_pool_records_virtual_and_capacity_stats() -> None:
