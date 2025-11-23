@@ -677,6 +677,46 @@ def test_allocate_batch_logs_include_alias_stats(_base_pool: pd.DataFrame) -> No
     assert logs["alias_unmatched"].unique().tolist() == [0]
 
 
+def test_canonicalize_allocation_frames_accepts_english_join_keys() -> None:
+    policy = load_policy()
+    students = _single_student()
+    pool = pd.DataFrame(
+        {
+            "mentor_name": ["زهرا"],
+            "mentor_id": ["EMP-01"],
+            "group_code": [1201],
+            "gender": [1],
+            "graduation_status": [0],
+            "center": [1],
+            "finance": [0],
+            "school_code": [3581],
+            "remaining_capacity": [2],
+        }
+    )
+
+    students_canon, pool_canon = canonicalize_allocation_frames(
+        students,
+        pool,
+        policy=policy,
+        sanitize_pool=True,
+        pool_source="inspactor",
+    )
+
+    expected_values = {
+        "کدرشته": 1201,
+        "جنسیت": 1,
+        "دانش آموز فارغ": 0,
+        "مرکز گلستان صدرا": 1,
+        "مالی حکمت بنیاد": 0,
+        "کد مدرسه": 3581,
+    }
+
+    for join_key, expected in expected_values.items():
+        assert join_key in pool_canon.columns
+        assert pool_canon[join_key].tolist() == [expected]
+    assert students_canon is not None
+
+
 def test_allocate_student_handles_empty_ranking(
     monkeypatch: pytest.MonkeyPatch, _base_pool: pd.DataFrame
 ) -> None:
