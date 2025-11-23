@@ -1410,13 +1410,15 @@ def _run_build_matrix(args: argparse.Namespace, policy: PolicyConfig, progress: 
         progress(
             65,
             (
-                "❌ join-key duplicates exceed threshold: "
+                "❌ join-key duplicates (same mentor per 6-key) exceed threshold: "
                 f"rows={duplicate_rows} threshold={duplicate_threshold}"
             ),
         )
         message = (
-            "تعداد ردیف‌های دارای کلید تکراری ({rows}) از آستانهٔ مجاز "
-            "({threshold}) بیشتر است."
+            "تعداد ردیف‌های دارای کلید تکراری برای همان پشتیبان ({rows}) از "
+            "آستانهٔ مجاز ({threshold}) بیشتر است. هر پشتیبان باید حداکثر یک"
+            " بار روی هر ترکیب ۶ کلید ظاهر شود؛ وجود پشتیبان‌های متفاوت روی"
+            " یک کلید مجاز است."
         ).format(rows=duplicate_rows, threshold=duplicate_threshold)
         if preview:
             message += f" نمونه: {preview}"
