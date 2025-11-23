@@ -1935,7 +1935,9 @@ def build_matrix(
         pool_source="inspactor",
         require_join_keys=False,
         preserve_columns=school_name_columns,
-        include_distinct_mentor_duplicates=True,
+        # مطابق سیاست، تنها تکرار یک پشتیبان روی همان شش‌کلید ممنوع است؛
+        # حضور پشتیبان‌های متفاوت روی یک کلید مجاز است.
+        include_distinct_mentor_duplicates=False,
     )
     pool_stats = insp_df.attrs.get("pool_canonicalization_stats")
     alias_autofill = int(getattr(pool_stats, "alias_autofill", 0) or 0) if pool_stats else 0
