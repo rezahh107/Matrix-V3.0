@@ -96,14 +96,20 @@ def test_qa_snapshot_round_trip(tmp_path) -> None:
         ]
     )
 
+    qa_extras = {"sample": pd.DataFrame({"x": [1, 2]})}
     db.insert_qa_snapshot(
-        run_id=run_id, qa_summary_df=qa_summary_df, qa_details_df=qa_details_df
+        run_id=run_id,
+        qa_summary_df=qa_summary_df,
+        qa_details_df=qa_details_df,
+        qa_extras=qa_extras,
     )
 
-    restored_summary, restored_details = db.fetch_qa_snapshot(run_id)
+    restored_summary, restored_details, restored_extras = db.fetch_qa_snapshot(run_id)
     assert restored_summary is not None and restored_details is not None
     assert_frame_equal(restored_summary.reset_index(drop=True), qa_summary_df.reset_index(drop=True))
     assert_frame_equal(restored_details.reset_index(drop=True), qa_details_df.reset_index(drop=True))
+    assert "sample" in restored_extras
+    assert_frame_equal(restored_extras["sample"].reset_index(drop=True), qa_extras["sample"].reset_index(drop=True))
 
     with db.connect() as conn:
         version = conn.execute("SELECT schema_version FROM schema_meta WHERE id = 1").fetchone()[0]
@@ -117,7 +123,7 @@ def test_fetch_returns_none_for_missing_rows(tmp_path) -> None:
     db = LocalDatabase(tmp_path / "snap.db")
     db.initialize()
     assert db.fetch_trace_snapshot(999) == (None, None, None)
-    assert db.fetch_qa_snapshot(999) == (None, None)
+    assert db.fetch_qa_snapshot(999) == (None, None, {})
 
 
 def test_deserialize_error_is_handled(tmp_path, caplog) -> None:

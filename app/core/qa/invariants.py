@@ -58,11 +58,12 @@ class QaRuleResult:
     violations: list[QaViolation]
 
 
-@dataclass(frozen=True)
+@dataclass
 class QaReport:
     """گزارش نهایی QA برای یک نوبت ساخت/تخصیص."""
 
     results: list[QaRuleResult]
+    extras: Mapping[str, pd.DataFrame] | None = None
 
     @property
     def violations(self) -> list[QaViolation]:

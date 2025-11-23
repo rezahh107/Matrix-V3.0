@@ -119,15 +119,23 @@ def _make_unique_columns(columns: Sequence[str]) -> list[str]:
 
 
 def _empty_join_key_report(
-    join_keys: Sequence[str], mentor_column: str
+    join_keys: Sequence[str], mentor_column: str, pool_source: str | None
 ) -> pd.DataFrame:
-    """ساخت دیتافریم تهی با ستون‌های کلید شش‌تایی و شناسهٔ پشتیبان."""
+    """ساخت دیتافریم تهی برای گزارش تکرار کلید شش‌تایی.
+
+    ستون‌ها شامل شش کلید، شناسهٔ پشتیبان، اندازهٔ گروه تکراری، ایندکس
+    منبع و منبع استخر است تا سازگاری schema با خروجی پرشده حفظ شود.
+    """
 
     data: dict[str, pd.Series] = {
         column: pd.Series(dtype="Int64") for column in join_keys
     }
     data[mentor_column] = pd.Series(dtype="string")
     data["duplicate_group_size"] = pd.Series(dtype="Int64")
+    data["pool_row_index"] = pd.Series(dtype="Int64")
+    data["pool_source"] = pd.Series(dtype="string")
+    if pool_source is not None:
+        data["pool_source"] = pd.Series([pool_source], dtype="string").iloc[:0]
     return pd.DataFrame(data)
 
 
@@ -137,6 +145,7 @@ def _build_join_key_duplicate_report(
     mentor_column: str,
     *,
     include_distinct_mentors: bool = False,
+    pool_source: str | None = None,
 ) -> pd.DataFrame:
     """گزارش ردیف‌های تکراری بر اساس کلید شش‌تایی با دو حالت تفکیک‌پذیر.
 
@@ -151,7 +160,8 @@ def _build_join_key_duplicate_report(
             می‌شود (حالت «per_key» برای Inspactor/matrix).
 
     بازگشت:
-        دیتافریم شامل ستون‌های ``join_keys``، ستون پشتیبان و ``duplicate_group_size``.
+        دیتافریم شامل ستون‌های ``join_keys``، ستون پشتیبان، اندازهٔ گروه
+        تکراری، ایندکس ردیف منبع و منبع استخر ورودی.
 
     مثال‌ها (خلاصه‌شده)::
 
@@ -181,18 +191,26 @@ def _build_join_key_duplicate_report(
     """
 
     if any(column not in frame.columns for column in join_keys):
-        return _empty_join_key_report(join_keys, mentor_column)
+        return _empty_join_key_report(join_keys, mentor_column, pool_source)
     if mentor_column not in frame.columns:
-        return _empty_join_key_report(join_keys, mentor_column)
+        return _empty_join_key_report(join_keys, mentor_column, pool_source)
     subset_columns = list(join_keys) + [mentor_column]
     detection_subset = list(join_keys)
     if not include_distinct_mentors:
         detection_subset = subset_columns
     mask_duplicates = frame.duplicated(subset=detection_subset, keep=False)
     if not bool(mask_duplicates.any()):
-        return _empty_join_key_report(join_keys, mentor_column)
+        return _empty_join_key_report(join_keys, mentor_column, pool_source)
     report = frame.loc[mask_duplicates, subset_columns].copy()
-    report = report.sort_values(subset_columns, kind="stable")
+    pool_row_index = pd.Series(frame.index[mask_duplicates], index=report.index)
+    pool_row_numeric = pd.to_numeric(pool_row_index, errors="coerce")
+    if pool_row_numeric.notna().any():
+        report["pool_row_index"] = pool_row_numeric.astype("Int64")
+    else:
+        report["pool_row_index"] = pool_row_index.astype("string")
+    report["pool_source"] = pool_source if pool_source is not None else ""
+    sort_keys = subset_columns + ["pool_row_index"]
+    report = report.sort_values(sort_keys, kind="stable")
     group_sizes = (
         report.groupby(detection_subset, sort=False)[mentor_column]
         .transform("size")
@@ -631,6 +649,7 @@ def canonicalize_pool_frame(
         policy.join_keys,
         mentor_column,
         include_distinct_mentors=include_distinct_mentor_duplicates,
+        pool_source=pool_source,
     )
     duplicate_report.attrs["duplicate_scope"] = duplicate_scope
     stats.join_key_duplicates = int(len(duplicate_report))

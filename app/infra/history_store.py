@@ -13,6 +13,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Mapping
 
 import pandas as pd
 
@@ -177,6 +178,7 @@ def log_allocation_run(
     qa_outcome: QaOutcome | None,
     qa_report: QaReport | None = None,
     trace_snapshot: pd.DataFrame | None = None,
+    qa_extras: Mapping[str, pd.DataFrame] | None = None,
     db: LocalDatabase | None,
 ) -> None:
     """ثبت کامل اجرای تخصیص/RuleEngine در SQLite.
@@ -211,6 +213,7 @@ def log_allocation_run(
             run_id=run_id,
             trace_snapshot=trace_snapshot,
             qa_report=qa_report,
+            qa_extras=qa_extras,
         )
     except Exception:
         logger.exception(
@@ -224,6 +227,7 @@ def _maybe_store_snapshots(
     run_id: int,
     trace_snapshot: pd.DataFrame | None,
     qa_report: QaReport | None,
+    qa_extras: Mapping[str, pd.DataFrame] | None = None,
 ) -> None:
     """ذخیرهٔ Snapshot های Trace و QA در صورت موجود بودن."""
 
@@ -238,22 +242,25 @@ def _maybe_store_snapshots(
                 history_info_df if isinstance(history_info_df, pd.DataFrame) else None
             ),
         )
-    if qa_report is not None:
-        qa_summary_df, qa_details_df = _extract_qa_frames(qa_report)
+    if qa_report is not None or qa_extras:
+        qa_summary_df, qa_details_df, qa_extra_frames = _extract_qa_frames(qa_report)
+        if qa_extras:
+            qa_extra_frames = {**qa_extras, **qa_extra_frames}
         db.insert_qa_snapshot(
             run_id=run_id,
             qa_summary_df=qa_summary_df,
             qa_details_df=qa_details_df,
+            qa_extras=qa_extra_frames,
         )
 
 
 def _extract_qa_frames(
     qa_report: QaReport | None,
-) -> tuple[pd.DataFrame | None, pd.DataFrame | None]:
-    """تبدیل گزارش QA به دیتافریم‌های خلاصه و جزئیات."""
+) -> tuple[pd.DataFrame | None, pd.DataFrame | None, dict[str, pd.DataFrame]]:
+    """تبدیل گزارش QA به دیتافریم‌های خلاصه، جزئیات و خروجی‌های تکمیلی."""
 
     if qa_report is None:
-        return None, None
+        return None, None, {}
     summary_df = qa_report.to_summary_frame()
     detail_frames: list[pd.DataFrame] = []
     for result in qa_report.results:
@@ -261,7 +268,12 @@ def _extract_qa_frames(
     details_df = (
         pd.concat(detail_frames, ignore_index=True) if detail_frames else pd.DataFrame()
     )
-    return summary_df, details_df
+    extras_raw = getattr(qa_report, "extras", None) or {}
+    extras: dict[str, pd.DataFrame] = {}
+    for key, frame in extras_raw.items():
+        if isinstance(frame, pd.DataFrame):
+            extras[str(key)] = frame
+    return summary_df, details_df, extras
 
 
 def build_run_context(

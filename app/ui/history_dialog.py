@@ -93,6 +93,8 @@ class HistoryDialog(QDialog):
 
         self._qa_summary_model = DataFrameTableModel()
         self._qa_details_model = DataFrameTableModel()
+        self._qa_extras_model = DataFrameTableModel()
+        self._qa_extras: dict[str, pd.DataFrame] = {}
 
         self._qa_summary_view = QTableView(self)
         self._qa_summary_view.setModel(self._qa_summary_model)
@@ -106,6 +108,16 @@ class HistoryDialog(QDialog):
         self._qa_details_view.horizontalHeader().setStretchLastSection(True)
         self._qa_details_view.verticalHeader().setVisible(False)
 
+        self._qa_extras_list = QListWidget(self)
+        self._qa_extras_list.currentRowChanged.connect(self._on_extra_selected)
+        self._qa_extras_view = QTableView(self)
+        self._qa_extras_view.setModel(self._qa_extras_model)
+        self._qa_extras_view.setEditTriggers(QTableView.NoEditTriggers)
+        self._qa_extras_view.horizontalHeader().setStretchLastSection(True)
+        self._qa_extras_view.verticalHeader().setVisible(False)
+        self._qa_extras_empty = QLabel("No QA extras", self)
+        self._qa_extras_empty.setAlignment(Qt.AlignCenter)
+
         self._metrics_model = DataFrameTableModel()
         self._metrics_view = QTableView(self)
         self._metrics_view.setModel(self._metrics_model)
@@ -118,6 +130,12 @@ class HistoryDialog(QDialog):
         qa_tabs = QTabWidget(self)
         qa_tabs.addTab(self._wrap_widget(self._qa_summary_view), "QA Summary")
         qa_tabs.addTab(self._wrap_widget(self._qa_details_view), "QA Details")
+        qa_tabs.addTab(
+            self._wrap_widget(
+                self._qa_extras_list, self._qa_extras_view, self._qa_extras_empty
+            ),
+            "QA Extras",
+        )
 
         right_tabs = QTabWidget(self)
         right_tabs.addTab(self._wrap_widget(self._metrics_view, self._metrics_empty), "Metrics")
@@ -156,6 +174,9 @@ class HistoryDialog(QDialog):
         self._trace_model.update(pd.DataFrame())
         self._qa_summary_model.update(pd.DataFrame())
         self._qa_details_model.update(pd.DataFrame())
+        self._qa_extras_model.update(pd.DataFrame())
+        self._qa_extras = {}
+        self._qa_extras_list.clear()
         self._metrics_model.update(pd.DataFrame())
         self._update_empty_states()
 
@@ -166,11 +187,19 @@ class HistoryDialog(QDialog):
         run_row = self._runs[row]
         run_id = int(run_row["id"])
         metrics_df = self._rows_to_dataframe(self._db.fetch_metrics_for_run(run_id))
-        trace_df, qa_summary_df, qa_details_df = self._load_snapshots(run_id)
+        trace_df, qa_summary_df, qa_details_df, qa_extras = self._load_snapshots(run_id)
         self._metrics_model.update(metrics_df)
         self._trace_model.update(trace_df)
         self._qa_summary_model.update(qa_summary_df)
         self._qa_details_model.update(qa_details_df)
+        self._qa_extras = qa_extras or {}
+        self._qa_extras_list.clear()
+        for key in sorted(self._qa_extras):
+            self._qa_extras_list.addItem(str(key))
+        if self._qa_extras:
+            self._qa_extras_list.setCurrentRow(0)
+        else:
+            self._qa_extras_model.update(pd.DataFrame())
         self._update_empty_states()
 
     def _update_empty_states(self) -> None:
@@ -180,18 +209,33 @@ class HistoryDialog(QDialog):
         is_metrics_empty = self._metrics_model.rowCount() == 0
         self._metrics_view.setVisible(not is_metrics_empty)
         self._metrics_empty.setVisible(is_metrics_empty)
+        is_extras_empty = self._qa_extras_model.rowCount() == 0
+        self._qa_extras_view.setVisible(not is_extras_empty)
+        self._qa_extras_empty.setVisible(is_extras_empty)
 
     def _load_snapshots(
         self, run_id: int
-    ) -> tuple[pd.DataFrame | None, pd.DataFrame | None, pd.DataFrame | None]:
+    ) -> tuple[
+        pd.DataFrame | None, pd.DataFrame | None, pd.DataFrame | None, dict[str, pd.DataFrame]
+    ]:
         trace_df, summary_df, history_df = self._db.fetch_trace_snapshot(run_id)
         if trace_df is not None:
             if summary_df is not None:
                 trace_df.attrs["summary_df"] = summary_df
             if history_df is not None:
                 trace_df.attrs["history_info_df"] = history_df
-        qa_summary_df, qa_details_df = self._db.fetch_qa_snapshot(run_id)
-        return trace_df, qa_summary_df, qa_details_df
+        qa_summary_df, qa_details_df, qa_extras = self._db.fetch_qa_snapshot(run_id)
+        return trace_df, qa_summary_df, qa_details_df, qa_extras
+
+    def _on_extra_selected(self, row: int) -> None:
+        if row < 0 or row >= len(self._qa_extras):
+            self._qa_extras_model.update(pd.DataFrame())
+            self._update_empty_states()
+            return
+        key = self._qa_extras_list.item(row).text()
+        frame = self._qa_extras.get(key, pd.DataFrame())
+        self._qa_extras_model.update(frame)
+        self._update_empty_states()
 
     @staticmethod
     def _rows_to_dataframe(rows: list[object]) -> pd.DataFrame:
