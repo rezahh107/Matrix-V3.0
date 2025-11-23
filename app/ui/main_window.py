@@ -681,18 +681,16 @@ class MainWindow(QMainWindow):
         default_year = "current"
         db = self._year_manager.open_year(default_year)
         self._local_db = db
-        schema_version = None
-        try:
-            with db.connect() as conn:
-                schema_version = db._get_schema_version(conn)  # type: ignore[attr-defined]
-        except Exception:
-            schema_version = None
-        self._year_info = YearDatabaseInfo(
-            year_id=default_year,
-            path=db.path,
-            schema_version=schema_version,
-            size_bytes=db.path.stat().st_size if db.path.exists() else 0,
-        )
+        all_years_info = self._year_manager.list_years()
+        self._year_info = next((info for info in all_years_info if info.year_id == default_year), None)
+
+        if self._year_info is None:
+            self._year_info = YearDatabaseInfo(
+                year_id=default_year,
+                path=db.path,
+                schema_version=None,
+                size_bytes=db.path.stat().st_size if db.path.exists() else 0,
+            )
 
     def open_database_manager(self) -> None:
         """باز کردن دیالوگ مدیریت پایگاه داده."""

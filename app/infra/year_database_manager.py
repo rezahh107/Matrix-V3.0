@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import sqlite3
 from pathlib import Path
 from typing import List
 
@@ -48,8 +49,6 @@ class YearDatabaseManager:
         path = self._year_path(year_id)
         db = LocalDatabase(path, academic_year=year_id)
         db.initialize()
-        with db._open_connection() as conn:  # type: ignore[attr-defined]
-            db._ensure_year_meta(conn)
         return db
 
     def open_year(self, year_id: str) -> LocalDatabase:
@@ -69,5 +68,5 @@ class YearDatabaseManager:
                 cursor = conn.execute("SELECT schema_version FROM schema_meta WHERE id = 1")
                 row = cursor.fetchone()
                 return int(row[0]) if row else None
-        except Exception:
+        except sqlite3.Error:
             return None

@@ -549,7 +549,7 @@ class LocalDatabase:
                         counts[label] = 0
                         continue
                     try:
-                        cursor = conn.execute(f"SELECT COUNT(*) FROM {table}")
+                        cursor = conn.execute(f'SELECT COUNT(*) FROM "{table}"')
                         row = cursor.fetchone()
                         counts[label] = int(row[0]) if row is not None else 0
                     except sqlite3.Error:
@@ -603,20 +603,6 @@ class LocalDatabase:
                 qa_summary_json TEXT,
                 status TEXT NOT NULL,
                 message TEXT
-            );
-
-            CREATE TABLE IF NOT EXISTS year_meta (
-                id INTEGER PRIMARY KEY CHECK (id = 1),
-                academic_year TEXT NOT NULL,
-                created_at TEXT NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS roster_sources (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                source_type TEXT NOT NULL,
-                file_name TEXT,
-                imported_at TEXT NOT NULL,
-                academic_year TEXT
             );
 
             CREATE TABLE IF NOT EXISTS run_metrics (
@@ -1398,7 +1384,7 @@ class LocalDatabase:
             tables = [row[0] for row in cursor.fetchall()]
             rows: list[dict[str, object]] = []
             for table in tables:
-                count = conn.execute(f"SELECT COUNT(1) FROM {table}").fetchone()[0]
+                count = conn.execute(f'SELECT COUNT(1) FROM "{table}"').fetchone()[0]
                 rows.append({"table": table, "row_count": int(count)})
         return pd.DataFrame(rows)
 
@@ -1407,9 +1393,11 @@ class LocalDatabase:
 
         self.initialize()
         with self._open_connection() as conn:
+            if not _table_exists(conn, table_name):
+                raise DatabaseOperationError("جدول در پایگاه‌داده یافت نشد.")
             try:
                 df = pd.read_sql_query(
-                    f"SELECT * FROM {table_name} LIMIT ?", conn, params=[int(limit)]
+                    f'SELECT * FROM "{table_name}" LIMIT ?', conn, params=[int(limit)]
                 )
             except Exception as exc:  # pragma: no cover - خطاهای نادر
                 raise DatabaseOperationError("خواندن جدول برای پیش‌نمایش ناکام ماند.") from exc
