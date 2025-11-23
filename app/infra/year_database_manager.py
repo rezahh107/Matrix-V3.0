@@ -63,10 +63,4 @@ class YearDatabaseManager:
 
     @staticmethod
     def _read_version(db: LocalDatabase) -> int | None:
-        try:
-            with db.connect() as conn:
-                cursor = conn.execute("SELECT schema_version FROM schema_meta WHERE id = 1")
-                row = cursor.fetchone()
-                return int(row[0]) if row else None
-        except sqlite3.Error:
-            return None
+        return db.get_schema_version()
