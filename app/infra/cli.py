@@ -1488,13 +1488,14 @@ def _run_build_matrix(args: argparse.Namespace, policy: PolicyConfig, progress: 
         inspactor=insp_df,
         invalid_mentors=invalid_mentors,
     )
-    qa_report.extras = {"pool_join_key_duplicates": duplicate_join_keys_df.copy()}
+    pool_join_key_duplicates = join_key_duplicates.copy()
+    qa_report.extras = {"pool_join_key_duplicates": pool_join_key_duplicates}
     qa_context = QaValidationContext(
         matrix=matrix,
         inspactor=insp_df,
         invalid_mentors=invalid_mentors,
         meta=meta,
-        pool_join_key_duplicates=duplicate_join_keys_df,
+        pool_join_key_duplicates=pool_join_key_duplicates,
     )
     _export_qa_validation_workbook(
         report=qa_report,
