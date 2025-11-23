@@ -15,7 +15,7 @@ try:
     from app.ui.theme import build_theme
 except ImportError as exc:
     pytest.skip(f"Theme unavailable: {exc}", allow_module_level=True)
-from app.ui.widgets.status_bar import DatabaseStatusWidget
+from app.ui.widgets import DatabaseStatusWidget
 
 
 @pytest.fixture
