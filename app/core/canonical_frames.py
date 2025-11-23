@@ -134,11 +134,13 @@ def _empty_join_key_report(
 def _build_join_key_duplicate_report(
     frame: pd.DataFrame, join_keys: Sequence[str], mentor_column: str
 ) -> pd.DataFrame:
-    """گزارش ردیف‌های تکراری برای **همان پشتیبان** روی همان کلید شش‌تایی.
+    """گزارش ردیف‌های تکراری بر اساس کلید شش‌تایی مستقل از شناسهٔ پشتیبان.
 
-    این تابع تنها زمانی خروجی غیرتهی دارد که یک پشتیبان بیش از یک بار
-    روی همان ترکیب ۶ کلید ظاهر شده باشد. وجود چند پشتیبان متفاوت روی یک
-    کلید شش‌تایی مجاز است و در این گزارش منعکس نمی‌شود.
+    این تابع هر ترکیب تکراری از ۶ کلید سیاستی را – حتی اگر پشتیبان‌ها
+    متفاوت باشند – استخراج می‌کند تا خطای دادهٔ ورودی به‌صورت شفاف
+    گزارش شود. انتظار می‌رود `join_keys` همان کلیدهای شش‌گانهٔ سیاست
+    باشند و `duplicate_group_size` شمار ردیف‌های موجود در هر ترکیب کلید
+    را نشان می‌دهد، مستقل از شناسهٔ پشتیبان.
 
     مثال::
 
@@ -166,7 +168,8 @@ def _build_join_key_duplicate_report(
         ... )
         >>> report[["کد کارمندی پشتیبان", "duplicate_group_size"]].drop_duplicates()
           کد کارمندی پشتیبان  duplicate_group_size
-        0               EMP-1                     2
+        0               EMP-1                     3
+        2               EMP-2                     3
 
     """
 
@@ -175,13 +178,13 @@ def _build_join_key_duplicate_report(
     if mentor_column not in frame.columns:
         return _empty_join_key_report(join_keys, mentor_column)
     subset_columns = list(join_keys) + [mentor_column]
-    mask_duplicates = frame.duplicated(subset=subset_columns, keep=False)
+    mask_duplicates = frame.duplicated(subset=join_keys, keep=False)
     if not bool(mask_duplicates.any()):
         return _empty_join_key_report(join_keys, mentor_column)
     report = frame.loc[mask_duplicates, subset_columns].copy()
     report = report.sort_values(subset_columns, kind="stable")
     group_sizes = (
-        report.groupby(subset_columns, sort=False)[mentor_column]
+        report.groupby(list(join_keys), sort=False)[mentor_column]
         .transform("size")
         .astype("Int64")
     )

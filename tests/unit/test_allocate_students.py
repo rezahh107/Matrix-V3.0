@@ -444,7 +444,11 @@ def test_canonicalize_pool_frame_reports_join_key_duplicates(
     summary = normalized.attrs[POOL_DUPLICATE_SUMMARY_ATTR]
 
     assert not duplicate_report.empty
-    assert duplicate_report["کد کارمندی پشتیبان"].tolist() == ["EMP-001", "EMP-001"]
+    assert duplicate_report["کد کارمندی پشتیبان"].tolist() == [
+        "EMP-001",
+        "EMP-001",
+        "EMP-002",
+    ]
     assert stats.join_key_duplicates == len(duplicate_report)
     assert summary["total"] == len(duplicate_report)
     assert isinstance(summary["sample"], list)
@@ -458,7 +462,9 @@ def test_canonicalize_pool_frame_allows_distinct_mentors_same_join_keys(
     normalized = canonicalize_pool_frame(_base_pool, policy=policy, sanitize_pool=False)
     duplicate_report = normalized.attrs[POOL_JOIN_KEY_DUPLICATES_ATTR]
 
-    assert duplicate_report.empty
+    assert not duplicate_report.empty
+    assert duplicate_report["کد کارمندی پشتیبان"].tolist() == ["EMP-001", "EMP-002"]
+    assert duplicate_report["duplicate_group_size"].dropna().unique().tolist() == [2]
 
 
 def test_build_join_key_duplicate_report_counts_only_repeated_mentor_rows(
@@ -497,8 +503,8 @@ def test_build_join_key_duplicate_report_counts_only_repeated_mentor_rows(
     report = _build_join_key_duplicate_report(repeated, join_keys, mentor_column)
 
     assert not report.empty
-    assert set(report[mentor_column].unique()) == {"EMP-001", "EMP-002"}
-    assert sorted(report["duplicate_group_size"].dropna().unique()) == [2, 3]
+    assert set(report[mentor_column].unique()) == {"EMP-001", "EMP-002", "EMP-999"}
+    assert report["duplicate_group_size"].dropna().unique().tolist() == [6]
     assert set(report.columns) == set(join_keys + [mentor_column, "duplicate_group_size"])
 
 
