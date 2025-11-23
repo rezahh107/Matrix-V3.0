@@ -7,6 +7,7 @@ import pytest
 from app.infra.errors import (
     DatabaseCorruptError,
     DatabaseOperationError,
+    DatabaseSchemaMismatchError,
     ReferenceDataMissingError,
     SchemaVersionMismatchError,
 )
@@ -76,3 +77,47 @@ def test_initialize_reports_corrupt_file_with_backup(tmp_path):
             "SELECT schema_version FROM schema_meta WHERE id = 1"
         ).fetchone()[0]
     assert version == _SCHEMA_VERSION
+
+
+def test_initialize_reports_schema_mismatch_for_missing_column(tmp_path):
+    db_path = tmp_path / "missing_column.sqlite"
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            """
+            CREATE TABLE schema_meta (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                schema_version INTEGER NOT NULL,
+                policy_version TEXT NOT NULL,
+                ssot_version TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            "INSERT INTO schema_meta (id, schema_version, policy_version, ssot_version, created_at)"
+            " VALUES (1, ?, '1.0.0', '1.0.0', strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))",
+            (_SCHEMA_VERSION,),
+        )
+        conn.execute(
+            """
+            CREATE TABLE students_cache (
+                "کد ملی" TEXT,
+                "کدرشته" INTEGER,
+                "گروه آزمایشی" TEXT,
+                "جنسیت" INTEGER,
+                "دانش آموز فارغ" INTEGER,
+                "مرکز گلستان صدرا" INTEGER,
+                "مالی حکمت بنیاد" INTEGER,
+                "کد مدرسه" INTEGER,
+                school_code_raw TEXT,
+                school_code_norm INTEGER,
+                school_status_resolved INTEGER
+            )
+            """
+        )
+        conn.commit()
+
+    db = LocalDatabase(db_path)
+
+    with pytest.raises(DatabaseSchemaMismatchError):
+        db.initialize()
