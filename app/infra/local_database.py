@@ -29,7 +29,9 @@ import pandas as pd
 from pandas.api.types import is_integer_dtype
 
 from app.infra.errors import (
+    DatabaseCorruptError,
     DatabaseOperationError,
+    DatabasePreparationError,
     ReferenceDataMissingError,
     SchemaVersionMismatchError,
 )
@@ -148,11 +150,26 @@ class LocalDatabase:
                 logger.warning(
                     "Local DB appears corrupted at %s; backing up and recreating", self.path
                 )
-                self._recover_corrupt_database()
-                return
-            raise DatabaseOperationError("خطا در آماده‌سازی پایگاه داده.") from exc
+                backup = self._recover_corrupt_database()
+                raise DatabaseCorruptError(
+                    path=str(self.path),
+                    reason="فایل پایگاه‌داده خراب است و بازسازی شد.",
+                    hint="جهت ادامه، در صورت نیاز داده‌های مرجع را دوباره بارگذاری کنید و فرمان را مجدداً اجرا نمایید.",
+                    backup_path=backup,
+                ) from exc
+            raise DatabasePreparationError(
+                path=str(self.path),
+                reason=str(exc),
+                hint=(
+                    "دسترسی فایل یا سلامت دیسک را بررسی کنید؛ در صورت تکرار، فایل پایگاه‌داده را حذف و دوباره بسازید."
+                ),
+            ) from exc
         except sqlite3.Error as exc:  # pragma: no cover - خطاهای غیرمنتظره
-            raise DatabaseOperationError("خطا در آماده‌سازی پایگاه داده.") from exc
+            raise DatabasePreparationError(
+                path=str(self.path),
+                reason=str(exc),
+                hint="مسیر فایل یا مجوز نوشتن را بررسی کنید.",
+            ) from exc
         logger.debug("Local DB schema ensured at %s", self.path)
 
     def _initialize_once(self) -> None:
@@ -192,7 +209,7 @@ class LocalDatabase:
             self._validate_schema_version(conn)
             conn.commit()
 
-    def _recover_corrupt_database(self) -> None:
+    def _recover_corrupt_database(self) -> Path | None:
         """پشتیبان‌گیری از فایل خراب و بازسازی پایگاه داده.
 
         - اگر فایل فعلی وجود داشته باشد، با پسوند ``.corrupt`` بکاپ می‌شود
@@ -200,14 +217,20 @@ class LocalDatabase:
         - سپس مسیر فایل پاک و ``_initialize_once`` دوباره اجرا می‌شود تا
           Schema سالم ساخته شود.
         """
+        backup: Path | None = None
         if self.path.exists():
             backup = self.path.with_suffix(self.path.suffix + ".corrupt")
             try:
                 self.path.replace(backup)
-            except OSError:
+            except OSError as exc:
                 logger.exception("Failed to backup corrupt DB at %s", self.path)
-                raise DatabaseOperationError("خطا در آماده‌سازی پایگاه داده.")
+                raise DatabaseCorruptError(
+                    path=str(self.path),
+                    reason="بکاپ‌گیری از پایگاه‌داده خراب ناکام ماند.",
+                    hint="مجوز دسترسی یا قفل بودن فایل را بررسی کنید و در صورت لزوم فایل را به‌صورت دستی حذف کنید.",
+                ) from exc
         self._initialize_once()
+        return backup
 
     @staticmethod
     def _is_corruption_error(exc: sqlite3.Error) -> bool:

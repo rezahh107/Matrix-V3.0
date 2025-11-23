@@ -53,7 +53,12 @@ from app.infra.excel.export_allocations import (
     collect_trace_debug_sheets,
     load_sabt_export_profile,
 )
-from app.infra.errors import ReferenceDataMissingError, SchemaVersionMismatchError
+from app.infra.errors import (
+    DatabaseCorruptError,
+    DatabasePreparationError,
+    ReferenceDataMissingError,
+    SchemaVersionMismatchError,
+)
 from app.infra.excel.export_qa_validation import (
     QaValidationContext,
     export_qa_validation,
@@ -182,6 +187,33 @@ def _resolve_local_db(args: argparse.Namespace) -> LocalDatabase | None:
         return None
 
 
+def _format_db_prepare_error(exc: BaseException, *, db_path: Path) -> str:
+    """تبدیل خطاهای آماده‌سازی پایگاه داده به پیام کاربرپسند."""
+
+    prefix = "خطا در آماده‌سازی پایگاه داده."
+    base_hint = f"مسیر: {db_path}"
+    if isinstance(exc, DatabasePreparationError):
+        return str(exc)
+    if isinstance(exc, SchemaVersionMismatchError):
+        rebuild_hint = (
+            f"نسخهٔ Schema پشتیبانی نمی‌شود؛ فایل {db_path} را حذف کنید تا دوباره ساخته شود."
+            if exc.actual_version < 2
+            else f"برای ادامه، فایل {db_path} را بازسازی یا از نسخهٔ سازگار استفاده کنید."
+        )
+        return f"{prefix} {exc.message}; {rebuild_hint}"
+    return f"{prefix} {exc} ({base_hint})"
+
+
+def _prepare_local_db(db: LocalDatabase, progress: ProgressFn) -> None:
+    """اجرای initialize با گزارش خطای دقیق روی progress."""
+
+    try:
+        db.initialize()
+    except (DatabaseCorruptError, DatabasePreparationError, SchemaVersionMismatchError) as exc:
+        progress(0, _format_db_prepare_error(exc, db_path=db.path))
+        raise
+
+
 def _resolve_forms_client(args: argparse.Namespace) -> WordPressFormsClient:
     """برگشت کلاینت WordPress تزریق‌شده یا خطای خوانا در صورت نبود."""
 
@@ -289,7 +321,7 @@ def _load_forms_repository(args: argparse.Namespace, db: LocalDatabase) -> Forms
 
 
 def _resolve_reference_frames(
-    *, args: argparse.Namespace, db: LocalDatabase
+    *, args: argparse.Namespace, db: LocalDatabase, progress: ProgressFn = _default_progress
 ) -> tuple[
     pd.DataFrame,
     pd.DataFrame,
@@ -299,7 +331,7 @@ def _resolve_reference_frames(
 ]:
     """بارگذاری دیتافریم مدارس و Crosswalk از SQLite یا Excel."""
 
-    db.initialize()
+    _prepare_local_db(db, progress)
     schools_df: pd.DataFrame | None = None
     crosswalk_groups_df: pd.DataFrame | None = None
     crosswalk_synonyms_df: pd.DataFrame | None = None
@@ -1344,7 +1376,7 @@ def _run_build_matrix(args: argparse.Namespace, policy: PolicyConfig, progress: 
         crosswalk_synonyms_df,
         ref_inputs,
         ref_inputs_mtime,
-    ) = _resolve_reference_frames(args=args, db=db)
+    ) = _resolve_reference_frames(args=args, db=db, progress=progress)
     insp_df, pool_inputs, pool_inputs_mtime = _resolve_mentor_pool_frame(
         args, policy, db=db, pool_arg="inspactor", pool_source="inspactor"
     )
@@ -2048,6 +2080,7 @@ def _run_sync_forms(args: argparse.Namespace, policy: PolicyConfig, progress: Pr
     if db is None:
         raise ValueError("برای sync-forms باید --local-db مشخص شود.")
 
+    _prepare_local_db(db, progress)
     cache_only = bool(getattr(args, "cache_only", False))
     repo = _load_forms_repository(args, db)
     if cache_only:
@@ -2070,10 +2103,12 @@ def _run_sync_forms(args: argparse.Namespace, policy: PolicyConfig, progress: Pr
     return 0
 
 
-def _run_exporter_archive(args: argparse.Namespace, *, db: LocalDatabase) -> int:
+def _run_exporter_archive(
+    args: argparse.Namespace, *, db: LocalDatabase, progress: ProgressFn = _default_progress
+) -> int:
     """اجرای فرمان‌های لیست/مقایسه Snapshot های ImportToSabt."""
 
-    db.initialize()
+    _prepare_local_db(db, progress)
     repo = ExporterArchiveRepository(db=db)
     if args.action == "list":
         rows = repo.list_snapshots()
@@ -2521,7 +2556,7 @@ def main(
             db = _resolve_local_db(args)
             if db is None:
                 raise ValueError("برای exporter-archive باید --local-db مشخص شود.")
-            return _run_exporter_archive(args, db=db)
+            return _run_exporter_archive(args, db=db, progress=progress)
 
         if args.command == "sync-forms":
             return _run_sync_forms(args, policy, progress)
@@ -2536,6 +2571,11 @@ def main(
 
         raise RuntimeError(f"Unsupported command: {args.command}")
     except ReferenceDataMissingError as exc:
+        if ui_overrides is not None:
+            raise
+        print(f"❌ {exc}", file=sys.stderr)
+        return 2
+    except (DatabasePreparationError, DatabaseCorruptError) as exc:
         if ui_overrides is not None:
             raise
         print(f"❌ {exc}", file=sys.stderr)

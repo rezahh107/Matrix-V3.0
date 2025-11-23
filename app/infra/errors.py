@@ -1,7 +1,8 @@
 """مدل خطای لایهٔ Infra برای عملیات پایگاه داده."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from pathlib import Path
 
 
 class InfraError(RuntimeError):
@@ -54,10 +55,46 @@ class DatabaseOperationError(InfraError):
         return self.message
 
 
+@dataclass(eq=True)
+class DatabasePreparationError(DatabaseOperationError):
+    """خطای آماده‌سازی پایگاه‌داده با پیام و راهکار عملیاتی."""
+
+    path: str
+    reason: str
+    hint: str | None = None
+    message: str = field(init=False)
+
+    def __post_init__(self) -> None:
+        path_text = str(self.path)
+        details = self.reason.strip()
+        if self.hint:
+            details = f"{details}؛ {self.hint.strip()}"
+        self.message = f"خطا در آماده‌سازی پایگاه داده: {details} (مسیر: {path_text})"
+
+
+@dataclass(eq=True)
+class DatabaseCorruptError(DatabasePreparationError):
+    """پایگاه داده خراب است و بکاپ گرفته شده است."""
+
+    backup_path: Path | None = None
+
+    def __post_init__(self) -> None:  # pragma: no cover - delegated to base
+        hint_parts: list[str] = []
+        if self.hint:
+            hint_parts.append(self.hint.strip())
+        if self.backup_path:
+            hint_parts.append(f"بکاپ در {self.backup_path} ذخیره شد")
+        combined_hint = "؛ ".join(part for part in hint_parts if part)
+        self.hint = combined_hint or None
+        super().__post_init__()
+
+
 __all__ = [
     "InfraError",
     "DatabaseDisabledError",
     "ReferenceDataMissingError",
     "SchemaVersionMismatchError",
     "DatabaseOperationError",
+    "DatabasePreparationError",
+    "DatabaseCorruptError",
 ]
