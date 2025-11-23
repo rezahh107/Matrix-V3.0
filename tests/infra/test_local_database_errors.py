@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 
 from app.infra.errors import (
+    DatabaseCorruptError,
     DatabaseOperationError,
     ReferenceDataMissingError,
     SchemaVersionMismatchError,
@@ -58,15 +59,18 @@ def test_generic_sqlite_error_wrapped(tmp_path, monkeypatch):
         db.upsert_schools(df)
 
 
-def test_initialize_recovers_from_corrupt_file(tmp_path):
+def test_initialize_reports_corrupt_file_with_backup(tmp_path):
     db_path = tmp_path / "corrupt.sqlite"
     db_path.write_text("not a sqlite database")
     db = LocalDatabase(db_path)
 
-    db.initialize()
+    with pytest.raises(DatabaseCorruptError):
+        db.initialize()
 
     backup_path = db_path.with_suffix(db_path.suffix + ".corrupt")
     assert backup_path.exists()
+    # اجرای مجدد باید بدون استثناء و با نسخهٔ صحیح انجام شود
+    db.initialize()
     with db.connect() as conn:
         version = conn.execute(
             "SELECT schema_version FROM schema_meta WHERE id = 1"

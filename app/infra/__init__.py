@@ -3,6 +3,8 @@
 from app.infra.errors import (
     DatabaseDisabledError,
     DatabaseOperationError,
+    DatabasePreparationError,
+    DatabaseCorruptError,
     InfraError,
     ReferenceDataMissingError,
     SchemaVersionMismatchError,
@@ -12,6 +14,8 @@ from app.infra.sqlite_config import configure_connection
 __all__ = [
     "DatabaseDisabledError",
     "DatabaseOperationError",
+    "DatabasePreparationError",
+    "DatabaseCorruptError",
     "InfraError",
     "ReferenceDataMissingError",
     "SchemaVersionMismatchError",
