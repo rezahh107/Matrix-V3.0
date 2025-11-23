@@ -584,7 +584,10 @@ def canonicalize_pool_frame(
     required = set(policy.join_keys) | {"کد کارمندی پشتیبان"}
     missing = [column for column in required if column not in pool.columns]
     if missing and require_join_keys:
-        raise KeyError(f"Pool data missing columns: {missing}")
+        raise KeyError(
+            "Pool data missing canonical join-key columns (Policy join keys, not raw Excel headers): "
+            f"{missing}. برای جزئیات نگاشت کلیدهای الحاقی به راهنمای docs/join_keys_and_pool_explainer.md مراجعه کنید."
+        )
 
     present_join_keys = [column for column in policy.join_keys if column in pool.columns]
     if present_join_keys:
