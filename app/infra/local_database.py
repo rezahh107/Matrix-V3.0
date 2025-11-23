@@ -127,6 +127,15 @@ class LocalDatabase:
 
         return self._open_connection()
 
+    def get_schema_version(self) -> int | None:
+        """بازگرداندن نسخهٔ Schema بدون نیاز به برون‌ریزی پرس‌وجو."""
+
+        try:
+            with self._open_connection() as conn:
+                return self._get_schema_version(conn)
+        except sqlite3.Error:
+            return None
+
     def initialize(self) -> None:
         """ایجاد Schema و اعتبارسنجی نسخه به‌صورت idempotent."""
 
