@@ -10,6 +10,7 @@ import logging
 import atexit
 import traceback
 import getpass
+import importlib
 import re
 from datetime import datetime
 from pathlib import Path
@@ -421,24 +422,36 @@ def load_main_window():
         MainWindow: کلاس پنجره اصلی
     """
     try:
-        from app.ui.main_window import MainWindow
+        module = _import_main_window_module()
+        MainWindow = getattr(module, "MainWindow")
         logger.info("ماژول MainWindow با موفقیت بارگذاری شد")
         return MainWindow
-        
+
     except ImportError as e:
         logger.error(f"خطای Import در بارگذاری MainWindow: {e}")
-        
-        # تشخیص نوع خطای import
-        if "app.ui.main_window" in str(e):
-            raise ImportError(
-                "خطا در بارگذاری ماژول‌های برنامه.\n"
-                "لطفاً از صحت ساختار پوشه‌ها و فایل‌ها اطمینان حاصل کنید."
-            ) from e
-        else:
-            raise ImportError(
-                "خطا در وابستگی‌های برنامه.\n"
-                "لطفاً از نصب بودن تمام کتابخانه‌های مورد نیاز اطمینان حاصل کنید."
-            ) from e
+        formatted = _format_dependency_import_error(e)
+        raise ImportError(formatted) from e
+
+
+def _import_main_window_module():
+    """بارگذاری ماژول پنجره اصلی با importlib برای سهولت تست و پایداری."""
+
+    return importlib.import_module("app.ui.main_window")
+
+
+def _format_dependency_import_error(import_error: ImportError) -> str:
+    """ساخت پیام کاربرپسند برای خطای وابستگی‌های رابط کاربری."""
+
+    missing = getattr(import_error, "name", None)
+    missing_name = str(missing).strip() if missing else ""
+    lines = ["خطا در وابستگی‌های رابط کاربری."]
+    if missing_name:
+        lines.append(f"کتابخانهٔ مفقود: {missing_name}")
+    lines.append("برای نصب وابستگی‌ها: pip install -r requirements.txt")
+    details = str(import_error).strip()
+    if details:
+        lines.append(f"جزئیات فنی: {details}")
+    return "\n".join(lines)
 
 
 def show_critical_error(
