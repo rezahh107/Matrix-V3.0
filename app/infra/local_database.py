@@ -1384,7 +1384,8 @@ class LocalDatabase:
             tables = [row[0] for row in cursor.fetchall()]
             rows: list[dict[str, object]] = []
             for table in tables:
-                count = conn.execute(f'SELECT COUNT(1) FROM "{table}"').fetchone()[0]
+                quoted_table = _quote_identifier(table)
+                count = conn.execute(f"SELECT COUNT(1) FROM {quoted_table}").fetchone()[0]
                 rows.append({"table": table, "row_count": int(count)})
         return pd.DataFrame(rows)
 
@@ -1396,8 +1397,9 @@ class LocalDatabase:
             if not _table_exists(conn, table_name):
                 raise DatabaseOperationError("جدول در پایگاه‌داده یافت نشد.")
             try:
+                quoted_table = _quote_identifier(table_name)
                 df = pd.read_sql_query(
-                    f'SELECT * FROM "{table_name}" LIMIT ?', conn, params=[int(limit)]
+                    f"SELECT * FROM {quoted_table} LIMIT ?", conn, params=[int(limit)]
                 )
             except Exception as exc:  # pragma: no cover - خطاهای نادر
                 raise DatabaseOperationError("خواندن جدول برای پیش‌نمایش ناکام ماند.") from exc
@@ -1454,6 +1456,15 @@ def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
         "SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table,)
     )
     return cursor.fetchone() is not None
+
+
+def _quote_identifier(name: str) -> str:
+    """Quote an identifier safely for use in SQLite statements."""
+
+    if not name:
+        raise ValueError("Identifier cannot be empty.")
+    escaped = name.replace("\"", "\"\"")
+    return f'"{escaped}"'
 
 
 def _coerce_int_columns(df: pd.DataFrame, columns: Iterable[str]) -> pd.DataFrame:
