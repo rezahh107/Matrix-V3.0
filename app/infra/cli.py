@@ -320,7 +320,17 @@ def _resolve_reference_frames(
         inputs_mtime["crosswalk"] = crosswalk_path.stat().st_mtime
 
     if schools_df is None or crosswalk_groups_df is None:
-        schools_db, crosswalk_db, crosswalk_synonyms_db = get_school_reference_frames(db)
+        try:
+            schools_db, crosswalk_db, crosswalk_synonyms_db = get_school_reference_frames(db)
+        except ReferenceDataMissingError as exc:
+            raise ReferenceDataMissingError(
+                table=exc.table,
+                message=(
+                    "جدول {table} در پایگاه داده یافت نشد؛ «build-matrix» را با "
+                    "گزینه‌های --schools و --crosswalk اجرا کنید یا ابتدا «import-schools»/"
+                    "«import-crosswalk» را برای پر کردن کش SQLite اجرا نمایید."
+                ).format(table=exc.table),
+            ) from exc
         if schools_df is None:
             schools_df = schools_db
             inputs.setdefault("schools", f"sqlite://{db.path}")
@@ -1328,9 +1338,6 @@ def _run_build_matrix(args: argparse.Namespace, policy: PolicyConfig, progress: 
         )
 
     progress(0, f"policy {policy.version} loaded")
-    insp_df, pool_inputs, pool_inputs_mtime = _resolve_mentor_pool_frame(
-        args, policy, db=db, pool_arg="inspactor", pool_source="inspactor"
-    )
     (
         schools_df,
         crosswalk_groups_df,
@@ -1338,6 +1345,9 @@ def _run_build_matrix(args: argparse.Namespace, policy: PolicyConfig, progress: 
         ref_inputs,
         ref_inputs_mtime,
     ) = _resolve_reference_frames(args=args, db=db)
+    insp_df, pool_inputs, pool_inputs_mtime = _resolve_mentor_pool_frame(
+        args, policy, db=db, pool_arg="inspactor", pool_source="inspactor"
+    )
 
     governance_cfg: MentorPoolGovernanceConfig = getattr(
         policy, "mentor_pool_governance", _default_governance_config()
