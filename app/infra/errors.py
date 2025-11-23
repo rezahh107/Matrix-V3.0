@@ -93,6 +93,8 @@ class DatabaseCorruptError(DatabasePreparationError):
 class DatabaseSchemaMismatchError(DatabasePreparationError):
     """عدم سازگاری ساختار پایگاه‌داده با نسخهٔ فعلی برنامه."""
 
+    diagnostics: dict[str, list[str]] | None = None
+
     def __post_init__(self) -> None:  # pragma: no cover - پیام توسط والد مدیریت می‌شود
         super().__post_init__()
 

@@ -56,6 +56,7 @@ from app.infra.excel.export_allocations import (
 from app.infra.errors import (
     DatabaseCorruptError,
     DatabasePreparationError,
+    DatabaseSchemaMismatchError,
     ReferenceDataMissingError,
     SchemaVersionMismatchError,
 )
@@ -193,7 +194,15 @@ def _format_db_prepare_error(exc: BaseException, *, db_path: Path) -> str:
     prefix = "خطا در آماده‌سازی پایگاه داده."
     base_hint = f"مسیر: {db_path}"
     if isinstance(exc, DatabasePreparationError):
-        return str(exc)
+        message = str(exc)
+        if getattr(exc, "diagnostics", None):
+            details = []
+            diagnostics = getattr(exc, "diagnostics", {}) or {}
+            for table, missing in diagnostics.items():
+                details.append(f"{table}: {', '.join(missing)}")
+            if details:
+                message = f"{message} | ستون‌های مفقود → {'؛ '.join(details)}"
+        return message
     if isinstance(exc, SchemaVersionMismatchError):
         rebuild_hint = (
             f"نسخهٔ Schema پشتیبانی نمی‌شود؛ فایل {db_path} را حذف کنید تا دوباره ساخته شود."
@@ -209,6 +218,15 @@ def _prepare_local_db(db: LocalDatabase, progress: ProgressFn) -> None:
 
     try:
         db.initialize()
+    except DatabaseSchemaMismatchError as exc:
+        diagnostics = db.get_schema_diagnostics()
+        logger.error(
+            "Database schema mismatch at %s (module=%s)",
+            db.path,
+            diagnostics.module_path,
+        )
+        progress(0, _format_db_prepare_error(exc, db_path=db.path))
+        raise
     except (DatabaseCorruptError, DatabasePreparationError, SchemaVersionMismatchError) as exc:
         progress(0, _format_db_prepare_error(exc, db_path=db.path))
         raise
