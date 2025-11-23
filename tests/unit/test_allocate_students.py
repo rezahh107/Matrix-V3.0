@@ -475,7 +475,15 @@ def test_build_join_key_duplicate_report_counts_only_repeated_mentor_rows(
     mentor_column = "کد کارمندی پشتیبان"
 
     pool_subset = _base_pool[[*join_keys, mentor_column]].copy()
-    repeated = pd.concat([pool_subset, pool_subset.iloc[[0]].copy()], ignore_index=True)
+    repeated = pd.concat(
+        [
+            pool_subset,
+            pool_subset.iloc[[0]].copy(),
+            pool_subset.iloc[[1]].copy(),
+            pool_subset.iloc[[1]].copy(),
+        ],
+        ignore_index=True,
+    )
     repeated.loc[len(repeated)] = {
         "کدرشته": 1201,
         "جنسیت": 1,
@@ -489,8 +497,8 @@ def test_build_join_key_duplicate_report_counts_only_repeated_mentor_rows(
     report = _build_join_key_duplicate_report(repeated, join_keys, mentor_column)
 
     assert not report.empty
-    assert set(report[mentor_column].unique()) == {"EMP-001"}
-    assert report["duplicate_group_size"].dropna().unique().tolist() == [2]
+    assert set(report[mentor_column].unique()) == {"EMP-001", "EMP-002"}
+    assert sorted(report["duplicate_group_size"].dropna().unique()) == [2, 3]
     assert set(report.columns) == set(join_keys + [mentor_column, "duplicate_group_size"])
 
 

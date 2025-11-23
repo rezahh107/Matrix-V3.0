@@ -181,7 +181,7 @@ def _build_join_key_duplicate_report(
     report = frame.loc[mask_duplicates, subset_columns].copy()
     report = report.sort_values(subset_columns, kind="stable")
     group_sizes = (
-        report.groupby(list(join_keys), sort=False)[mentor_column]
+        report.groupby(subset_columns, sort=False)[mentor_column]
         .transform("size")
         .astype("Int64")
     )
