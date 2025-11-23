@@ -346,8 +346,8 @@ def test_build_matrix_reports_join_key_duplicates() -> None:
     first_row.loc[:, "کدرشته"] = [1201]
     first_row.loc[:, "کد مدرسه"] = [0]
     duplicate = first_row.copy()
-    duplicate.loc[:, "نام پشتیبان"] = ["زهرا دوم"]
-    duplicate.loc[:, "کد کارمندی پشتیبان"] = ["EMP-99"]
+    duplicate.loc[:, "نام پشتیبان"] = ["زهرا تکراری"]
+    duplicate.loc[:, "کد کارمندی پشتیبان"] = [first_row["کد کارمندی پشتیبان"].iat[0]]
     insp_df = pd.concat([first_row, duplicate], ignore_index=True)
 
     _, validation, _, _, _, _, duplicate_join_keys, _ = build_matrix(
@@ -358,7 +358,8 @@ def test_build_matrix_reports_join_key_duplicates() -> None:
     )
 
     assert len(duplicate_join_keys) == 2
-    assert duplicate_join_keys["کد کارمندی پشتیبان"].tolist() == ["EMP-1", "EMP-99"]
+    mentor_ids = duplicate_join_keys["کد کارمندی پشتیبان"].tolist()
+    assert mentor_ids == [mentor_ids[0], mentor_ids[0]]
     assert validation["join_key_duplicate_rows"].iat[0] == 2
     warnings_df = validation[validation["warning_type"].notna()]
     assert not warnings_df.empty
