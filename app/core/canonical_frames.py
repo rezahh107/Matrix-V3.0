@@ -132,17 +132,28 @@ def _empty_join_key_report(
 
 
 def _build_join_key_duplicate_report(
-    frame: pd.DataFrame, join_keys: Sequence[str], mentor_column: str
+    frame: pd.DataFrame,
+    join_keys: Sequence[str],
+    mentor_column: str,
+    *,
+    include_distinct_mentors: bool = False,
 ) -> pd.DataFrame:
-    """گزارش ردیف‌های تکراری بر اساس کلید شش‌تایی مستقل از شناسهٔ پشتیبان.
+    """گزارش ردیف‌های تکراری بر اساس کلید شش‌تایی با دو حالت تفکیک‌پذیر.
 
-    این تابع هر ترکیب تکراری از ۶ کلید سیاستی را – حتی اگر پشتیبان‌ها
-    متفاوت باشند – استخراج می‌کند تا خطای دادهٔ ورودی به‌صورت شفاف
-    گزارش شود. انتظار می‌رود `join_keys` همان کلیدهای شش‌گانهٔ سیاست
-    باشند و `duplicate_group_size` شمار ردیف‌های موجود در هر ترکیب کلید
-    را نشان می‌دهد، مستقل از شناسهٔ پشتیبان.
+    Args:
+        frame: دیتافریم ورودی که ستون‌های join و ستون شناسهٔ پشتیبان دارد.
+        join_keys: شش کلید سیاستی (int) که تکرار روی آن‌ها بررسی می‌شود.
+        mentor_column: نام ستون شناسهٔ پشتیبان (employee code).
+        include_distinct_mentors: اگر ``False`` (حالت پیش‌فرض)، فقط ردیف‌هایی
+            گزارش می‌شوند که برای **همان پشتیبان** روی همان کلید شش‌تایی
+            تکرار شده‌اند (حالت «per_mentor»). اگر ``True``، هر کلید شش‌تایی
+            که بیش از یک‌بار (حتی با پشتیبان‌های متفاوت) تکرار شده باشد گزارش
+            می‌شود (حالت «per_key» برای Inspactor/matrix).
 
-    مثال::
+    بازگشت:
+        دیتافریم شامل ستون‌های ``join_keys``، ستون پشتیبان و ``duplicate_group_size``.
+
+    مثال‌ها (خلاصه‌شده)::
 
         >>> import pandas as pd
         >>> df = pd.DataFrame({
@@ -154,22 +165,18 @@ def _build_join_key_duplicate_report(
         ...     "کد مدرسه": [3581, 3581, 3581],
         ...     "کد کارمندی پشتیبان": ["EMP-1", "EMP-1", "EMP-2"],
         ... })
-        >>> report = _build_join_key_duplicate_report(
-        ...     df,
-        ...     [
-        ...         "کدرشته",
-        ...         "جنسیت",
-        ...         "دانش آموز فارغ",
-        ...         "مرکز گلستان صدرا",
-        ...         "مالی حکمت بنیاد",
-        ...         "کد مدرسه",
-        ...     ],
-        ...     "کد کارمندی پشتیبان",
+        >>> # حالت پیش‌فرض: فقط تکرارهای همان پشتیبان روی یک کلید
+        >>> per_mentor = _build_join_key_duplicate_report(
+        ...     df, df.columns[:6], "کد کارمندی پشتیبان"
         ... )
-        >>> report[["کد کارمندی پشتیبان", "duplicate_group_size"]].drop_duplicates()
-          کد کارمندی پشتیبان  duplicate_group_size
-        0               EMP-1                     3
-        2               EMP-2                     3
+        >>> per_mentor["کد کارمندی پشتیبان"].tolist()
+        ['EMP-1', 'EMP-1']
+        >>> # حالت کلیدمحور: همهٔ ردیف‌های کلید تکراری (حتی منتور متفاوت)
+        >>> per_key = _build_join_key_duplicate_report(
+        ...     df, df.columns[:6], "کد کارمندی پشتیبان", include_distinct_mentors=True
+        ... )
+        >>> per_key["کد کارمندی پشتیبان"].tolist()
+        ['EMP-1', 'EMP-1', 'EMP-2']
 
     """
 
@@ -178,13 +185,16 @@ def _build_join_key_duplicate_report(
     if mentor_column not in frame.columns:
         return _empty_join_key_report(join_keys, mentor_column)
     subset_columns = list(join_keys) + [mentor_column]
-    mask_duplicates = frame.duplicated(subset=join_keys, keep=False)
+    detection_subset = list(join_keys)
+    if not include_distinct_mentors:
+        detection_subset = subset_columns
+    mask_duplicates = frame.duplicated(subset=detection_subset, keep=False)
     if not bool(mask_duplicates.any()):
         return _empty_join_key_report(join_keys, mentor_column)
     report = frame.loc[mask_duplicates, subset_columns].copy()
     report = report.sort_values(subset_columns, kind="stable")
     group_sizes = (
-        report.groupby(list(join_keys), sort=False)[mentor_column]
+        report.groupby(detection_subset, sort=False)[mentor_column]
         .transform("size")
         .astype("Int64")
     )
@@ -219,17 +229,26 @@ def _json_safe_value(value: object) -> object:
     return str(value)
 
 
-def _build_duplicate_summary(report: pd.DataFrame, *, sample_size: int = 5) -> dict[str, Any]:
+def _build_duplicate_summary(
+    report: pd.DataFrame,
+    *,
+    sample_size: int = 5,
+    duplicate_scope: str | None = None,
+) -> dict[str, Any]:
     """تولید خلاصهٔ JSON-safe از تکرارهای کلید شش‌تایی برای درج در attrs."""
 
     if report is None or report.empty:
-        return {"total": 0, "sample": []}
+        return {"total": 0, "sample": [], "duplicate_scope": duplicate_scope}
     sample_rows = report.head(sample_size).to_dict(orient="records")
     safe_rows = [
         {key: _json_safe_value(value) for key, value in row.items()}
         for row in sample_rows
     ]
-    return {"total": int(len(report)), "sample": safe_rows}
+    return {
+        "total": int(len(report)),
+        "sample": safe_rows,
+        "duplicate_scope": duplicate_scope,
+    }
 
 
 def sanitize_pool_for_allocation(
@@ -484,10 +503,16 @@ def canonicalize_pool_frame(
     pool_source: str = "inspactor",
     require_join_keys: bool = True,
     preserve_columns: Sequence[str] | None = None,
+    include_distinct_mentor_duplicates: bool = False,
 ) -> pd.DataFrame:
     """کاننیکال‌سازی استخر منتورها از هر منبع (inspactor/matrix).
 
     آمار اصلاحات در ``df.attrs["pool_canonicalization_stats"]`` قرار می‌گیرد.
+    پارامتر ``include_distinct_mentor_duplicates`` حالت گزارش‌دهی تکرار کلید را
+    مشخص می‌کند: پیش‌فرض ``False`` یعنی فقط تکرارهای یک پشتیبان روی یک کلید
+    (per_mentor) گزارش می‌شوند؛ اگر ``True`` باشد، هر تکرار کلید شش‌تایی حتی با
+    پشتیبان متفاوت (per_key) گزارش می‌شود که برای مسیر Inspactor/matrix سخت‌گیرانه
+    است.
     """
 
     source = pool_source if pool_source in {"inspactor", "matrix"} else "inspactor"
@@ -600,12 +625,20 @@ def canonicalize_pool_frame(
     present_join_keys = [column for column in policy.join_keys if column in pool.columns]
     if present_join_keys:
         pool = enforce_join_key_types(pool, present_join_keys)
+    duplicate_scope = "per_key" if include_distinct_mentor_duplicates else "per_mentor"
     duplicate_report = _build_join_key_duplicate_report(
-        pool, policy.join_keys, mentor_column
+        pool,
+        policy.join_keys,
+        mentor_column,
+        include_distinct_mentors=include_distinct_mentor_duplicates,
     )
+    duplicate_report.attrs["duplicate_scope"] = duplicate_scope
     stats.join_key_duplicates = int(len(duplicate_report))
     pool.attrs[POOL_JOIN_KEY_DUPLICATES_ATTR] = duplicate_report
-    pool.attrs[POOL_DUPLICATE_SUMMARY_ATTR] = _build_duplicate_summary(duplicate_report)
+    pool.attrs["pool_duplicate_scope"] = duplicate_scope
+    pool.attrs[POOL_DUPLICATE_SUMMARY_ATTR] = _build_duplicate_summary(
+        duplicate_report, duplicate_scope=duplicate_scope
+    )
     pool = _append_bilingual_alias_columns(pool, policy)
     if preserved:
         for column, original in preserved.items():

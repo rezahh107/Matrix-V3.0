@@ -45,7 +45,9 @@ def test_duplicate_report_flags_cross_mentor_collisions() -> None:
         ]
     )
 
-    report = _build_join_key_duplicate_report(frame, join_keys, MENTOR_COLUMN)
+    report = _build_join_key_duplicate_report(
+        frame, join_keys, MENTOR_COLUMN, include_distinct_mentors=True
+    )
 
     assert len(report) == 2
     assert report[MENTOR_COLUMN].tolist() == ["EMP-1", "EMP-2"]
@@ -69,7 +71,9 @@ def test_duplicate_report_handles_multiple_duplicate_groups() -> None:
         ]
     )
 
-    report = _build_join_key_duplicate_report(frame, join_keys, MENTOR_COLUMN)
+    report = _build_join_key_duplicate_report(
+        frame, join_keys, MENTOR_COLUMN, include_distinct_mentors=True
+    )
 
     assert len(report) == 4
     group_sizes = report.groupby(join_keys, sort=False)["duplicate_group_size"].first()
