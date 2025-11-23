@@ -559,6 +559,13 @@ class MainWindow(QMainWindow):
         toolbar.addAction(prefs_action)
         self._toolbar_actions["prefs"] = prefs_action
 
+        db_action = QAction(self._t("action.database", "پایگاه‌داده"), self)
+        db_action.setShortcut(QKeySequence("Ctrl+D"))
+        db_action.setShortcutVisibleInContextMenu(True)
+        db_action.triggered.connect(self.open_database_manager)
+        toolbar.addAction(db_action)
+        self._toolbar_actions["database"] = db_action
+
         toolbar.addSeparator()
         theme_widget = QWidget(self)
         theme_layout = QHBoxLayout(theme_widget)
@@ -644,6 +651,11 @@ class MainWindow(QMainWindow):
                 self._t("action.preferences", "تنظیمات"),
                 f"<b>{self._t('action.preferences', 'تنظیمات')}</b><br/>"
                 f"{self._t('tooltip.preferences', 'تنظیمات نمایش و زبان را تغییر دهید')}",
+            ),
+            "database": (
+                self._t("action.database", "پایگاه‌داده"),
+                f"<b>{self._t('action.database', 'پایگاه‌داده')}</b><br/>"
+                f"{self._t('tooltip.database', 'تشخیص ساختار، مشاهده مسیر فعال و بازنشانی امن')}",
             ),
         }
         for key, (text, tooltip) in mapping.items():

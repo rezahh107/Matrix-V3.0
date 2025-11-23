@@ -121,3 +121,47 @@ def test_initialize_reports_schema_mismatch_for_missing_column(tmp_path):
 
     with pytest.raises(DatabaseSchemaMismatchError):
         db.initialize()
+
+
+def test_initialize_creates_students_cache_with_student_id_column(tmp_path):
+    db = LocalDatabase(tmp_path / "fresh.sqlite")
+    db.initialize()
+
+    with db.connect() as conn:
+        cols = {row[1] for row in conn.execute("PRAGMA table_info('students_cache')")}
+    assert "student_id" in cols
+
+
+def test_get_schema_diagnostics_reports_missing_student_id(tmp_path):
+    db_path = tmp_path / "broken.sqlite"
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            """
+            CREATE TABLE schema_meta (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                schema_version INTEGER NOT NULL,
+                policy_version TEXT NOT NULL,
+                ssot_version TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            "INSERT INTO schema_meta (id, schema_version, policy_version, ssot_version, created_at)"
+            " VALUES (1, ?, '1.0.0', '1.0.0', strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))",
+            (_SCHEMA_VERSION,),
+        )
+        conn.execute(
+            """
+            CREATE TABLE students_cache (
+                "کد ملی" TEXT,
+                "کدرشته" INTEGER
+            )
+            """
+        )
+        conn.commit()
+
+    db = LocalDatabase(db_path)
+    diagnostics = db.get_schema_diagnostics()
+    target = next(diag for diag in diagnostics.tables if diag.name == "students_cache")
+    assert "student_id" in target.missing_required_columns

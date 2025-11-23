@@ -67,6 +67,28 @@ class DatabaseHealthSummary:
 
 
 @dataclass(frozen=True)
+class TableSchemaDiagnostics:
+    """تشخیص ساختار یک جدول مهم در پایگاه داده."""
+
+    name: str
+    exists: bool
+    columns: list[str]
+    missing_required_columns: list[str]
+    row_count: int | None
+
+
+@dataclass(frozen=True)
+class DatabaseSchemaDiagnostics:
+    """گزارش کامل وضعیت Schema برای نمایش و عیب‌یابی."""
+
+    path: str
+    module_path: str
+    expected_schema_version: int
+    actual_schema_version: int | None
+    tables: list[TableSchemaDiagnostics]
+
+
+@dataclass(frozen=True)
 class RunRecord:
     """نمایندهٔ ردیف جدول ``runs`` برای یک اجرای تخصیص."""
 
@@ -118,6 +140,33 @@ class LocalDatabase:
     def __init__(self, path: Path, *, academic_year: str | None = None) -> None:
         self.path = path
         self.academic_year = academic_year
+        self._required_tables: dict[str, list[str]] = {
+            "students_cache": [
+                "student_id",
+                "کد ملی",
+                "کدرشته",
+                "گروه آزمایشی",
+                "جنسیت",
+                "دانش آموز فارغ",
+                "مرکز گلستان صدرا",
+                "مالی حکمت بنیاد",
+                "کد مدرسه",
+            ],
+            "mentor_pool_cache": [
+                "mentor_id",
+                "کد کارمندی پشتیبان",
+                "کدرشته",
+                "گروه آزمایشی",
+                "جنسیت",
+                "دانش آموز فارغ",
+                "مرکز گلستان صدرا",
+                "مالی حکمت بنیاد",
+                "کد مدرسه",
+                "remaining_capacity",
+                "allocations_new",
+                "occupancy_ratio",
+            ],
+        }
 
     def _open_connection(self) -> sqlite3.Connection:
         """ایجاد اتصال پیکربندی‌شده با PRAGMA های یکسان."""
@@ -138,6 +187,61 @@ class LocalDatabase:
                 return self._get_schema_version(conn)
         except sqlite3.Error:
             return None
+
+    def get_schema_diagnostics(self) -> DatabaseSchemaDiagnostics:
+        """دریافت گزارش کامل Schema بدون تغییر در پایگاه داده.
+
+        این تابع حتی در صورت ناسازگاری، ساختار فعلی را خوانده و ستون‌های
+        الزامی جداول کلیدی (students_cache و mentor_pool_cache) را بررسی
+        می‌کند تا برای UI/CLI قابل‌نمایش باشد.
+        """
+
+        tables: list[TableSchemaDiagnostics] = []
+        actual_version: int | None = None
+        try:
+            with self._open_connection() as conn:
+                actual_version = self._get_schema_version(conn)
+                for name, required_cols in self._required_tables.items():
+                    tables.append(
+                        self._collect_table_diagnostics(conn, name, required_cols)
+                    )
+                # جدول runs نیز برای ردیابی سلامت مهم است
+                tables.append(
+                    self._collect_table_diagnostics(conn, "runs", [])
+                )
+        except sqlite3.Error:
+            logger.exception("Failed to read schema diagnostics for %s", self.path)
+
+        return DatabaseSchemaDiagnostics(
+            path=str(self.path),
+            module_path=str(Path(__file__).resolve()),
+            expected_schema_version=_SCHEMA_VERSION,
+            actual_schema_version=actual_version,
+            tables=tables,
+        )
+
+    def backup_and_reset(self) -> Path | None:
+        """بکاپ‌گیری و بازنشانی پایگاه‌داده برای بازسازی ایمن.
+
+        - اگر فایل فعلی وجود داشته باشد، با پسوند زمان‌دار ``.bak-YYYYMMDD-HHMMSS``
+          جابه‌جا می‌شود.
+        - سپس ``initialize`` فراخوانی می‌شود تا Schema سالم ساخته شود.
+        """
+
+        backup: Path | None = None
+        if self.path.exists():
+            timestamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+            backup = self.path.with_name(f"{self.path.name}.bak-{timestamp}")
+            try:
+                self.path.replace(backup)
+            except OSError as exc:  # pragma: no cover - I/O failure
+                raise DatabasePreparationError(
+                    path=str(self.path),
+                    reason="انتقال فایل برای بکاپ ممکن نشد.",
+                    hint="دسترسی دیسک یا قفل فایل را بررسی کنید و دوباره تلاش نمایید.",
+                ) from exc
+        self.initialize()
+        return backup
 
     def initialize(self) -> None:
         """ایجاد Schema و اعتبارسنجی نسخه به‌صورت idempotent."""
@@ -221,7 +325,16 @@ class LocalDatabase:
                     message="نسخهٔ Schema بسیار قدیمی است و پشتیبانی نمی‌شود؛ پایگاه داده را بازسازی کنید.",
                 )
             elif existing_version < _SCHEMA_VERSION:
-                self._migrate_schema(conn, from_version=existing_version)
+                try:
+                    self._migrate_schema(conn, from_version=existing_version)
+                except sqlite3.Error as exc:
+                    diagnostics = {name: req for name, req in self._required_tables.items()}
+                    raise DatabaseSchemaMismatchError(
+                        path=str(self.path),
+                        reason=f"مهاجرت Schema ناکام ماند (ساختار ناسازگار): {exc}",
+                        hint="فایل را حذف یا بازنشانی کنید تا Schema جدید اعمال شود.",
+                        diagnostics=diagnostics,
+                    ) from exc
             elif existing_version > _SCHEMA_VERSION:
                 raise SchemaVersionMismatchError(
                     expected_version=_SCHEMA_VERSION,
@@ -233,6 +346,7 @@ class LocalDatabase:
             # NEW: ensure year meta also after migrations/schema ensure
             self._ensure_year_meta(conn)
             self._validate_schema_version(conn)
+            self._assert_required_schema(conn)
             conn.commit()
 
     def _recover_corrupt_database(self) -> Path | None:
@@ -646,9 +760,72 @@ class LocalDatabase:
                 counts={},
             )
 
-    @staticmethod
-    def _ensure_schema(conn: sqlite3.Connection) -> None:
+    def _collect_table_diagnostics(
+        self, conn: sqlite3.Connection, table: str, required_columns: Sequence[str]
+    ) -> TableSchemaDiagnostics:
+        """جمع‌آوری اطلاعات ستون‌ها و شمارش ردیف برای یک جدول."""
+
+        exists = _table_exists(conn, table)
+        columns: list[str] = []
+        missing: list[str] = []
+        row_count: int | None = None
+
+        if exists:
+            cursor = conn.execute(f"PRAGMA table_info({table})")
+            columns = [str(row[1]) for row in cursor.fetchall()]
+            missing = [col for col in required_columns if col not in columns]
+            try:
+                row_count = int(
+                    conn.execute(f'SELECT COUNT(*) FROM "{table}"').fetchone()[0]
+                )
+            except sqlite3.Error:
+                row_count = None
+        else:
+            missing = list(required_columns)
+
+        return TableSchemaDiagnostics(
+            name=table,
+            exists=exists,
+            columns=columns,
+            missing_required_columns=missing,
+            row_count=row_count,
+        )
+
+    def _assert_required_schema(self, conn: sqlite3.Connection) -> None:
+        """اطمینان از حضور جداول و ستون‌های کلیدی و تولید خطای خوانا در صورت فقدان."""
+
+        diagnostics: dict[str, list[str]] = {}
+        for name, required in self._required_tables.items():
+            table_diag = self._collect_table_diagnostics(conn, name, required)
+            if table_diag.missing_required_columns:
+                diagnostics[name] = table_diag.missing_required_columns
+        if diagnostics:
+            missing_text = ", ".join(
+                f"{table}: {', '.join(cols)}" for table, cols in diagnostics.items()
+            )
+            raise DatabaseSchemaMismatchError(
+                path=str(self.path),
+                reason=f"ستون‌های ضروری پیدا نشد: {missing_text}",
+                hint="فایل پایگاه‌داده را حذف یا بازنشانی کنید تا با Schema جدید ساخته شود.",
+                diagnostics=diagnostics,
+            )
+
+    def _ensure_schema(self, conn: sqlite3.Connection) -> None:
         """ساخت جدول‌های runs/run_metrics/qa_summary و مراجع به‌صورت idempotent."""
+
+        for name, required in self._required_tables.items():
+            if _table_exists(conn, name):
+                table_diag = self._collect_table_diagnostics(conn, name, required)
+                if table_diag.missing_required_columns:
+                    missing_text = ", ".join(table_diag.missing_required_columns)
+                    raise DatabaseSchemaMismatchError(
+                        path=str(self.path),
+                        reason=(
+                            f"ساختار جدول {name} ناقص است؛ ستون‌های مفقود: {missing_text}"
+                        ),
+                        hint="فایل را بازنشانی کنید تا Schema کامل ایجاد شود.",
+                        diagnostics={name: table_diag.missing_required_columns},
+                    )
 
         conn.executescript(
             """

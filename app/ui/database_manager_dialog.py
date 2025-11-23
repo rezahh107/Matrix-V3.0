@@ -1,14 +1,18 @@
-"""پنجرهٔ مدیریت پایگاه داده برای مشاهده سال جاری."""
+"""دیالوگ مدیریت پایگاه داده برای نمایش سلامت و عملیات بازنشانی."""
 
 from __future__ import annotations
 
-import pandas as pd
+from pathlib import Path
+from typing import Iterable
 try:  # pragma: no cover - وابستگی Qt ممکن است در CI غایب باشد
     from PySide6.QtCore import Qt
     from PySide6.QtWidgets import (
         QDialog,
+        QGridLayout,
         QHeaderView,
+        QHBoxLayout,
         QLabel,
+        QMessageBox,
         QPushButton,
         QTableWidget,
         QTableWidgetItem,
@@ -19,16 +23,21 @@ try:  # pragma: no cover - وابستگی Qt ممکن است در CI غایب ب
 except Exception as exc:  # pragma: no cover - fallback
     Qt = None  # type: ignore
     QDialog = object  # type: ignore
-    QHeaderView = QLabel = QPushButton = QTableWidget = QTableWidgetItem = QVBoxLayout = QWidget = None  # type: ignore
+    QGridLayout = QHeaderView = QLabel = QMessageBox = QPushButton = QTableWidget = QTableWidgetItem = QVBoxLayout = QWidget = None  # type: ignore
     _QT_AVAILABLE = False
     _QT_IMPORT_ERROR = exc
 
-from app.infra.local_database import LocalDatabase
+from app.infra.local_database import (
+    DatabaseSchemaDiagnostics,
+    LocalDatabase,
+)
 from app.infra.year_database_manager import YearDatabaseInfo
+
+__all__ = ["DatabaseManagerDialog", "_QT_AVAILABLE"]
 
 
 class DatabaseManagerDialog(QDialog):
-    """نمایش سادهٔ اطلاعات پایگاه دادهٔ سالیانه."""
+    """پنجرهٔ مدیریت پایگاه‌داده با خلاصهٔ سلامت، تشخیص ستون‌ها و بازنشانی ایمن."""
 
     def __init__(
         self,
@@ -42,69 +51,117 @@ class DatabaseManagerDialog(QDialog):
         super().__init__(parent)
         self.db = db
         self.year_info = year_info
+        self.diagnostics: DatabaseSchemaDiagnostics | None = None
         self.setWindowTitle("مدیریت پایگاه داده")
-        self.resize(720, 480)
+        self.resize(900, 600)
         self._build_ui()
-        self._refresh_tables()
+        self._refresh()
 
     def _build_ui(self) -> None:
         layout = QVBoxLayout(self)
 
-        info_label = QLabel(
-            f"سال فعال: {self.year_info.year_id}\nمسیر: {self.year_info.path}\nنسخهٔ schema: {self.year_info.schema_version}"
-        )
-        info_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        layout.addWidget(info_label)
+        self._path_label = QLabel(self)
+        self._path_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        layout.addWidget(self._path_label)
 
-        self.table_widget = QTableWidget(self)
-        self.table_widget.setColumnCount(2)
-        self.table_widget.setHorizontalHeaderLabels(["جدول", "تعداد ردیف"])
-        header = self.table_widget.horizontalHeader()
+        grid = QGridLayout()
+        self._schema_label = QLabel(self)
+        self._module_label = QLabel(self)
+        self._schema_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self._module_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        grid.addWidget(QLabel("نسخهٔ Schema (انتظار/فعلی):", self), 0, 0)
+        grid.addWidget(self._schema_label, 0, 1)
+        grid.addWidget(QLabel("مسیر ماژول SQLite:", self), 1, 0)
+        grid.addWidget(self._module_label, 1, 1)
+        layout.addLayout(grid)
+
+        tables_label = QLabel("خلاصه جداول کلیدی", self)
+        layout.addWidget(tables_label)
+        self._counts_table = QTableWidget(self)
+        self._counts_table.setColumnCount(3)
+        self._counts_table.setHorizontalHeaderLabels(["جدول", "تعداد ردیف", "ستون‌های مفقود"])
+        header = self._counts_table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.Stretch)
         header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        layout.addWidget(self.table_widget)
+        header.setSectionResizeMode(2, QHeaderView.Stretch)
+        layout.addWidget(self._counts_table)
 
-        self.preview_label = QLabel("پیش‌نمایش جدول انتخاب‌شده")
-        layout.addWidget(self.preview_label)
+        issues_label = QLabel("مشکلات Schema", self)
+        layout.addWidget(issues_label)
+        self._issues_table = QTableWidget(self)
+        self._issues_table.setColumnCount(2)
+        self._issues_table.setHorizontalHeaderLabels(["جدول", "ستون‌های مفقود"])
+        header2 = self._issues_table.horizontalHeader()
+        header2.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        header2.setSectionResizeMode(1, QHeaderView.Stretch)
+        layout.addWidget(self._issues_table)
 
-        self.preview_widget = QTableWidget(self)
-        layout.addWidget(self.preview_widget)
+        btn_row = QHBoxLayout()
+        self._btn_refresh = QPushButton("به‌روزرسانی", self)
+        self._btn_reset = QPushButton("بکاپ و بازنشانی پایگاه‌داده", self)
+        self._btn_refresh.clicked.connect(self._refresh)
+        self._btn_reset.clicked.connect(self._backup_and_reset)
+        btn_row.addWidget(self._btn_refresh)
+        btn_row.addWidget(self._btn_reset)
+        btn_row.addStretch(1)
+        layout.addLayout(btn_row)
 
-        refresh_btn = QPushButton("به‌روزرسانی")
-        refresh_btn.clicked.connect(self._refresh_tables)
-        layout.addWidget(refresh_btn)
+    def _refresh(self) -> None:
+        summary = self.db.get_database_health_summary()
+        self.diagnostics = self.db.get_schema_diagnostics()
+        self._path_label.setText(
+            f"سال فعال: {self.year_info.year_id}\nمسیر پایگاه‌داده: {self.year_info.path}"
+        )
+        actual = self.diagnostics.actual_schema_version
+        self._schema_label.setText(f"{self.diagnostics.expected_schema_version} / {actual}")
+        self._module_label.setText(self.diagnostics.module_path)
+        self._populate_counts_table(summary.counts, self.diagnostics.tables)
+        self._populate_issues_table(self.diagnostics.tables)
+        status_prefix = {
+            "ok": "✅",
+            "degraded": "⚠️",
+            "unavailable": "❌",
+        }.get(summary.status.value, "")
+        self.setWindowTitle(f"مدیریت پایگاه داده {status_prefix}")
 
-        self.table_widget.itemSelectionChanged.connect(self._load_preview)
+    def _populate_counts_table(
+        self, counts: dict[str, int], table_diags: Iterable[object]
+    ) -> None:
+        rows: list[tuple[str, str, str]] = []
+        for diag in table_diags:
+            missing = ", ".join(diag.missing_required_columns)
+            row_count = diag.row_count if diag.row_count is not None else counts.get(diag.name, 0)
+            rows.append((diag.name, str(row_count), missing))
+        self._counts_table.setRowCount(len(rows))
+        for idx, (name, count, missing) in enumerate(rows):
+            self._counts_table.setItem(idx, 0, QTableWidgetItem(name))
+            self._counts_table.setItem(idx, 1, QTableWidgetItem(count))
+            self._counts_table.setItem(idx, 2, QTableWidgetItem(missing))
 
-    def _refresh_tables(self) -> None:
-        df = self.db.list_tables_with_counts()
-        self.table_widget.setRowCount(len(df))
-        for idx, row in df.iterrows():
-            self.table_widget.setItem(idx, 0, QTableWidgetItem(str(row["table"])))
-            self.table_widget.setItem(idx, 1, QTableWidgetItem(str(row["row_count"])))
-        if len(df):
-            self.table_widget.selectRow(0)
-        else:
-            self.preview_widget.clear()
+    def _populate_issues_table(self, table_diags: Iterable[object]) -> None:
+        issues = [
+            (diag.name, ", ".join(diag.missing_required_columns))
+            for diag in table_diags
+            if diag.missing_required_columns
+        ]
+        self._issues_table.setRowCount(len(issues))
+        for idx, (name, missing) in enumerate(issues):
+            self._issues_table.setItem(idx, 0, QTableWidgetItem(name))
+            self._issues_table.setItem(idx, 1, QTableWidgetItem(missing))
 
-    def _load_preview(self) -> None:
-        items = self.table_widget.selectedItems()
-        if not items:
+    def _backup_and_reset(self) -> None:
+        backup_path: Path | None = None
+        try:
+            backup_path = self.db.backup_and_reset()
+        except Exception as exc:  # pragma: no cover - مسیر خطا نادر
+            QMessageBox.critical(
+                self,
+                "خطا در بازنشانی",
+                f"بازنشانی پایگاه‌داده با خطا مواجه شد: {exc}",
+            )
             return
-        table_name = items[0].text()
-        df = self.db.preview_table(table_name, limit=50)
-        self._populate_preview(df)
-
-    def _populate_preview(self, df: pd.DataFrame) -> None:
-        self.preview_widget.clear()
-        if df.empty:
-            self.preview_widget.setRowCount(0)
-            self.preview_widget.setColumnCount(0)
-            return
-        self.preview_widget.setRowCount(len(df.index))
-        self.preview_widget.setColumnCount(len(df.columns))
-        self.preview_widget.setHorizontalHeaderLabels([str(col) for col in df.columns])
-        for r_idx, (_, row) in enumerate(df.iterrows()):
-            for c_idx, value in enumerate(row):
-                self.preview_widget.setItem(r_idx, c_idx, QTableWidgetItem(str(value)))
-        self.preview_widget.resizeColumnsToContents()
+        message = "پایگاه‌داده با موفقیت بازنشانی شد."
+        if backup_path is not None:
+            message += f"\nبکاپ: {backup_path}"
+        QMessageBox.information(self, "انجام شد", message)
+        self._refresh()
