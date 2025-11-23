@@ -66,6 +66,7 @@ from app.core.common.columns import CANON_EN_TO_FA, canonicalize_headers, ensure
 from app.core.counter import find_max_sequence_by_prefix, year_to_yy
 from app.core.policy_loader import get_policy
 from app.infra import cli
+from app.infra.local_database import LocalDatabase
 from app.utils.path_utils import resource_path
 
 from app.ui.helpers.counter_helpers import detect_year_candidates
@@ -77,7 +78,7 @@ from app.ui.models import MentorPoolEntry, build_mentor_entries_from_dataframe
 from app.ui.policy_cache import get_cached_policy
 from app.ui.fonts import get_app_font
 from .task_runner import ProgressFn, Worker
-from .widgets import FilePicker, ThemedStatusBar
+from .widgets import DatabaseStatusWidget, FilePicker, ThemedStatusBar
 from .app_preferences import AppPreferences
 from .i18n import Language
 from .preferences import (
@@ -325,7 +326,10 @@ class MainWindow(QMainWindow):
         self._last_run_badge: QLabel | None = None
         self._current_action: str = self._translator.text("status.ready", "آماده")
         self._status_bar: ThemedStatusBar | None = None
+        self._database_status: DatabaseStatusWidget | None = None
         self._excel_loaders: set[ExcelLoader] = set()
+        self._local_db: LocalDatabase | None = LocalDatabase(Path("smart_alloc.db"))
+        self._db_status_timer: QTimer | None = None
         policy_file = resource_path("config", "policy.json")
         self._default_policy_path = str(policy_file) if policy_file.exists() else ""
         exporter_config = resource_path("config", "SmartAlloc_Exporter_Config_v1.json")
@@ -577,6 +581,7 @@ class MainWindow(QMainWindow):
         """نوار وضعیت پایین با نمایش زبان و وضعیت جاری."""
 
         status_bar = ThemedStatusBar(self._theme, self)
+        db_widget = DatabaseStatusWidget(self._theme, status_bar)
         language_label = QLabel(
             f"{self._t('status.language', 'زبان فعال')}: {self._prefs.language.code.upper()}"
         )
@@ -587,11 +592,21 @@ class MainWindow(QMainWindow):
         state_label.setFont(get_app_font())
         status_bar.setSizeGripEnabled(False)
         status_bar.addWidget(state_label)
+        status_bar.addWidget(db_widget)
         status_bar.addPermanentWidget(language_label)
         self._language_label = language_label
         self._status_bar_state = state_label
+        self._database_status = db_widget
         self.setStatusBar(status_bar)
         self._status_bar = status_bar
+        self._refresh_database_status()
+        if self._db_status_timer is None:
+            timer = QTimer(self)
+            timer.setInterval(60000)
+            timer.setSingleShot(False)
+            timer.timeout.connect(self._refresh_database_status)
+            timer.start()
+            self._db_status_timer = timer
 
     def _refresh_action_texts(self) -> None:
         """به‌روزرسانی متن و Tooltip اکشن‌های نوار ابزار بر اساس زبان فعال."""
@@ -661,6 +676,14 @@ class MainWindow(QMainWindow):
             "error": f"❌ {self._t('statusbar.error', 'وضعیت: خطا')}",
         }
         self._status_bar_state.setText(mapping.get(key, mapping["ready"]))
+
+    def _refresh_database_status(self) -> None:
+        """به‌روزرسانی ویجت سلامت پایگاه‌داده بدون بلاک کردن UI."""
+
+        if self._database_status is None or self._local_db is None:
+            return
+        summary = self._local_db.get_database_health_summary()
+        self._database_status.set_summary(summary)
 
     def _animate_tab_change(self, index: int) -> None:
         """انیمیشن محو/نمایش نرم هنگام تغییر تب."""
@@ -2335,6 +2358,8 @@ class MainWindow(QMainWindow):
         """اجرای فرمان CLI با Worker و رعایت قرارداد progress."""
 
         override_payload = overrides or {}
+        if self._local_db is not None:
+            override_payload = {"local_db_path": str(self._local_db.path), **override_payload}
 
         def _task(*, progress: ProgressFn) -> None:
             exit_code = cli.main(
@@ -2657,6 +2682,7 @@ class MainWindow(QMainWindow):
             f'<span style="color:{self._theme.colors.success}">✅ {self._t("status.complete.detail", "عملیات با موفقیت پایان یافت")}</span>'
         )
         self._update_status_bar_state("ready")
+        self._refresh_database_status()
         if hook is not None:
             try:
                 hook()

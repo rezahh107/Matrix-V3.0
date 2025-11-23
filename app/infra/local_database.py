@@ -21,8 +21,9 @@ import logging
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime
+from enum import Enum
 from pathlib import Path
-from typing import Iterable, List, Sequence
+from typing import Dict, Iterable, List, Optional, Sequence
 
 import pandas as pd
 from pandas.api.types import is_integer_dtype
@@ -42,6 +43,24 @@ _SSOT_VERSION = "1.0.2"
 _ISO_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
 
 logger = logging.getLogger(__name__)
+
+
+class DatabaseHealthStatus(str, Enum):
+    """وضعیت کلی پایگاه داده برای نمایش در UI."""
+
+    OK = "ok"
+    DEGRADED = "degraded"
+    UNAVAILABLE = "unavailable"
+
+
+@dataclass(frozen=True)
+class DatabaseHealthSummary:
+    """خلاصه وضعیت پایگاه‌داده برای نمایش در نوار وضعیت."""
+
+    status: DatabaseHealthStatus
+    message: str
+    counts: Dict[str, int]
+    last_updated: Optional[datetime] = None
 
 
 @dataclass(frozen=True)
@@ -450,6 +469,63 @@ class LocalDatabase:
             return None, None
         rows_df = _deserialize_exporter_rows(row)
         return row, rows_df
+
+    def get_database_health_summary(self) -> DatabaseHealthSummary:
+        """تولید خلاصهٔ سلامت پایگاه‌داده برای نمایش در UI."""
+
+        if not self.path.exists():
+            return DatabaseHealthSummary(
+                status=DatabaseHealthStatus.UNAVAILABLE,
+                message="پایگاه‌داده: در دسترس نیست",
+                counts={},
+            )
+
+        try:
+            with self._open_connection() as conn:
+                conn.row_factory = sqlite3.Row
+                expected_tables: dict[str, str] = {
+                    "دانش‌آموز": "students_cache",
+                    "پشتیبان": "mentor_pool_cache",
+                    "اجرا": "runs",
+                }
+                missing = [
+                    label for label, table in expected_tables.items() if not _table_exists(conn, table)
+                ]
+                counts: dict[str, int] = {}
+                degraded_tables: list[str] = []
+                for label, table in expected_tables.items():
+                    if not _table_exists(conn, table):
+                        counts[label] = 0
+                        continue
+                    try:
+                        cursor = conn.execute(f"SELECT COUNT(*) FROM {table}")
+                        row = cursor.fetchone()
+                        counts[label] = int(row[0]) if row is not None else 0
+                    except sqlite3.Error:
+                        degraded_tables.append(label)
+                        counts[label] = 0
+                last_updated = datetime.utcnow()
+                if missing or degraded_tables:
+                    return DatabaseHealthSummary(
+                        status=DatabaseHealthStatus.DEGRADED,
+                        message="پایگاه‌داده: نیاز به بررسی",
+                        counts=counts,
+                        last_updated=last_updated,
+                    )
+
+                return DatabaseHealthSummary(
+                    status=DatabaseHealthStatus.OK,
+                    message="پایگاه‌داده: آماده",
+                    counts=counts,
+                    last_updated=last_updated,
+                )
+        except sqlite3.Error:
+            logger.exception("Failed to collect database health summary")
+            return DatabaseHealthSummary(
+                status=DatabaseHealthStatus.UNAVAILABLE,
+                message="پایگاه‌داده: خطای اتصال",
+                counts={},
+            )
 
     @staticmethod
     def _ensure_schema(conn: sqlite3.Connection) -> None:
