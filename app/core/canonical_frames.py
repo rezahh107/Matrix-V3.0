@@ -505,6 +505,14 @@ def canonicalize_pool_frame(
         report=False,
     )
 
+    # اطمینان از حضور ستون‌های join به فارسی حتی در حالت هدر انگلیسی
+    join_key_aliases = canonicalize_headers(pool, header_mode="fa")
+    for join_key in policy.join_keys:
+        if join_key not in pool.columns and join_key in join_key_aliases.columns:
+            pool[join_key] = ensure_series(join_key_aliases[join_key]).reindex(
+                pool.index
+            )
+
     mentor_column = "کد کارمندی پشتیبان"
     if mentor_column in pool.columns:
         mentor_source = ensure_series(pool[mentor_column])
