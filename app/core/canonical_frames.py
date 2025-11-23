@@ -134,19 +134,23 @@ def _empty_join_key_report(
 def _build_join_key_duplicate_report(
     frame: pd.DataFrame, join_keys: Sequence[str], mentor_column: str
 ) -> pd.DataFrame:
-    """گزارش ردیف‌های تکراری بر اساس کلید شش‌تایی Policy.
+    """گزارش ردیف‌های تکراری برای **همان پشتیبان** روی همان کلید شش‌تایی.
+
+    این تابع تنها زمانی خروجی غیرتهی دارد که یک پشتیبان بیش از یک بار
+    روی همان ترکیب ۶ کلید ظاهر شده باشد. وجود چند پشتیبان متفاوت روی یک
+    کلید شش‌تایی مجاز است و در این گزارش منعکس نمی‌شود.
 
     مثال::
 
         >>> import pandas as pd
         >>> df = pd.DataFrame({
-        ...     "کدرشته": [1201, 1201],
-        ...     "جنسیت": [1, 1],
-        ...     "دانش آموز فارغ": [0, 0],
-        ...     "مرکز گلستان صدرا": [1, 1],
-        ...     "مالی حکمت بنیاد": [0, 0],
-        ...     "کد مدرسه": [3581, 3581],
-        ...     "کد کارمندی پشتیبان": ["EMP-1", "EMP-2"],
+        ...     "کدرشته": [1201, 1201, 1201],
+        ...     "جنسیت": [1, 1, 1],
+        ...     "دانش آموز فارغ": [0, 0, 0],
+        ...     "مرکز گلستان صدرا": [1, 1, 1],
+        ...     "مالی حکمت بنیاد": [0, 0, 0],
+        ...     "کد مدرسه": [3581, 3581, 3581],
+        ...     "کد کارمندی پشتیبان": ["EMP-1", "EMP-1", "EMP-2"],
         ... })
         >>> report = _build_join_key_duplicate_report(
         ...     df,
@@ -160,8 +164,9 @@ def _build_join_key_duplicate_report(
         ...     ],
         ...     "کد کارمندی پشتیبان",
         ... )
-        >>> int(report["duplicate_group_size"].iat[0])
-        2
+        >>> report[["کد کارمندی پشتیبان", "duplicate_group_size"]].drop_duplicates()
+          کد کارمندی پشتیبان  duplicate_group_size
+        0               EMP-1                     2
 
     """
 
@@ -169,10 +174,10 @@ def _build_join_key_duplicate_report(
         return _empty_join_key_report(join_keys, mentor_column)
     if mentor_column not in frame.columns:
         return _empty_join_key_report(join_keys, mentor_column)
-    mask_duplicates = frame.duplicated(subset=list(join_keys), keep=False)
+    subset_columns = list(join_keys) + [mentor_column]
+    mask_duplicates = frame.duplicated(subset=subset_columns, keep=False)
     if not bool(mask_duplicates.any()):
         return _empty_join_key_report(join_keys, mentor_column)
-    subset_columns = list(join_keys) + [mentor_column]
     report = frame.loc[mask_duplicates, subset_columns].copy()
     report = report.sort_values(subset_columns, kind="stable")
     group_sizes = (

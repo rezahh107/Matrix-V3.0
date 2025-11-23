@@ -20,6 +20,7 @@ from app.core.common.reasons import ReasonCode
 from app.core.canonical_frames import (
     POOL_DUPLICATE_SUMMARY_ATTR,
     POOL_JOIN_KEY_DUPLICATES_ATTR,
+    _build_join_key_duplicate_report,
     canonicalize_allocation_frames,
     canonicalize_pool_frame,
     canonicalize_students_frame,
@@ -435,16 +436,89 @@ def test_canonicalize_pool_frame_reports_join_key_duplicates(
 ) -> None:
     policy = load_policy()
 
-    normalized = canonicalize_pool_frame(_base_pool, policy=policy, sanitize_pool=False)
+    duplicated = pd.concat([_base_pool, _base_pool.iloc[[0]].copy()], ignore_index=True)
+
+    normalized = canonicalize_pool_frame(duplicated, policy=policy, sanitize_pool=False)
     duplicate_report = normalized.attrs[POOL_JOIN_KEY_DUPLICATES_ATTR]
     stats = normalized.attrs["pool_canonicalization_stats"]
     summary = normalized.attrs[POOL_DUPLICATE_SUMMARY_ATTR]
 
     assert not duplicate_report.empty
-    assert duplicate_report["کد کارمندی پشتیبان"].tolist() == ["EMP-001", "EMP-002"]
+    assert duplicate_report["کد کارمندی پشتیبان"].tolist() == ["EMP-001", "EMP-001"]
     assert stats.join_key_duplicates == len(duplicate_report)
     assert summary["total"] == len(duplicate_report)
     assert isinstance(summary["sample"], list)
+
+
+def test_canonicalize_pool_frame_allows_distinct_mentors_same_join_keys(
+    _base_pool: pd.DataFrame,
+) -> None:
+    policy = load_policy()
+
+    normalized = canonicalize_pool_frame(_base_pool, policy=policy, sanitize_pool=False)
+    duplicate_report = normalized.attrs[POOL_JOIN_KEY_DUPLICATES_ATTR]
+
+    assert duplicate_report.empty
+
+
+def test_build_join_key_duplicate_report_counts_only_repeated_mentor_rows(
+    _base_pool: pd.DataFrame,
+) -> None:
+    join_keys = [
+        "کدرشته",
+        "جنسیت",
+        "دانش آموز فارغ",
+        "مرکز گلستان صدرا",
+        "مالی حکمت بنیاد",
+        "کد مدرسه",
+    ]
+    mentor_column = "کد کارمندی پشتیبان"
+
+    pool_subset = _base_pool[[*join_keys, mentor_column]].copy()
+    repeated = pd.concat([pool_subset, pool_subset.iloc[[0]].copy()], ignore_index=True)
+    repeated.loc[len(repeated)] = {
+        "کدرشته": 1201,
+        "جنسیت": 1,
+        "دانش آموز فارغ": 0,
+        "مرکز گلستان صدرا": 1,
+        "مالی حکمت بنیاد": 0,
+        "کد مدرسه": 3581,
+        "کد کارمندی پشتیبان": "EMP-999",
+    }
+
+    report = _build_join_key_duplicate_report(repeated, join_keys, mentor_column)
+
+    assert not report.empty
+    assert set(report[mentor_column].unique()) == {"EMP-001"}
+    assert report["duplicate_group_size"].dropna().unique().tolist() == [2]
+    assert set(report.columns) == set(join_keys + [mentor_column, "duplicate_group_size"])
+
+
+def test_build_join_key_duplicate_report_missing_columns_returns_empty() -> None:
+    join_keys = [
+        "کدرشته",
+        "جنسیت",
+        "دانش آموز فارغ",
+        "مرکز گلستان صدرا",
+        "مالی حکمت بنیاد",
+        "کد مدرسه",
+    ]
+    mentor_column = "کد کارمندی پشتیبان"
+    frame = pd.DataFrame(
+        {
+            "کدرشته": [1201],
+            "جنسیت": [1],
+            "دانش آموز فارغ": [0],
+            "مرکز گلستان صدرا": [1],
+            "مالی حکمت بنیاد": [0],
+            mentor_column: ["EMP-001"],
+        }
+    )
+
+    report = _build_join_key_duplicate_report(frame, join_keys, mentor_column)
+
+    assert report.empty
+    assert report.columns.tolist() == join_keys + [mentor_column, "duplicate_group_size"]
 
 
 def test_sanitize_pool_records_virtual_and_capacity_stats() -> None:
