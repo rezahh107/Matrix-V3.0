@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Sequence
+from typing import Dict, Iterable, List, Mapping, Optional, Sequence
 
 import pandas as pd
 from pandas.api.types import is_integer_dtype
@@ -39,7 +39,7 @@ from app.infra.sqlite_config import configure_connection
 from app.infra.sqlite_types import coerce_int_columns as _sqlite_coerce_int_columns
 from app.infra.sqlite_types import coerce_int_like as _sqlite_coerce_int_like
 
-_SCHEMA_VERSION = 8
+_SCHEMA_VERSION = 9
 _POLICY_VERSION = "1.0.3"
 _SSOT_VERSION = "1.0.2"
 _ISO_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
@@ -427,23 +427,25 @@ class LocalDatabase:
         run_id: int,
         qa_summary_df: pd.DataFrame | None,
         qa_details_df: pd.DataFrame | None,
+        qa_extras: Mapping[str, pd.DataFrame] | None = None,
     ) -> None:
-        """ثبت Snapshot QA شامل خلاصه و جزئیات قوانین."""
+        """ثبت Snapshot QA شامل خلاصه، جزئیات و خروجی‌های تکمیلی."""
 
         summary_json = _serialize_dataframe(qa_summary_df) if qa_summary_df is not None else None
         details_json = _serialize_dataframe(qa_details_df) if qa_details_df is not None else None
-        if summary_json is None and details_json is None:
-            logger.debug("Skipping QA snapshot insert; both payloads are empty")
+        extras_json = _serialize_dataframe_map(qa_extras)
+        if summary_json is None and details_json is None and extras_json is None:
+            logger.debug("Skipping QA snapshot insert; all payloads are empty")
             return
         try:
             with self._open_connection() as conn:
                 conn.execute(
                     """
                     INSERT OR REPLACE INTO qa_snapshots (
-                        run_id, qa_summary_json, qa_details_json
-                    ) VALUES (?, ?, ?)
+                        run_id, qa_summary_json, qa_details_json, qa_extras_json
+                    ) VALUES (?, ?, ?, ?)
                     """,
-                    (run_id, summary_json, details_json),
+                    (run_id, summary_json, details_json, extras_json),
                 )
                 conn.commit()
         except sqlite3.Error as exc:  # pragma: no cover - مسیر غیرمنتظره
@@ -451,27 +453,28 @@ class LocalDatabase:
 
     def fetch_qa_snapshot(
         self, run_id: int
-    ) -> tuple[pd.DataFrame | None, pd.DataFrame | None]:
+    ) -> tuple[pd.DataFrame | None, pd.DataFrame | None, dict[str, pd.DataFrame]]:
         """بازیابی Snapshot QA برای یک اجرا."""
 
         with self._open_connection() as conn:
             cursor = conn.execute(
                 """
-                SELECT qa_summary_json, qa_details_json
+                SELECT qa_summary_json, qa_details_json, qa_extras_json
                 FROM qa_snapshots WHERE run_id = ?
                 """,
                 (run_id,),
             )
             row = cursor.fetchone()
         if row is None:
-            return None, None
+            return None, None, {}
         summary_df = _safe_deserialize_dataframe(
             row["qa_summary_json"], label="qa_summary_json"
         )
         details_df = _safe_deserialize_dataframe(
             row["qa_details_json"], label="qa_details_json"
         )
-        return summary_df, details_df
+        extras = _safe_deserialize_dataframe_map(row["qa_extras_json"])
+        return summary_df, details_df, extras
 
     # ------------------------------------------------------------------
     # Snapshot بایگانی خروجی Exporter
@@ -666,6 +669,7 @@ class LocalDatabase:
                 run_id INTEGER PRIMARY KEY,
                 qa_summary_json TEXT,
                 qa_details_json TEXT,
+                qa_extras_json TEXT,
                 FOREIGN KEY(run_id) REFERENCES runs(id) ON DELETE CASCADE
             );
 
@@ -948,6 +952,10 @@ class LocalDatabase:
                 self._migrate_v7_to_v8(conn)
                 version = 8
                 continue
+            if version == 8:
+                self._migrate_v8_to_v9(conn)
+                version = 9
+                continue
             raise SchemaVersionMismatchError(
                 expected_version=_SCHEMA_VERSION,
                 actual_version=version,
@@ -971,6 +979,7 @@ class LocalDatabase:
                 run_id INTEGER PRIMARY KEY,
                 qa_summary_json TEXT,
                 qa_details_json TEXT,
+                qa_extras_json TEXT,
                 FOREIGN KEY(run_id) REFERENCES runs(id) ON DELETE CASCADE
             );
             """
@@ -1039,6 +1048,16 @@ class LocalDatabase:
         LocalDatabase._ensure_year_tables(conn)
         conn.execute(
             "UPDATE schema_meta SET schema_version = ? WHERE id = 1", (8,),
+        )
+
+    def _migrate_v8_to_v9(self, conn: sqlite3.Connection) -> None:
+        """افزودن ستون QA extras برای snapshotها در نسخهٔ ۹."""
+
+        conn.execute(
+            "ALTER TABLE qa_snapshots ADD COLUMN qa_extras_json TEXT"
+        )
+        conn.execute(
+            "UPDATE schema_meta SET schema_version = ? WHERE id = 1", (9,),
         )
 
     @staticmethod
@@ -1561,6 +1580,26 @@ def _serialize_dataframe(df: pd.DataFrame | None) -> str | None:
     )
 
 
+def _serialize_dataframe_map(
+    frames: Mapping[str, pd.DataFrame] | None,
+) -> str | None:
+    """سریال‌سازی نگاشت دیتافریم‌ها به JSON برای ذخیره در SQLite."""
+
+    if not frames:
+        return None
+    payload: dict[str, str] = {}
+    for key, df in frames.items():
+        if not isinstance(df, pd.DataFrame):
+            continue
+        serialized = _serialize_dataframe(df)
+        if serialized is None:
+            continue
+        payload[str(key)] = serialized
+    if not payload:
+        return None
+    return json.dumps(payload, ensure_ascii=False)
+
+
 def _safe_deserialize_dataframe(payload: str | bytes | None, *, label: str) -> pd.DataFrame | None:
     """بازسازی امن دیتافریم از JSON ذخیره‌شده به‌صورت split."""
 
@@ -1573,6 +1612,28 @@ def _safe_deserialize_dataframe(payload: str | bytes | None, *, label: str) -> p
     except Exception:
         logger.exception("Failed to deserialize DataFrame payload for %s", label)
         return None
+
+
+def _safe_deserialize_dataframe_map(
+    payload: str | bytes | None,
+) -> dict[str, pd.DataFrame]:
+    """بازسازی نگاشت دیتافریم‌ها از JSON ذخیره‌شده."""
+
+    if payload in (None, b"", ""):
+        return {}
+    try:
+        if isinstance(payload, bytes):
+            payload = payload.decode("utf-8")
+        raw = json.loads(payload)
+        result: dict[str, pd.DataFrame] = {}
+        for key, df_payload in raw.items():
+            frame = _safe_deserialize_dataframe(df_payload, label=f"qa_extras.{key}")
+            if isinstance(frame, pd.DataFrame):
+                result[str(key)] = frame
+        return result
+    except Exception:
+        logger.exception("Failed to deserialize QA extras payload")
+        return {}
 
 
 def _deserialize_exporter_rows(row: sqlite3.Row) -> pd.DataFrame | None:

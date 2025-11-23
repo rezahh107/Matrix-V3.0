@@ -33,6 +33,7 @@ class QaValidationContext:
     inspactor: pd.DataFrame | None = None
     invalid_mentors: pd.DataFrame | None = None
     meta: Mapping[str, object] | None = None
+    pool_join_key_duplicates: pd.DataFrame | None = None
 
 
 def _summary_sheet(report: QaReport) -> pd.DataFrame:
@@ -98,6 +99,45 @@ def _join_key_sheet(report: QaReport) -> pd.DataFrame:
     return details
 
 
+def _join_key_duplicates_sheet(context: QaValidationContext) -> pd.DataFrame:
+    df = context.pool_join_key_duplicates
+    if df is None:
+        return pd.DataFrame(
+            columns=[
+                "کدرشته",
+                "جنسیت",
+                "دانش آموز فارغ",
+                "مرکز گلستان صدرا",
+                "مالی حکمت بنیاد",
+                "کد مدرسه",
+                "mentor_id",
+                "duplicate_group_size",
+                "pool_row_index",
+                "pool_source",
+            ]
+        )
+    ordered = [
+        "کدرشته",
+        "جنسیت",
+        "دانش آموز فارغ",
+        "مرکز گلستان صدرا",
+        "مالی حکمت بنیاد",
+        "کد مدرسه",
+        "mentor_id",
+        "duplicate_group_size",
+        "pool_row_index",
+        "pool_source",
+    ]
+    base_cols = [col for col in ordered if col in df.columns]
+    remaining = [col for col in df.columns if col not in base_cols]
+    if not base_cols and not remaining:
+        return pd.DataFrame(columns=ordered)
+    result = df.loc[:, base_cols + remaining].copy()
+    if base_cols:
+        result = result.sort_values(by=base_cols, kind="stable").reset_index(drop=True)
+    return result
+
+
 def _stu_count_sheet(report: QaReport) -> pd.DataFrame:
     details = report.to_details_frame("QA_RULE_STU_01")
     if details.empty:
@@ -137,6 +177,7 @@ def export_qa_validation(
         "join_keys": _join_key_sheet(report),
         "student_counts": _stu_count_sheet(report),
         "meta": _meta_sheet(ctx, report),
+        "pool_join_key_duplicates": _join_key_duplicates_sheet(ctx),
     }
     sheet_modes = {name: None for name in sheets}
     write_xlsx_atomic(sheets, output, header_mode=None, sheet_header_modes=sheet_modes)

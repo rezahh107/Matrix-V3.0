@@ -484,8 +484,12 @@ def _format_duplicate_progress_preview(
         return ""
     if sample_rows:
         detail = _format_duplicate_warning_message(sample_rows[0], join_keys, mentor_column)
-        return f"total={total}; sample={detail}"
-    return f"total={total}; sample=NA"
+        return f"total={total}; sample={detail}; sheet=pool_join_key_duplicates"
+    return "".join(
+        [
+            f"total={total}; sample=NA; sheet=pool_join_key_duplicates",
+        ]
+    )
 
 
 # =============================================================================
@@ -1938,7 +1942,12 @@ def build_matrix(
     alias_unmatched = int(getattr(pool_stats, "alias_unmatched", 0) or 0) if pool_stats else 0
     duplicate_join_keys_df = insp_df.attrs.get(POOL_JOIN_KEY_DUPLICATES_ATTR)
     if duplicate_join_keys_df is None:
-        columns = list(cfg.policy.join_keys) + [COL_MENTOR_ID, "duplicate_group_size"]
+        columns = list(cfg.policy.join_keys) + [
+            COL_MENTOR_ID,
+            "duplicate_group_size",
+            "pool_row_index",
+            "pool_source",
+        ]
         duplicate_join_keys_df = pd.DataFrame(columns=columns)
     duplicate_summary = insp_df.attrs.get(POOL_DUPLICATE_SUMMARY_ATTR)
     duplicate_progress_message = _format_duplicate_progress_preview(
