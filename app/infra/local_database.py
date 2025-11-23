@@ -32,6 +32,7 @@ from app.infra.errors import (
     DatabaseCorruptError,
     DatabaseOperationError,
     DatabasePreparationError,
+    DatabaseSchemaMismatchError,
     ReferenceDataMissingError,
     SchemaVersionMismatchError,
 )
@@ -145,6 +146,31 @@ class LocalDatabase:
             self._initialize_once()
         except SchemaVersionMismatchError:
             raise
+        except sqlite3.OperationalError as exc:  # pragma: no cover - خطاهای عملیاتی قابل‌تشخیص
+            if self._is_schema_mismatch_error(exc):
+                raise DatabaseSchemaMismatchError(
+                    path=str(self.path),
+                    reason=f"ساختار پایگاه‌داده با نسخهٔ فعلی برنامه سازگار نیست: {exc}",
+                    hint="فایل پایگاه‌داده را حذف کنید تا با Schema جدید بازسازی شود.",
+                ) from exc
+            if self._is_corruption_error(exc):
+                logger.warning(
+                    "Local DB appears corrupted at %s; backing up and recreating", self.path
+                )
+                backup = self._recover_corrupt_database()
+                raise DatabaseCorruptError(
+                    path=str(self.path),
+                    reason="فایل پایگاه‌داده خراب است و بازسازی شد.",
+                    hint="جهت ادامه، در صورت نیاز داده‌های مرجع را دوباره بارگذاری کنید و فرمان را مجدداً اجرا نمایید.",
+                    backup_path=backup,
+                ) from exc
+            raise DatabasePreparationError(
+                path=str(self.path),
+                reason=str(exc),
+                hint=(
+                    "دسترسی فایل یا سلامت دیسک را بررسی کنید؛ در صورت تکرار، فایل پایگاه‌داده را حذف و دوباره بسازید."
+                ),
+            ) from exc
         except sqlite3.DatabaseError as exc:  # pragma: no cover - خطای پایگاه دادهٔ خراب
             if self._is_corruption_error(exc):
                 logger.warning(
@@ -240,6 +266,13 @@ class LocalDatabase:
             "file is not a database" in message
             or "malformed" in message
         )
+
+    @staticmethod
+    def _is_schema_mismatch_error(exc: sqlite3.Error) -> bool:
+        """تشخیص عدم سازگاری Schema بر اساس پیام SQLite."""
+
+        message = str(exc).lower()
+        return "no such column" in message or "has no column named" in message
 
 
     def insert_run(self, record: RunRecord) -> int:

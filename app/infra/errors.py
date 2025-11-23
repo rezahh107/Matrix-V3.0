@@ -89,6 +89,14 @@ class DatabaseCorruptError(DatabasePreparationError):
         super().__post_init__()
 
 
+@dataclass(eq=True)
+class DatabaseSchemaMismatchError(DatabasePreparationError):
+    """عدم سازگاری ساختار پایگاه‌داده با نسخهٔ فعلی برنامه."""
+
+    def __post_init__(self) -> None:  # pragma: no cover - پیام توسط والد مدیریت می‌شود
+        super().__post_init__()
+
+
 __all__ = [
     "InfraError",
     "DatabaseDisabledError",
@@ -97,4 +105,5 @@ __all__ = [
     "DatabaseOperationError",
     "DatabasePreparationError",
     "DatabaseCorruptError",
+    "DatabaseSchemaMismatchError",
 ]
