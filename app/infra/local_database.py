@@ -36,7 +36,7 @@ from app.infra.sqlite_config import configure_connection
 from app.infra.sqlite_types import coerce_int_columns as _sqlite_coerce_int_columns
 from app.infra.sqlite_types import coerce_int_like as _sqlite_coerce_int_like
 
-_SCHEMA_VERSION = 7
+_SCHEMA_VERSION = 8
 _POLICY_VERSION = "1.0.3"
 _SSOT_VERSION = "1.0.2"
 _ISO_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
@@ -93,8 +93,9 @@ class LocalDatabase:
     جداول و درج داده در اختیار Infra قرار می‌دهد.
     """
 
-    def __init__(self, path: Path) -> None:
+    def __init__(self, path: Path, *, academic_year: str | None = None) -> None:
         self.path = path
+        self.academic_year = academic_year
 
     def _open_connection(self) -> sqlite3.Connection:
         """ایجاد اتصال پیکربندی‌شده با PRAGMA های یکسان."""
@@ -135,38 +136,42 @@ class LocalDatabase:
         """
 
         with self._open_connection() as conn:
-            self._ensure_schema_meta_table(conn)
-            existing_version = self._get_schema_version(conn)
-            if existing_version is None:
-                self._ensure_schema(conn)
-                self._ensure_schema_meta_row(conn, version=_SCHEMA_VERSION)
-            elif existing_version < 2:
-                raise SchemaVersionMismatchError(
-                    expected_version=_SCHEMA_VERSION,
-                    actual_version=existing_version,
-                    message="نسخهٔ Schema بسیار قدیمی است و پشتیبانی نمی‌شود؛ پایگاه داده را بازسازی کنید.",
-                )
-            elif existing_version < _SCHEMA_VERSION:
-                self._migrate_schema(conn, from_version=existing_version)
-            elif existing_version > _SCHEMA_VERSION:
-                raise SchemaVersionMismatchError(
-                    expected_version=_SCHEMA_VERSION,
-                    actual_version=existing_version,
-                    message="نسخهٔ Schema پایگاه داده از نسخهٔ برنامه جدیدتر است.",
-                )
+        self._ensure_schema_meta_table(conn)
+        existing_version = self._get_schema_version(conn)
+        if existing_version is None:
             self._ensure_schema(conn)
-            self._validate_schema_version(conn)
-            conn.commit()
+            self._ensure_schema_meta_row(conn, version=_SCHEMA_VERSION)
+            # NEW: keep year meta support from main
+            self._ensure_year_meta(conn)
+        elif existing_version < 2:
+            raise SchemaVersionMismatchError(
+                expected_version=_SCHEMA_VERSION,
+                actual_version=existing_version,
+                message="نسخهٔ Schema بسیار قدیمی است و پشتیبانی نمی‌شود؛ پایگاه داده را بازسازی کنید.",
+            )
+        elif existing_version < _SCHEMA_VERSION:
+            self._migrate_schema(conn, from_version=existing_version)
+        elif existing_version > _SCHEMA_VERSION:
+            raise SchemaVersionMismatchError(
+                expected_version=_SCHEMA_VERSION,
+                actual_version=existing_version,
+                message="نسخهٔ Schema پایگاه داده از نسخهٔ برنامه جدیدتر است.",
+            )
+
+        self._ensure_schema(conn)
+        # NEW: ensure year meta also after migrations/schema ensure
+        self._ensure_year_meta(conn)
+        self._validate_schema_version(conn)
+        conn.commit()
 
     def _recover_corrupt_database(self) -> None:
         """پشتیبان‌گیری از فایل خراب و بازسازی پایگاه داده.
 
-        - اگر فایل فعلی وجود داشته باشد، با پسوند ``.corrupt`` بکیاپ می‌شود
+        - اگر فایل فعلی وجود داشته باشد، با پسوند ``.corrupt`` بکاپ می‌شود
           تا اطلاعات قبلی از دست نرود.
         - سپس مسیر فایل پاک و ``_initialize_once`` دوباره اجرا می‌شود تا
           Schema سالم ساخته شود.
         """
-
         if self.path.exists():
             backup = self.path.with_suffix(self.path.suffix + ".corrupt")
             try:
@@ -179,9 +184,12 @@ class LocalDatabase:
     @staticmethod
     def _is_corruption_error(exc: sqlite3.Error) -> bool:
         """تشخیص پیام‌های خطای مرتبط با خراب بودن فایل SQLite."""
-
         message = str(exc).lower()
-        return "file is not a database" in message or "malformed" in message
+        return (
+            "file is not a database" in message
+            or "malformed" in message
+        )
+
 
     def insert_run(self, record: RunRecord) -> int:
         """درج ردیف جدید در جدول ``runs`` و بازگرداندن شناسه."""
@@ -521,6 +529,20 @@ class LocalDatabase:
                 message TEXT
             );
 
+            CREATE TABLE IF NOT EXISTS year_meta (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                academic_year TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS roster_sources (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                source_type TEXT NOT NULL,
+                file_name TEXT,
+                imported_at TEXT NOT NULL,
+                academic_year TEXT
+            );
+
             CREATE TABLE IF NOT EXISTS run_metrics (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 run_id INTEGER NOT NULL,
@@ -740,6 +762,51 @@ class LocalDatabase:
         row = cursor.fetchone()
         return int(row[0]) if row is not None else None
 
+    def _ensure_year_meta(self, conn: sqlite3.Connection) -> None:
+        """ثبت متادیتای سال تحصیلی در صورت تعریف."""
+
+        LocalDatabase._ensure_year_tables(conn)
+        if self.academic_year is None:
+            return
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO year_meta (id, academic_year, created_at)
+            VALUES (1, ?, COALESCE((SELECT created_at FROM year_meta WHERE id = 1), ?))
+            """,
+            (self.academic_year, _to_iso(datetime.utcnow())),
+        )
+
+    def get_academic_year(self) -> str | None:
+        """بازیابی شناسهٔ سال ذخیره‌شده در پایگاه داده."""
+
+        with self._open_connection() as conn:
+            cursor = conn.execute(
+                "SELECT academic_year FROM year_meta WHERE id = 1"
+            )
+            row = cursor.fetchone()
+            return str(row[0]) if row else None
+
+    def record_roster_source(
+        self, *, source_type: str, file_name: str | None, academic_year: str | None = None
+    ) -> None:
+        """ثبت متادیتای منبع اکسل برای سال جاری."""
+
+        self.initialize()
+        with self._open_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO roster_sources (source_type, file_name, imported_at, academic_year)
+                VALUES (?, ?, ?, ?)
+                """,
+                (
+                    source_type,
+                    file_name,
+                    _to_iso(datetime.utcnow()),
+                    academic_year or self.academic_year,
+                ),
+            )
+            conn.commit()
+
     @staticmethod
     def _validate_schema_version(conn: sqlite3.Connection) -> None:
         """اعتبارسنجی تطابق نسخهٔ Schema پایگاه داده."""
@@ -782,6 +849,10 @@ class LocalDatabase:
             if version == 6:
                 self._migrate_v6_to_v7(conn)
                 version = 7
+                continue
+            if version == 7:
+                self._migrate_v7_to_v8(conn)
+                version = 8
                 continue
             raise SchemaVersionMismatchError(
                 expected_version=_SCHEMA_VERSION,
@@ -866,6 +937,34 @@ class LocalDatabase:
         LocalDatabase._ensure_exporter_archive_schema(conn)
         conn.execute(
             "UPDATE schema_meta SET schema_version = ? WHERE id = 1", (7,),
+        )
+
+    def _migrate_v7_to_v8(self, conn: sqlite3.Connection) -> None:
+        """افزودن جدول سال و منابع roster برای نسخهٔ ۸."""
+
+        LocalDatabase._ensure_year_tables(conn)
+        conn.execute(
+            "UPDATE schema_meta SET schema_version = ? WHERE id = 1", (8,),
+        )
+
+    @staticmethod
+    def _ensure_year_tables(conn: sqlite3.Connection) -> None:
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS year_meta (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                academic_year TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS roster_sources (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                source_type TEXT NOT NULL,
+                file_name TEXT,
+                imported_at TEXT NOT NULL,
+                academic_year TEXT
+            );
+            """
         )
 
     # ------------------------------------------------------------------
@@ -1207,6 +1306,38 @@ class LocalDatabase:
         if row is None:
             return None
         return row[0], row[1], row[2]
+
+    def list_tables_with_counts(self) -> pd.DataFrame:
+        """فهرست جدول‌های SQLite همراه شمارش ردیف."""
+
+        self.initialize()
+        with self._open_connection() as conn:
+            cursor = conn.execute(
+                """
+                SELECT name FROM sqlite_master
+                WHERE type='table' AND name NOT LIKE 'sqlite_%'
+                ORDER BY name
+                """
+            )
+            tables = [row[0] for row in cursor.fetchall()]
+            rows: list[dict[str, object]] = []
+            for table in tables:
+                count = conn.execute(f"SELECT COUNT(1) FROM {table}").fetchone()[0]
+                rows.append({"table": table, "row_count": int(count)})
+        return pd.DataFrame(rows)
+
+    def preview_table(self, table_name: str, *, limit: int = 100) -> pd.DataFrame:
+        """بازگرداندن نمونه‌ای محدود از جدول برای نمایش."""
+
+        self.initialize()
+        with self._open_connection() as conn:
+            try:
+                df = pd.read_sql_query(
+                    f"SELECT * FROM {table_name} LIMIT ?", conn, params=[int(limit)]
+                )
+            except Exception as exc:  # pragma: no cover - خطاهای نادر
+                raise DatabaseOperationError("خواندن جدول برای پیش‌نمایش ناکام ماند.") from exc
+        return _sqlite_coerce_int_like(df)
 
     @staticmethod
     def _replace_table_atomic(

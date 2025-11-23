@@ -71,6 +71,7 @@ from app.utils.path_utils import resource_path
 from app.ui.helpers.counter_helpers import detect_year_candidates
 from app.ui.helpers.manager_helpers import extract_manager_names
 from app.ui.history_metrics import HistoryMetricsDialog
+from app.ui.database_manager_dialog import DatabaseManagerDialog
 from app.ui.loaders import ExcelLoader
 from app.ui.mentor_pool_dialog import MentorPoolDialog
 from app.ui.models import MentorPoolEntry, build_mentor_entries_from_dataframe
@@ -96,6 +97,8 @@ from .theme import (
     build_theme,
 )
 from .texts import UiTranslator
+from app.infra.year_database_manager import YearDatabaseManager, YearDatabaseInfo
+from app.infra.local_database import LocalDatabase
 
 logger = logging.getLogger(__name__)
 
@@ -293,6 +296,11 @@ class MainWindow(QMainWindow):
         if app is not None:
             apply_layout_direction(app, self._language)
             apply_theme(app, self._theme)
+
+        self._year_manager = YearDatabaseManager(Path.home() / ".smart_alloc" / "years")
+        self._year_info: YearDatabaseInfo | None = None
+        self._local_db: LocalDatabase | None = None
+        self._ensure_year_loaded()
 
         self._worker: Worker | None = None
         self._success_hook: Callable[[], None] | None = None
@@ -649,6 +657,36 @@ class MainWindow(QMainWindow):
         for index, text in labels:
             if index < self._tabs.count():
                 self._tabs.setTabText(index, text)
+
+    def _ensure_year_loaded(self) -> None:
+        """انتخاب سال پیش‌فرض و مقداردهی پایگاه دادهٔ محلی."""
+
+        if self._year_info is not None and self._local_db is not None:
+            return
+        default_year = "current"
+        db = self._year_manager.open_year(default_year)
+        self._local_db = db
+        schema_version = None
+        try:
+            with db.connect() as conn:
+                schema_version = db._get_schema_version(conn)  # type: ignore[attr-defined]
+        except Exception:
+            schema_version = None
+        self._year_info = YearDatabaseInfo(
+            year_id=default_year,
+            path=db.path,
+            schema_version=schema_version,
+            size_bytes=db.path.stat().st_size if db.path.exists() else 0,
+        )
+
+    def open_database_manager(self) -> None:
+        """باز کردن دیالوگ مدیریت پایگاه داده."""
+
+        self._ensure_year_loaded()
+        if self._local_db is None or self._year_info is None:
+            return
+        dialog = DatabaseManagerDialog(db=self._local_db, year_info=self._year_info, parent=self)
+        dialog.exec()
 
     def _update_status_bar_state(self, key: str) -> None:
         """به‌روزرسانی متن نوار وضعیت بر اساس کلید."""
