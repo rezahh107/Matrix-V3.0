@@ -204,3 +204,26 @@ def test_attach_allocation_channel_with_real_policy() -> None:
         AllocationChannel.GOLESTAN.value,
         AllocationChannel.SADRA.value,
     ]
+
+
+def test_attach_allocation_channel_missing_student_id_column() -> None:
+    policy = parse_policy_dict(_policy_payload_with_channels())
+    center_column = policy.stage_column("center")
+    # ورودی بدون ستون student_id باید خطا ایجاد نکند و ستون کانال را خالی نگه دارد.
+    students = pd.DataFrame(
+        [
+            {policy.columns.school_code: 10, center_column: 0},
+            {policy.columns.school_code: 0, center_column: 1},
+        ]
+    )
+    summary = pd.DataFrame(
+        [
+            {"student_id": 1, "final_status": "ALLOCATED"},
+            {"student_id": 2, "final_status": "ALLOCATED"},
+        ]
+    )
+
+    enriched = attach_allocation_channel(summary, students, policy=policy)
+
+    assert "allocation_channel" in enriched.columns
+    assert enriched["allocation_channel"].tolist() == ["", ""]
