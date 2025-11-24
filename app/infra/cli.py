@@ -1745,7 +1745,13 @@ def _allocate_and_write(
             aligned_string = aligned.astype("string")
             if ensure_existing and "student_id" in en_frame.columns:
                 existing = en_frame["student_id"].astype("string")
-                en_frame["student_id"] = existing.fillna(aligned_string)
+                existing_mask = existing.str.strip().eq("") | existing.isna()
+                en_frame.loc[existing_mask, "student_id"] = aligned_string.reindex(
+                    en_frame.index
+                )
+                en_frame.loc[~existing_mask, "student_id"] = existing.loc[
+                    ~existing_mask
+                ]
             else:
                 en_frame["student_id"] = aligned_string
             return canonicalize_headers(en_frame, header_mode=header_internal)
