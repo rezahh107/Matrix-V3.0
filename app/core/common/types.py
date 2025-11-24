@@ -101,10 +101,7 @@ class JoinKeyValues(Mapping[str, int]):
             missing = tuple(key for key in expected if key not in ordered)
             extra = tuple(key for key in ordered if key not in expected)
             if missing or extra:
-                raise ValueError(
-                    "JoinKeyValues keys mismatch; "
-                    f"missing={missing} extra={extra}"
-                )
+                raise ValueError("JoinKeyValues keys mismatch; " f"missing={missing} extra={extra}")
             if tuple(ordered.keys()) != expected:
                 raise ValueError(
                     "JoinKeyValues order mismatch; expected "
@@ -114,7 +111,9 @@ class JoinKeyValues(Mapping[str, int]):
         object.__setattr__(self, "_items", tuple(ordered.items()))
         object.__setattr__(self, "_mapping", MappingProxyType(dict(ordered)))
 
-    def __setattr__(self, name: str, value: object) -> None:  # pragma: no cover - immutability guard
+    def __setattr__(
+        self, name: str, value: object
+    ) -> None:  # pragma: no cover - immutability guard
         raise AttributeError("JoinKeyValues is immutable")
 
     def __delattr__(self, name: str) -> None:  # pragma: no cover - immutability guard

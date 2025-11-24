@@ -82,5 +82,3 @@ def test_join_key_values_immutability_guards(sample_keys_data: dict[str, int]):
         keys._mapping["کدرشته"] = 2  # type: ignore[index]
     with pytest.raises(TypeError):
         keys._items[0] = ("کدرشته", 2)  # type: ignore[index]
-
-
