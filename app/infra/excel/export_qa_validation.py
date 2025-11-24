@@ -34,6 +34,8 @@ class QaValidationContext:
     invalid_mentors: pd.DataFrame | None = None
     meta: Mapping[str, object] | None = None
     pool_join_key_duplicates: pd.DataFrame | None = None
+    alloc_join_audit: pd.DataFrame | None = None
+    alloc_join_summary: pd.DataFrame | None = None
 
 
 def _summary_sheet(report: QaReport) -> pd.DataFrame:
@@ -179,6 +181,13 @@ def export_qa_validation(
         "meta": _meta_sheet(ctx, report),
         "pool_join_key_duplicates": _join_key_duplicates_sheet(ctx),
     }
+    if ctx.alloc_join_summary is not None:
+        sheets["alloc_join_summary"] = ctx.alloc_join_summary
+    if ctx.alloc_join_audit is not None:
+        audit = ctx.alloc_join_audit
+        if "any_mismatch" in audit.columns:
+            audit = audit.loc[audit["any_mismatch"].fillna(False)].copy()
+        sheets["alloc_join_mismatches"] = audit
     sheet_modes = {name: None for name in sheets}
     write_xlsx_atomic(sheets, output, header_mode=None, sheet_header_modes=sheet_modes)
 
