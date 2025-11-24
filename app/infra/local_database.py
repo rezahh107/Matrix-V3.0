@@ -1837,16 +1837,21 @@ class LocalDatabase:
 
         temp_table = f"_{table_name}_new"
         backup_table = f"_{table_name}_backup"
+        quoted_table = _quote_identifier(table_name)
+        quoted_temp = _quote_identifier(temp_table)
+        quoted_backup = _quote_identifier(backup_table)
         try:
-            conn.execute(f"DROP TABLE IF EXISTS {temp_table}")
-            conn.execute(f"DROP TABLE IF EXISTS {backup_table}")
+            conn.execute(f"DROP TABLE IF EXISTS {quoted_temp}")
+            conn.execute(f"DROP TABLE IF EXISTS {quoted_backup}")
             df.to_sql(temp_table, conn, if_exists="replace", index=False)
 
             conn.execute("BEGIN IMMEDIATE")
             if _table_exists(conn, table_name):
-                conn.execute(f"ALTER TABLE {table_name} RENAME TO {backup_table}")
-            conn.execute(f"ALTER TABLE {temp_table} RENAME TO {table_name}")
-            conn.execute(f"DROP TABLE IF EXISTS {backup_table}")
+                conn.execute(
+                    f"ALTER TABLE {quoted_table} RENAME TO {quoted_backup}"
+                )
+            conn.execute(f"ALTER TABLE {quoted_temp} RENAME TO {quoted_table}")
+            conn.execute(f"DROP TABLE IF EXISTS {quoted_backup}")
             for stmt in index_statements or []:
                 conn.execute(stmt)
             conn.commit()
@@ -1856,11 +1861,13 @@ class LocalDatabase:
             except sqlite3.Error:
                 pass
             try:
-                conn.execute(f"DROP TABLE IF EXISTS {temp_table}")
-                conn.execute(f"DROP TABLE IF EXISTS {backup_table}")
+                conn.execute(f"DROP TABLE IF EXISTS {quoted_temp}")
+                conn.execute(f"DROP TABLE IF EXISTS {quoted_backup}")
             except sqlite3.Error:
                 pass
-            raise DatabaseOperationError("جایگزینی جدول به‌صورت اتمیک با خطا مواجه شد.") from exc
+            raise DatabaseOperationError(
+                f"جایگزینی جدول به‌صورت اتمیک با خطا مواجه شد: {exc}"
+            ) from exc
 
 
 def _to_iso(dt: datetime) -> str:
