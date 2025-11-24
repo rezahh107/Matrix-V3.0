@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import enum
-from typing import Iterable
+from collections.abc import Iterable
 
 import pandas as pd
 
-from app.core.common.phone_rules import normalize_digits
 from app.core.common.columns import CANON_EN_TO_FA
+from app.core.common.phone_rules import normalize_digits
 
 __all__ = [
     "HistoryStatus",
@@ -150,13 +150,16 @@ def dedupe_by_national_id(
 
     مثال::
 
-        >>> students = pd.DataFrame({"نام": ["الف", "ب", "ج"], "کد ملی": ["0012345678", "1234567890", "123"]})
+        >>> students = pd.DataFrame(
+        ...     {"نام": ["الف", "ب", "ج"], "کد ملی": ["0012345678", "1234567890", "123"]}
+        ... )
         >>> history = pd.DataFrame({"national_code": ["0012345678"]})
         >>> allocated, new = dedupe_by_national_id(students, history)
         >>> allocated[["نام", "history_status"]].values.tolist()
         [['الف', 'already_allocated']]
         >>> new[["نام", "history_status", "dedupe_reason"]].values.tolist()
-        [['ب', 'no_history_match', 'no_history_match'], ['ج', 'missing_or_invalid_national_code', 'missing_or_invalid_national_code']]
+        [['ب', 'no_history_match', 'no_history_match'],
+         ['ج', 'missing_or_invalid_national_code', 'missing_or_invalid_national_code']]
 
     :param students_df: دیتافریم دانش‌آموزان.
     :param history_df: دیتافریم سوابق قبلی که توسط لایهٔ Infra بارگذاری شده است.

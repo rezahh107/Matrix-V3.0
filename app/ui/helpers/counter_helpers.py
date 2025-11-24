@@ -1,13 +1,12 @@
-from __future__ import annotations
-
 """توابع کمکی خالص برای پیشنهاد سال تحصیلی بر اساس شمارنده‌ها.
 
 مثال:
     >>> autodetect_academic_year(Path("roster.xlsx"))
 """
 
+from __future__ import annotations
+
 from pathlib import Path
-from typing import Tuple
 
 import pandas as pd
 
@@ -38,7 +37,7 @@ def _load_counter_dataframe(path: Path) -> pd.DataFrame:
         return workbook.parse(sheet_name)
 
 
-def detect_year_candidates(dataframe: pd.DataFrame) -> Tuple[int | None, int | None]:
+def detect_year_candidates(dataframe: pd.DataFrame) -> tuple[int | None, int | None]:
     """محاسبهٔ سال تحصیلی (سخت‌گیرانه و تقریبی) از دیتافریم شمارنده."""
 
     canonical = canonicalize_headers(dataframe, header_mode="en")

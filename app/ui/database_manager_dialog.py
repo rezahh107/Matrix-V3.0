@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
+
 try:  # pragma: no cover - وابستگی Qt ممکن است در CI غایب باشد
     from PySide6.QtCore import Qt
     from PySide6.QtWidgets import (
         QDialog,
         QGridLayout,
-        QHeaderView,
         QHBoxLayout,
+        QHeaderView,
         QLabel,
         QMessageBox,
         QPushButton,

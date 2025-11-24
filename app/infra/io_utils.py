@@ -8,14 +8,15 @@ from __future__ import annotations
 
 import contextlib
 import json
+import math
 import os
 import re
 import tempfile
 import warnings
-import math
+from collections.abc import Iterator, Mapping, Sequence
 from os import PathLike
 from pathlib import Path
-from typing import Dict, Iterator, List, Literal, Mapping, Sequence
+from typing import Literal
 
 import pandas as pd
 
@@ -27,8 +28,6 @@ from app.core.common.columns import (
     ensure_series,
 )
 from app.core.common.contact_columns import (
-    MOBILE_COLUMN_KEYWORDS,
-    MOBILE_COLUMN_NAMES,
     TEXT_SENSITIVE_COLUMN_NAMES,
     is_mobile_header,
     normalize_mobile_series_for_export,
@@ -109,11 +108,11 @@ def _flatten_columns(df: pd.DataFrame) -> pd.DataFrame:
     return df.copy().set_axis(cleaned, axis="columns")
 
 
-def _make_unique_columns(columns: Sequence[str]) -> List[str]:
+def _make_unique_columns(columns: Sequence[str]) -> list[str]:
     """ساخت نام ستون یکتا با حفظ ترتیب اولیه."""
 
     seen: dict[str, int] = {}
-    unique: List[str] = []
+    unique: list[str] = []
     for original in columns:
         base = (original or "column").strip() or "column"
         count = seen.get(base, 0)
@@ -136,7 +135,7 @@ def _coalesce_duplicate_columns(df: pd.DataFrame) -> pd.DataFrame:
         return df.copy()
 
     labels = [str(col) for col in df.columns]
-    groups: dict[str, List[int]] = {}
+    groups: dict[str, list[int]] = {}
     for idx, label in enumerate(labels):
         groups.setdefault(label, []).append(idx)
 
@@ -260,7 +259,7 @@ def _apply_excel_formatting(
     rtl: bool,
     font_name: str | None,
     font_size: int | None,
-    sheet_frames: Dict[str, pd.DataFrame],
+    sheet_frames: dict[str, pd.DataFrame],
 ) -> None:
     """اعمال تنظیمات خروجی با کمک زیرسیستم Excel."""
 
@@ -304,7 +303,7 @@ def _pick_engine() -> str | None:
 
 
 def write_xlsx_atomic(
-    data_dict: Dict[str, pd.DataFrame],
+    data_dict: dict[str, pd.DataFrame],
     filepath: Path | str | PathLike[str],
     *,
     rtl: bool | None = None,
@@ -331,17 +330,14 @@ def write_xlsx_atomic(
 
     engine = _pick_engine()
     taken: set[str] = set()
-    written_frames: Dict[str, pd.DataFrame] = {}
+    written_frames: dict[str, pd.DataFrame] = {}
 
-    processed_data: Dict[str, pd.DataFrame] = {}
+    processed_data: dict[str, pd.DataFrame] = {}
     sheet_header_modes = sheet_header_modes or {}
     sheet_prepare_modes = sheet_prepare_modes or {}
     for sheet_name, df in data_dict.items():
         prepare_mode = sheet_prepare_modes.get(sheet_name, "default")
-        if prepare_mode == "raw":
-            prepared = df.copy()
-        else:
-            prepared = _prepare_dataframe_for_excel(df)
+        prepared = df.copy() if prepare_mode == "raw" else _prepare_dataframe_for_excel(df)
         mode = sheet_header_modes.get(sheet_name, header_mode)
         if mode:
             prepared = canonicalize_headers(prepared, header_mode=mode)

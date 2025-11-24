@@ -5,10 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 
 import pandas as pd
+import pytest
 from openpyxl import load_workbook
 from pandas import testing as pd_testing
 from pandas.api import types as pd_types
-import pytest
 
 from app.infra.excel.common import enforce_text_columns, identify_code_headers
 from app.infra.excel.export_allocations import (

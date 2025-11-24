@@ -1,7 +1,7 @@
 from datetime import datetime
 from pathlib import Path
 
-from app.infra.local_database import LocalDatabase, _SCHEMA_VERSION
+from app.infra.local_database import _SCHEMA_VERSION, LocalDatabase
 
 
 def _insert_dummy_run(db: LocalDatabase) -> None:

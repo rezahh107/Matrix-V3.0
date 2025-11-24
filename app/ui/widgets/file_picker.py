@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
 
 from PySide6.QtCore import QFileInfo, Qt
 from PySide6.QtGui import QIcon
@@ -25,7 +24,7 @@ class FilePicker(QWidget):
 
     def __init__(
         self,
-        parent: Optional[QWidget] = None,
+        parent: QWidget | None = None,
         *,
         save: bool = False,
         placeholder: str = "",
@@ -78,7 +77,7 @@ class FilePicker(QWidget):
 
         return Path(self.text()) if self.text() else Path()
 
-    def setText(self, value: str) -> None:
+    def setText(self, value: str) -> None:  # noqa: N802 - امضای Qt
         """تنظیم مقدار متنی فیلد."""
 
         self._edit.setText(value)

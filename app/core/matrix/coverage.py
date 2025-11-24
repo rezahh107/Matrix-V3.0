@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Mapping, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
@@ -76,7 +76,7 @@ class CoverageMetrics:
     coverage_ratio: float
 
 
-def _aggregate_group_status(row: pd.Series) -> Tuple[bool, str]:
+def _aggregate_group_status(row: pd.Series) -> tuple[bool, str]:
     has_candidate = bool(row["candidate_row_count"] > 0)
     has_matrix = bool(row["matrix_row_count"] > 0)
     can_generate = bool(row.get("candidate_can_generate", False))
@@ -216,7 +216,7 @@ def compute_group_coverage_debug(
         "candidate_only_groups": int((merged["status"] == "candidate_only").sum()),
         "blocked_candidate_groups": int((merged["status"] == "blocked_candidate").sum()),
         "matrix_only_groups": int((merged["status"] == "matrix_only").sum()),
-        "candidate_groups": int((merged["has_candidate"] == True).sum()),
+        "candidate_groups": int(merged["has_candidate"].sum()),
     }
 
     ordered_columns = list(join_keys) + [

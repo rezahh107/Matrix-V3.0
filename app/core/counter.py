@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from hashlib import blake2b
-from typing import Dict, Optional, Sequence
 
 import pandas as pd
 
@@ -59,7 +59,7 @@ def pick_counter_sheet_name(sheet_names: Sequence[str]) -> str | None:
     if not sheet_names:
         return None
 
-    normalized: Dict[str, str] = {
+    normalized: dict[str, str] = {
         str(name).strip().lower(): str(name) for name in sheet_names
     }
     for candidate in _COUNTER_SHEET_CANDIDATES:
@@ -199,14 +199,14 @@ def build_registration_id(yy: int, mid3: str, sequence: int) -> str:
     return f"{yy:02d}{int(mid3):03d}{int(sequence):04d}"
 
 
-def _extract_sequence(counter_value: object) -> Optional[int]:
+def _extract_sequence(counter_value: object) -> int | None:
     text = normalize_digits(("" if counter_value is None else str(counter_value)).strip())
     if re.fullmatch(r"\d{9}", text):
         return int(text[-4:])
     return None
 
 
-def _pick_counter_column(df: pd.DataFrame) -> Optional[str]:
+def _pick_counter_column(df: pd.DataFrame) -> str | None:
     candidates = [
         "student_id",
         "counter",
@@ -228,7 +228,7 @@ def _pick_counter_column(df: pd.DataFrame) -> Optional[str]:
     return None
 
 
-def _pick_nat_id_column(df: pd.DataFrame) -> Optional[str]:
+def _pick_nat_id_column(df: pd.DataFrame) -> str | None:
     candidates = ["national_id", "کد ملی", "کدملی", "شماره ملی"]
     lowered = {str(column).lower(): column for column in df.columns}
     for name in candidates:
@@ -258,7 +258,7 @@ def _normalized_counter_series(df: pd.DataFrame, column: str) -> pd.Series:
 
 def detect_academic_year_from_counters(
     current_roster_df: pd.DataFrame | None,
-) -> Optional[int]:
+) -> int | None:
     """تشخیص سال تحصیلی از روی شناسه‌های ۹رقمی موجود در روستر."""
 
     if current_roster_df is None or current_roster_df.empty:
@@ -275,7 +275,7 @@ def detect_academic_year_from_counters(
     return None
 
 
-def infer_year_strict(current_roster_df: pd.DataFrame | None) -> Optional[int]:
+def infer_year_strict(current_roster_df: pd.DataFrame | None) -> int | None:
     """استخراج سال تحصیلی در صورت یکتایی پیشوندهای YY."""
 
     if current_roster_df is None or current_roster_df.empty:
@@ -323,7 +323,7 @@ def find_max_sequence_by_prefix(current_roster_df: pd.DataFrame | None, prefix: 
 
 def _prior_map(
     prior_roster_df: pd.DataFrame | None,
-) -> tuple[Dict[str, str], Dict[str, list[str]]]:
+) -> tuple[dict[str, str], dict[str, list[str]]]:
     """ساخت نگاشت روستر سال قبل با حذف برخورد شناسه‌های تکراری."""
 
     if prior_roster_df is None or prior_roster_df.empty:
@@ -332,9 +332,9 @@ def _prior_map(
     counter_col = _pick_counter_column(prior_roster_df)
     if nat_col is None or counter_col is None:
         return {}, {}
-    mapping: Dict[str, str] = {}
-    conflicts: Dict[str, list[str]] = {}
-    counter_to_owner: Dict[str, str] = {}
+    mapping: dict[str, str] = {}
+    conflicts: dict[str, list[str]] = {}
+    counter_to_owner: dict[str, str] = {}
     for nat, counter_value in zip(prior_roster_df[nat_col], prior_roster_df[counter_col]):
         normalized = _normalize_nat_id(nat)
         if not normalized:
@@ -421,7 +421,7 @@ def assign_counters(
     next_male = male_max + 1
     next_female = female_max + 1
 
-    assigned_mapping: Dict[str, str] = {}
+    assigned_mapping: dict[str, str] = {}
     reused_count = 0
     new_male_count = 0
     new_female_count = 0

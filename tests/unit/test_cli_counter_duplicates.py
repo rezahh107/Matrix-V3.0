@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from app.infra import cli
 from app.core.policy_loader import load_policy
+from app.infra import cli
 
 
 def _load_policy() -> object:

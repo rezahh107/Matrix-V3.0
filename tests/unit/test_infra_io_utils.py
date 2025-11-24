@@ -9,7 +9,6 @@ import pandas as pd
 import pytest
 
 import app.infra.io_utils as io_utils  # noqa: E402
-from app.infra.io_utils import ALT_CODE_COLUMN, write_xlsx_atomic  # noqa: E402
 from app.core.build_matrix import (
     CAPACITY_CURRENT_COL,
     CAPACITY_SPECIAL_COL,
@@ -21,6 +20,7 @@ from app.core.build_matrix import (
     COL_SCHOOL_COUNT,
     REQUIRED_INSPACTOR_COLUMNS,
 )
+from app.infra.io_utils import ALT_CODE_COLUMN, write_xlsx_atomic  # noqa: E402
 
 _HAS_OPENPYXL = importlib.util.find_spec("openpyxl") is not None
 _HAS_XLSXWRITER = importlib.util.find_spec("xlsxwriter") is not None
@@ -302,7 +302,7 @@ def test_write_xlsx_atomic_cleans_up_temp_file_on_failure(
     monkeypatch.setattr(io_utils, "_pick_engine", lambda: "openpyxl")
 
     class ExplodingWriter:
-        def __enter__(self) -> "ExplodingWriter":
+        def __enter__(self) -> ExplodingWriter:
             raise RuntimeError("boom")
 
         def __exit__(self, exc_type, exc, tb) -> bool:  # pragma: no cover - interface

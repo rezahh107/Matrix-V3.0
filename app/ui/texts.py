@@ -8,10 +8,8 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import Dict
 
 from app.ui.i18n import Language
-
 from app.utils.path_utils import resource_path
 
 __all__ = ["UiTranslator", "SUPPORTED_LANGUAGES", "DEFAULT_LANGUAGE"]
@@ -39,11 +37,11 @@ class UiTranslator:
         object.__setattr__(self, "_lang", lang_enum.code)
         object.__setattr__(self, "_messages", self._load_messages())
 
-    def _load_messages(self) -> Dict[str, str]:
+    def _load_messages(self) -> dict[str, str]:
         """بارگذاری دیکشنری ترجمه از فایل JSON با fallback به مقدار پیش‌فرض."""
 
         payload_path = resource_path("resources", "translations", "ui_texts.json")
-        default: Dict[str, Dict[str, str]] = {lang: {} for lang in SUPPORTED_LANGUAGES}
+        default: dict[str, dict[str, str]] = {lang: {} for lang in SUPPORTED_LANGUAGES}
         if payload_path.exists():
             try:
                 loaded = json.loads(payload_path.read_text(encoding="utf-8"))

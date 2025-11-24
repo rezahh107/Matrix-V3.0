@@ -1,10 +1,10 @@
 """لایهٔ زیرساختی برای عملیات I/O و پل‌های سیستم Eligibility Matrix."""
 
 from app.infra.errors import (
+    DatabaseCorruptError,
     DatabaseDisabledError,
     DatabaseOperationError,
     DatabasePreparationError,
-    DatabaseCorruptError,
     InfraError,
     ReferenceDataMissingError,
     SchemaVersionMismatchError,

@@ -7,8 +7,8 @@ import pandas.testing as pd_testing
 import pytest
 
 from app.core.allocate_students import allocate_batch, build_selection_reason_rows
-from app.core.policy_loader import load_policy
 from app.core.common.columns import canonicalize_headers
+from app.core.policy_loader import load_policy
 from app.infra.audit_allocations import audit_allocations
 from app.infra.cli import _sanitize_pool_for_allocation
 from app.infra.excel_writer import write_selection_reasons_sheet

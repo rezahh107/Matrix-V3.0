@@ -5,14 +5,13 @@ Excel Inspactor تنها یک‌بار خوانده و با قواعد Policy ن
 """
 from __future__ import annotations
 
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Final, Iterable
+from typing import Any, Final
 
 import pandas as pd
 
-from app.core.common.errors import InvalidCenterMappingError
 from app.core.build_matrix import (
-    BuildConfig,
     COL_GENDER,
     COL_GROUP,
     COL_MANAGER_NAME,
@@ -23,17 +22,19 @@ from app.core.build_matrix import (
     COL_SCHOOL4,
     COL_STATUS_A,
     COL_STATUS_B,
+    BuildConfig,
     _as_domain_config,
     build_school_maps,
     collect_school_codes_from_row,
-    expand_group_token,
     domain_center_from_manager,
+    expand_group_token,
     norm_gender,
     norm_status,
     prepare_crosswalk_mappings,
 )
 from app.core.canonical_frames import canonicalize_headers, canonicalize_pool_frame
 from app.core.common.domain import _coerce_finance, _num_to_int_safe
+from app.core.common.errors import InvalidCenterMappingError
 from app.core.common.normalization import normalize_fa
 from app.core.policy_loader import PolicyConfig
 from app.infra.errors import DatabaseOperationError

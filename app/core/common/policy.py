@@ -2,18 +2,18 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Mapping, MutableSequence, Sequence
 import warnings
+from collections.abc import Mapping, MutableSequence, Sequence
+from dataclasses import dataclass
 
+from app.core.policy.loader import compute_schema_hash, validate_policy_columns
 from app.core.policy_loader import (
+    _DEFAULT_REASON_TRACE_LABELS,
+    _DEFAULT_SELECTION_REASON_OPTIONS,
     DEFAULT_POLICY_VERSION,
     PolicyConfig,
     VersionMismatchMode,
-    _DEFAULT_REASON_TRACE_LABELS,
-    _DEFAULT_SELECTION_REASON_OPTIONS,
 )
-from app.core.policy.loader import compute_schema_hash, validate_policy_columns
 
 
 @dataclass(frozen=True)

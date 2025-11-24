@@ -12,7 +12,8 @@ from __future__ import annotations
 import contextlib
 import logging
 import os
-from typing import Final, Iterator
+from collections.abc import Iterator
+from typing import Final
 
 from PySide6.QtGui import QPainter
 

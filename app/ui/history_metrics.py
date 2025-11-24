@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """ویجت و مدل نمایش KPI تاریخچه تخصیص در UI."""
+
+from __future__ import annotations
 
 import pandas as pd
 from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt
@@ -43,12 +43,12 @@ class HistoryMetricsModel(QAbstractTableModel):
         self.endResetModel()
 
     # Qt model overrides -------------------------------------------------
-    def rowCount(self, parent: QModelIndex | None = None) -> int:  # type: ignore[override]
+    def rowCount(self, parent: QModelIndex | None = None) -> int:  # type: ignore[override]  # noqa: N802 - امضای Qt
         if parent and parent.isValid():
             return 0
         return len(self._metrics_df.index)
 
-    def columnCount(self, parent: QModelIndex | None = None) -> int:  # type: ignore[override]
+    def columnCount(self, parent: QModelIndex | None = None) -> int:  # type: ignore[override]  # noqa: N802 - امضای Qt
         if parent and parent.isValid():
             return 0
         return len(METRIC_COLUMNS)
@@ -66,7 +66,9 @@ class HistoryMetricsModel(QAbstractTableModel):
                 return str(value)
         return str(value)
 
-    def headerData(self, section: int, orientation: Qt.Orientation, role: int = Qt.DisplayRole):  # type: ignore[override]
+    def headerData(  # noqa: N802 - امضای Qt
+        self, section: int, orientation: Qt.Orientation, role: int = Qt.DisplayRole
+    ):  # type: ignore[override]  # noqa: N802 - امضای Qt
         if role != Qt.DisplayRole:
             return None
         if orientation == Qt.Horizontal:

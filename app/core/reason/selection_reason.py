@@ -2,16 +2,17 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 import pandas as pd
 
 from app.core.common.columns import canonicalize_headers, ensure_series
 from app.core.common.normalization import (
     fa_digitize,
-    sanitize_bidi,
     safe_truncate,
+    sanitize_bidi,
     to_numlike_str,
 )
 from app.core.common.policy import (
@@ -20,8 +21,8 @@ from app.core.common.policy import (
     load_selection_reason_policy,
 )
 from app.core.common.ranking import natural_key
-from app.core.common.reasons import ReasonCode, reason_message
 from app.core.common.reasoning import summarize_trace_steps
+from app.core.common.reasons import ReasonCode, reason_message
 from app.core.policy_loader import PolicyConfig
 
 __all__ = [

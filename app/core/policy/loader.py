@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import re
-from typing import Iterable, Sequence
+from collections.abc import Iterable, Sequence
 
 _RESERVED_PREFIXES: tuple[str, ...] = ("__",)
 _RESERVED_EQUIVALENTS: tuple[str, ...] = ("index",)

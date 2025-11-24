@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from app.infra.local_database import LocalDatabase
-from app.infra.local_database import _table_exists
+from app.infra.local_database import LocalDatabase, _table_exists
 
 
 def test_initialize_creates_reference_tables(tmp_path) -> None:

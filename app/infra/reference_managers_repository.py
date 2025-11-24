@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """مدیریت کش SQLite برای نگاشت مدیر → مرکز (ManagerReport).
 
 ManagerReport (نگاشت مدیر→مرکز) تنها یک‌بار از Excel خوانده می‌شود و پس از
@@ -10,9 +9,9 @@ ManagerReport (نگاشت مدیر→مرکز) تنها یک‌بار از Excel
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
 
 import pandas as pd
 
@@ -21,7 +20,6 @@ from app.infra.io_utils import read_excel_first_sheet
 from app.infra.local_database import LocalDatabase
 from app.infra.reference_repository import SQLiteReferenceRepository
 from app.infra.sqlite_types import coerce_int_series
-
 
 _MANAGER_COLUMN = "نام مدیر"
 _CENTER_COLUMN = "مرکز گلستان صدرا"

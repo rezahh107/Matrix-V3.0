@@ -5,7 +5,6 @@ from app.core.build_matrix import (
     CAPACITY_CURRENT_COL,
     CAPACITY_SPECIAL_COL,
     BuildConfig,
-    DomainBuildConfig,
     _as_domain_config,
     _explode_rows,
     center_text,
@@ -13,7 +12,6 @@ from app.core.build_matrix import (
 from app.core.common.domain import COL_SCHOOL
 from app.core.matrix.coverage import CoveragePolicyConfig, compute_coverage_metrics
 from app.core.qa.coverage_validation import build_coverage_validation_fields
-
 
 JOIN_KEYS = [
     "کدرشته",

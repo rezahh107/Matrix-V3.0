@@ -1,8 +1,5 @@
 from pathlib import Path
 
-import pandas as pd
-
-from app.infra.local_database import LocalDatabase
 from app.infra.year_database_manager import YearDatabaseManager
 
 

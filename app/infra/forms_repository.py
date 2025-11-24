@@ -1,11 +1,11 @@
-from __future__ import annotations
-
 """Forms repository for WordPress/Gravity Forms backed by SQLite."""
 
+from __future__ import annotations
 
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Callable, Mapping, Protocol, Sequence
+from typing import Any, Protocol
 
 import pandas as pd
 

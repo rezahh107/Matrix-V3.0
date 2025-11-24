@@ -5,13 +5,13 @@ import pytest
 pytest.importorskip("PySide6.QtWidgets", reason="PySide6 GUI stack نیاز به libGL دارد")
 from PySide6.QtWidgets import QApplication
 
+from app.ui.texts import UiTranslator
 from app.ui.theme import (
     apply_theme_mode,
     build_dark_theme,
     build_light_theme,
     relative_luminance,
 )
-from app.ui.texts import UiTranslator
 
 
 @pytest.fixture(scope="module")

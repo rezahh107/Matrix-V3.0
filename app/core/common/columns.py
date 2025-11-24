@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import re
-from typing import Collection, Dict, Iterable, List, Literal, Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
+from dataclasses import dataclass
+from typing import Literal
 
 import pandas as pd
 
 from app.core.policy_loader import get_policy
+
 from .normalization import normalize_fa, strip_school_code_separators, to_numlike_str
 
 __all__ = [
@@ -420,7 +422,7 @@ class _AliasBundle:
     """نگه‌دارندهٔ نگاشت نرمال‌شده به کلید کاننیکال و فهرست سینونیم‌ها."""
 
     normalized_map: Mapping[str, str]
-    report_map: Mapping[str, List[str]]
+    report_map: Mapping[str, list[str]]
 
 
 # ---------------------------------------------------------------------------
@@ -474,8 +476,8 @@ def _build_alias_bundle(source: Source) -> _AliasBundle:
     base = dict(ALIASES_DEFAULT.get(source, {}))
     base.update(_policy_aliases(source))
 
-    normalized_map: Dict[str, str] = {}
-    report_map: Dict[str, List[str]] = {
+    normalized_map: dict[str, str] = {}
+    report_map: dict[str, list[str]] = {
         CANON_EN_TO_FA[key]: [] for key in CANON_EN_TO_FA
     }
 
@@ -508,7 +510,7 @@ def collect_aliases_for(source: Source) -> Mapping[str, str]:
     """برگرداندن نگاشت alias→نام کاننیکال (فارسی) برای پیام‌های خطا."""
 
     bundle = _build_alias_bundle(source)
-    aliases: Dict[str, str] = {}
+    aliases: dict[str, str] = {}
     for normalized, en_key in bundle.normalized_map.items():
         fa_name = CANON_EN_TO_FA.get(en_key, en_key)
         aliases[normalized] = fa_name
@@ -635,7 +637,7 @@ def resolve_aliases(df: pd.DataFrame, source: Source) -> pd.DataFrame:
     """هم‌نام‌سازی ستون‌های ورودی بر اساس سیاست و سینونیم‌ها."""
 
     bundle = _build_alias_bundle(source)
-    rename_map: Dict[str, str] = {}
+    rename_map: dict[str, str] = {}
     seen: set[str] = set()
     for column in df.columns:
         canonical_en: str | None = None
@@ -698,7 +700,7 @@ def ensure_required_columns(
     if not missing:
         return resolved
 
-    accepted: Dict[str, Sequence[str]] = {}
+    accepted: dict[str, Sequence[str]] = {}
     for column in missing:
         synonyms = list(accepted_synonyms(source, column))
         if column not in synonyms:
@@ -743,7 +745,7 @@ def canonicalize_headers(df: pd.DataFrame, header_mode: HeaderMode) -> pd.DataFr
     if header_mode not in {"fa", "en", "fa_en"}:
         raise ValueError(f"Unsupported header_mode '{header_mode}'")
 
-    rename: Dict[str, str] = {}
+    rename: dict[str, str] = {}
     for column in df.columns:
         en_key: str | None = None
         for normalized in _normalized_header_tokens(column):

@@ -9,11 +9,12 @@ import sys
 import threading
 import traceback
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from types import TracebackType
-from typing import Any, Callable
+from typing import Any
 
 import yaml
 
@@ -65,7 +66,7 @@ class LoggingContext:
             Path: مسیر فایل گزارش ایجاد شده.
         """
 
-        timestamp = datetime.now(timezone.utc)
+        timestamp = datetime.now(UTC)
         filename = f"{error_id}-{timestamp.strftime('%Y%m%dT%H%M%SZ')}.log"
         self.error_dir.mkdir(parents=True, exist_ok=True)
         report_path = self.error_dir / filename

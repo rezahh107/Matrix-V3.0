@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-from typing import Optional, Tuple
-
 import pandas as pd
 
-from app.core.common.normalization import extract_ascii_digits
 from app.core.common.domain import FinanceCode
+from app.core.common.normalization import extract_ascii_digits
 
 MOBILE_REQUIRED_PREFIX = "09"
 MOBILE_REQUIRED_LENGTH = 11
@@ -32,7 +30,7 @@ __all__ = [
 ]
 
 
-def normalize_digits(value: object | None) -> Optional[str]:
+def normalize_digits(value: object | None) -> str | None:
     """بازگرداندن تنها digits انگلیسی از ورودی.
 
     - ارقام فارسی/عربی به انگلیسی برگردانده می‌شوند.
@@ -44,7 +42,7 @@ def normalize_digits(value: object | None) -> Optional[str]:
     return digits or None
 
 
-def normalize_mobile(value: object | None) -> Optional[str]:
+def normalize_mobile(value: object | None) -> str | None:
     """اعتبارسنجی شماره موبایل ایران طبق Policy فعلی.
 
     تنها شماره‌هایی پذیرفته می‌شوند که بعد از حذف نویز:
@@ -76,7 +74,7 @@ def normalize_landline(
     value: object | None,
     *,
     allow_special_zero: bool = False,
-) -> Optional[str]:
+) -> str | None:
     """نرمال‌سازی تلفن ثابت طبق Policy.
 
     قواعد:
@@ -140,7 +138,7 @@ def normalize_digits_series(series: pd.Series | None) -> pd.Series:
 def fix_guardian_phones(
     phone1: object | None,
     phone2: object | None,
-) -> Tuple[Optional[str], Optional[str]]:
+) -> tuple[str | None, str | None]:
     """تعمیر شماره رابط اول و دوم با رعایت قواعد برابری/جابجایی.
 
     قواعد:
@@ -202,7 +200,7 @@ def fix_guardian_phone_columns(
     series1 = _ensure_series(result, col1)
     series2 = _ensure_series(result, col2)
 
-    fixed_values: list[Tuple[Optional[str], Optional[str]]] = []
+    fixed_values: list[tuple[str | None, str | None]] = []
     for value1, value2 in zip(series1.tolist(), series2.tolist()):
         fixed_values.append(fix_guardian_phones(value1, value2))
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Iterable, Sequence
+from collections.abc import Iterable, Sequence
 
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet

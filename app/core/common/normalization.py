@@ -1,11 +1,10 @@
-# -*- coding: utf-8 -*-
 """
 A compact, fail-safe Persian normalization helper (Python 3.10+).
 
 Public API:
 - normalize_fa(text: Any) -> str
 - to_numlike_str(value: Any) -> str
-- ensure_list(values: Iterable[Any]) -> List[str]
+- ensure_list(values: Iterable[Any]) -> list[str]
 - strip_school_code_separators(text: str) -> str
 
 Design notes:
@@ -16,12 +15,13 @@ Design notes:
 """
 from __future__ import annotations
 
-from typing import Any, Iterable, List, Set, Dict, Tuple, Mapping, MutableMapping, Optional
+import math
 import re
 import unicodedata
+from collections.abc import Iterable, Mapping, MutableMapping
 from functools import lru_cache
-import math
 from logging import Logger, getLogger
+from typing import Any
 
 import pandas as pd
 
@@ -66,13 +66,13 @@ _SCHOOL_CODE_SEPARATOR_TRANSLATION = str.maketrans(
 )
 
 # Arabic-Indic (0660–0669) and Extended Arabic-Indic (06F0–06F9) → ASCII digits
-_DIGIT_TRANSLATION: Dict[int, int] = {
+_DIGIT_TRANSLATION: dict[int, int] = {
     **{ord(chr(0x0660 + i)): ord(str(i)) for i in range(10)},
     **{ord(chr(0x06F0 + i)): ord(str(i)) for i in range(10)},
 }
 
 # Numeric symbol translation for number-like normalization contexts.
-_NUM_SYM_TRANSLATION: Dict[int, int | None] = {
+_NUM_SYM_TRANSLATION: dict[int, int | None] = {
     ord("\u2212"): ord("-"),  # MINUS SIGN → hyphen-minus
     ord("\u066B"): ord("."),  # ARABIC DECIMAL SEPARATOR → '.'
     # Thousand separators to remove in numeric contexts
@@ -97,7 +97,7 @@ def strip_school_code_separators(text: str) -> str:
     return text.translate(_SCHOOL_CODE_SEPARATOR_TRANSLATION)
 
 # Minimal Arabic → Persian letter fixes
-_AR2FA_MAP: Dict[str, str] = {
+_AR2FA_MAP: dict[str, str] = {
     "ي": "ی",
     "ى": "ی",
     "ك": "ک",
@@ -165,7 +165,7 @@ def _format_float_stable(val: float) -> str:
         return "0"
 
 
-def _to_stable_str(value: Any, _seen: Set[int] | None = None) -> str:
+def _to_stable_str(value: Any, _seen: set[int] | None = None) -> str:
     """
     Deterministic, cycle-safe conversion of any value to a stable string.
     - dict: sort by the stable-string of keys
@@ -199,8 +199,8 @@ def _to_stable_str(value: Any, _seen: Set[int] | None = None) -> str:
         if isinstance(value, int):
             return str(value)
         if isinstance(value, dict):
-            items: List[Tuple[str, Any]] = []
-            for k in value.keys():
+            items: list[tuple[str, Any]] = []
+            for k in value:
                 ks = _to_stable_str(k, _seen)
                 items.append((ks, k))
             items.sort(key=lambda pair: pair[0])
@@ -213,7 +213,7 @@ def _to_stable_str(value: Any, _seen: Set[int] | None = None) -> str:
             parts = [_to_stable_str(v, _seen) for v in value]
             return "[" + str(len(parts)) + "|" + ",".join(parts) + "]"
         if isinstance(value, set):
-            parts = sorted((_to_stable_str(v, _seen) for v in value))
+            parts = sorted(_to_stable_str(v, _seen) for v in value)
             return "{" + ",".join(parts) + "}"
 
         name = type(value).__name__
@@ -281,7 +281,7 @@ def _numlike_ascii_cleanup(s: str) -> str:
         s = s.translate(_DIGIT_TRANSLATION | _NUM_SYM_TRANSLATION)
         if not s:
             return ""
-        keep: List[str] = []
+        keep: list[str] = []
         first_dot_used = False
         is_negative = False
         for ch in s:
@@ -407,7 +407,7 @@ def to_numlike_str(value: Any) -> str:
         return ""
 
 
-def ensure_list(values: Iterable[Any]) -> List[str]:
+def ensure_list(values: Iterable[Any]) -> list[str]:
     """
     Split and normalize a heterogeneous list of values into a unique, order-preserving list of strings.
     - Splits strings by any of [, | ، ؛]+
@@ -419,13 +419,10 @@ def ensure_list(values: Iterable[Any]) -> List[str]:
     >>> ensure_list([" الف،ب ", "الف|ج", None, "۰"]) == ["الف", "ب", "ج"]
     True
     """
-    out: List[str] = []
-    seen: Set[str] = set()
+    out: list[str] = []
+    seen: set[str] = set()
     try:
-        if isinstance(values, (str, bytes, bytearray)):
-            values_iter = [values]
-        else:
-            values_iter = values  # type: ignore[assignment]
+        values_iter = [values] if isinstance(values, (str, bytes, bytearray)) else values  # type: ignore[assignment]
         for item in values_iter:
             if _is_nan_like(item):
                 continue
@@ -469,7 +466,7 @@ def normalize_header(name: Any) -> str:
     return text
 
 
-def parse_int_safe(value: Any) -> Optional[int]:
+def parse_int_safe(value: Any) -> int | None:
     """تبدیل امن مقدار به عدد صحیح؛ فقط اعداد درست یا اعشاری با صفر اعشار پذیرفته می‌شوند."""
 
     candidate = to_numlike_str(value)
@@ -495,7 +492,7 @@ def parse_int_safe(value: Any) -> Optional[int]:
 
 
 def resolve_group_code(
-    row: "pd.Series",
+    row: pd.Series,
     group_map: Mapping[str, int],
     *,
     major_column: str,
@@ -503,7 +500,7 @@ def resolve_group_code(
     prefer_major_code: bool = True,
     stats: MutableMapping[str, int] | None = None,
     logger: Logger | None = None,
-) -> Optional[int]:
+) -> int | None:
     """تعیین کد رشتهٔ دانش‌آموز با اولویت «کد رشته» و سپس نگاشت Crosswalk."""
 
     def _bump(key: str) -> None:

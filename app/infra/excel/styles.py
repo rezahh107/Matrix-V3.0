@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from contextlib import suppress
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 _VAZIR_KEYWORDS = ("vazir", "vazirmatn")
 _DEFAULT_STYLE_NAME = "EM_DefaultCenter"
@@ -21,15 +22,15 @@ __all__ = [
 class FontConfig:
     """پیکربندی فونت خروجی با درنظرگرفتن Override برای Vazir."""
 
-    name: Optional[str]
-    size: Optional[int]
+    name: str | None
+    size: int | None
 
     @property
     def has_override(self) -> bool:
         return self.size is not None or self.name is not None
 
 
-def is_vazir_family(font_name: Optional[str]) -> bool:
+def is_vazir_family(font_name: str | None) -> bool:
     """تشخیص اینکه فونت متعلق به خانوادهٔ Vazir/Vazirmatn است."""
 
     if not font_name:
@@ -39,9 +40,9 @@ def is_vazir_family(font_name: Optional[str]) -> bool:
 
 
 def build_font_config(
-    font_name: Optional[str],
+    font_name: str | None,
     *,
-    font_size: Optional[int] = None,
+    font_size: int | None = None,
 ) -> FontConfig:
     """تولید پیکربندی فونت با احترام به اندازهٔ تعریف‌شده در Policy.
 
@@ -74,11 +75,11 @@ def ensure_xlsxwriter_format(
 
     if not hasattr(workbook, "_em_format_cache"):
         workbook._em_format_cache = {}  # type: ignore[attr-defined]
-    cache: Dict[Tuple[Optional[str], Optional[int], bool, bool], Any] = workbook._em_format_cache  # type: ignore[attr-defined]
+    cache: dict[tuple[str | None, int | None, bool, bool], Any] = workbook._em_format_cache  # type: ignore[attr-defined]
     key = (font.name, font.size, header, align_right)
     if key in cache:
         return cache[key]
-    options: Dict[str, Any] = {}
+    options: dict[str, Any] = {}
     if font.name:
         options["font_name"] = font.name
     if font.size:
@@ -106,7 +107,7 @@ def ensure_openpyxl_named_style(workbook: Any, font: FontConfig):
 
     if not hasattr(workbook, "_em_named_styles"):
         workbook._em_named_styles = {}  # type: ignore[attr-defined]
-    cache: Dict[Tuple[Optional[str], Optional[int]], str] = workbook._em_named_styles  # type: ignore[attr-defined]
+    cache: dict[tuple[str | None, int | None], str] = workbook._em_named_styles  # type: ignore[attr-defined]
 
     key = (font.name, font.size)
     if key in cache:
@@ -126,10 +127,8 @@ def ensure_openpyxl_named_style(workbook: Any, font: FontConfig):
     named_style = NamedStyle(name=style_name)
     if font.name or font.size:
         named_style.font = Font(name=font.name, size=font.size)
-    try:
-        workbook.add_named_style(named_style)
-    except ValueError:
+    with suppress(ValueError):
         # در صورت موجود بودن استایل با همین نام، از همان نمونهٔ قبلی استفاده می‌کنیم.
-        pass
+        workbook.add_named_style(named_style)
     cache[key] = style_name
     return style_name

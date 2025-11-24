@@ -4,8 +4,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from app.core.allocate_students import allocate_batch
-from app.core.allocate_students import build_selection_reason_rows
+from app.core.allocate_students import allocate_batch, build_selection_reason_rows
 from app.core.common.trace import FinalStatus, build_unallocated_summary
 from app.core.policy_loader import load_policy
 

@@ -7,7 +7,9 @@ import pytest
 
 pytest.importorskip("PySide6")
 try:  # noqa: SIM105 - وابستگی سیستمی ممکن است موجود نباشد
-    from PySide6.QtWidgets import QApplication  # noqa: E402  # pylint: disable=wrong-import-position
+    from PySide6.QtWidgets import (
+        QApplication,  # noqa: E402  # pylint: disable=wrong-import-position
+    )
 except ImportError as exc:  # pragma: no cover - در CI headless محتمل است
     pytest.skip(f"PySide6 QtWidgets not available: {exc}", allow_module_level=True)
 

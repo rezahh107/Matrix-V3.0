@@ -1,11 +1,11 @@
 from __future__ import annotations
 
+import sqlite3
+from collections.abc import Iterable
 from datetime import datetime
 from pathlib import Path
-import sqlite3
-from typing import Iterable
 
-from app.infra.local_database import LocalDatabase, _SCHEMA_VERSION
+from app.infra.local_database import _SCHEMA_VERSION, LocalDatabase
 
 
 def _list_user_tables(conn: sqlite3.Connection) -> set[str]:

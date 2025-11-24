@@ -3,34 +3,25 @@
 from __future__ import annotations
 
 import warnings
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from numbers import Number
-from typing import Any, Callable, Dict, List, Mapping, Sequence, Tuple
+from typing import Any
 
 import pandas as pd
 from pandas.api import types as pd_types
 
+from .allocation.trace import attach_allocation_channel
 from .canonical_frames import canonicalize_pool_frame, canonicalize_students_frame
 from .center_manager import resolve_center_manager_config, validate_center_config
-from .common.column_normalizer import normalize_input_columns
-from .common.columns import (
-    CANON_EN_TO_FA,
-    CANON_FA_TO_EN,
-    canonicalize_headers,
-    coerce_semantics,
-    dedupe_columns,
-    enrich_school_columns_en,
-    ensure_series,
-    enforce_join_key_types,
-    resolve_aliases,
-)
+from .common.columns import CANON_EN_TO_FA, canonicalize_headers, dedupe_columns, ensure_series
 from .common.filters import (
     StudentSchoolCode,
     apply_join_filters,
     resolve_student_school_code,
 )
 from .common.ids import build_mentor_id_map, inject_mentor_id, natural_key
-from .common.normalization import normalize_fa, to_numlike_str
+from .common.normalization import to_numlike_str
 from .common.ranking import apply_ranking_policy, build_mentor_state, consume_capacity
 from .common.reasons import ReasonCode, build_reason
 from .common.rules import (
@@ -41,13 +32,12 @@ from .common.rules import (
     default_stage_rule_map,
 )
 from .common.trace import (
-    FinalStatus,
     TraceOutcome,
     TraceStagePlan,
     build_allocation_trace,
     build_trace_plan,
-    find_allocation_policy_violations,
     build_unallocated_summary,
+    find_allocation_policy_violations,
     summarize_trace_outcome,
 )
 from .common.types import (
@@ -62,7 +52,6 @@ from .common.types import (
 from .counter import normalize_digits, strip_hidden_chars
 from .policy_loader import PolicyConfig, load_policy
 from .reason.selection_reason import build_selection_reason_rows as _build_selection_reason_rows
-from .allocation.trace import attach_allocation_channel
 
 ProgressFn = Callable[[int, str], None]
 
@@ -74,7 +63,7 @@ __all__ = [
     "build_selection_reason_rows",
 ]
 
-_STUDENT_NATIONAL_KEYS: Tuple[str, ...] = (
+_STUDENT_NATIONAL_KEYS: tuple[str, ...] = (
     "student_national_code",
     "student_national_id",
     "national_id",
@@ -82,7 +71,7 @@ _STUDENT_NATIONAL_KEYS: Tuple[str, ...] = (
     "کدملی",
     "کد ملی",
 )
-_MENTOR_ALIAS_KEYS: Tuple[str, ...] = (
+_MENTOR_ALIAS_KEYS: tuple[str, ...] = (
     "mentor_alias_code",
     "mentor_alias_postal_code",
     "mentor_postal_code",
@@ -96,7 +85,7 @@ _MENTOR_ALIAS_KEYS: Tuple[str, ...] = (
     "کد پستی",
 )
 
-_ALLOCATION_OUTPUT_COLUMNS: Tuple[str, ...] = (
+_ALLOCATION_OUTPUT_COLUMNS: tuple[str, ...] = (
     "student_id",
     "student_national_code",
     "mentor",
@@ -104,7 +93,7 @@ _ALLOCATION_OUTPUT_COLUMNS: Tuple[str, ...] = (
     "mentor_alias_code",
 )
 
-_JOIN_STAGE_FAILURE_ORDER: Tuple[TraceStageLiteral, ...] = (
+_JOIN_STAGE_FAILURE_ORDER: tuple[TraceStageLiteral, ...] = (
     "type",
     "group",
     "gender",
@@ -114,7 +103,7 @@ _JOIN_STAGE_FAILURE_ORDER: Tuple[TraceStageLiteral, ...] = (
     "school",
 )
 
-_STAGE_LABEL_FA: Dict[str, str] = {
+_STAGE_LABEL_FA: dict[str, str] = {
     "type": CANON_EN_TO_FA.get("group_code", "type"),
     "group": CANON_EN_TO_FA.get("exam_group", "group"),
     "gender": CANON_EN_TO_FA.get("gender", "gender"),
@@ -257,7 +246,7 @@ class AllocationResult:
     """خروجی تخصیص یک دانش‌آموز."""
 
     mentor_row: pd.Series | None
-    trace: List[TraceStageRecord]
+    trace: list[TraceStageRecord]
     log: AllocationLogRecord
 
 
@@ -296,10 +285,7 @@ def _resolve_mentor_state_entry(
     """Resolve mentor state entry while tolerating dtype mismatches."""
 
     if isinstance(identifier, pd.Series):
-        if identifier.empty:
-            identifier = None
-        else:
-            identifier = identifier.iloc[0]
+        identifier = None if identifier.empty else identifier.iloc[0]
     if identifier is None:
         return None, None
     try:
@@ -308,7 +294,7 @@ def _resolve_mentor_state_entry(
     except TypeError:
         pass
 
-    candidates: List[Any] = []
+    candidates: list[Any] = []
     seen: set[str] = set()
 
     def _push(value: object) -> None:
@@ -449,8 +435,8 @@ class JoinKeyDataMissingError(ValueError):
         self, missing_columns: Sequence[str], join_map: Mapping[str, int]
     ) -> None:
         super().__init__("DATA_MISSING")
-        self.missing_columns: Tuple[str, ...] = tuple(missing_columns)
-        self.join_map: Dict[str, int] = dict(join_map)
+        self.missing_columns: tuple[str, ...] = tuple(missing_columns)
+        self.join_map: dict[str, int] = dict(join_map)
 
 
 def _resolve_capacity_column(policy: PolicyConfig, override: str | None) -> str:
@@ -464,6 +450,8 @@ def _resolve_capacity_column(policy: PolicyConfig, override: str | None) -> str:
 
 def _coerce_int(value: object) -> int:
     if value is None:
+        raise ValueError("DATA_MISSING")
+    if isinstance(value, Number) and pd.isna(value):  # type: ignore[arg-type]
         raise ValueError("DATA_MISSING")
     if isinstance(value, Number):
         if pd.isna(value):  # type: ignore[arg-type]
@@ -658,13 +646,11 @@ def _resolve_student_center_info(
             break
     normalized = _maybe_int_from_text(value)
     text_value = str(value).strip() if isinstance(value, str) else value
-    is_invalid = False
-    if value is None:
-        is_invalid = True
-    elif isinstance(text_value, str) and not text_value:
-        is_invalid = True
-    elif normalized is None:
-        is_invalid = True
+    is_invalid = bool(
+        value is None
+        or (isinstance(text_value, str) and not text_value)
+        or normalized is None
+    )
     return StudentCenterInfo(
         column=str(source),
         raw_value=value,
@@ -707,8 +693,8 @@ def _extract_and_validate_center(
 
 def _collect_join_key_map(
     student: Mapping[str, object], policy: PolicyConfig
-) -> tuple[Dict[str, int], Tuple[str, ...]]:
-    join_map: Dict[str, int] = {}
+) -> tuple[dict[str, int], tuple[str, ...]]:
+    join_map: dict[str, int] = {}
     missing_columns: list[str] = []
     school_column = policy.columns.school_code
     school_code_resolved: StudentSchoolCode | None = None
@@ -988,7 +974,9 @@ def _build_center_manager_index(
                 UserWarning,
                 stacklevel=2,
             )
-    if missing_centers and (policy.center_management.strict_manager_validation or strict_validation):
+    if missing_centers and (
+        policy.center_management.strict_manager_validation or strict_validation
+    ):
         raise ValueError(
             f"مدیران مورد نیاز برای مراکز {missing_centers} در استخر یافت نشدند"
         )
@@ -1058,13 +1046,13 @@ def _derive_failure_alerts(
     trace: Sequence[TraceStageRecord],
     *,
     error_type: str,
-) -> List[AllocationAlertRecord]:
+) -> list[AllocationAlertRecord]:
     """استخراج هشدارهای ساخت‌یافته براساس stage و trace."""
 
     if not stage_candidate_counts:
         return []
     if error_type == "ELIGIBILITY_NO_MATCH":
-        stage_sequence: Tuple[str, ...] = _JOIN_STAGE_FAILURE_ORDER
+        stage_sequence: tuple[str, ...] = _JOIN_STAGE_FAILURE_ORDER
     elif error_type == "CAPACITY_FULL":
         stage_sequence = ("capacity_gate",)
     else:
@@ -1077,7 +1065,7 @@ def _derive_failure_alerts(
         return []
     record = next((item for item in trace if item.get("stage") == failing_stage), None)
     message = _format_alert_message(failing_stage, record)
-    context: Dict[str, Any] = {}
+    context: dict[str, Any] = {}
     if record is not None:
         context = {
             "column": record.get("column"),
@@ -1128,7 +1116,7 @@ def _append_invalid_center_alert(
     )
     original_text = "" if original_center is None else str(original_center)
     message = f"مرکز نامعتبر '{original_text or 'نامشخص'}' به {fallback_text} تغییر یافت"
-    context: Dict[str, Any] = {
+    context: dict[str, Any] = {
         "column": column,
         "raw_value": original_center,
         "fallback_center": fallback_center,
@@ -1194,7 +1182,7 @@ def _emit_alert_progress(
         except Exception:
             pass
         column = context.get("column")
-        hints: List[str] = []
+        hints: list[str] = []
         if expected not in (None, ""):
             hints.append(f"مقدار={expected}")
         if column:
@@ -1301,7 +1289,7 @@ def allocate_student(
     capacity_column: str | None = None,
     trace_plan: Sequence[TraceStagePlan] | None = None,
     stage_rules: Mapping[TraceStageLiteral, Rule] | None = None,
-    state: Dict[object, Dict[str, int]] | None = None,
+    state: dict[object, dict[str, int]] | None = None,
     pool_state_view: pd.DataFrame | None = None,
     alert_progress: ProgressFn | None = None,
 ) -> AllocationResult:
@@ -1320,7 +1308,7 @@ def allocate_student(
     center_fallback = None
     if center_info.is_invalid and center_info.normalized_value is None:
         center_fallback = policy.default_center_for_invalid
-    center_alert_payload: Dict[str, object] | None = None
+    center_alert_payload: dict[str, object] | None = None
     if center_info.is_invalid:
         center_alert_payload = {
             "student_id": student.get("student_id"),
@@ -1331,7 +1319,7 @@ def allocate_student(
     join_map, missing_columns = _collect_join_key_map(student, policy)
 
     progress(5, "prefilter")
-    stage_candidate_counts: Dict[str, int] = {}
+    stage_candidate_counts: dict[str, int] = {}
 
     def _record_stage(stage: str, count: int) -> None:
         stage_candidate_counts[stage] = int(count)
@@ -1772,7 +1760,9 @@ def allocate_batch(
 
     pool_internal = canonicalize_headers(pool_with_ids, header_mode="en")
     pool_internal = pool_internal.loc[:, ~pool_internal.columns.duplicated(keep="first")]
-    if "mentor_sort_key" not in pool_internal.columns and "mentor_sort_key" in pool_with_ids.columns:
+    if "mentor_sort_key" not in pool_internal.columns and (
+        "mentor_sort_key" in pool_with_ids.columns
+    ):
         pool_internal["mentor_sort_key"] = pool_with_ids["mentor_sort_key"].values
     internal_sort_columns = [
         column
@@ -1806,10 +1796,10 @@ def allocate_batch(
     )
     center_column_name = policy.stage_column("center")
 
-    allocations: List[Mapping[str, object]] = []
-    logs: List[AllocationLogRecord] = []
-    trace_rows: List[Mapping[str, object]] = []
-    trace_outcomes: List[TraceOutcome] = []
+    allocations: list[Mapping[str, object]] = []
+    logs: list[AllocationLogRecord] = []
+    trace_rows: list[Mapping[str, object]] = []
+    trace_outcomes: list[TraceOutcome] = []
     stage_rules = default_stage_rule_map()
 
     total = max(int(students_norm.shape[0]), 1)
@@ -1843,7 +1833,7 @@ def allocate_batch(
             student_center, center_is_valid = _extract_and_validate_center(
                 student_dict, policy
             )
-            invalid_center_payload: Dict[str, object] | None = None
+            invalid_center_payload: dict[str, object] | None = None
             if not center_is_valid:
                 invalid_center_payload = {
                     "student_id": student_dict.get("student_id", processed),

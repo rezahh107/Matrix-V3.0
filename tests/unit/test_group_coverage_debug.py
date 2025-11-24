@@ -4,7 +4,6 @@ import pandas as pd
 
 from app.core.matrix.coverage import compute_group_coverage_debug
 
-
 JOIN_KEYS = [
     "کدرشته",
     "جنسیت",

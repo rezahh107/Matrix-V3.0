@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import enum
-from typing import Iterable
+from collections.abc import Iterable
 
 import pandas as pd
 
@@ -106,9 +106,10 @@ def derive_allocation_channel(student: pd.Series, policy: PolicyConfig) -> Alloc
 
     rules = policy.allocation_channels
     school_code = _to_int_safe(student.get(policy.columns.school_code))
-    if school_code is not None and school_code in rules.school_codes:
-        if _is_active_student(student, policy):
-            return AllocationChannel.SCHOOL
+    if school_code is not None and school_code in rules.school_codes and _is_active_student(
+        student, policy
+    ):
+        return AllocationChannel.SCHOOL
 
     try:
         center_column = policy.stage_column("center")

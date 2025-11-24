@@ -4,9 +4,9 @@
 from __future__ import annotations
 
 import sys
+from collections.abc import Iterable
 from difflib import unified_diff
 from pathlib import Path
-from typing import Iterable
 
 from openpyxl import load_workbook
 

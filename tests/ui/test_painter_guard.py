@@ -10,8 +10,7 @@ from PySide6.QtGui import QImage, QPainter
 from PySide6.QtWidgets import QApplication, QLabel, QWidget
 
 from app.ui.effects import SafeDropShadowEffect, SafeOpacityEffect
-from app.ui.utils import assert_painter_active
-from app.ui.utils import painter_guard as painter_guard_module
+from app.ui.utils import assert_painter_active, painter_guard as painter_guard_module
 
 
 @pytest.fixture()

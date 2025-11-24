@@ -19,7 +19,7 @@ def test_write_xlsx_atomic_handles_many_long_duplicate_names(tmp_path: Path) -> 
 
     write_xlsx_atomic(sheets, out)
 
-    from openpyxl import load_workbook  # noqa: WPS433 (local optional import)
+    from openpyxl import load_workbook
 
     names = load_workbook(out).sheetnames
 

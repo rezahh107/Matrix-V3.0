@@ -4,25 +4,25 @@
 نسخه بهبود یافته
 """
 
-import sys
-import os
-import logging
 import atexit
-import traceback
 import getpass
 import importlib
+import logging
+import os
 import re
+import sys
+import traceback
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 from types import TracebackType
-from typing import Any, Callable
+
+from PySide6.QtCore import QSharedMemory, Qt, QTimer, qVersion
 from PySide6.QtWidgets import QApplication, QMessageBox
-from PySide6.QtCore import Qt, QSharedMemory, QTimer, qVersion
 
 from app.infra.logging import LoggingContext, configure_logging, install_exception_hook
 from app.ui.fonts import apply_default_font
 from app.utils.path_utils import get_log_directory
-
 
 __version__ = "1.0.1"
 __author__ = "Your Name"
@@ -423,7 +423,7 @@ def load_main_window():
     """
     try:
         module = _import_main_window_module()
-        MainWindow = getattr(module, "MainWindow")
+        MainWindow = getattr(module, "MainWindow")  # noqa: N806 - نام کلاس Qt
         logger.info("ماژول MainWindow با موفقیت بارگذاری شد")
         return MainWindow
 
@@ -523,7 +523,7 @@ def main() -> int:
         app = setup_application()
         
         # بارگذاری و ایجاد پنجره اصلی
-        MainWindowClass = load_main_window()
+        MainWindowClass = load_main_window()  # noqa: N806 - نام کلاس Qt
         window = MainWindowClass()
         window.show()
         

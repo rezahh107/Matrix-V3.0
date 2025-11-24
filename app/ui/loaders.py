@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """بارگذار Async برای فایل‌های Excel/CSV بر پایه QThread.
 
 این کلاس مسیر فایل را گرفته و با تشخیص پسوند، دیتافریم pandas را در نخ جداگانه
@@ -10,7 +8,10 @@ from __future__ import annotations
     loader.start()
 """
 
+from __future__ import annotations
+
 from pathlib import Path
+
 import pandas as pd
 from PySide6.QtCore import QThread, Signal
 
@@ -30,10 +31,7 @@ class ExcelLoader(QThread):
             if not self._path.exists():
                 raise FileNotFoundError(str(self._path))
             suffix = self._path.suffix.lower()
-            if suffix == ".csv":
-                df = pd.read_csv(self._path)
-            else:
-                df = pd.read_excel(self._path)
+            df = pd.read_csv(self._path) if suffix == ".csv" else pd.read_excel(self._path)
             self.loaded.emit(df)
         except Exception as exc:  # pragma: no cover - خطای غیرمنتظره
             self.failed.emit(str(exc))

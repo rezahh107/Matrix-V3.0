@@ -4,7 +4,7 @@ import pandas as pd
 import pytest
 
 from app.infra import cli
-from app.infra.local_database import LocalDatabase, _SCHEMA_VERSION
+from app.infra.local_database import _SCHEMA_VERSION, LocalDatabase
 from app.infra.reference_managers_repository import load_managers_from_cache
 
 

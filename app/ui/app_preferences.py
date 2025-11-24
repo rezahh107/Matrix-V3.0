@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import Any, List, Set
+from typing import Any
 
 from PySide6.QtCore import QByteArray, QSettings
 
@@ -23,7 +23,7 @@ class AppPreferences:
         self._valid_centers = self._load_valid_centers()
 
     # ------------------------------------------------------------------ داخلی
-    def _load_valid_centers(self) -> Set[int]:
+    def _load_valid_centers(self) -> set[int]:
         """بارگذاری مراکز معتبر از Policy."""
 
         try:
@@ -47,7 +47,7 @@ class AppPreferences:
     def _has_key(self, key: str) -> bool:
         return self._settings.contains(key)
 
-    def _get_choice(self, key: str, choices: List[str], default: str) -> str:
+    def _get_choice(self, key: str, choices: list[str], default: str) -> str:
         """خواندن مقدار انتخابی همراه با اعتبارسنجی."""
 
         value = self._get_string(key, default).lower().strip()
@@ -339,7 +339,7 @@ class AppPreferences:
         self._settings.setValue("ui/window_geometry", value)
         self._settings.sync()
 
-    def load_recent_files(self, category: str, max_count: int = 10) -> List[str]:
+    def load_recent_files(self, category: str, max_count: int = 10) -> list[str]:
         """بارگذاری لیست فایل‌های اخیر."""
 
         key = f"recent/{category}"

@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-import logging
-from typing import List, Set, Tuple
-
 import importlib
+import logging
+from pathlib import Path
 
 import pandas as pd
 import pandas.testing as tm
@@ -18,8 +16,8 @@ from app.infra.excel import exporter as excel_exporter  # noqa: E402
 from app.infra.io_utils import write_xlsx_atomic  # noqa: E402
 
 
-def _available_engines() -> List[str]:
-    engines: List[str] = []
+def _available_engines() -> list[str]:
+    engines: list[str] = []
     for name in ("openpyxl", "xlsxwriter"):
         if importlib.util.find_spec(name) is not None:
             engines.append(name)
@@ -92,8 +90,8 @@ def test_style_caches_remain_minimal(
     out = tmp_path / f"{engine}-style-count.xlsx"
     monkeypatch.setenv("EXCEL_ENGINE", engine)
 
-    created_formats: Set[Tuple[str | None, int | None, bool]] = set()
-    created_styles: Set[str] = set()
+    created_formats: set[tuple[str | None, int | None, bool]] = set()
+    created_styles: set[str] = set()
 
     if engine == "xlsxwriter":
         original = excel_exporter.ensure_xlsxwriter_format
@@ -166,10 +164,7 @@ def test_table_headers_dedup(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, en
     assert tables, "table must exist for dedup test"
     table = tables[0]
     table_columns = table.tableColumns
-    if hasattr(table_columns, "tableColumn"):
-        iterable = table_columns.tableColumn
-    else:
-        iterable = table_columns
+    iterable = table_columns.tableColumn if hasattr(table_columns, "tableColumn") else table_columns
     column_names = [col.name for col in iterable]
     assert column_names == ["Dup", "Dup_2", "Dup_3"]
 

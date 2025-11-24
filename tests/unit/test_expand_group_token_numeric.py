@@ -5,12 +5,12 @@ from __future__ import annotations
 import pandas as pd
 
 from app.core.build_matrix import (
-    BuildConfig,
-    _as_domain_config,
-    _prepare_base_rows,
     COL_MANAGER_NAME,
     COL_MENTOR_ID,
     COL_MENTOR_NAME,
+    BuildConfig,
+    _as_domain_config,
+    _prepare_base_rows,
     expand_group_token,
     prepare_crosswalk_mappings,
 )

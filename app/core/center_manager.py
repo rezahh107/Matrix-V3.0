@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, Iterable, List, Mapping, Optional, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 
 from .policy_loader import PolicyConfig
 
@@ -13,8 +13,8 @@ __all__ = [
 
 
 def _normalize_manager_mapping(
-    managers: Optional[Mapping[object, object]],
-) -> Dict[int, List[str]]:
+    managers: Mapping[object, object] | None,
+) -> dict[int, list[str]]:
     """نرمال‌سازی نگاشت مدیران.
 
     Args:
@@ -30,18 +30,15 @@ def _normalize_manager_mapping(
 
     if managers is None:
         return {}
-    normalized: Dict[int, List[str]] = {}
+    normalized: dict[int, list[str]] = {}
     for raw_center, raw_names in managers.items():
         try:
             center_id = int(raw_center)
         except (TypeError, ValueError):
             continue
         items: Iterable[object]
-        if isinstance(raw_names, (list, tuple, set)):
-            items = raw_names
-        else:
-            items = (raw_names,)
-        names: List[str] = []
+        items = raw_names if isinstance(raw_names, (list, tuple, set)) else (raw_names,)
+        names: list[str] = []
         seen: set[str] = set()
         for item in items:
             text = str(item or "").strip()
@@ -56,8 +53,8 @@ def _normalize_manager_mapping(
 
 def _normalize_priority_sequence(
     policy: PolicyConfig,
-    cli_priority: Optional[Sequence[int]],
-) -> List[int]:
+    cli_priority: Sequence[int] | None,
+) -> list[int]:
     """نرمال‌سازی ترتیب اولویت مراکز.
 
     Args:
@@ -68,7 +65,7 @@ def _normalize_priority_sequence(
         List[int]: لیست نهایی اولویت مراکز با تضمین پوشش همهٔ مراکز تعریف‌شده
     """
 
-    normalized: List[int] = []
+    normalized: list[int] = []
     seen: set[int] = set()
     if cli_priority:
         for item in cli_priority:
@@ -98,11 +95,11 @@ def _normalize_priority_sequence(
 def resolve_center_manager_config(
     *,
     policy: PolicyConfig,
-    ui_managers: Optional[Mapping[object, object]] = None,
-    cli_managers: Optional[Mapping[object, object]] = None,
-    cli_priority: Optional[Sequence[int]] = None,
+    ui_managers: Mapping[object, object] | None = None,
+    cli_managers: Mapping[object, object] | None = None,
+    cli_priority: Sequence[int] | None = None,
     cli_strict_validation: bool = False,
-) -> tuple[Dict[int, List[str]], List[int]]:
+) -> tuple[dict[int, list[str]], list[int]]:
     """ادغام تنظیمات مدیر مراکز از Policy، UI و CLI با اولویت‌بندی مشخص.
 
     این تابع تنظیمات مدیران مراکز را از سه منبع مختلف دریافت کرده و با اولویت
@@ -133,7 +130,7 @@ def resolve_center_manager_config(
         ({1: ['مدیر UI'], 2: ['مدیر CLI']}, [1, 2, 0])
     """
 
-    final_map: Dict[int, List[str]] = {}
+    final_map: dict[int, list[str]] = {}
     for center in policy.center_management.centers:
         defaults = center.default_manager
         if defaults:
@@ -165,10 +162,10 @@ def validate_center_config(
     policy: PolicyConfig,
     center_manager_map: Mapping[int, Sequence[str]],
     center_priority: Sequence[int],
-) -> List[str]:
+) -> list[str]:
     """اعتبارسنجی پیکربندی مدیریت مراکز و تولید هشدارهای خوانا."""
 
-    warnings_list: List[str] = []
+    warnings_list: list[str] = []
     defined_centers = {center.id for center in policy.center_management.centers}
     for center_id in center_manager_map:
         if center_id not in defined_centers:

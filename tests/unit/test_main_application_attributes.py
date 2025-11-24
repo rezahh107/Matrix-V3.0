@@ -29,7 +29,7 @@ class _StubSharedMemory:
 
 class _StubTimer:
     @staticmethod
-    def singleShot(_delay: int, _callable):
+    def singleShot(_delay: int, _callable):  # noqa: N802 - امضای Qt
         return None
 
 
@@ -106,8 +106,6 @@ class _Attr:
 
 def _install_qt_stubs(monkeypatch):
     try:
-        import PySide6.QtWidgets  # type: ignore
-        import PySide6.QtCore  # type: ignore
         return
     except Exception:
         pass

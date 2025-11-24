@@ -10,10 +10,10 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Mapping
 
 import pandas as pd
 
@@ -73,7 +73,7 @@ def _build_run_record(
     *,
     db_path: Path | None,
     history_metrics: pd.DataFrame | None,
-    qa_outcome: "QaOutcome | None",
+    qa_outcome: QaOutcome | None,
 ) -> RunRecord:
     """ساخت ``RunRecord`` بر پایهٔ زمینهٔ اجرا و داده‌های QA/متریک.
 
@@ -301,8 +301,8 @@ def build_run_context(
         cli_args=cli_args,
         policy_version=policy_version,
         ssot_version=ssot_version,
-        started_at=started_at.astimezone(timezone.utc),
-        completed_at=completed_at.astimezone(timezone.utc),
+        started_at=started_at.astimezone(UTC),
+        completed_at=completed_at.astimezone(UTC),
         success=success,
         message=message,
         input_students_path=input_students,

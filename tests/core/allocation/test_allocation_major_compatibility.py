@@ -1,8 +1,8 @@
 import pandas as pd
 
 from app.core.allocate_students import allocate_batch
-from app.core.policy_loader import load_policy
 from app.core.common.columns import canonicalize_headers
+from app.core.policy_loader import load_policy
 
 
 def _base_student_frame(policy: object, major: int) -> pd.DataFrame:

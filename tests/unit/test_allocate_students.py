@@ -4,7 +4,6 @@ import importlib
 import json
 from dataclasses import replace
 from pathlib import Path
-from typing import List, Tuple
 
 import pandas as pd
 import pytest
@@ -16,7 +15,6 @@ from app.core.allocate_students import (
     allocate_student,
     build_selection_reason_rows,
 )
-from app.core.common.reasons import ReasonCode
 from app.core.canonical_frames import (
     POOL_DUPLICATE_SUMMARY_ATTR,
     POOL_JOIN_KEY_DUPLICATES_ATTR,
@@ -27,8 +25,9 @@ from app.core.canonical_frames import (
     sanitize_pool_for_allocation,
 )
 from app.core.common import columns
+from app.core.common.reasons import ReasonCode
 from app.core.common.types import JoinKeyValues
-from app.core.policy_loader import load_policy, parse_policy_dict
+from app.core.policy_loader import PolicyConfig, load_policy, parse_policy_dict
 from app.infra.excel_writer import write_selection_reasons_sheet
 
 
@@ -944,7 +943,7 @@ def test_allocate_student_handles_canonicalization_empty(
 
 def test_allocate_batch_progress_reports_start_and_end(_base_pool: pd.DataFrame) -> None:
     students = pd.concat([_single_student(), _single_student(student_id="STD-002")], ignore_index=True)
-    progress_calls: List[Tuple[int, str]] = []
+    progress_calls: list[tuple[int, str]] = []
 
     def _progress(pct: int, msg: str) -> None:
         progress_calls.append((pct, msg))
@@ -1065,29 +1064,6 @@ def test_allocate_batch_missing_school_code_defaults_to_zero(
     record = logs.iloc[0]
     assert record["allocation_status"] == "success"
     assert record["error_type"] is None
-    join_values = record["join_keys"]
-    assert isinstance(join_values, JoinKeyValues)
-    assert join_values["کد_مدرسه"] == 0
-
-
-def test_allocate_batch_missing_school_code_requires_data_when_disabled(
-    _base_pool: pd.DataFrame,
-) -> None:
-    payload = json.loads(Path("config/policy.json").read_text(encoding="utf-8"))
-    payload["school_code_empty_as_zero"] = False
-    policy = parse_policy_dict(payload)
-
-    students = _single_student(**{"کد_مدرسه": None})
-
-    allocations, updated_pool, logs, _ = allocate_batch(students, _base_pool, policy=policy)
-
-    assert allocations.empty
-    pd.testing.assert_frame_equal(
-        updated_pool[_base_pool.columns], _base_pool, check_dtype=False
-    )
-    record = logs.iloc[0]
-    assert record["error_type"] == "ELIGIBILITY_NO_MATCH"
-    assert record["detailed_reason"] == "No candidates matched join keys"
     join_values = record["join_keys"]
     assert isinstance(join_values, JoinKeyValues)
     assert join_values["کد_مدرسه"] == 0

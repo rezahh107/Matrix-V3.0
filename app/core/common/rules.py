@@ -7,11 +7,11 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import math
+from collections.abc import Iterable, Mapping, MutableSequence, Sequence
+from dataclasses import dataclass
 from numbers import Integral, Real
-from collections.abc import Iterable, Sequence
-from typing import Any, Mapping, MutableSequence, Protocol
+from typing import Any, Protocol
 
 from .reasons import LocalizedReason, ReasonCode, build_reason
 from .types import CANONICAL_TRACE_ORDER, TraceStageLiteral, TraceStageRecord

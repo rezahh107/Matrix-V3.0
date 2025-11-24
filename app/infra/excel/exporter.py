@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import logging
-from typing import Dict, Iterable, Tuple
+from collections.abc import Iterable
+from typing import TYPE_CHECKING
 
 import pandas as pd
 
@@ -18,6 +19,10 @@ from .tables import (
 )
 
 __all__ = ["apply_workbook_formatting", "write_selection_reasons_sheet"]
+
+
+if TYPE_CHECKING:
+    from app.core.policy_loader import PolicyConfig
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -53,7 +58,7 @@ def _reset_font_warning_flag() -> None:
 
 def _format_xlsxwriter(
     writer: pd.ExcelWriter,
-    sheet_frames: Dict[str, pd.DataFrame],
+    sheet_frames: dict[str, pd.DataFrame],
     *,
     rtl: bool,
     font_name: str | None,
@@ -98,7 +103,7 @@ def _format_xlsxwriter(
 
 def _format_openpyxl(
     writer: pd.ExcelWriter,
-    sheet_frames: Dict[str, pd.DataFrame],
+    sheet_frames: dict[str, pd.DataFrame],
     *,
     rtl: bool,
     font_name: str | None,
@@ -144,7 +149,7 @@ def apply_workbook_formatting(
     writer: pd.ExcelWriter,
     *,
     engine: str,
-    sheet_frames: Dict[str, pd.DataFrame],
+    sheet_frames: dict[str, pd.DataFrame],
     rtl: bool,
     font_name: str | None,
     font_size: int | None,
@@ -200,12 +205,12 @@ def _sanitize_selection_reasons_frame(
         0         1  الف
     """
 
-    base_columns: Tuple[str, ...] = tuple(columns)
-    extra_columns: Tuple[str, ...] = tuple(
+    base_columns: tuple[str, ...] = tuple(columns)
+    extra_columns: tuple[str, ...] = tuple(
         column for column in (df_reasons.columns if df_reasons is not None else [])
         if column not in base_columns
     )
-    ordered_columns: Tuple[str, ...] = base_columns + extra_columns
+    ordered_columns: tuple[str, ...] = base_columns + extra_columns
     if df_reasons is None or df_reasons.empty:
         sanitized = pd.DataFrame(columns=ordered_columns)
     else:
@@ -266,7 +271,7 @@ def _set_schema_hash_defined_name(writer: pd.ExcelWriter | None, schema_hash: st
 def write_selection_reasons_sheet(
     df_reasons: pd.DataFrame | None,
     writer: pd.ExcelWriter | None,
-    policy: "PolicyConfig",
+    policy: PolicyConfig,
 ) -> tuple[str, pd.DataFrame]:
     """تهیه و نوشتن شیت «دلایل انتخاب پشتیبان» مطابق Policy.
 

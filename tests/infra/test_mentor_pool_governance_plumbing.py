@@ -1,5 +1,4 @@
 import argparse
-import argparse
 import json
 
 import pandas as pd

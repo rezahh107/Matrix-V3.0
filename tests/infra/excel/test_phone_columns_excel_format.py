@@ -3,16 +3,15 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 import openpyxl
 import pandas as pd
-import pytest
 
 from app.infra.io_utils import _prepare_dataframe_for_excel, write_xlsx_atomic
 
 
-def debug_column_profile(df: pd.DataFrame, column: str) -> Dict[str, Any]:
+def debug_column_profile(df: pd.DataFrame, column: str) -> dict[str, Any]:
     """نمایهٔ سریع از dtype و طول رشته‌ها برای ستون موردنظر (صرفاً جهت دیباگ).
 
     مثال::

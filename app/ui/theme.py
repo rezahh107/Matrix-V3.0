@@ -7,16 +7,16 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import logging
+from dataclasses import dataclass
 
 from PySide6.QtCore import QEasingCurve, QObject, QPropertyAnimation, Qt
 from PySide6.QtGui import QColor, QPalette
 from PySide6.QtWidgets import QApplication, QPushButton, QWidget
 
+from app.ui.effects import SafeDropShadowEffect
 from app.ui.fonts import create_app_font
 from app.ui.i18n import Language
-from app.ui.effects import SafeDropShadowEffect
 
 __all__ = [
     "BASE_FONT_PT",
@@ -299,7 +299,7 @@ class _HoverAnimationFilter(QObject):
         self._animation.setEasingCurve(QEasingCurve.InOutQuad)
         self._animation.setDuration(120)
 
-    def eventFilter(self, obj: QObject, event) -> bool:  # type: ignore[override]
+    def eventFilter(self, obj: QObject, event) -> bool:  # type: ignore[override]  # noqa: N802 - امضای Qt
         from PySide6.QtCore import QEvent
 
         if obj is self._button:

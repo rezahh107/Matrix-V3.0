@@ -4,14 +4,14 @@ from dataclasses import replace
 
 import pandas as pd
 
+from app.core.common.normalization import fa_digitize, safe_truncate
+from app.core.common.policy import SelectionReasonLabels, SelectionReasonPolicy
 from app.core.policy_loader import load_policy
 from app.core.reason.selection_reason import (
     ReasonContext,
     build_selection_reason_rows,
     render_reason,
 )
-from app.core.common.normalization import fa_digitize, safe_truncate
-from app.core.common.policy import SelectionReasonLabels, SelectionReasonPolicy
 
 
 def _policy_stub() -> SelectionReasonPolicy:

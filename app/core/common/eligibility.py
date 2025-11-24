@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Mapping
+from collections.abc import Mapping
 
 from app.core.policy_loader import PolicyConfig, load_policy
+
 from .types import TraceStageLiteral
 
 __all__ = ["build_stage_pass_flags"]

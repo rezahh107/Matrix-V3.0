@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 build_matrix.py — Eligibility Matrix Builder (SSoT v1.0.2, script v1.0.4)
 
@@ -7,21 +6,23 @@ Summary
 -------
 - Normal mentors: build BOTH statuses → student=1 AND graduate=0
 - School mentors: build ONLY student=1
-- Everything else as per SSoT v1.0.2 (capacity gate, crosswalk+synonyms, finance 0/1/3, center mapping, atomic writes)
+- Everything else as per SSoT v1.0.2 (capacity gate, crosswalk+synonyms,
+  finance 0/1/3, center mapping, atomic writes)
 - Patch: When school code is empty, set "کد مدرسه" to numeric 0 in output rows.
 """
 from __future__ import annotations
 
-from logging import getLogger
 import json
 import math
 import re
 import unicodedata
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import IntEnum, auto
 from functools import lru_cache
 from itertools import product
-from typing import Any, Callable, Collection, Dict, Iterable, List, Mapping, Sequence, Tuple, TypeVar
+from logging import getLogger
+from typing import Any, TypeVar
 
 import numpy as np
 import pandas as pd
@@ -31,15 +32,15 @@ from app.core.canonical_frames import (
     POOL_JOIN_KEY_DUPLICATES_ATTR,
     canonicalize_pool_frame,
 )
+from app.core.common.column_normalizer import (
+    ColumnNormalizationReport,
+    normalize_input_columns,
+)
 from app.core.common.columns import (
     coerce_semantics,
     ensure_required_columns,
     ensure_series,
     resolve_aliases,
-)
-from app.core.common.column_normalizer import (
-    ColumnNormalizationReport,
-    normalize_input_columns,
 )
 from app.core.common.domain import (
     BuildConfig as DomainBuildConfig,
@@ -51,16 +52,6 @@ from app.core.common.domain import (
     school_code_norm,
 )
 from app.core.common.normalization import normalize_header, resolve_group_code
-from app.core.matrix.coverage import (
-    CoveragePolicyConfig,
-    compute_coverage_metrics,
-)
-from app.core.qa.coverage_validation import build_coverage_validation_fields
-from app.core.policy_loader import (
-    MentorSchoolBindingPolicy,
-    PolicyConfig,
-    load_policy,
-)
 from app.core.inspactor_schema_helper import (
     InspactorDefaultConfig,
     missing_inspactor_columns,
@@ -68,6 +59,16 @@ from app.core.inspactor_schema_helper import (
     schema_error_message,
     with_default_inspactor_columns,
 )
+from app.core.matrix.coverage import (
+    CoveragePolicyConfig,
+    compute_coverage_metrics,
+)
+from app.core.policy_loader import (
+    MentorSchoolBindingPolicy,
+    PolicyConfig,
+    load_policy,
+)
+from app.core.qa.coverage_validation import build_coverage_validation_fields
 
 # =============================================================================
 # CONSTANTS
@@ -397,7 +398,9 @@ def _as_domain_config(cfg: BuildConfig) -> DomainBuildConfig:
     return DomainBuildConfig(
         version=cfg.policy_version,
         postal_valid_range=tuple(cfg.postal_valid_range or (1000, 9999)),
-        finance_variants=tuple(cfg.finance_variants or (Finance.NORMAL, Finance.BONYAD, Finance.HEKMAT)),
+        finance_variants=tuple(
+            cfg.finance_variants or (Finance.NORMAL, Finance.BONYAD, Finance.HEKMAT)
+        ),
         center_map=dict(cfg.center_manager_map or {}),
         school_code_empty_as_zero=bool(cfg.school_code_empty_as_zero),
         alias_rule_normal=cfg.alias_rule_normal or "postal_or_fallback_mentor_id",
@@ -609,7 +612,9 @@ def _parse_int_from_text(text: str) -> int | None:
     digits = text[1:] if text and text[0] in "+-" else text
     if "." in digits:
         integer_part, decimal_part = digits.split(".", 1)
-        if integer_part and integer_part.isdigit() and (not decimal_part or set(decimal_part) <= {"0"}):
+        if integer_part and integer_part.isdigit() and (
+            not decimal_part or set(decimal_part) <= {"0"}
+        ):
             sign = -1 if text and text[0] == "-" else 1
             return sign * int(integer_part)
     return None
@@ -677,7 +682,11 @@ def norm_gender(value: Any) -> int | None:
 
 
 def gender_text(code: int | None) -> str:
-    return {Gender.FEMALE: "دختر", Gender.MALE: "پسر"}.get(int(code), "") if code is not None else ""
+    return (
+        {Gender.FEMALE: "دختر", Gender.MALE: "پسر"}.get(int(code), "")
+        if code is not None
+        else ""
+    )
 
 
 def norm_status(value: Any) -> int | None:
@@ -692,16 +701,28 @@ def norm_status(value: Any) -> int | None:
 
 
 def status_text(code: int | None) -> str:
-    return {Status.STUDENT: "دانش‌آموز", Status.GRADUATE: "فارغ‌التحصیل"}.get(int(code), "") if code is not None else ""
+    return (
+        {Status.STUDENT: "دانش‌آموز", Status.GRADUATE: "فارغ‌التحصیل"}.get(
+            int(code), ""
+        )
+        if code is not None
+        else ""
+    )
 
 
 def center_text(code: int) -> str:
-    return {Center.MARKAZ: "مرکز", Center.GOLESTAN: "گلستان", Center.SADRA: "صدرا"}.get(int(code), "")
+    return {
+        Center.MARKAZ: "مرکز",
+        Center.GOLESTAN: "گلستان",
+        Center.SADRA: "صدرا",
+    }.get(int(code), "")
 
 # =============================================================================
 # CROSSWALK
 # =============================================================================
-def _validate_finance_invariants(matrix: pd.DataFrame, *, cfg: BuildConfig, finance_col: str) -> None:
+def _validate_finance_invariants(
+    matrix: pd.DataFrame, *, cfg: BuildConfig, finance_col: str
+) -> None:
     if finance_col not in matrix.columns:
         return
     required = {int(code) for code in cfg.finance_variants}
@@ -801,11 +822,19 @@ def prepare_crosswalk_mappings(
     synonyms = {normalize_fa(k): v for k, v in BUILTIN_SYNONYMS.items()}
     if synonyms_df is not None:
         src_col = next(
-            (c for c in synonyms_df.columns if "from" in normalize_fa(c) or "alias" in normalize_fa(c)),
+            (
+                c
+                for c in synonyms_df.columns
+                if "from" in normalize_fa(c) or "alias" in normalize_fa(c)
+            ),
             synonyms_df.columns[0],
         )
         dst_col = next(
-            (c for c in synonyms_df.columns if "to" in normalize_fa(c) or "target" in normalize_fa(c)),
+            (
+                c
+                for c in synonyms_df.columns
+                if "to" in normalize_fa(c) or "target" in normalize_fa(c)
+            ),
             synonyms_df.columns[1] if len(synonyms_df.columns) > 1 else synonyms_df.columns[0],
         )
         for _, row in synonyms_df.iterrows():
@@ -968,7 +997,9 @@ def safe_int_value(value: Any, default: int = 0) -> int:
     return int(default)
 
 
-def normalize_capacity_values(current: Any, special: Any, *, default: int = 0) -> tuple[int, int, int]:
+def normalize_capacity_values(
+    current: Any, special: Any, *, default: int = 0
+) -> tuple[int, int, int]:
     """نرمال‌سازی ستون‌های ظرفیت و محاسبهٔ ظرفیت باقی‌مانده.
 
     مثال::
@@ -1001,7 +1032,9 @@ class CapacityGateMetrics:
 
     مثال::
 
-        >>> CapacityGateMetrics(total_removed=2, total_special_capacity_lost=7, percent_pool_kept=0.5)
+        >>> CapacityGateMetrics(
+        ...     total_removed=2, total_special_capacity_lost=7, percent_pool_kept=0.5
+        ... )
         CapacityGateMetrics(total_removed=2, total_special_capacity_lost=7, percent_pool_kept=0.5)
     """
 
@@ -1010,7 +1043,7 @@ class CapacityGateMetrics:
     percent_pool_kept: float = 1.0
 
     @classmethod
-    def empty(cls) -> "CapacityGateMetrics":
+    def empty(cls) -> CapacityGateMetrics:
         """ساخت نمونهٔ تهی برای زمانی که R0 اجرا نشده است."""
 
         return cls()
@@ -1215,14 +1248,14 @@ def parse_group_code_spec(
 # =============================================================================
 def generate_row_variants(
     base: dict,
-    group_pairs: List[tuple[str, int]],
-    genders: List[Any],
-    statuses: List[Any],
-    schools_raw: List[Any],
+    group_pairs: list[tuple[str, int]],
+    genders: list[Any],
+    statuses: list[Any],
+    schools_raw: list[Any],
     finance_variants: Iterable[int],
-    code_to_name_school: Dict[str, str],
-) -> List[dict]:
-    rows: List[dict] = []
+    code_to_name_school: dict[str, str],
+) -> list[dict]:
+    rows: list[dict] = []
 
     def _school_lookup(sc_val: Any) -> tuple[str, str, int]:
         """returns (school_code, school_name, is_school_flag)
@@ -1255,7 +1288,9 @@ def generate_row_variants(
                 "پشتیبان": base["supporter"],
                 "کد کارمندی پشتیبان": base["mentor_id"],
                 "مدیر": base["manager"],
-                "ردیف پشتیبان": int(base["row_id"]) if str(base["row_id"]).strip().isdigit() else "",
+                "ردیف پشتیبان": (
+                    int(base["row_id"]) if str(base["row_id"]).strip().isdigit() else ""
+                ),
                 "نام رشته": g_name,
                 "کدرشته": int(g_code),
                 "جنسیت": int(gcode) if gcode is not None else "",
@@ -1304,7 +1339,6 @@ def _prepare_base_rows(
     normal_statuses = [int(s) for s in cfg.policy.normal_statuses]
     school_statuses = [int(s) for s in cfg.policy.school_statuses]
     postal_col = cfg.postal_code_column or COL_POSTAL
-    school_count_col = cfg.school_count_column or COL_SCHOOL_COUNT
     capacity_current_col = cfg.capacity_current_column or CAPACITY_CURRENT_COL
     capacity_special_col = cfg.capacity_special_column or CAPACITY_SPECIAL_COL
     binding_policy = cfg.policy.mentor_school_binding
@@ -1677,7 +1711,11 @@ def _explode_rows(
     df = df.assign(finance_list=df["finance"], school_list=df[school_col])
     df = df.drop(columns=["finance", school_col])
     df = df.explode("group_pairs")
-    gp = pd.DataFrame(df.pop("group_pairs").tolist(), columns=["group_name", "group_code"], index=df.index)
+    gp = pd.DataFrame(
+        df.pop("group_pairs").tolist(),
+        columns=["group_name", "group_code"],
+        index=df.index,
+    )
     df = df.join(gp)
     df = df.explode("genders").explode(status_col).explode("school_list").explode("finance_list")
 
@@ -1714,7 +1752,9 @@ def _explode_rows(
     status_series = df[status_col]
     df["status_code"] = _normalize_demographic_key(status_series)
 
-    blank_school_mask = df["school_list"].map(lambda v: pd.isna(v) or (isinstance(v, str) and not v.strip()))
+    blank_school_mask = df["school_list"].map(
+        lambda v: pd.isna(v) or (isinstance(v, str) and not v.strip())
+    )
     df["کد مدرسه"] = _build_school_code_series(df["school_list"], df.index)
     df.loc[blank_school_mask.fillna(True), "کد مدرسه"] = 0
     df["کد مدرسه"] = df["کد مدرسه"].astype("Int64")
@@ -1754,7 +1794,9 @@ def _explode_rows(
     df["مرکز گلستان صدرا"] = safe_int_column(df, "مرکز گلستان صدرا", default=0)
     df["کدرشته"] = safe_int_column(df, "کدرشته", default=0)
     df["جنسیت2"] = df["جنسیت"].map(lambda v: gender_text(v) if pd.notna(v) else "")
-    df["دانش آموز فارغ2"] = df["دانش آموز فارغ"].map(lambda v: status_text(v) if pd.notna(v) else "")
+    df["دانش آموز فارغ2"] = df["دانش آموز فارغ"].map(
+        lambda v: status_text(v) if pd.notna(v) else ""
+    )
     df["مرکز گلستان صدرا3"] = df["center_text"]
 
     df = df.drop(
@@ -2024,10 +2066,22 @@ def build_matrix(
     gender_col = COL_GENDER if COL_GENDER in insp.columns else None
     included_col = next(
         (c for c in insp.columns if normalize_fa(c) == normalize_fa(COL_GROUP_INCLUDED)),
-        next((c for c in insp.columns if all(k in normalize_fa(c) for k in ("شامل", "گروه", "آزمایشی"))), None),
+        next(
+            (
+                c
+                for c in insp.columns
+                if all(k in normalize_fa(c) for k in ("شامل", "گروه", "آزمایشی"))
+            ),
+            None,
+        ),
     )
-    group_cols = [c for c in insp.columns if ("گروه آزمایشی" in str(c)) and (c != included_col)]
-    school_cols = [c for c in [COL_SCHOOL1, COL_SCHOOL2, COL_SCHOOL3, COL_SCHOOL4] if c in insp.columns]
+    group_cols = [
+        c for c in insp.columns if ("گروه آزمایشی" in str(c)) and (c != included_col)
+    ]
+    school_cols = [
+        c for c in [COL_SCHOOL1, COL_SCHOOL2, COL_SCHOOL3, COL_SCHOOL4]
+        if c in insp.columns
+    ]
 
     # generate rows
     progress(30, "preparing vectorized base rows")
@@ -2072,9 +2126,9 @@ def build_matrix(
 
     if school_lookup_threshold_exceeded:
         message = (
-            "کد/نام مدرسه ناشناخته ({count}) بیش از آستانهٔ مجاز ({threshold:.1%}) است؛"
-            " جزئیات در شیت invalid_mentors ثبت شد."
-        ).format(count=school_mismatch_count, threshold=school_lookup_threshold)
+            f"کد/نام مدرسه ناشناخته ({school_mismatch_count}) بیش از آستانهٔ مجاز "
+            f"({school_lookup_threshold:.1%}) است؛ جزئیات در شیت invalid_mentors ثبت شد."
+        )
         if cfg.fail_on_school_lookup_threshold:
             error = ValueError(message)
             setattr(error, "is_school_lookup_threshold_error", True)
@@ -2115,7 +2169,7 @@ def build_matrix(
     cap_current_col = cfg.capacity_current_column or CAPACITY_CURRENT_COL
     cap_special_col = cfg.capacity_special_column or CAPACITY_SPECIAL_COL
     remaining_col = cfg.remaining_capacity_column or "remaining_capacity"
-    school_code_col = cfg.school_code_column or COL_SCHOOL
+    school_code_col = cfg.school_code_column or COL_SCHOOL_CODE
     normal_df = _explode_rows(
         base_df.loc[base_df["can_normal"]],
         alias_col="alias_normal",
@@ -2373,10 +2427,18 @@ def build_matrix(
         "policy_version_expected": cfg.expected_policy_version or pd.NA,
         "total_rows": total_rows,
         "distinct_supporters": matrix["پشتیبان"].nunique() if not matrix.empty else 0,
-        "school_based_rows": int((matrix["عادی مدرسه"] == "مدرسه‌ای").sum()) if not matrix.empty else 0,
-        "finance_0_rows": int((matrix[finance_col] == Finance.NORMAL).sum()) if not matrix.empty else 0,
-        "finance_1_rows": int((matrix[finance_col] == Finance.BONYAD).sum()) if not matrix.empty else 0,
-        "finance_3_rows": int((matrix[finance_col] == Finance.HEKMAT).sum()) if not matrix.empty else 0,
+        "school_based_rows": (
+            int((matrix["عادی مدرسه"] == "مدرسه‌ای").sum()) if not matrix.empty else 0
+        ),
+        "finance_0_rows": (
+            int((matrix[finance_col] == Finance.NORMAL).sum()) if not matrix.empty else 0
+        ),
+        "finance_1_rows": (
+            int((matrix[finance_col] == Finance.BONYAD).sum()) if not matrix.empty else 0
+        ),
+        "finance_3_rows": (
+            int((matrix[finance_col] == Finance.HEKMAT).sum()) if not matrix.empty else 0
+        ),
         "removed_mentors": 0 if removed_mentors is None else len(removed_mentors),
         "capacity_removed_total": capacity_metrics.total_removed,
         "capacity_special_capacity_lost": capacity_metrics.total_special_capacity_lost,
@@ -2459,10 +2521,8 @@ def build_matrix(
 
     if dedup_threshold_exceeded:
         message = (
-            "حذف رکوردهای تکراری ({removed:.1%}) از آستانهٔ مجاز ({threshold:.1%}) بیشتر است."
-        ).format(
-            removed=dedup_removed_ratio,
-            threshold=dedup_threshold,
+            f"حذف رکوردهای تکراری ({dedup_removed_ratio:.1%}) از آستانهٔ مجاز "
+            f"({dedup_threshold:.1%}) بیشتر است."
         )
         LOGGER.error(
             "dedupe threshold exceeded: removed=%s threshold=%s rows_before=%s rows_after=%s",
@@ -2484,13 +2544,13 @@ def build_matrix(
         setattr(error, "dedup_removed_ratio", float(dedup_removed_ratio))
         raise error
 
+    unseen_preview: list[dict[str, object]] | None = None
     coverage_gate_unseen = coverage_metrics.unseen_viable_groups
     if (
         coverage_metrics.total_groups
         and coverage_ratio < min_coverage_ratio
         and coverage_gate_unseen > 0
     ):
-        unseen_preview: list[dict[str, object]] | None = None
         if (
             isinstance(group_coverage_df, pd.DataFrame)
             and not group_coverage_df.empty
@@ -2504,13 +2564,9 @@ def build_matrix(
                 .to_dict(orient="records")
             )
         message = (
-            "نسبت پوشش خروجی {coverage:.1%} کمتر از حداقل مجاز {minimum:.1%} است؛ "
-            "unmatched_schools={unmatched}، unseen_groups={unseen}."
-        ).format(
-            coverage=coverage_ratio,
-            minimum=min_coverage_ratio,
-            unmatched=unmatched_school_count,
-            unseen=coverage_gate_unseen,
+            f"نسبت پوشش خروجی {coverage_ratio:.1%} کمتر از حداقل مجاز "
+            f"{min_coverage_ratio:.1%} است؛ unmatched_schools={unmatched_school_count}، "
+            f"unseen_groups={coverage_gate_unseen}."
         )
         error = ValueError(message)
         setattr(error, "is_coverage_threshold_error", True)
@@ -2571,10 +2627,10 @@ def validate_with_students(
     students_gender_mode: str = "auto",
     students_source_hint: str | None = None,
     cfg: BuildConfig | None = None,
-) -> tuple[pd.DataFrame, pd.DataFrame, Dict[str, int]]:
+) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, int]]:
     cfg = cfg or BuildConfig()
     domain_cfg = _as_domain_config(cfg)
-    school_code_col = cfg.school_code_column or COL_SCHOOL
+    school_code_col = cfg.school_code_column or COL_SCHOOL_CODE
     center_col = cfg.policy.stage_column("center")
 
     stud_raw = students_df.copy()
@@ -2599,7 +2655,7 @@ def validate_with_students(
     resolution_frame = stud_raw.copy()
     resolution_frame["student_postal"] = postal_series
 
-    group_stats: Dict[str, int] = {}
+    group_stats: dict[str, int] = {}
     group_codes = resolution_frame.apply(
         lambda row: resolve_group_code(
             row,
@@ -2635,7 +2691,8 @@ def validate_with_students(
     ).values
 
     LOGGER.info(
-        "student group_code resolution (prefer_major_code=%s): major=%d, crosswalk=%d, mismatch=%d, unresolved=%d",
+        "student group_code resolution (prefer_major_code=%s): "
+        "major=%d, crosswalk=%d, mismatch=%d, unresolved=%d",
         cfg.prefer_major_code,
         group_stats.get("resolved_by_major_code", 0),
         group_stats.get("resolved_by_crosswalk", 0),
@@ -2710,7 +2767,11 @@ def validate_with_students(
 
     breakdown = stud["reason"].value_counts().reset_index()
     breakdown.columns = ["reason", "count"]
-    summary = {"total": int(len(stud)), "matched": int(stud["match"].sum()), "unmatched": int((~stud["match"]).sum())}
+    summary = {
+        "total": int(len(stud)),
+        "matched": int(stud["match"].sum()),
+        "unmatched": int((~stud["match"]).sum()),
+    }
 
     return stud, breakdown, summary
 

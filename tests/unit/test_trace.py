@@ -5,14 +5,14 @@ import pytest
 
 from app.core.common.trace import build_allocation_trace, build_trace_plan
 from app.core.policy_loader import (
-    ExcelOptions,
-    EmissionOptions,
     CenterConfig,
     CenterManagementConfig,
+    EmissionOptions,
+    ExcelOptions,
     GenderCode,
     GenderCodes,
-    PolicyAliasRule,
     MentorSchoolBindingPolicy,
+    PolicyAliasRule,
     PolicyColumns,
     PolicyConfig,
     RankingRule,

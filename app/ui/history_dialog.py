@@ -9,8 +9,8 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QListWidget,
-    QTabWidget,
     QTableView,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -41,12 +41,12 @@ class DataFrameTableModel(QAbstractTableModel):
         self.endResetModel()
 
     # Qt overrides ------------------------------------------------------
-    def rowCount(self, parent: QModelIndex | None = None) -> int:  # type: ignore[override]
+    def rowCount(self, parent: QModelIndex | None = None) -> int:  # type: ignore[override]  # noqa: N802 - امضای Qt
         if parent and parent.isValid():
             return 0
         return len(self._df.index)
 
-    def columnCount(self, parent: QModelIndex | None = None) -> int:  # type: ignore[override]
+    def columnCount(self, parent: QModelIndex | None = None) -> int:  # type: ignore[override]  # noqa: N802 - امضای Qt
         if parent and parent.isValid():
             return 0
         return len(self._df.columns)
@@ -59,7 +59,9 @@ class DataFrameTableModel(QAbstractTableModel):
             return ""
         return str(value)
 
-    def headerData(self, section: int, orientation: Qt.Orientation, role: int = Qt.DisplayRole):  # type: ignore[override]
+    def headerData(  # noqa: N802 - امضای Qt
+        self, section: int, orientation: Qt.Orientation, role: int = Qt.DisplayRole
+    ):  # type: ignore[override]  # noqa: N802 - امضای Qt
         if role != Qt.DisplayRole:
             return None
         if orientation == Qt.Horizontal:

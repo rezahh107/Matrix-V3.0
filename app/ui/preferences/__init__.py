@@ -1,6 +1,5 @@
 """تنظیمات و مدل‌های ترجیحی UI."""
 
-from .dashboard_texts import ChecklistItem, DashboardTextBundle, load_dashboard_texts
 from .dashboard_state import (
     FileStatusLevel,
     FileStatusViewModel,
@@ -9,6 +8,7 @@ from .dashboard_state import (
     format_last_run_label,
     read_last_run_info,
 )
+from .dashboard_texts import ChecklistItem, DashboardTextBundle, load_dashboard_texts
 
 __all__ = [
     "ChecklistItem",

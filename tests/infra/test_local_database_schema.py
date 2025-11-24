@@ -8,7 +8,7 @@ import pytest
 from pandas.testing import assert_frame_equal
 
 from app.infra.errors import DatabaseOperationError, SchemaVersionMismatchError
-from app.infra.local_database import LocalDatabase, _SCHEMA_VERSION
+from app.infra.local_database import _SCHEMA_VERSION, LocalDatabase
 
 
 def test_schema_meta_initialized(tmp_path):

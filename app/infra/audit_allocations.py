@@ -5,8 +5,9 @@ from __future__ import annotations
 import argparse
 import json
 import re
+from collections.abc import Iterable, Mapping
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Mapping
+from typing import Any
 
 import pandas as pd
 
@@ -16,7 +17,7 @@ from app.core.policy_loader import PolicyConfig, get_policy
 __all__ = ["audit_allocations", "audit_allocations_cli", "summarize_report"]
 
 
-def _duplicate_student_ids(frame: pd.DataFrame) -> tuple[int, List[str]]:
+def _duplicate_student_ids(frame: pd.DataFrame) -> tuple[int, list[str]]:
     """تشخیص شناسه‌های دانش‌آموز تکراری و نمونه‌برداری."""
 
     if frame.empty or "student_id" not in frame.columns:
@@ -31,7 +32,7 @@ def _duplicate_student_ids(frame: pd.DataFrame) -> tuple[int, List[str]]:
     return len(unique_ids), unique_ids
 
 
-def _counter_overflow_hits(frame: pd.DataFrame) -> tuple[int, List[str]]:
+def _counter_overflow_hits(frame: pd.DataFrame) -> tuple[int, list[str]]:
     """بررسی شناسه‌هایی که به مرز 9999 رسیده‌اند."""
 
     if frame.empty or "student_id" not in frame.columns:
@@ -46,7 +47,7 @@ def _counter_overflow_hits(frame: pd.DataFrame) -> tuple[int, List[str]]:
     return len(hits), hits.head(5).tolist()
 
 
-def _year_ambiguity(frame: pd.DataFrame) -> tuple[int, List[str]]:
+def _year_ambiguity(frame: pd.DataFrame) -> tuple[int, list[str]]:
     """بررسی اختلاف سال تحصیلی بر اساس پیشوند YY."""
 
     if frame.empty or "student_id" not in frame.columns:
@@ -90,7 +91,7 @@ def _virtual_hits(
     allocations: pd.DataFrame,
     policy: PolicyConfig,
     regex: re.Pattern[str] | None,
-) -> tuple[int, List[Mapping[str, Any]]]:
+) -> tuple[int, list[Mapping[str, Any]]]:
     """شمارش تخصیص‌های منتور مجازی بر اساس Policy."""
 
     if allocations.empty:
@@ -120,7 +121,7 @@ def _virtual_hits(
 
 def _capacity_stuck(
     logs: pd.DataFrame,
-) -> tuple[int, List[Mapping[str, Any]]]:
+) -> tuple[int, list[Mapping[str, Any]]]:
     """پیدا کردن تخصیص‌هایی که ظرفیت قبل/بعد ثابت مانده است."""
 
     if logs.empty:
@@ -144,7 +145,7 @@ def _trace_mismatch(
     trace: pd.DataFrame,
     *,
     expected_stage_count: int,
-) -> tuple[int, List[Mapping[str, Any]]]:
+) -> tuple[int, list[Mapping[str, Any]]]:
     """شناسایی دانش‌آموزانی که Trace کامل یا True ندارند."""
 
     if trace.empty or "student_id" not in trace.columns:
@@ -157,14 +158,14 @@ def _trace_mismatch(
             df["matched"] = matched_series.astype(str).str.lower().isin({"true", "1", "yes"})
 
     grouped = df.groupby("student_id")
-    failing_ids: List[Any] = []
+    failing_ids: list[Any] = []
     for student_id, group in grouped:
         stage_count = group["stage"].nunique(dropna=True) if "stage" in group else 0
         all_matched = bool(group.get("matched", pd.Series([], dtype=bool)).all()) if "matched" in group else True
         if stage_count < expected_stage_count or not all_matched:
             failing_ids.append(student_id)
 
-    samples: List[Mapping[str, Any]] = []
+    samples: list[Mapping[str, Any]] = []
     for student_id in failing_ids[:10]:
         subset = df.loc[df["student_id"] == student_id]
         stages = subset.get("stage", pd.Series([], dtype=object)).tolist()
@@ -179,7 +180,7 @@ def _trace_mismatch(
     return len(failing_ids), samples
 
 
-def audit_allocations(path: str | Path) -> Dict[str, Dict[str, Any]]:
+def audit_allocations(path: str | Path) -> dict[str, dict[str, Any]]:
     """اجرای ممیزی روی خروجی Excel تخصیص و بازگشت گزارش ساخت‌یافته."""
 
     target = Path(path)
@@ -226,10 +227,10 @@ def audit_allocations(path: str | Path) -> Dict[str, Dict[str, Any]]:
     }
 
 
-def summarize_report(report: Mapping[str, Mapping[str, Any]]) -> Dict[str, Any]:
+def summarize_report(report: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
     """خلاصهٔ شمارشی ممیزی با حفظ ترتیب کلیدها."""
 
-    summary: Dict[str, Any] = {}
+    summary: dict[str, Any] = {}
     for key, payload in report.items():
         count = int(payload.get("count", 0))
         samples = payload.get("samples")

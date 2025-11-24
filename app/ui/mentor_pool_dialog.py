@@ -1,10 +1,9 @@
-from __future__ import annotations
-
 """دیالوگ حاکمیت استخر منتورها با گروه‌بندی مدیر→منتور."""
 
-from typing import Iterable, Mapping
+from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from collections.abc import Iterable, Mapping
+
 from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,

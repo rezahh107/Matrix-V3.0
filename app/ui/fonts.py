@@ -13,13 +13,14 @@ import binascii
 import logging
 import os
 import shutil
+from collections.abc import Iterable, Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Iterable, List, Sequence
+from typing import TYPE_CHECKING
 
 from app.ui.assets.font_data_vazirmatn import VAZIRMATN_REGULAR_BASE64, VAZIRMATN_REGULAR_TTF_BASE64
 
 if TYPE_CHECKING:  # pragma: no cover
-    from PySide6.QtGui import QFont
+    from PySide6.QtGui import QFont, QFontDatabase
     from PySide6.QtWidgets import QApplication
 
 __all__ = [
@@ -130,7 +131,7 @@ def ensure_vazir_local_fonts() -> Path:
     return FONTS_DIR
 
 
-def _iter_windows_sources() -> Iterable[List[Path]]:
+def _iter_windows_sources() -> Iterable[list[Path]]:
     for candidate in _windows_candidates():
         if not candidate.exists():
             LOGGER.debug("مسیر فونت یافت نشد: %s", candidate)
@@ -242,7 +243,7 @@ def _load_vazir_font_family_names() -> list[str]:
 
 
 def resolve_vazir_family_name(
-    db: "QFontDatabase", *, candidates: Sequence[str] | None = None
+    db: QFontDatabase, *, candidates: Sequence[str] | None = None
 ) -> str | None:
     """انتخاب نام خانوادهٔ اصلی وزیر/وزیرمتن از میان خانواده‌های موجود."""
 
@@ -260,11 +261,10 @@ def resolve_vazir_family_name(
     return None
 
 
-def load_vazir_font(point_size: int | None = None) -> "QFont" | None:
+def load_vazir_font(point_size: int | None = None) -> QFont | None:
     """در صورت دسترسی به وزیر، نمونهٔ فونت آن را می‌سازد."""
 
-    from PySide6.QtGui import QFont
-    from PySide6.QtGui import QFontDatabase
+    from PySide6.QtGui import QFont, QFontDatabase
 
     families = _load_vazir_font_family_names()
     db = QFontDatabase()
@@ -281,7 +281,7 @@ def create_app_font(
     point_size: int | None = None,
     *,
     fallback_family: str | None = None,
-) -> "QFont":
+) -> QFont:
     """ساخت فونت سراسری برنامه با اولویت وزیر سپس تاهوما.
 
     Args:
@@ -353,16 +353,15 @@ def _select_fallback_family(preferred: str | None) -> str:
     return FALLBACK_FAMILY
 
 
-def get_app_font(point_size: int | None = None) -> "QFont":
+def get_app_font(point_size: int | None = None) -> QFont:
     """دریافت نسخهٔ کپی‌شده از فونت سراسری برنامه با اندازهٔ دلخواه."""
 
     return create_app_font(point_size=point_size)
 
 
-def get_heading_font() -> "QFont":
+def get_heading_font() -> QFont:
     """فونت عناوین: مبتنی بر وزیر با اندازهٔ بزرگ‌تر و وزن بولد."""
 
-    from PySide6.QtGui import QFont
 
     heading = create_app_font()
     heading.setPointSize(11)
@@ -393,15 +392,15 @@ def collect_font_diagnostics() -> dict[str, object]:
     return info
 
 
-def prepare_default_font(*, point_size: int | None = None) -> "QFont":
+def prepare_default_font(*, point_size: int | None = None) -> QFont:
     """سازگار برای کدهای قدیمی؛ معادل ``create_app_font``."""
 
     return create_app_font(point_size=point_size)
 
 
 def apply_default_font(
-    app: "QApplication", *, point_size: int | None = None, family_override: str | None = None
-) -> "QFont":
+    app: QApplication, *, point_size: int | None = None, family_override: str | None = None
+) -> QFont:
     """اعمال فونت سراسری (وزیر یا تاهوما) روی QApplication با امکان override.
 
     Args:
@@ -415,7 +414,7 @@ def apply_default_font(
     return font
 
 
-def _with_antialias(font: "QFont") -> "QFont":
+def _with_antialias(font: QFont) -> QFont:
     """اعمال آنتی‌الیاس و کیفیت بالای رندر به‌صورت صریح و پایدار."""
 
     from PySide6.QtGui import QFont
@@ -432,7 +431,7 @@ def _with_antialias(font: "QFont") -> "QFont":
     return font
 
 
-def _resolve_weight() -> "QFont.Weight":
+def _resolve_weight() -> QFont.Weight:
     """تبدیل وزن پیش‌فرض متنی به مقدار مناسب QFont."""
 
     from PySide6.QtGui import QFont

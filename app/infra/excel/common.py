@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Iterable, Sequence, TYPE_CHECKING
+from collections.abc import Iterable, Sequence
+from typing import TYPE_CHECKING
 
 import pandas as pd
 
@@ -68,7 +69,7 @@ def _normalize_hint(value: str | None) -> str:
 
 
 def identify_code_headers(
-    profile: Sequence["AllocationExportColumn"],
+    profile: Sequence[AllocationExportColumn],
 ) -> set[str]:
     """ستون‌هایی که باید همیشه به‌صورت متن نوشته شوند را بر اساس پروفایل برمی‌گرداند."""
 
