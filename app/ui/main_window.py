@@ -597,6 +597,7 @@ class MainWindow(QMainWindow):
 
         status_bar = ThemedStatusBar(self._theme, self)
         db_widget = DatabaseStatusWidget(self._theme, status_bar)
+        db_widget.databaseManagerRequested.connect(self.open_database_manager)
         language_label = QLabel(
             f"{self._t('status.language', 'زبان فعال')}: {self._prefs.language.code.upper()}"
         )

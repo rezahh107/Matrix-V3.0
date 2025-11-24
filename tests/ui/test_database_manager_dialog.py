@@ -2,9 +2,10 @@ from pathlib import Path
 
 import pytest
 try:  # pragma: no cover - محیط CI ممکن است وابستگی Qt نداشته باشد
-    from PySide6.QtWidgets import QApplication
+    from PySide6.QtWidgets import QApplication, QMessageBox
 except Exception:  # pragma: no cover - fallback for headless env
     QApplication = None  # type: ignore
+    QMessageBox = None  # type: ignore
 
 from app.infra.local_database import LocalDatabase
 from app.infra.year_database_manager import YearDatabaseInfo
@@ -62,7 +63,7 @@ def test_database_manager_dialog_shows_schema_issue(tmp_path: Path, qapp: QAppli
     assert any("student_id" in text for text in issue_rows)
 
 
-def test_database_manager_backup_and_reset_creates_backup(tmp_path: Path, qapp: QApplication, monkeypatch) -> None:
+def test_database_manager_buttons_trigger_actions(tmp_path: Path, qapp: QApplication, monkeypatch) -> None:
     if QApplication is None or not _QT_AVAILABLE:
         pytest.skip("Qt bindings not available")
     db = LocalDatabase(tmp_path / "to_reset.sqlite")
@@ -71,6 +72,41 @@ def test_database_manager_backup_and_reset_creates_backup(tmp_path: Path, qapp: 
     dialog = DatabaseManagerDialog(db=db, year_info=info)
     monkeypatch.setattr("app.ui.database_manager_dialog.QMessageBox.information", lambda *args, **kwargs: None)
     monkeypatch.setattr("app.ui.database_manager_dialog.QMessageBox.critical", lambda *args, **kwargs: None)
-    dialog._backup_and_reset()
-    backups = list(tmp_path.glob("to_reset.sqlite.bak-*"))
-    assert backups
+    monkeypatch.setattr("app.ui.database_manager_dialog.QMessageBox.question", lambda *args, **kwargs: QMessageBox.Yes)
+
+    calls = {"full": 0, "cache": 0}
+    monkeypatch.setattr(db, "reset_full_database", lambda: calls.__setitem__("full", calls["full"] + 1) or db.path)
+    monkeypatch.setattr(db, "clear_caches", lambda: calls.__setitem__("cache", calls["cache"] + 1))
+
+    dialog._btn_full_reset.click()
+    dialog._btn_clear_cache.click()
+
+    assert calls["full"] == 1
+    assert calls["cache"] == 1
+
+
+def test_full_reset_error_shows_message_box(tmp_path: Path, qapp: QApplication, monkeypatch) -> None:
+    if QApplication is None or not _QT_AVAILABLE:
+        pytest.skip("Qt bindings not available")
+    db = LocalDatabase(tmp_path / "to_reset_error.sqlite")
+    db.initialize()
+    info = YearDatabaseInfo("current", db.path, schema_version=9, size_bytes=0)
+    dialog = DatabaseManagerDialog(db=db, year_info=info)
+    monkeypatch.setattr("app.ui.database_manager_dialog.QMessageBox.question", lambda *args, **kwargs: QMessageBox.Yes)
+    captured = {}
+
+    def _raise_error():
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(db, "reset_full_database", _raise_error)
+
+    def _capture(*args, **kwargs):
+        captured["called"] = True
+        return None
+
+    monkeypatch.setattr("app.ui.database_manager_dialog.QMessageBox.critical", _capture)
+    monkeypatch.setattr("app.ui.database_manager_dialog.QMessageBox.information", lambda *args, **kwargs: None)
+
+    dialog._full_reset()
+
+    assert captured.get("called")

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import QLabel, QHBoxLayout, QWidget
 
@@ -20,6 +20,8 @@ class DatabaseStatusWidget(QWidget):
     این ویجت تنها مسئول نمایش است و وضعیت را از خلاصه‌ای که بیرون از آن
     (مثلاً توسط پنجره اصلی) تهیه می‌شود دریافت می‌کند.
     """
+
+    databaseManagerRequested = Signal()
 
     def __init__(self, theme: Theme, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -76,3 +78,7 @@ class DatabaseStatusWidget(QWidget):
         if not parts:
             return summary.message
         return " — ".join(parts)
+
+    def mousePressEvent(self, event):  # type: ignore[override]
+        super().mousePressEvent(event)
+        self.databaseManagerRequested.emit()
