@@ -392,9 +392,9 @@ def _raise_on_duplicate_mentor_ids(
     )
 
     message = (
-        "استخر «{source}» دارای ردیف تکراری بر اساس کلید ترکیبی mentor_id و "
-        "کلیدهای اتصال است؛ نمونه‌ها: {keys}; نمونهٔ ردیف‌ها: {rows}"
-    ).format(source=pool_source, keys=duplicate_rows, rows=sample_rows)
+        f"استخر «{pool_source}» دارای ردیف تکراری بر اساس کلید ترکیبی mentor_id و "
+        f"کلیدهای اتصال است؛ نمونه‌ها: {duplicate_rows}; نمونهٔ ردیف‌ها: {sample_rows}"
+    )
     raise DatabaseOperationError(message)
 
 

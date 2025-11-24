@@ -21,7 +21,6 @@ from .common.filters import (
     resolve_student_school_code,
 )
 from .common.ids import build_mentor_id_map, inject_mentor_id, natural_key
-from .common.normalization import to_numlike_str
 from .common.ranking import apply_ranking_policy, build_mentor_state, consume_capacity
 from .common.reasons import ReasonCode, build_reason
 from .common.rules import (
@@ -453,9 +452,6 @@ def _coerce_int(value: object) -> int:
         raise ValueError("DATA_MISSING")
     if isinstance(value, Number) and pd.isna(value):  # type: ignore[arg-type]
         raise ValueError("DATA_MISSING")
-    if isinstance(value, Number):
-        if pd.isna(value):  # type: ignore[arg-type]
-            raise ValueError("DATA_MISSING")
     return int(value)
 
 
@@ -607,13 +603,6 @@ def _filter_candidates_by_join_map(
 
     filtered = candidates.loc[mask]
     return filtered, mismatches
-    text = to_numlike_str(value).strip()
-    if not text:
-        raise ValueError("DATA_MISSING")
-    try:
-        return int(float(text))
-    except ValueError as exc:
-        raise ValueError("DATA_MISSING") from exc
 
 
 def _student_value(student: Mapping[str, object], column: str) -> object:
