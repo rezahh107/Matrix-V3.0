@@ -1680,6 +1680,53 @@ def _prepare_allocation_frames(
         pool_source=pool_source,
     )
 
+
+def _sanitize_pool_for_allocation(
+    pool_df: pd.DataFrame, *, policy: PolicyConfig
+) -> pd.DataFrame:
+    """پاک‌سازی استخر منتورها برای تخصیص بر اساس Policy.
+
+    این تابع لایهٔ Infra تنها وظیفهٔ فوروارد کردن استخر خام به منطق خالص
+    :func:`app.core.canonical_frames.canonicalize_pool_frame` را دارد تا
+    منتورهای مجازی حذف شوند، کلیدهای join به نوع صحیح `Int64` تبدیل شوند و
+    آمار اصلاحات در ``df.attrs["pool_canonicalization_stats"]`` ثبت شود.
+
+    مثال::
+
+        >>> import pandas as pd
+        >>> from app.core.policy_loader import load_policy
+        >>> policy = load_policy()  # doctest: +SKIP
+        >>> raw = pd.DataFrame({
+        ...     "mentor_name": ["مجازی", "علی"],
+        ...     "alias": [7501, 102],
+        ...     "remaining_capacity": [0, 3],
+        ... })
+        >>> clean = _sanitize_pool_for_allocation(raw, policy=policy)  # doctest: +SKIP
+        >>> int(clean["remaining_capacity"].sum())  # doctest: +SKIP
+        3
+
+    Args:
+        pool_df: دیتافریم خام استخر منتورها (inspactor یا matrix).
+        policy: سیاست فعال برای تشخیص منتور مجازی و اعمال قواعد ستون‌ها.
+
+    Returns:
+        دیتافریم استاندارد و فاقد منتور مجازی برای ورودی ``allocate_batch``.
+    """
+
+    sanitized = canonicalize_pool_frame(
+        pool_df,
+        policy=policy,
+        sanitize_pool=True,
+        pool_source="inspactor",
+        require_join_keys=True,
+    )
+
+    sanitized_en = canonicalize_headers(sanitized, header_mode="en")
+    sanitized_en = sanitized_en.loc[:, ~sanitized_en.columns.duplicated()]
+    sanitized_en.attrs.update(sanitized.attrs)
+
+    return sanitized_en
+
 def _allocate_and_write(
     students_base: pd.DataFrame,
     pool_base: pd.DataFrame,
