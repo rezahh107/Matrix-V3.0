@@ -37,7 +37,6 @@ from app.core.allocation.mentor_pool import (
     apply_manager_mentor_governance,
     apply_mentor_pool_governance,
 )
-from app.core.canonical_frames import sanitize_pool_for_allocation as _sanitize_pool_for_allocation
 from app.core.build_matrix import BuildConfig, build_matrix
 from app.core.canonical_frames import (
     canonicalize_allocation_frames,

@@ -451,9 +451,9 @@ def _resolve_capacity_column(policy: PolicyConfig, override: str | None) -> str:
 def _coerce_int(value: object) -> int:
     if value is None:
         raise ValueError("DATA_MISSING")
+    if isinstance(value, Number) and pd.isna(value):  # type: ignore[arg-type]
+        raise ValueError("DATA_MISSING")
     if isinstance(value, Number):
-        if pd.isna(value):  # type: ignore[arg-type]
-            raise ValueError("DATA_MISSING")
         return int(value)
     text = to_numlike_str(value).strip()
     if not text:
