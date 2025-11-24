@@ -220,20 +220,12 @@ class AccentSplitterHandle(QSplitterHandle):
         """به‌روزرسانی رنگ پس‌زمینه و متن متناسب با تم و وضعیت Hover."""
 
         palette = self.palette()
-        base_color = (
-            self._theme.border
-            if self._theme
-            else QPalette().color(QPalette.ColorRole.Mid)
-        )
+        base_color = self._theme.border if self._theme else QPalette().color(QPalette.ColorRole.Mid)
         hover_color = (
-            self._theme.accent
-            if self._theme
-            else QPalette().color(QPalette.ColorRole.Highlight)
+            self._theme.accent if self._theme else QPalette().color(QPalette.ColorRole.Highlight)
         )
         text_color = (
-            self._theme.text_muted
-            if self._theme
-            else QPalette().color(QPalette.ColorRole.Text)
+            self._theme.text_muted if self._theme else QPalette().color(QPalette.ColorRole.Text)
         )
         palette.setColor(QPalette.ColorRole.Window, hover_color if self._hover else base_color)
         palette.setColor(QPalette.ColorRole.WindowText, text_color)
@@ -259,6 +251,8 @@ class AccentSplitter(QSplitter):
             handle = self.handle(index)
             if isinstance(handle, AccentSplitterHandle):
                 handle.set_theme(theme)
+
+
 class MainWindow(QMainWindow):
     """پنجرهٔ اصلی PySide6 برای اجرای سناریوهای Build و Allocate."""
 
@@ -333,9 +327,7 @@ class MainWindow(QMainWindow):
         policy_file = resource_path("config", "policy.json")
         self._default_policy_path = str(policy_file) if policy_file.exists() else ""
         exporter_config = resource_path("config", "SmartAlloc_Exporter_Config_v1.json")
-        self._default_sabt_config_path = (
-            str(exporter_config) if exporter_config.exists() else ""
-        )
+        self._default_sabt_config_path = str(exporter_config) if exporter_config.exists() else ""
 
         self._splitter = AccentSplitter(Qt.Vertical, self, self._theme)
         self._splitter.setChildrenCollapsible(False)
@@ -356,7 +348,8 @@ class MainWindow(QMainWindow):
             self._wrap_page(self._build_allocate_page()), self._t("tabs.allocate", "تخصیص")
         )
         self._tabs.addTab(
-            self._wrap_page(self._build_rule_engine_page()), self._t("tabs.rule_engine", "موتور قواعد")
+            self._wrap_page(self._build_rule_engine_page()),
+            self._t("tabs.rule_engine", "موتور قواعد"),
         )
         self._tabs.addTab(
             self._wrap_page(self._build_validate_page()), self._t("tabs.validate", "اعتبارسنجی")
@@ -377,7 +370,9 @@ class MainWindow(QMainWindow):
         status_layout.setSpacing(12)
         self._stage_badge = QLabel(self._t("status.ready", "آماده"))
         self._stage_badge.setObjectName("labelStageBadge")
-        self._stage_detail = QLabel(self._t("stage.pick_scenario", "برای شروع یکی از سناریوها را انتخاب کنید"))
+        self._stage_detail = QLabel(
+            self._t("stage.pick_scenario", "برای شروع یکی از سناریوها را انتخاب کنید")
+        )
         self._stage_detail.setWordWrap(True)
         self._stage_detail.setObjectName("labelStageDetail")
         self._status = QLabel(self._t("status.ready", "آماده"))
@@ -387,7 +382,9 @@ class MainWindow(QMainWindow):
         status_column.addWidget(self._stage_badge)
         status_column.addWidget(self._stage_detail)
         status_column.addWidget(self._status)
-        self._last_run_badge = QLabel(self._t("status.no_runs", "آخرین اجرا: هنوز اجرایی ثبت نشده است"))
+        self._last_run_badge = QLabel(
+            self._t("status.no_runs", "آخرین اجرا: هنوز اجرایی ثبت نشده است")
+        )
         self._last_run_badge.setObjectName("lastRunBadge")
         self._last_run_badge.setWordWrap(True)
         status_column.addWidget(self._last_run_badge)
@@ -444,7 +441,9 @@ class MainWindow(QMainWindow):
         controls_layout.addWidget(self._btn_history_metrics)
         self._btn_demo = QPushButton(self._t("action.demo", "اجرای تست (دمو Progress)"))
         self._btn_demo.setObjectName("btnDemo")
-        self._btn_demo.setToolTip(self._t("log.demo.tooltip", "اجرای تست کوتاه برای نمایش انیمیشن پیشرفت"))
+        self._btn_demo.setToolTip(
+            self._t("log.demo.tooltip", "اجرای تست کوتاه برای نمایش انیمیشن پیشرفت")
+        )
         self._btn_demo.clicked.connect(self._start_demo_task)
         controls_layout.addWidget(self._btn_demo)
         bottom_layout.addLayout(controls_layout)
@@ -687,7 +686,9 @@ class MainWindow(QMainWindow):
         db = self._year_manager.open_year(default_year)
         self._local_db = db
         all_years_info = self._year_manager.list_years()
-        self._year_info = next((info for info in all_years_info if info.year_id == default_year), None)
+        self._year_info = next(
+            (info for info in all_years_info if info.year_id == default_year), None
+        )
 
         if self._year_info is None:
             self._year_info = YearDatabaseInfo(
@@ -786,6 +787,7 @@ class MainWindow(QMainWindow):
                     self._progress.value(), self._t("status.ready", "آماده")
                 )
             self._update_status_bar_state("ready")
+
     def _refresh_last_run_badge(self) -> None:
         """به‌روزرسانی برچسب آخرین اجرای ثبت‌شده."""
 
@@ -916,9 +918,13 @@ class MainWindow(QMainWindow):
         inputs_layout.setLabelAlignment(Qt.AlignRight)
         inputs_layout.setFormAlignment(Qt.AlignTop | Qt.AlignRight)
 
-        self._picker_inspactor = FilePicker(page, placeholder=self._t("files.inspactor", "فایل Inspactor"))
+        self._picker_inspactor = FilePicker(
+            page, placeholder=self._t("files.inspactor", "فایل Inspactor")
+        )
         self._picker_inspactor.setObjectName("editInspactor")
-        self._picker_inspactor.setToolTip(self._t("files.inspactor", "خروجی گزارش Inspactor که فهرست پشتیبان‌ها را دارد"))
+        self._picker_inspactor.setToolTip(
+            self._t("files.inspactor", "خروجی گزارش Inspactor که فهرست پشتیبان‌ها را دارد")
+        )
         self._picker_inspactor.line_edit().textChanged.connect(
             lambda *_: self._reset_matrix_mentor_pool_cache()
         )
@@ -938,13 +944,19 @@ class MainWindow(QMainWindow):
 
         self._picker_schools = FilePicker(page, placeholder=self._t("files.schools", "فایل مدارس"))
         self._picker_schools.setObjectName("editSchools")
-        self._picker_schools.setToolTip(self._t("files.schools", "فایل رسمی مدارس برای تطبیق کد و نام مدرسه"))
+        self._picker_schools.setToolTip(
+            self._t("files.schools", "فایل رسمی مدارس برای تطبیق کد و نام مدرسه")
+        )
         self._set_picker_button_text(self._picker_schools)
         inputs_layout.addRow(self._t("files.schools", "گزارش مدارس"), self._picker_schools)
 
-        self._picker_crosswalk = FilePicker(page, placeholder=self._t("files.crosswalk", "فایل Crosswalk"))
+        self._picker_crosswalk = FilePicker(
+            page, placeholder=self._t("files.crosswalk", "فایل Crosswalk")
+        )
         self._picker_crosswalk.setObjectName("editCrosswalk")
-        self._picker_crosswalk.setToolTip(self._t("files.crosswalk", "جدول Crosswalk جهت نگاشت رشته‌ها و گروه‌ها"))
+        self._picker_crosswalk.setToolTip(
+            self._t("files.crosswalk", "جدول Crosswalk جهت نگاشت رشته‌ها و گروه‌ها")
+        )
         self._set_picker_button_text(self._picker_crosswalk)
         inputs_layout.addRow(self._t("files.crosswalk", "Crosswalk"), self._picker_crosswalk)
 
@@ -955,9 +967,7 @@ class MainWindow(QMainWindow):
         policy_layout.setLabelAlignment(Qt.AlignRight)
         policy_layout.setFormAlignment(Qt.AlignTop | Qt.AlignRight)
 
-        self._picker_policy_build = FilePicker(
-            page, placeholder="پیش‌فرض: config/policy.json"
-        )
+        self._picker_policy_build = FilePicker(page, placeholder="پیش‌فرض: config/policy.json")
         self._picker_policy_build.setObjectName("editPolicy1")
         if self._default_policy_path:
             self._picker_policy_build.setText(self._default_policy_path)
@@ -1013,9 +1023,7 @@ class MainWindow(QMainWindow):
         inputs_layout.setLabelAlignment(Qt.AlignRight)
         inputs_layout.setFormAlignment(Qt.AlignTop | Qt.AlignRight)
 
-        self._picker_students = FilePicker(
-            page, placeholder="دانش‌آموزان (*.xlsx یا *.csv)"
-        )
+        self._picker_students = FilePicker(page, placeholder="دانش‌آموزان (*.xlsx یا *.csv)")
         self._picker_students.setObjectName("editStudents")
         self._picker_students.setToolTip("لیست دانش‌آموزانی که باید به پشتیبان متصل شوند")
         self._set_picker_button_text(self._picker_students)
@@ -1049,9 +1057,7 @@ class MainWindow(QMainWindow):
         advanced_layout.setLabelAlignment(Qt.AlignRight)
         advanced_layout.setFormAlignment(Qt.AlignTop | Qt.AlignRight)
 
-        self._picker_policy_allocate = FilePicker(
-            page, placeholder="پیش‌فرض: config/policy.json"
-        )
+        self._picker_policy_allocate = FilePicker(page, placeholder="پیش‌فرض: config/policy.json")
         self._picker_policy_allocate.setObjectName("editPolicy2")
         if self._default_policy_path:
             self._picker_policy_allocate.setText(self._default_policy_path)
@@ -1139,9 +1145,7 @@ class MainWindow(QMainWindow):
             dialog_filter="Excel (*.xlsx *.xlsm *.xls)",
         )
         self._picker_sabt_output_alloc.setObjectName("editSabtOutputAlloc")
-        self._picker_sabt_output_alloc.setToolTip(
-            "فایل ImportToSabt برای ارسال به سامانه ثبت"
-        )
+        self._picker_sabt_output_alloc.setToolTip("فایل ImportToSabt برای ارسال به سامانه ثبت")
         self._picker_sabt_output_alloc.set_button_text(browse_text)
         self._apply_pref_default(
             self._picker_sabt_output_alloc, self._prefs.last_sabt_output_allocate
@@ -1155,16 +1159,10 @@ class MainWindow(QMainWindow):
             dialog_filter="JSON (*.json)",
         )
         self._picker_sabt_config_alloc.setObjectName("editSabtConfigAlloc")
-        self._picker_sabt_config_alloc.setToolTip(
-            "فایل تنظیمات SmartAlloc Exporter"
-        )
+        self._picker_sabt_config_alloc.setToolTip("فایل تنظیمات SmartAlloc Exporter")
         self._picker_sabt_config_alloc.set_button_text(browse_text)
-        self._apply_pref_default(
-            self._picker_sabt_config_alloc, self._prefs.last_sabt_config_path
-        )
-        self._apply_resource_default(
-            self._picker_sabt_config_alloc, self._default_sabt_config_path
-        )
+        self._apply_pref_default(self._picker_sabt_config_alloc, self._prefs.last_sabt_config_path)
+        self._apply_resource_default(self._picker_sabt_config_alloc, self._default_sabt_config_path)
         self._set_picker_button_text(self._picker_sabt_config_alloc)
         sabt_layout.addRow("فایل تنظیمات", self._picker_sabt_config_alloc)
 
@@ -1224,21 +1222,15 @@ class MainWindow(QMainWindow):
         inputs_layout.setLabelAlignment(Qt.AlignRight)
         inputs_layout.setFormAlignment(Qt.AlignTop | Qt.AlignRight)
 
-        self._picker_rule_matrix = FilePicker(
-            page, placeholder="ماتریس اهلیت (*.xlsx)"
-        )
+        self._picker_rule_matrix = FilePicker(page, placeholder="ماتریس اهلیت (*.xlsx)")
         self._picker_rule_matrix.setObjectName("editRuleMatrix")
         self._picker_rule_matrix.setToolTip("فایل ماتریس اهلیت ساخته‌شده را انتخاب کنید")
         self._picker_rule_matrix.set_button_text(browse_text)
-        self._apply_pref_default(
-            self._picker_rule_matrix, self._prefs.last_matrix_path
-        )
+        self._apply_pref_default(self._picker_rule_matrix, self._prefs.last_matrix_path)
         self._set_picker_button_text(self._picker_rule_matrix)
         inputs_layout.addRow("فایل ماتریس", self._picker_rule_matrix)
 
-        self._picker_rule_students = FilePicker(
-            page, placeholder="دانش‌آموزان (*.xlsx یا *.csv)"
-        )
+        self._picker_rule_students = FilePicker(page, placeholder="دانش‌آموزان (*.xlsx یا *.csv)")
         self._picker_rule_students.setObjectName("editRuleStudents")
         self._picker_rule_students.setToolTip("لیست دانش‌آموزان برای ارزیابی مجدد با موتور قواعد")
         self._set_picker_button_text(self._picker_rule_students)
@@ -1292,9 +1284,7 @@ class MainWindow(QMainWindow):
         advanced_layout.setLabelAlignment(Qt.AlignRight)
         advanced_layout.setFormAlignment(Qt.AlignTop | Qt.AlignRight)
 
-        self._picker_policy_rule = FilePicker(
-            page, placeholder="پیش‌فرض: config/policy.json"
-        )
+        self._picker_policy_rule = FilePicker(page, placeholder="پیش‌فرض: config/policy.json")
         self._picker_policy_rule.setObjectName("editRulePolicy")
         if self._default_policy_path:
             self._picker_policy_rule.setText(self._default_policy_path)
@@ -1313,9 +1303,7 @@ class MainWindow(QMainWindow):
         output_layout = QFormLayout(output_group)
         output_layout.setLabelAlignment(Qt.AlignRight)
         output_layout.setFormAlignment(Qt.AlignTop | Qt.AlignRight)
-        self._picker_rule_output = FilePicker(
-            page, save=True, placeholder="خروجی تخصیص (*.xlsx)"
-        )
+        self._picker_rule_output = FilePicker(page, save=True, placeholder="خروجی تخصیص (*.xlsx)")
         self._picker_rule_output.setObjectName("editRuleOutput")
         self._picker_rule_output.setToolTip("فایل خروجی موتور قواعد برای ذخیره گزارش جدید")
         self._set_picker_button_text(self._picker_rule_output)
@@ -1334,13 +1322,9 @@ class MainWindow(QMainWindow):
             dialog_filter="Excel (*.xlsx *.xlsm *.xls)",
         )
         self._picker_sabt_output_rule.setObjectName("editSabtOutputRule")
-        self._picker_sabt_output_rule.setToolTip(
-            "فایل ImportToSabt برای خروجی سناریوی موتور قواعد"
-        )
+        self._picker_sabt_output_rule.setToolTip("فایل ImportToSabt برای خروجی سناریوی موتور قواعد")
         self._picker_sabt_output_rule.set_button_text(browse_text)
-        self._apply_pref_default(
-            self._picker_sabt_output_rule, self._prefs.last_sabt_output_rule
-        )
+        self._apply_pref_default(self._picker_sabt_output_rule, self._prefs.last_sabt_output_rule)
         self._set_picker_button_text(self._picker_sabt_output_rule)
         sabt_layout.addRow("فایل خروجی", self._picker_sabt_output_rule)
 
@@ -1354,12 +1338,8 @@ class MainWindow(QMainWindow):
             "فایل تنظیمات SmartAlloc Exporter برای Rule-Engine"
         )
         self._picker_sabt_config_rule.set_button_text(browse_text)
-        self._apply_pref_default(
-            self._picker_sabt_config_rule, self._prefs.last_sabt_config_path
-        )
-        self._apply_resource_default(
-            self._picker_sabt_config_rule, self._default_sabt_config_path
-        )
+        self._apply_pref_default(self._picker_sabt_config_rule, self._prefs.last_sabt_config_path)
+        self._apply_resource_default(self._picker_sabt_config_rule, self._default_sabt_config_path)
         self._set_picker_button_text(self._picker_sabt_config_rule)
         sabt_layout.addRow("فایل تنظیمات", self._picker_sabt_config_rule)
 
@@ -1411,9 +1391,7 @@ class MainWindow(QMainWindow):
             )
         )
 
-        intro = QLabel(
-            "این بخش برای یادآوری مراحل کنترل کیفیت خروجی‌های Sabt و تخصیص است."
-        )
+        intro = QLabel("این بخش برای یادآوری مراحل کنترل کیفیت خروجی‌های Sabt و تخصیص است.")
         intro.setWordWrap(True)
         layout.addWidget(intro)
 
@@ -1574,7 +1552,9 @@ class MainWindow(QMainWindow):
         if not self._ensure_filled(required):
             return
 
-        policy_path = self._picker_policy_build.text() or self._default_policy_path or "config/policy.json"
+        policy_path = (
+            self._picker_policy_build.text() or self._default_policy_path or "config/policy.json"
+        )
         argv = [
             "build-matrix",
             "--inspactor",
@@ -1588,6 +1568,7 @@ class MainWindow(QMainWindow):
             "--policy",
             policy_path,
         ]
+
         def _remember_build_output() -> None:
             output_path = self._picker_output_matrix.text().strip()
             if output_path:
@@ -1609,9 +1590,7 @@ class MainWindow(QMainWindow):
         if self._matrix_mentor_pool_overrides:
             overrides["mentor_pool_overrides"] = dict(self._matrix_mentor_pool_overrides)
         if self._matrix_manager_overrides:
-            overrides["mentor_pool_manager_overrides"] = dict(
-                self._matrix_manager_overrides
-            )
+            overrides["mentor_pool_manager_overrides"] = dict(self._matrix_manager_overrides)
         return overrides
 
     def _reset_history_metrics(self) -> None:
@@ -1635,9 +1614,7 @@ class MainWindow(QMainWindow):
         """نمایش دیالوگ History Metrics با داده‌های آخرین اجرا."""
 
         if self._history_metrics_dialog is None:
-            self._history_metrics_dialog = HistoryMetricsDialog(
-                self._history_metrics_df, self
-            )
+            self._history_metrics_dialog = HistoryMetricsDialog(self._history_metrics_df, self)
         else:
             self._history_metrics_dialog.update_metrics(self._history_metrics_df)
         self._history_metrics_dialog.show()
@@ -1663,9 +1640,7 @@ class MainWindow(QMainWindow):
         capacity = self._edit_capacity.text().strip() or "remaining_capacity"
         self._edit_capacity.setText(capacity)
         policy_path = (
-            self._picker_policy_allocate.text()
-            or self._default_policy_path
-            or "config/policy.json"
+            self._picker_policy_allocate.text() or self._default_policy_path or "config/policy.json"
         )
 
         overrides = self._build_allocate_overrides()
@@ -1746,9 +1721,7 @@ class MainWindow(QMainWindow):
         capacity = self._edit_rule_capacity.text().strip() or "remaining_capacity"
         self._edit_rule_capacity.setText(capacity)
         policy_path = (
-            self._picker_policy_rule.text()
-            or self._default_policy_path
-            or "config/policy.json"
+            self._picker_policy_rule.text() or self._default_policy_path or "config/policy.json"
         )
 
         overrides = self._build_rule_engine_overrides()
@@ -1911,16 +1884,12 @@ class MainWindow(QMainWindow):
                 label = QLabel(f"مدیر {center.name}:")
                 combo = self._create_manager_combo(group_box)
                 combo.setMinimumWidth(250)
-                preferred = self._prefs.get_center_manager(
-                    center.id, center.default_manager or ""
-                )
+                preferred = self._prefs.get_center_manager(center.id, center.default_manager or "")
                 self._refresh_manager_combo(center.id, combo)
                 if preferred:
                     combo.setCurrentText(preferred)
                 combo.currentTextChanged.connect(
-                    lambda text, cid=center.id: self._on_center_manager_changed(
-                        cid, text
-                    )
+                    lambda text, cid=center.id: self._on_center_manager_changed(cid, text)
                 )
                 self._center_manager_combos[center.id] = combo
                 row_layout.addWidget(label)
@@ -2221,17 +2190,13 @@ class MainWindow(QMainWindow):
             overrides = dialog.get_overrides()
             self._mentor_pool_overrides = {str(k): bool(v) for k, v in overrides.items()}
 
-    def _handle_matrix_mentor_pool_finished(
-        self, result: int, dialog: MentorPoolDialog
-    ) -> None:
+    def _handle_matrix_mentor_pool_finished(self, result: int, dialog: MentorPoolDialog) -> None:
         """ذخیرهٔ overrideهای مدیر/منتور برای تب ساخت ماتریس."""
 
         if result == QDialog.Accepted:
             overrides = dialog.get_overrides()
             manager_overrides = dialog.get_manager_overrides()
-            self._matrix_mentor_pool_overrides = {
-                str(k): bool(v) for k, v in overrides.items()
-            }
+            self._matrix_mentor_pool_overrides = {str(k): bool(v) for k, v in overrides.items()}
             self._matrix_manager_overrides = {str(k): bool(v) for k, v in manager_overrides.items()}
         self._matrix_mentor_pool_dialog = None
 
@@ -2299,9 +2264,7 @@ class MainWindow(QMainWindow):
     def _autodetect_counters(self) -> None:
         """خواندن روستر سال جاری و پیشنهاد سال و آخرین شمارنده‌ها."""
 
-        self._autodetect_counters_for(
-            self._picker_current_roster, self._combo_academic_year
-        )
+        self._autodetect_counters_for(self._picker_current_roster, self._combo_academic_year)
 
     def _autodetect_rule_engine_counters(self) -> None:
         """پیشنهاد شمارنده‌ها برای تب موتور قواعد."""
@@ -2310,9 +2273,7 @@ class MainWindow(QMainWindow):
             self._picker_rule_current_roster, self._combo_rule_academic_year
         )
 
-    def _autodetect_counters_for(
-        self, picker: FilePicker, combo: QComboBox
-    ) -> None:
+    def _autodetect_counters_for(self, picker: FilePicker, combo: QComboBox) -> None:
         """منطق مشترک پیشنهاد شمارنده بر اساس روستر ورودی."""
 
         path_text = picker.text().strip()
@@ -2550,11 +2511,7 @@ class MainWindow(QMainWindow):
             return
         path = Path(filename)
         suffix = path.suffix.lower()
-        content = (
-            self._log.toPlainText()
-            if suffix in {".txt", ".log", ""}
-            else self._log.toHtml()
-        )
+        content = self._log.toPlainText() if suffix in {".txt", ".log", ""} else self._log.toHtml()
         try:
             path.write_text(content, encoding="utf-8")
         except OSError as exc:
@@ -2592,13 +2549,13 @@ class MainWindow(QMainWindow):
         content = message
         if background:
             content = (
-                f"<span style=\"background:{background}; padding:2px 6px; "
+                f'<span style="background:{background}; padding:2px 6px; '
                 f"border-radius:{self._theme.radius_sm}px; "
-                f"color:{self._theme.colors.text};\">{message}</span>"
+                f'color:{self._theme.colors.text};">{message}</span>'
             )
         html = (
             "<span style=\"font-family: 'Fira Code', 'Cascadia Code', 'Segoe UI Mono',"
-            " 'Courier New', monospace; color:" + self._theme.colors.text_muted + "\">"
+            " 'Courier New', monospace; color:" + self._theme.colors.text_muted + '">'
             f"{prefix}</span> {content}"
         )
         self._log.append(html)
@@ -2629,9 +2586,7 @@ class MainWindow(QMainWindow):
         path = Path(path_text)
         folder = path if path.is_dir() else path.parent
         if not folder.exists():
-            QMessageBox.warning(
-                self, "پوشه یافت نشد", f"پوشهٔ ذخیره‌شده در دسترس نیست: {folder}"
-            )
+            QMessageBox.warning(self, "پوشه یافت نشد", f"پوشهٔ ذخیره‌شده در دسترس نیست: {folder}")
             return
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder.resolve())))
 

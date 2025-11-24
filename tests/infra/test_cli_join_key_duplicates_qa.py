@@ -34,7 +34,9 @@ def test_run_build_matrix_propagates_join_key_duplicates(monkeypatch, tmp_path: 
         return pd.DataFrame({"mentor_id": []}), {}, {}
 
     class DummyBuildConfig:
-        def __init__(self, *, policy: object, min_coverage_ratio=None, expected_policy_version=None):
+        def __init__(
+            self, *, policy: object, min_coverage_ratio=None, expected_policy_version=None
+        ):
             self.policy = policy
             self.min_coverage_ratio = min_coverage_ratio
             self.expected_policy_version = expected_policy_version
@@ -112,5 +114,8 @@ def test_run_build_matrix_propagates_join_key_duplicates(monkeypatch, tmp_path: 
     assert exit_code == 0
     assert captured["report_extras"]["pool_join_key_duplicates"].equals(join_key_duplicates)
     ctx = captured["context"]
-    assert getattr(ctx, "pool_join_key_duplicates", None) is captured["report_extras"]["pool_join_key_duplicates"]
+    assert (
+        getattr(ctx, "pool_join_key_duplicates", None)
+        is captured["report_extras"]["pool_join_key_duplicates"]
+    )
     assert captured.get("workbook_written") is True

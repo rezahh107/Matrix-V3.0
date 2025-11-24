@@ -272,7 +272,9 @@ def build_selection_reason_rows(
 
     def _alias(column: str) -> str:
         try:
-            alias = canonicalize_headers(pd.DataFrame(columns=[column]), header_mode="en").columns[0]
+            alias = canonicalize_headers(pd.DataFrame(columns=[column]), header_mode="en").columns[
+                0
+            ]
         except Exception:
             alias = column
         return alias
@@ -335,7 +337,10 @@ def build_selection_reason_rows(
     log_lookup: dict[str, dict[str, object]] = {}
     if logs is not None:
         logs_df = pd.DataFrame(logs)
-        if not logs_df.empty and "student_id" in canonicalize_headers(logs_df, header_mode="en").columns:
+        if (
+            not logs_df.empty
+            and "student_id" in canonicalize_headers(logs_df, header_mode="en").columns
+        ):
             logs_en = canonicalize_headers(logs_df, header_mode="en")
             logs_en = logs_en.copy()
             logs_en["student_id"] = logs_en["student_id"].astype("string")
@@ -367,9 +372,7 @@ def build_selection_reason_rows(
 
         national_id = _student_value(student_id, "national_id", "کدملی", "کد ملی")
         if not national_id:
-            fallback_national = row.get("student_national_code") or row.get(
-                "national_code"
-            )
+            fallback_national = row.get("student_national_code") or row.get("national_code")
             if pd.notna(fallback_national):
                 national_id = str(fallback_national).strip()
         first_name = _student_value(student_id, "first_name", "نام")
@@ -425,9 +428,7 @@ def build_selection_reason_rows(
         if not occupancy_ratio:
             occupancy_ratio = _format_ratio(row.get("occupancy_ratio"))
         allocations_new = _format_int(
-            log_data.get("allocations_new")
-            if log_data.get("allocations_new") is not None
-            else None
+            log_data.get("allocations_new") if log_data.get("allocations_new") is not None else None
         )
         if not allocations_new:
             before = log_data.get("capacity_before")
@@ -474,16 +475,10 @@ def build_selection_reason_rows(
         reason_segments = [reason_text]
         if rule_code and rule_message:
             reason_segments.append(
-                fa_digitize(
-                    sanitize_bidi(f"دلیل Policy: [{rule_code}] {rule_message}")
-                )
+                fa_digitize(sanitize_bidi(f"دلیل Policy: [{rule_code}] {rule_message}"))
             )
         if rule_detail_text:
-            reason_segments.append(
-                fa_digitize(
-                    sanitize_bidi(f"جزئیات Policy: {rule_detail_text}")
-                )
-            )
+            reason_segments.append(fa_digitize(sanitize_bidi(f"جزئیات Policy: {rule_detail_text}")))
         if fairness_text:
             reason_segments.append(fa_digitize(sanitize_bidi(f"عدالت: {fairness_text}")))
         reason_text = " — ".join(segment for segment in reason_segments if segment)
@@ -509,9 +504,7 @@ def build_selection_reason_rows(
         if column not in reason_df.columns:
             reason_df[column] = ""
 
-    internal_columns = list(
-        dict.fromkeys(output_columns + ["__mentor_id__", "student_id"])
-    )
+    internal_columns = list(dict.fromkeys(output_columns + ["__mentor_id__", "student_id"]))
     reason_df = reason_df.reindex(columns=internal_columns)
     if "شمارنده" in reason_df.columns:
         reason_df["شمارنده"] = pd.to_numeric(reason_df["شمارنده"], errors="coerce")
@@ -521,9 +514,7 @@ def build_selection_reason_rows(
     reason_df = reason_df.sort_values(
         sort_columns,
         kind="mergesort",
-        key=lambda series: series.map(natural_key)
-        if series.name == "__mentor_id__"
-        else series,
+        key=lambda series: series.map(natural_key) if series.name == "__mentor_id__" else series,
     ).reset_index(drop=True)
     if "شمارنده" in reason_df.columns:
         reason_df["شمارنده"] = pd.Series(

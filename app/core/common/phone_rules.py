@@ -205,7 +205,9 @@ def fix_guardian_phone_columns(
         fixed_values.append(fix_guardian_phones(value1, value2))
 
     first_series = pd.Series((pair[0] for pair in fixed_values), index=result.index, dtype="string")
-    second_series = pd.Series((pair[1] for pair in fixed_values), index=result.index, dtype="string")
+    second_series = pd.Series(
+        (pair[1] for pair in fixed_values), index=result.index, dtype="string"
+    )
 
     target1 = canonical1 or col1
     target2 = canonical2 or col2
@@ -244,9 +246,7 @@ def apply_hekmat_contact_policy_series(
     landline_series = _ensure_string_series(landline)
     hekmat_mask = (status_int == HEKMAT_STATUS_CODE).fillna(False)
     empty_landline = _blank_mask(landline_series)
-    updated_landline = landline_series.mask(
-        hekmat_mask & empty_landline, HEKMAT_LANDLINE_FALLBACK
-    )
+    updated_landline = landline_series.mask(hekmat_mask & empty_landline, HEKMAT_LANDLINE_FALLBACK)
 
     updated_tracking: pd.Series | None = None
     if tracking is not None:

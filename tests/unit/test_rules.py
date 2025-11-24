@@ -103,7 +103,10 @@ def test_center_priority_rule_enforces_allowed_centers() -> None:
     assert rule.evaluate(student, mentor) is None
     mentor_mismatch = {"allowed_centers": [2]}
     assert rule.evaluate(student, mentor_mismatch) is ReasonCode.CENTER_MISMATCH
-    assert rule.evaluate({"center": None, "is_school_student": False}, mentor) is ReasonCode.INVALID_CENTER_VALUE
+    assert (
+        rule.evaluate({"center": None, "is_school_student": False}, mentor)
+        is ReasonCode.INVALID_CENTER_VALUE
+    )
     assert rule.evaluate(student, None) is ReasonCode.NO_MANAGER_FOR_CENTER
     school_student = {"center": 5, "is_school_student": True}
     assert rule.evaluate(school_student, mentor_mismatch) is None

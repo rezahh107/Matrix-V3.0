@@ -25,7 +25,9 @@ class LanguageDialog(QDialog):
 
         layout = QFormLayout(self)
         layout.setContentsMargins(16, 16, 16, 16)
-        layout.addRow(translator.text("dialog.language.label", "انتخاب زبان رابط کاربری"), self._combo)
+        layout.addRow(
+            translator.text("dialog.language.label", "انتخاب زبان رابط کاربری"), self._combo
+        )
 
         buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel, self)
         buttons.accepted.connect(self.accept)

@@ -474,15 +474,17 @@ def _normalize_policy_payload(data: Mapping[str, object]) -> Mapping[str, object
     required_student_fields = _normalize_required_student_fields(
         data.get("required_student_fields"), join_keys
     )
-    ranking_rules = _normalize_ranking_rules(data["ranking_rules"] if "ranking_rules" in data else data["ranking"])
+    ranking_rules = _normalize_ranking_rules(
+        data["ranking_rules"] if "ranking_rules" in data else data["ranking"]
+    )
     trace_stages = _normalize_trace_stages(data.get("trace_stages"), join_keys)
     postal_valid_range = _normalize_postal_valid_range(data["postal_valid_range"])
     finance_variants = _normalize_finance_variants(data["finance_variants"])
     center_map = _normalize_center_map(data["center_map"])
-    center_management = _normalize_center_management(
-        data.get("center_management"), center_map
+    center_management = _normalize_center_management(data.get("center_management"), center_map)
+    school_code_empty_as_zero = _ensure_bool(
+        "school_code_empty_as_zero", data["school_code_empty_as_zero"]
     )
-    school_code_empty_as_zero = _ensure_bool("school_code_empty_as_zero", data["school_code_empty_as_zero"])
     prefer_major_code = _ensure_bool("prefer_major_code", data["prefer_major_code"])
     coverage_threshold = _normalize_coverage_threshold(
         data.get("coverage_threshold", _DEFAULT_COVERAGE_THRESHOLD)
@@ -519,12 +521,8 @@ def _normalize_policy_payload(data: Mapping[str, object]) -> Mapping[str, object
     fairness_strategy = _normalize_fairness_strategy(
         data.get("fairness_strategy") or data.get("fairness")
     )
-    coverage_options = _normalize_coverage_options(
-        (data.get("matrix") or {}).get("coverage", {})
-    )
-    mentor_pool_governance = _normalize_mentor_pool_governance(
-        data.get("mentor_pool_governance")
-    )
+    coverage_options = _normalize_coverage_options((data.get("matrix") or {}).get("coverage", {}))
+    mentor_pool_governance = _normalize_mentor_pool_governance(data.get("mentor_pool_governance"))
     allocation_channels = _normalize_allocation_channels(
         data.get("allocation_channels"), normal_statuses=normal_statuses
     )
@@ -709,12 +707,14 @@ def _normalize_center_management(
             text = str(managers_raw).strip()
             if text:
                 default_manager = text
-        centers.append({
-            "id": center_id,
-            "name": name,
-            "default_manager": default_manager,
-            "description": str(entry.get("description", "")),
-        })
+        centers.append(
+            {
+                "id": center_id,
+                "name": name,
+                "default_manager": default_manager,
+                "description": str(entry.get("description", "")),
+            }
+        )
 
     if not centers:
         centers = [
@@ -811,9 +811,7 @@ def _normalize_allocation_channels(
         raise TypeError("allocation_channels must be a mapping")
 
     school_codes_raw = payload.get("school_codes", [])
-    school_codes = tuple(
-        _ensure_int_sequence("allocation_channels.school_codes", school_codes_raw)
-    )
+    school_codes = tuple(_ensure_int_sequence("allocation_channels.school_codes", school_codes_raw))
 
     center_payload = payload.get("center_channels", {})
     if not isinstance(center_payload, Mapping):
@@ -924,6 +922,7 @@ def _normalize_column_aliases(value: object) -> Mapping[str, dict[str, str]]:
         }
     return normalized
 
+
 def _normalize_virtual_alias_ranges(raw: object) -> tuple[tuple[int, int], ...]:
     if not isinstance(raw, Sequence) or isinstance(raw, (str, bytes)):
         raise TypeError("virtual_alias_ranges must be a sequence of [start, end]")
@@ -981,16 +980,11 @@ def _normalize_join_keys(raw: object) -> list[str]:
                 duplicates.add(key)
             else:
                 seen.add(key)
-        raise ValueError(
-            "join_keys must be unique. Duplicate keys found: "
-            f"{sorted(duplicates)}"
-        )
+        raise ValueError("join_keys must be unique. Duplicate keys found: " f"{sorted(duplicates)}")
     return join_keys
 
 
-def _normalize_required_student_fields(
-    raw: object | None, join_keys: Sequence[str]
-) -> list[str]:
+def _normalize_required_student_fields(raw: object | None, join_keys: Sequence[str]) -> list[str]:
     """نرمال‌سازی فهرست ستون‌های ضروری دانش‌آموز از Policy."""
 
     if raw is None:
@@ -1059,7 +1053,9 @@ def _normalize_ranking_rules(raw: object) -> list[Mapping[str, object]]:
     return normalized
 
 
-def _normalize_trace_stages(raw: object | None, join_keys: Sequence[str]) -> list[Mapping[str, str]]:
+def _normalize_trace_stages(
+    raw: object | None, join_keys: Sequence[str]
+) -> list[Mapping[str, str]]:
     if raw is None:
         stages = [
             {"stage": stage, "column": _LEGACY_TRACE_DEFAULTS[stage]}
@@ -1096,8 +1092,7 @@ def _normalize_trace_stages(raw: object | None, join_keys: Sequence[str]) -> lis
     missing_from_trace = [key for key in join_keys if key not in stage_columns]
     if missing_from_trace:
         raise ValueError(
-            "All join_keys must appear in trace_stages columns: "
-            + ", ".join(missing_from_trace),
+            "All join_keys must appear in trace_stages columns: " + ", ".join(missing_from_trace),
         )
     return stages
 
@@ -1123,8 +1118,7 @@ def _version_gate(
     loaded_semver = _parse_semver(loaded_version)
     expected_semver = _parse_semver(expected_version)
     message = (
-        f"Policy version mismatch: loaded='{loaded_version}' "
-        f"expected='{expected_version}'"
+        f"Policy version mismatch: loaded='{loaded_version}' " f"expected='{expected_version}'"
     )
 
     if loaded_semver[0] != expected_semver[0]:
@@ -1144,9 +1138,7 @@ def _to_config(data: Mapping[str, object]) -> PolicyConfig:
         normal_statuses=[int(item) for item in data["normal_statuses"]],  # type: ignore[index]
         school_statuses=[int(item) for item in data["school_statuses"]],  # type: ignore[index]
         join_keys=[str(item) for item in data["join_keys"]],  # type: ignore[index]
-        required_student_fields=[
-            str(item) for item in data["required_student_fields"]
-        ],
+        required_student_fields=[str(item) for item in data["required_student_fields"]],
         ranking_rules=[_to_ranking_rule(item) for item in data["ranking_rules"]],
         trace_stages=[_to_trace_stage(item) for item in data["trace_stages"]],
         gender_codes=_to_gender_codes(data["gender_codes"]),
@@ -1156,12 +1148,8 @@ def _to_config(data: Mapping[str, object]) -> PolicyConfig:
         school_code_empty_as_zero=bool(data["school_code_empty_as_zero"]),
         prefer_major_code=bool(data["prefer_major_code"]),
         coverage_threshold=float(data["coverage_threshold"]),
-        dedup_removed_ratio_threshold=float(
-            data["dedup_removed_ratio_threshold"]
-        ),
-        school_lookup_mismatch_threshold=float(
-            data["school_lookup_mismatch_threshold"]
-        ),
+        dedup_removed_ratio_threshold=float(data["dedup_removed_ratio_threshold"]),
+        school_lookup_mismatch_threshold=float(data["school_lookup_mismatch_threshold"]),
         join_key_duplicate_threshold=int(data["join_key_duplicate_threshold"]),
         alias_rule=PolicyAliasRule(
             normal=str(data["alias_rule"]["normal"]),
@@ -1175,8 +1163,10 @@ def _to_config(data: Mapping[str, object]) -> PolicyConfig:
             capacity_special=str(data["columns"]["capacity_special"]),
             remaining_capacity=str(data["columns"]["remaining_capacity"]),
         ),
-        column_aliases={str(source): {str(k): str(v) for k, v in aliases.items()}
-                        for source, aliases in data["column_aliases"].items()},
+        column_aliases={
+            str(source): {str(k): str(v) for k, v in aliases.items()}
+            for source, aliases in data["column_aliases"].items()
+        },
         excel=ExcelOptions(**_normalize_excel_options(data["excel"])),
         virtual_alias_ranges=tuple(
             (int(start), int(end)) for start, end in data["virtual_alias_ranges"]
@@ -1187,19 +1177,13 @@ def _to_config(data: Mapping[str, object]) -> PolicyConfig:
         center_management=_to_center_management_config(data["center_management"]),
         coverage_options=MatrixCoverageOptions(
             denominator_mode=str(data["coverage_options"]["denominator_mode"]),
-            require_student_presence=bool(
-                data["coverage_options"]["require_student_presence"]
-            ),
+            require_student_presence=bool(data["coverage_options"]["require_student_presence"]),
             include_blocked_candidates_in_denominator=bool(
                 data["coverage_options"]["include_blocked_candidates_in_denominator"]
             ),
         ),
-        mentor_pool_governance=_to_mentor_pool_governance(
-            data.get("mentor_pool_governance", {})
-        ),
-        mentor_school_binding=_to_mentor_school_binding(
-            data.get("mentor_school_binding", {})
-        ),
+        mentor_pool_governance=_to_mentor_pool_governance(data.get("mentor_pool_governance", {})),
+        mentor_school_binding=_to_mentor_school_binding(data.get("mentor_school_binding", {})),
         allocation_channels=allocation_channels_obj,
     )
 
@@ -1246,7 +1230,9 @@ def _to_center_management_config(data: Mapping[str, object]) -> CenterManagement
 
 
 def _to_mentor_school_binding(data: Mapping[str, object]) -> MentorSchoolBindingPolicy:
-    tokens = data.get("empty_tokens", data.get("empty_placeholders", ("", "0", "-", "—", "_", "nan", "NaN")))
+    tokens = data.get(
+        "empty_tokens", data.get("empty_placeholders", ("", "0", "-", "—", "_", "nan", "NaN"))
+    )
     return MentorSchoolBindingPolicy(
         global_mode=str(data.get("global_mode", "global")),
         restricted_mode=str(data.get("restricted_mode", "restricted")),
@@ -1254,17 +1240,13 @@ def _to_mentor_school_binding(data: Mapping[str, object]) -> MentorSchoolBinding
     )
 
 
-def _to_mentor_pool_governance(
-    data: Mapping[str, object]
-) -> MentorPoolGovernanceConfig:
+def _to_mentor_pool_governance(data: Mapping[str, object]) -> MentorPoolGovernanceConfig:
     allowed_raw = data.get("allowed_statuses") or (
         MentorStatus.ACTIVE.value,
         MentorStatus.INACTIVE.value,
     )
     allowed = tuple(MentorStatus.from_value(item) for item in allowed_raw)
-    default_status = MentorStatus.from_value(
-        data.get("default_status", MentorStatus.ACTIVE.value)
-    )
+    default_status = MentorStatus.from_value(data.get("default_status", MentorStatus.ACTIVE.value))
     if default_status not in allowed:
         raise ValueError("default_status must be included in allowed_statuses")
 
@@ -1362,9 +1344,7 @@ def _apply_schema_defaults(data: dict[str, object]) -> dict[str, object]:
             selection_payload.get("trace_stage_labels")
         )
     if not isinstance(selection_payload.get("labels"), Mapping):
-        selection_payload["labels"] = _normalize_reason_labels(
-            selection_payload.get("labels")
-        )
+        selection_payload["labels"] = _normalize_reason_labels(selection_payload.get("labels"))
     data["emission"] = {"selection_reasons": selection_payload}
 
     matrix_section = data.get("matrix", {})
@@ -1409,7 +1389,9 @@ def _normalize_excel_options(payload: Mapping[str, object]) -> dict[str, object]
         raise TypeError("excel.font_size must be an integer") from exc
     if font_size <= 0:
         raise ValueError("excel.font_size must be a positive integer")
-    internal = str(payload.get("header_mode_internal", _DEFAULT_EXCEL_OPTIONS["header_mode_internal"]))
+    internal = str(
+        payload.get("header_mode_internal", _DEFAULT_EXCEL_OPTIONS["header_mode_internal"])
+    )
     write = str(payload.get("header_mode_write", _DEFAULT_EXCEL_OPTIONS["header_mode_write"]))
     return {
         "rtl": rtl,
@@ -1437,9 +1419,7 @@ def _normalize_coverage_options(payload: Mapping[str, object]) -> dict[str, obje
             "mentors, mentors_students_intersection, mentors_students_union"
         )
     require_student_presence = bool(payload.get("require_student_presence", False))
-    include_blocked = bool(
-        payload.get("include_blocked_candidates_in_denominator", False)
-    )
+    include_blocked = bool(payload.get("include_blocked_candidates_in_denominator", False))
     return {
         "denominator_mode": denominator_mode,
         "require_student_presence": require_student_presence,
@@ -1472,9 +1452,7 @@ def _normalize_mentor_pool_governance(raw: object | None) -> Mapping[str, object
             allowed_statuses.append(status_value)
             seen.add(status_value)
 
-    default_status = _parse_status_value(
-        raw.get("default_status", MentorStatus.ACTIVE.value)
-    )
+    default_status = _parse_status_value(raw.get("default_status", MentorStatus.ACTIVE.value))
     if default_status not in seen:
         raise ValueError("default_status must be part of allowed_statuses")
 
@@ -1628,9 +1606,7 @@ def _prepare_policy_payload(
 
     loaded_semver = _parse_semver(version)
     expected_semver = _parse_semver(expected_version)
-    message = (
-        f"Policy version mismatch: loaded='{version}' expected='{expected_version}'"
-    )
+    message = f"Policy version mismatch: loaded='{version}' expected='{expected_version}'"
 
     if loaded_semver[0] != expected_semver[0]:
         raise ValueError(message + " (major incompatible)")

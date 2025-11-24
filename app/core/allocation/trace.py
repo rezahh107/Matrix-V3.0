@@ -42,8 +42,13 @@ def attach_history_flags(
         raise KeyError(f"{key_column!r} در summary_df وجود ندارد")
     if key_column not in history_info_df.columns:
         raise KeyError(f"{key_column!r} در history_info_df وجود ندارد")
-    if "history_status" not in history_info_df.columns or "dedupe_reason" not in history_info_df.columns:
-        raise KeyError("history_info_df باید ستون‌های 'history_status' و 'dedupe_reason' را داشته باشد")
+    if (
+        "history_status" not in history_info_df.columns
+        or "dedupe_reason" not in history_info_df.columns
+    ):
+        raise KeyError(
+            "history_info_df باید ستون‌های 'history_status' و 'dedupe_reason' را داشته باشد"
+        )
 
     subset = history_info_df[[key_column, "history_status", "dedupe_reason"]].copy()
     # از آخرین رکورد موجود پیروی می‌کنیم تا ستون‌های وضعیت و اسنپ‌شات با هم همگام بمانند.
@@ -136,9 +141,7 @@ def attach_same_history_mentor(
     if key_column not in history_info_df.columns:
         raise KeyError(f"{key_column!r} در history_info_df وجود ندارد")
     if history_mentor_column not in history_info_df.columns:
-        raise KeyError(
-            f"{history_mentor_column!r} در history_info_df وجود ندارد"
-        )
+        raise KeyError(f"{history_mentor_column!r} در history_info_df وجود ندارد")
 
     result = summary_df.copy()
     if result.empty:
@@ -151,11 +154,7 @@ def attach_same_history_mentor(
 
     history_series = result[key_column].map(subset)
     current_mentor = result[mentor_column]
-    same = (
-        current_mentor.eq(history_series)
-        & current_mentor.notna()
-        & history_series.notna()
-    )
+    same = current_mentor.eq(history_series) & current_mentor.notna() & history_series.notna()
     result["same_history_mentor"] = same.astype(bool)
     return result
 

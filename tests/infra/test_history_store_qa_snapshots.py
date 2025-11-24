@@ -32,7 +32,9 @@ def test_history_store_persists_join_key_duplicates(tmp_path) -> None:
         allocated_students=None,
         unallocated_students=None,
     )
-    qa_report = QaReport(results=[QaRuleResult(rule_id="QA_RULE_STU_01", passed=True, violations=[])])
+    qa_report = QaReport(
+        results=[QaRuleResult(rule_id="QA_RULE_STU_01", passed=True, violations=[])]
+    )
     duplicates_df = pd.DataFrame(
         {
             "کدرشته": [1, 1],

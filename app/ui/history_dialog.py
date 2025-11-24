@@ -133,9 +133,7 @@ class HistoryDialog(QDialog):
         qa_tabs.addTab(self._wrap_widget(self._qa_summary_view), "QA Summary")
         qa_tabs.addTab(self._wrap_widget(self._qa_details_view), "QA Details")
         qa_tabs.addTab(
-            self._wrap_widget(
-                self._qa_extras_list, self._qa_extras_view, self._qa_extras_empty
-            ),
+            self._wrap_widget(self._qa_extras_list, self._qa_extras_view, self._qa_extras_empty),
             "QA Extras",
         )
 
@@ -262,4 +260,3 @@ class HistoryDialog(QDialog):
     @property
     def metrics_model(self) -> DataFrameTableModel:
         return self._metrics_model
-

@@ -33,7 +33,9 @@ def test_flatten_columns_recovers_from_mismatched_flat_index(monkeypatch) -> Non
 
 
 @pytest.mark.parametrize("engine", ["openpyxl", "xlsxwriter"])
-def test_write_xlsx_atomic_handles_duplicate_columns(tmp_path: Path, monkeypatch, engine: str) -> None:
+def test_write_xlsx_atomic_handles_duplicate_columns(
+    tmp_path: Path, monkeypatch, engine: str
+) -> None:
     try:
         __import__(engine)
     except Exception:
@@ -66,10 +68,6 @@ def test_write_xlsx_atomic_falls_back_to_csv(tmp_path: Path, monkeypatch) -> Non
     saved = pd.read_csv(csv_output)
     saved_internal = canonicalize_headers(saved, header_mode="en")
     expected_internal = canonicalize_headers(df, header_mode="en")
-    saved_internal = saved_internal.rename(
-        columns=lambda col: str(col).split("|")[0].strip()
-    )
-    expected_internal = expected_internal.rename(
-        columns=lambda col: str(col).split("|")[0].strip()
-    )
+    saved_internal = saved_internal.rename(columns=lambda col: str(col).split("|")[0].strip())
+    expected_internal = expected_internal.rename(columns=lambda col: str(col).split("|")[0].strip())
     pd.testing.assert_frame_equal(saved_internal, expected_internal)

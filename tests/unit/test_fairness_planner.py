@@ -35,7 +35,13 @@ def test_deterministic_jitter_orders_by_counter_hash() -> None:
 def test_round_robin_uses_hashed_mentor_id() -> None:
     policy = replace(load_policy(), fairness_strategy="round_robin")
     ranked = apply_ranking_policy(_tie_pool(), policy=policy)
-    hashed = ranked["mentor_id_en"].astype(str).map(
-        lambda value: int.from_bytes(blake2b(value.encode("utf-8"), digest_size=8).digest(), "big")
+    hashed = (
+        ranked["mentor_id_en"]
+        .astype(str)
+        .map(
+            lambda value: int.from_bytes(
+                blake2b(value.encode("utf-8"), digest_size=8).digest(), "big"
+            )
+        )
     )
     assert hashed.is_monotonic_increasing

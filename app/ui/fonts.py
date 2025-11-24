@@ -232,11 +232,7 @@ def _load_vazir_font_family_names() -> list[str]:
 
     db = QFontDatabase()
     all_families = list(db.families()) + families
-    vazir_like = [
-        fam
-        for fam in all_families
-        if "vazir" in fam.casefold() or "وزیر" in fam
-    ]
+    vazir_like = [fam for fam in all_families if "vazir" in fam.casefold() or "وزیر" in fam]
     unique_sorted = sorted(dict.fromkeys(vazir_like), key=str.casefold)
     LOGGER.debug("خانواده‌های ثبت‌شده: %s", unique_sorted)
     return unique_sorted
@@ -362,7 +358,6 @@ def get_app_font(point_size: int | None = None) -> QFont:
 def get_heading_font() -> QFont:
     """فونت عناوین: مبتنی بر وزیر با اندازهٔ بزرگ‌تر و وزن بولد."""
 
-
     heading = create_app_font()
     heading.setPointSize(11)
     heading.setWeight(_resolve_weight())
@@ -424,7 +419,9 @@ def _with_antialias(font: QFont) -> QFont:
     strategy |= QFont.StyleStrategy.PreferQuality
     font.setStyleStrategy(strategy)
 
-    if hasattr(QFont, "HintingPreference") and hasattr(QFont.HintingPreference, "PreferFullHinting"):
+    if hasattr(QFont, "HintingPreference") and hasattr(
+        QFont.HintingPreference, "PreferFullHinting"
+    ):
         font.setHintingPreference(QFont.HintingPreference.PreferFullHinting)
 
     font.setKerning(True)

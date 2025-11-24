@@ -38,7 +38,11 @@ class YearDatabaseManager:
             db = LocalDatabase(path)
             version = self._read_version(db)
             size = path.stat().st_size if path.exists() else 0
-            infos.append(YearDatabaseInfo(year_id=year_id, path=path, schema_version=version, size_bytes=size))
+            infos.append(
+                YearDatabaseInfo(
+                    year_id=year_id, path=path, schema_version=version, size_bytes=size
+                )
+            )
         return infos
 
     def create_year(self, year_id: str) -> LocalDatabase:

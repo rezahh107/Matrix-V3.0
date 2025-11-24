@@ -93,7 +93,9 @@ def test_write_xlsx_atomic_accepts_str_path_and_creates_parent(tmp_path: Path) -
 
 
 @pytest.mark.skipif(not _HAS_ENGINE, reason="هیچ engine اکسل یافت نشد")
-def test_write_xlsx_atomic_respects_env_override(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_write_xlsx_atomic_respects_env_override(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     engine = "openpyxl" if _HAS_OPENPYXL else "xlsxwriter"
     monkeypatch.setenv("EXCEL_ENGINE", engine)
     out = tmp_path / "env.xlsx"
@@ -107,7 +109,9 @@ def test_write_xlsx_atomic_respects_env_override(tmp_path: Path, monkeypatch: py
     not (_HAS_OPENPYXL and _HAS_XLSXWRITER),
     reason="xlsxwriter و openpyxl باید نصب باشند",
 )
-def test_write_xlsx_atomic_aligns_with_xlsxwriter(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_write_xlsx_atomic_aligns_with_xlsxwriter(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setenv("EXCEL_ENGINE", "xlsxwriter")
     df = pd.DataFrame({"کدرشته": list(range(1, 5))})
     out = tmp_path / "xlsxwriter_font.xlsx"
@@ -133,7 +137,9 @@ def test_write_xlsx_atomic_aligns_with_xlsxwriter(tmp_path: Path, monkeypatch: p
 
 
 @pytest.mark.skipif(not _HAS_OPENPYXL, reason="openpyxl لازم است برای بررسی RTL/فونت")
-def test_write_xlsx_atomic_applies_rtl_and_font(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_write_xlsx_atomic_applies_rtl_and_font(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setenv("EXCEL_ENGINE", "openpyxl")
     df = pd.DataFrame({"کدرشته": [101]})
     out = tmp_path / "rtl.xlsx"

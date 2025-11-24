@@ -1734,6 +1734,51 @@ def _prepare_allocation_frames(
     )
 
 
+def _sanitize_pool_for_allocation(pool_df: pd.DataFrame, *, policy: PolicyConfig) -> pd.DataFrame:
+    """پاک‌سازی استخر منتورها برای تخصیص بر اساس Policy.
+
+    این تابع لایهٔ Infra تنها وظیفهٔ فوروارد کردن استخر خام به منطق خالص
+    :func:`app.core.canonical_frames.canonicalize_pool_frame` را دارد تا
+    منتورهای مجازی حذف شوند، کلیدهای join به نوع صحیح `Int64` تبدیل شوند و
+    آمار اصلاحات در ``df.attrs["pool_canonicalization_stats"]`` ثبت شود.
+
+    مثال::
+
+        >>> import pandas as pd
+        >>> from app.core.policy_loader import load_policy
+        >>> policy = load_policy()  # doctest: +SKIP
+        >>> raw = pd.DataFrame({
+        ...     "mentor_name": ["مجازی", "علی"],
+        ...     "alias": [7501, 102],
+        ...     "remaining_capacity": [0, 3],
+        ... })
+        >>> clean = _sanitize_pool_for_allocation(raw, policy=policy)  # doctest: +SKIP
+        >>> int(clean["remaining_capacity"].sum())  # doctest: +SKIP
+        3
+
+    Args:
+        pool_df: دیتافریم خام استخر منتورها (inspactor یا matrix).
+        policy: سیاست فعال برای تشخیص منتور مجازی و اعمال قواعد ستون‌ها.
+
+    Returns:
+        دیتافریم استاندارد و فاقد منتور مجازی برای ورودی ``allocate_batch``.
+    """
+
+    sanitized = canonicalize_pool_frame(
+        pool_df,
+        policy=policy,
+        sanitize_pool=True,
+        pool_source="inspactor",
+        require_join_keys=True,
+    )
+
+    sanitized_en = canonicalize_headers(sanitized, header_mode="en")
+    sanitized_en = sanitized_en.loc[:, ~sanitized_en.columns.duplicated()]
+    sanitized_en.attrs.update(sanitized.attrs)
+
+    return sanitized_en
+
+
 def _allocate_and_write(
     students_base: pd.DataFrame,
     pool_base: pd.DataFrame,
@@ -1787,24 +1832,22 @@ def _allocate_and_write(
 
         header_internal: HeaderMode = policy.excel.header_mode_internal  # type: ignore[assignment]
 
-        allocations_df = attach_student_id_column(
-            allocations_df,
-            student_ids,
-            header_mode=header_internal,
-            ensure_existing=False,
-        )
-        logs_df = attach_student_id_column(
-            logs_df,
-            student_ids,
-            header_mode=header_internal,
-            ensure_existing=True,
-        )
-        trace_df = attach_student_id_column(
-            trace_df,
-            student_ids,
-            header_mode=header_internal,
-            ensure_existing=True,
-        )
+        def _attach_student_id(frame: pd.DataFrame, ensure_existing: bool = False) -> pd.DataFrame:
+            en_frame = canonicalize_headers(frame, header_mode="en")
+            aligned = student_ids.reindex(en_frame.index)
+            aligned_string = aligned.astype("string")
+            if ensure_existing and "student_id" in en_frame.columns:
+                existing = en_frame["student_id"].astype("string")
+                existing_mask = existing.str.strip().eq("") | existing.isna()
+                en_frame.loc[existing_mask, "student_id"] = aligned_string.reindex(en_frame.index)
+                en_frame.loc[~existing_mask, "student_id"] = existing.loc[~existing_mask]
+            else:
+                en_frame["student_id"] = aligned_string
+            return canonicalize_headers(en_frame, header_mode=header_internal)
+
+        allocations_df = _attach_student_id(allocations_df)
+        logs_df = _attach_student_id(logs_df, ensure_existing=True)
+        trace_df = _attach_student_id(trace_df, ensure_existing=True)
 
         export_profile_choice = _resolve_optional_override(args, "export_profile", "sabt") or "sabt"
         export_profile_path = _resolve_optional_override(

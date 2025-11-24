@@ -13,6 +13,7 @@ Design notes:
 - Core string normalization cached with @lru_cache(maxsize=1024).
 - Only standard library; no external deps.
 """
+
 from __future__ import annotations
 
 import math
@@ -74,14 +75,14 @@ _DIGIT_TRANSLATION: dict[int, int] = {
 # Numeric symbol translation for number-like normalization contexts.
 _NUM_SYM_TRANSLATION: dict[int, int | None] = {
     ord("\u2212"): ord("-"),  # MINUS SIGN → hyphen-minus
-    ord("\u066B"): ord("."),  # ARABIC DECIMAL SEPARATOR → '.'
+    ord("\u066b"): ord("."),  # ARABIC DECIMAL SEPARATOR → '.'
     # Thousand separators to remove in numeric contexts
-    ord("\u066C"): None,      # ARABIC THOUSANDS SEPARATOR
+    ord("\u066c"): None,  # ARABIC THOUSANDS SEPARATOR
     ord(","): None,
     ord("،"): None,
     ord("_"): None,
-    ord("\u00A0"): None,      # NBSP
-    ord(" "): None,           # plain space (numeric path only)
+    ord("\u00a0"): None,  # NBSP
+    ord(" "): None,  # plain space (numeric path only)
 }
 
 
@@ -95,6 +96,7 @@ def strip_school_code_separators(text: str) -> str:
     """
 
     return text.translate(_SCHOOL_CODE_SEPARATOR_TRANSLATION)
+
 
 # Minimal Arabic → Persian letter fixes
 _AR2FA_MAP: dict[str, str] = {
@@ -111,6 +113,7 @@ _RE_ALLAH_MULTI_L = re.compile(r"^(?:ل\s+)+ل$")
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
 
 def _is_nan_like(x: Any) -> bool:
     """Return True for None/empty/NaN-like inputs. Fail-safe."""
@@ -259,7 +262,7 @@ def _translate_digits_and_symbols_for_text(s: str) -> str:
     Thousand separators are handled by _RE_NONWORD, so not removed here.
     """
     try:
-        table = _DIGIT_TRANSLATION | {ord("\u2212"): ord("-"), ord("\u066B"): ord(".")}
+        table = _DIGIT_TRANSLATION | {ord("\u2212"): ord("-"), ord("\u066b"): ord(".")}
         return s.translate(table)
     except Exception:
         return s
@@ -318,6 +321,7 @@ def _numlike_ascii_cleanup(s: str) -> str:
 # Core normalization (cached)
 # ---------------------------------------------------------------------------
 
+
 @lru_cache(maxsize=1024)
 def _normalize_core(s: str) -> str:
     """
@@ -353,6 +357,7 @@ def _normalize_core(s: str) -> str:
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 def normalize_fa(text: Any) -> str:
     """
@@ -460,7 +465,9 @@ def normalize_header(name: Any) -> str:
     text = text.replace("\u200c", "")
     text = text.translate(_ARABIC_TO_PERSIAN)
     text = text.translate(_PERSIAN_DIGITS)
-    text = "".join(ch for ch in unicodedata.normalize("NFKD", text) if not unicodedata.combining(ch))
+    text = "".join(
+        ch for ch in unicodedata.normalize("NFKD", text) if not unicodedata.combining(ch)
+    )
     text = text.replace("_", " ")
     text = _RE_WHITESPACE.sub(" ", text)
     return text

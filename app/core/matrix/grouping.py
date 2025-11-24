@@ -148,7 +148,12 @@ def build_candidate_group_keys(
     present_keys = [key for key in join_keys if key in frame.columns]
     if present_keys:
         frame = enforce_join_key_types(frame, present_keys)
-    ordered_columns: list[str] = list(join_keys) + ["variant", "has_alias", "can_generate", "mentor_id"]
+    ordered_columns: list[str] = list(join_keys) + [
+        "variant",
+        "has_alias",
+        "can_generate",
+        "mentor_id",
+    ]
     for column in ordered_columns:
         if column not in frame.columns:
             frame[column] = pd.NA

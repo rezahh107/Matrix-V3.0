@@ -244,6 +244,7 @@ class Finance(IntEnum):
     BONYAD = auto()
     HEKMAT = 3  # non-sequential on purpose
 
+
 # =============================================================================
 # CONFIGURATION
 # =============================================================================
@@ -362,7 +363,7 @@ class BuildConfig:
             if ratio < 0 or ratio > 1:
                 raise ValueError(
                     "dedup_removed_ratio_threshold must be between 0 and 1 (inclusive)"
-            )
+                )
             self.dedup_removed_ratio_threshold = ratio
 
         if self.join_key_duplicate_threshold is None:
@@ -432,15 +433,8 @@ def _format_duplicate_warning_message(
 ) -> str:
     mentor_value = record.get(mentor_column) or record.get("mentor_id") or "?"
     group_size = record.get("duplicate_group_size")
-    group_text = (
-        f"size={group_size}"
-        if group_size not in (None, "")
-        else "size=NA"
-    )
-    join_parts = [
-        f"{key}={record.get(key)}"
-        for key in join_keys
-    ]
+    group_text = f"size={group_size}" if group_size not in (None, "") else "size=NA"
+    join_parts = [f"{key}={record.get(key)}" for key in join_keys]
     return f"mentor={mentor_value} {group_text} :: {', '.join(join_parts)}"
 
 
@@ -612,8 +606,10 @@ def _parse_int_from_text(text: str) -> int | None:
     digits = text[1:] if text and text[0] in "+-" else text
     if "." in digits:
         integer_part, decimal_part = digits.split(".", 1)
-        if integer_part and integer_part.isdigit() and (
-            not decimal_part or set(decimal_part) <= {"0"}
+        if (
+            integer_part
+            and integer_part.isdigit()
+            and (not decimal_part or set(decimal_part) <= {"0"})
         ):
             sign = -1 if text and text[0] == "-" else 1
             return sign * int(integer_part)
@@ -667,6 +663,7 @@ def ensure_list(values: Iterable[Any]) -> list[str]:
             seen.add(x)
     return uniq
 
+
 # =============================================================================
 # DOMAIN HELPERS
 # =============================================================================
@@ -683,9 +680,7 @@ def norm_gender(value: Any) -> int | None:
 
 def gender_text(code: int | None) -> str:
     return (
-        {Gender.FEMALE: "دختر", Gender.MALE: "پسر"}.get(int(code), "")
-        if code is not None
-        else ""
+        {Gender.FEMALE: "دختر", Gender.MALE: "پسر"}.get(int(code), "") if code is not None else ""
     )
 
 
@@ -702,9 +697,7 @@ def norm_status(value: Any) -> int | None:
 
 def status_text(code: int | None) -> str:
     return (
-        {Status.STUDENT: "دانش‌آموز", Status.GRADUATE: "فارغ‌التحصیل"}.get(
-            int(code), ""
-        )
+        {Status.STUDENT: "دانش‌آموز", Status.GRADUATE: "فارغ‌التحصیل"}.get(int(code), "")
         if code is not None
         else ""
     )
@@ -716,6 +709,7 @@ def center_text(code: int) -> str:
         Center.GOLESTAN: "گلستان",
         Center.SADRA: "صدرا",
     }.get(int(code), "")
+
 
 # =============================================================================
 # CROSSWALK
@@ -737,23 +731,17 @@ def _validate_finance_invariants(
     grouped = matrix.groupby(base_cols, dropna=False, sort=False)[finance_col].agg(_collect)
     missing = grouped[grouped.apply(lambda present: not required.issubset(present))]
     if not missing.empty:
-        details = {tuple(key) if isinstance(key, tuple) else key: sorted(required - present)
-                   for key, present in missing.items()}
-        raise AssertionError(
-            "Finance variants incomplete for join keys: " + str(details)
-        )
+        details = {
+            tuple(key) if isinstance(key, tuple) else key: sorted(required - present)
+            for key, present in missing.items()
+        }
+        raise AssertionError("Finance variants incomplete for join keys: " + str(details))
 
 
 def _validate_alias_contract(matrix: pd.DataFrame, *, cfg: BuildConfig) -> None:
-    alias_series = (
-        ensure_series(matrix["جایگزین"]).astype("string").str.strip().fillna("")
-    )
-    mentor_ids = (
-        ensure_series(matrix["کد کارمندی پشتیبان"]).astype("string").str.strip().fillna("")
-    )
-    row_types = (
-        ensure_series(matrix["عادی مدرسه"]).astype("string").str.strip().fillna("")
-    )
+    alias_series = ensure_series(matrix["جایگزین"]).astype("string").str.strip().fillna("")
+    mentor_ids = ensure_series(matrix["کد کارمندی پشتیبان"]).astype("string").str.strip().fillna("")
+    row_types = ensure_series(matrix["عادی مدرسه"]).astype("string").str.strip().fillna("")
 
     school_mask = row_types == "مدرسه‌ای"
     mismatch_school = matrix.loc[school_mask & (alias_series != mentor_ids)]
@@ -774,9 +762,7 @@ def _validate_alias_contract(matrix: pd.DataFrame, *, cfg: BuildConfig) -> None:
 
 
 def _validate_school_code_contract(matrix: pd.DataFrame, *, school_code_col: str) -> None:
-    row_types = (
-        ensure_series(matrix["عادی مدرسه"]).astype("string").str.strip().fillna("")
-    )
+    row_types = ensure_series(matrix["عادی مدرسه"]).astype("string").str.strip().fillna("")
     codes = matrix[school_code_col].astype("Int64")
     school_mask = row_types == "مدرسه‌ای"
     if ((codes[school_mask] == 0) | codes[school_mask].isna()).any():
@@ -844,6 +830,7 @@ def prepare_crosswalk_mappings(
                 synonyms[src] = dst
 
     return name_to_code, code_to_name, buckets, synonyms
+
 
 # -----------------------------------------------------------------------------
 def expand_group_token(
@@ -928,6 +915,7 @@ def expand_group_token(
             uniq.append((n, c))
             seen.add(c)
     return uniq
+
 
 # =============================================================================
 # SCHOOL MAPPINGS
@@ -1021,6 +1009,7 @@ def normalize_capacity_values(
     remaining = max(special_limit - covered, 0)
     return covered, special_limit, remaining
 
+
 # =============================================================================
 # CAPACITY GATE (R0)
 # =============================================================================
@@ -1111,6 +1100,7 @@ def capacity_gate(
     )
     return kept, removed, metrics, False
 
+
 # =============================================================================
 # SCHOOL CODE EXTRACTION
 # =============================================================================
@@ -1163,6 +1153,7 @@ def collect_school_codes_from_row(
         binding_mode=binding_policy.binding_mode(has_reference),
     )
 
+
 # =============================================================================
 # PROGRESS (optional)
 # =============================================================================
@@ -1176,6 +1167,7 @@ except ImportError:
 
 def progress(it, total: int | None = None):
     return tqdm(it, total=total) if HAS_TQDM else it
+
 
 # =============================================================================
 # GROUP CODE PARSING
@@ -1243,6 +1235,7 @@ def parse_group_code_spec(
 
     return out
 
+
 # =============================================================================
 # ROW GENERATION
 # =============================================================================
@@ -1309,6 +1302,7 @@ def generate_row_variants(
             }
         )
     return rows
+
 
 # =============================================================================
 # VECTORIZED MATRIX ASSEMBLY HELPERS
@@ -1651,9 +1645,7 @@ def _filter_invalid_mentors(
     negative_capacity_mask &= valid_mask
 
     _collect_invalid_rows(duplicate_invalid_mask, "duplicate mentor employee code")
-    _collect_invalid_rows(
-        inconsistent_invalid_mask, "inconsistent gender/group definition"
-    )
+    _collect_invalid_rows(inconsistent_invalid_mask, "inconsistent gender/group definition")
     _collect_invalid_rows(negative_capacity_mask, "negative remaining capacity")
 
     valid_mask = valid_mask & ~(
@@ -1816,16 +1808,12 @@ def _explode_rows(
         df["mentor_school_binding_mode"] = binding_policy.global_mode
     else:
         df["mentor_school_binding_mode"] = (
-            df["mentor_school_binding_mode"]
-            .astype("string")
-            .fillna(binding_policy.global_mode)
+            df["mentor_school_binding_mode"].astype("string").fillna(binding_policy.global_mode)
         )
     if "has_school_constraint" not in df.columns:
         df["has_school_constraint"] = False
     else:
-        df["has_school_constraint"] = (
-            df["has_school_constraint"].fillna(False).astype(bool)
-        )
+        df["has_school_constraint"] = df["has_school_constraint"].fillna(False).astype(bool)
     ordered_columns = [
         "جایگزین",
         "پشتیبان",
@@ -2075,12 +2063,9 @@ def build_matrix(
             None,
         ),
     )
-    group_cols = [
-        c for c in insp.columns if ("گروه آزمایشی" in str(c)) and (c != included_col)
-    ]
+    group_cols = [c for c in insp.columns if ("گروه آزمایشی" in str(c)) and (c != included_col)]
     school_cols = [
-        c for c in [COL_SCHOOL1, COL_SCHOOL2, COL_SCHOOL3, COL_SCHOOL4]
-        if c in insp.columns
+        c for c in [COL_SCHOOL1, COL_SCHOOL2, COL_SCHOOL3, COL_SCHOOL4] if c in insp.columns
     ]
 
     # generate rows
@@ -2107,9 +2092,7 @@ def build_matrix(
         )
     else:
         if "source_index" in school_lookup_issues.columns:
-            invalid_school_indices = set(
-                school_lookup_issues["source_index"].dropna().tolist()
-            )
+            invalid_school_indices = set(school_lookup_issues["source_index"].dropna().tolist())
             school_lookup_invalid = school_lookup_issues.drop(
                 columns=["source_index"], errors="ignore"
             )
@@ -2251,12 +2234,10 @@ def build_matrix(
 
     if not matrix.empty:
         matrix = matrix.copy()
-        matrix["ردیف پشتیبان"] = ensure_series(matrix["ردیف پشتیبان"]).map(
-            _coerce_int_like
-        )
+        matrix["ردیف پشتیبان"] = ensure_series(matrix["ردیف پشتیبان"]).map(_coerce_int_like)
         school_series = ensure_series(matrix[school_code_col])
-        matrix[school_code_col] = (
-            school_series.map(lambda v: safe_int_value(v, default=0)).astype("int64")
+        matrix[school_code_col] = school_series.map(lambda v: safe_int_value(v, default=0)).astype(
+            "int64"
         )
         matrix["کد کارمندی پشتیبان"] = (
             ensure_series(matrix["کد کارمندی پشتیبان"])
@@ -2266,31 +2247,16 @@ def build_matrix(
             .astype(object)
         )
         matrix["پشتیبان"] = (
-            ensure_series(matrix["پشتیبان"])
-            .astype("string")
-            .str.strip()
-            .fillna("")
-            .astype(object)
+            ensure_series(matrix["پشتیبان"]).astype("string").str.strip().fillna("").astype(object)
         )
         matrix["مدیر"] = (
-            ensure_series(matrix["مدیر"])
-            .astype("string")
-            .str.strip()
-            .fillna("")
-            .astype(object)
+            ensure_series(matrix["مدیر"]).astype("string").str.strip().fillna("").astype(object)
         )
         matrix["نام رشته"] = (
-            ensure_series(matrix["نام رشته"])
-            .astype("string")
-            .str.strip()
-            .fillna("")
-            .astype(object)
+            ensure_series(matrix["نام رشته"]).astype("string").str.strip().fillna("").astype(object)
         )
         matrix["نام مدرسه"] = (
-            ensure_series(matrix["نام مدرسه"])
-            .astype("string")
-            .fillna("")
-            .astype(object)
+            ensure_series(matrix["نام مدرسه"]).astype("string").fillna("").astype(object)
         )
         matrix["عادی مدرسه"] = (
             ensure_series(matrix["عادی مدرسه"])
@@ -2300,11 +2266,7 @@ def build_matrix(
             .astype(object)
         )
         matrix["جایگزین"] = (
-            ensure_series(matrix["جایگزین"])
-            .astype("string")
-            .str.strip()
-            .fillna("")
-            .astype(object)
+            ensure_series(matrix["جایگزین"]).astype("string").str.strip().fillna("").astype(object)
         )
         if finance_col in matrix.columns:
             matrix[finance_col] = ensure_series(matrix[finance_col]).astype("Int64")
@@ -2319,9 +2281,7 @@ def build_matrix(
             matrix = matrix.drop_duplicates(subset=dedupe_cols, keep="first")
         rows_after_dedupe = len(matrix)
         dedup_removed_rows = max(rows_before_dedupe - rows_after_dedupe, 0)
-        dedup_removed_ratio = (
-            dedup_removed_rows / rows_before_dedupe if rows_before_dedupe else 0.0
-        )
+        dedup_removed_ratio = dedup_removed_rows / rows_before_dedupe if rows_before_dedupe else 0.0
         dedup_threshold_exceeded = rows_before_dedupe > 0 and (
             dedup_removed_ratio > dedup_threshold
         )
@@ -2378,15 +2338,11 @@ def build_matrix(
             ),
             "groups_total": int(group_coverage_summary.get("total_groups", 0)),
             "groups_covered": int(group_coverage_summary.get("covered_groups", 0)),
-            "groups_candidate_only": int(
-                group_coverage_summary.get("candidate_only_groups", 0)
-            ),
+            "groups_candidate_only": int(group_coverage_summary.get("candidate_only_groups", 0)),
             "groups_blocked_candidate": int(
                 group_coverage_summary.get("blocked_candidate_groups", 0)
             ),
-            "groups_matrix_only": int(
-                group_coverage_summary.get("matrix_only_groups", 0)
-            ),
+            "groups_matrix_only": int(group_coverage_summary.get("matrix_only_groups", 0)),
             "coverage_total_groups": coverage_metrics.total_groups,
             "coverage_covered_groups": coverage_metrics.covered_groups,
             "coverage_unseen_viable_groups": coverage_metrics.unseen_viable_groups,
@@ -2449,12 +2405,8 @@ def build_matrix(
         "group_coverage_candidate_only": int(
             group_coverage_summary.get("candidate_only_groups", 0)
         ),
-        "group_coverage_blocked": int(
-            group_coverage_summary.get("blocked_candidate_groups", 0)
-        ),
-        "group_coverage_matrix_only": int(
-            group_coverage_summary.get("matrix_only_groups", 0)
-        ),
+        "group_coverage_blocked": int(group_coverage_summary.get("blocked_candidate_groups", 0)),
+        "group_coverage_matrix_only": int(group_coverage_summary.get("matrix_only_groups", 0)),
         "school_lookup_mismatch_count": int(school_mismatch_count),
         "school_lookup_mismatch_refs": int(school_reference_count),
         "school_lookup_mismatch_ratio": float(school_mismatch_ratio),
@@ -2557,9 +2509,7 @@ def build_matrix(
             and "is_unseen_viable" in group_coverage_df.columns
         ):
             unseen_preview = (
-                group_coverage_df.loc[
-                    group_coverage_df["is_unseen_viable"], cfg.policy.join_keys
-                ]
+                group_coverage_df.loc[group_coverage_df["is_unseen_viable"], cfg.policy.join_keys]
                 .head(5)
                 .to_dict(orient="records")
             )
@@ -2675,11 +2625,11 @@ def validate_with_students(
             "alias_norm": postal_series,
             "mentor_name": ensure_series(stud_raw["نام پشتیبان"]).astype(str).str.strip(),
             "manager": ensure_series(stud_raw["مدیر"]).astype(str).str.strip(),
-            "school_code": stud_raw[COL_SCHOOL1].apply(
-                lambda x: school_name_to_code.get(normalize_fa(x), "")
-            )
-            if COL_SCHOOL1 in stud_raw.columns
-            else "",
+            "school_code": (
+                stud_raw[COL_SCHOOL1].apply(lambda x: school_name_to_code.get(normalize_fa(x), ""))
+                if COL_SCHOOL1 in stud_raw.columns
+                else ""
+            ),
         }
     )
     stud["group_code"] = pd.Series(pd.array(group_codes, dtype="Int64"), index=stud.index)
@@ -2774,6 +2724,7 @@ def validate_with_students(
     }
 
     return stud, breakdown, summary
+
 
 # =============================================================================
 # DEDUPE KEYS

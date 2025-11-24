@@ -92,4 +92,3 @@ class MentorPoolDialog(QDialog):
     @property
     def model(self) -> ManagerMentorModel:
         return self._model
-

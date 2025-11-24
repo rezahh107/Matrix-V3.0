@@ -16,7 +16,9 @@ from app.core.build_matrix import (
 )
 
 
-def _sample_crosswalk() -> tuple[dict[str, int], dict[int, str], dict[str, list[tuple[str, int]]], dict[str, str]]:
+def _sample_crosswalk() -> (
+    tuple[dict[str, int], dict[int, str], dict[str, list[tuple[str, int]]], dict[str, str]]
+):
     crosswalk = pd.DataFrame(
         {"گروه آزمایشی": ["یازدهم ریاضی"], "کد گروه": [27], "مقطع تحصیلی": ["متوسطه دوم"]}
     )

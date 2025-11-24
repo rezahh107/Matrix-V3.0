@@ -1,4 +1,5 @@
 """تست‌های واحد برای سیستم لاگ زیرساختی."""
+
 from __future__ import annotations
 
 import logging

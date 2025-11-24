@@ -233,17 +233,14 @@ def test_upsert_caches_create_unique_indexes(tmp_path: Path) -> None:
             for idx in mentor_unique
         }
         assert (
-            (
-                "mentor_id",
-                "کدرشته",
-                "جنسیت",
-                "دانش آموز فارغ",
-                "مرکز گلستان صدرا",
-                "مالی حکمت بنیاد",
-                "کد مدرسه",
-            )
-            in composite_index_columns
-        )
+            "mentor_id",
+            "کدرشته",
+            "جنسیت",
+            "دانش آموز فارغ",
+            "مرکز گلستان صدرا",
+            "مالی حکمت بنیاد",
+            "کد مدرسه",
+        ) in composite_index_columns
 
         with pytest.raises(sqlite3.IntegrityError):
             conn.execute(
@@ -270,9 +267,7 @@ def test_upsert_caches_create_unique_indexes(tmp_path: Path) -> None:
         assert len(student_unique) >= 1
 
         with pytest.raises(sqlite3.IntegrityError):
-            conn.execute(
-                "INSERT INTO students_cache(student_id) VALUES (?)", ("s1",)
-            )
+            conn.execute("INSERT INTO students_cache(student_id) VALUES (?)", ("s1",))
 
 
 def test_initialize_reports_corrupt_file_with_backup(tmp_path):
@@ -288,9 +283,7 @@ def test_initialize_reports_corrupt_file_with_backup(tmp_path):
     # اجرای مجدد باید بدون استثناء و با نسخهٔ صحیح انجام شود
     db.initialize()
     with db.connect() as conn:
-        version = conn.execute(
-            "SELECT schema_version FROM schema_meta WHERE id = 1"
-        ).fetchone()[0]
+        version = conn.execute("SELECT schema_version FROM schema_meta WHERE id = 1").fetchone()[0]
     assert version == _SCHEMA_VERSION
 
 
@@ -332,8 +325,7 @@ def test_initialize_repairs_missing_mentor_group_column(tmp_path: Path) -> None:
 
     with db.connect() as conn:
         columns = {
-            row[1]
-            for row in conn.execute("PRAGMA table_info(mentor_pool_cache)").fetchall()
+            row[1] for row in conn.execute("PRAGMA table_info(mentor_pool_cache)").fetchall()
         }
 
     assert "گروه آزمایشی" in columns
@@ -382,9 +374,7 @@ def test_initialize_repairs_schema_when_students_cache_missing_student_id(tmp_pa
     db.initialize()
 
     with db.connect() as conn:
-        columns = {
-            row[1] for row in conn.execute("PRAGMA table_info('students_cache')")
-        }
+        columns = {row[1] for row in conn.execute("PRAGMA table_info('students_cache')")}
 
     assert "student_id" in columns
 

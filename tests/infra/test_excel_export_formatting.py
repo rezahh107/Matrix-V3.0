@@ -30,7 +30,9 @@ if not _ENGINES:
 
 
 @pytest.mark.parametrize("engine", _ENGINES)
-def test_vazir_font_size_enforced(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, engine: str) -> None:
+def test_vazir_font_size_enforced(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, engine: str
+) -> None:
     df = pd.DataFrame({"ستون": [1, 2, 3], "نام": ["الف", "ب", "ج"]})
     out = tmp_path / f"{engine}-vazir.xlsx"
     monkeypatch.setenv("EXCEL_ENGINE", engine)
@@ -50,7 +52,9 @@ def test_vazir_font_size_enforced(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
 
 
 @pytest.mark.parametrize("engine", _ENGINES)
-def test_non_vazir_font_uses_policy_size(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, engine: str) -> None:
+def test_non_vazir_font_uses_policy_size(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, engine: str
+) -> None:
     df = pd.DataFrame({"val": [1, 2]})
     out = tmp_path / f"{engine}-tahoma.xlsx"
     monkeypatch.setenv("EXCEL_ENGINE", engine)
@@ -64,7 +68,9 @@ def test_non_vazir_font_uses_policy_size(tmp_path: Path, monkeypatch: pytest.Mon
 
 
 @pytest.mark.parametrize("engine", _ENGINES)
-def test_table_and_autofilter_created(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, engine: str) -> None:
+def test_table_and_autofilter_created(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, engine: str
+) -> None:
     df = pd.DataFrame({"A": [1, 2, 3], "B": ["x", "y", "z"]})
     out = tmp_path / f"{engine}-table.xlsx"
     monkeypatch.setenv("EXCEL_ENGINE", engine)

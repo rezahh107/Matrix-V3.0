@@ -64,12 +64,15 @@ _FILE_STATUS_TEXT = {
     "output_folder": ("files.output_folder", "آخرین پوشه‌ای که خروجی در آن ذخیره شد"),
 }
 
+
 def _path_from_prefs(prefs: AppPreferences, attr: str) -> str:
     value = getattr(prefs, attr, "")
     return str(value or "").strip()
 
 
-def collect_file_statuses(prefs: AppPreferences, translator: UiTranslator) -> list[FileStatusViewModel]:
+def collect_file_statuses(
+    prefs: AppPreferences, translator: UiTranslator
+) -> list[FileStatusViewModel]:
     """ساخت مدل وضعیت فایل‌ها بر اساس مسیرهای ذخیره‌شده."""
 
     statuses: list[FileStatusViewModel] = []

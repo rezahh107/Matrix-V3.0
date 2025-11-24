@@ -1,4 +1,5 @@
 """زیرساخت راه‌اندازی لاگ و مدیریت خطا برای لایهٔ زیرساخت."""
+
 from __future__ import annotations
 
 import getpass

@@ -73,20 +73,13 @@ def compute_history_metrics(summary_df: pd.DataFrame) -> pd.DataFrame:
         .sum()
     )
     history_missing_or_invalid = (
-        (
-            working_df["history_status"]
-            == HistoryStatus.MISSING_OR_INVALID_NATIONAL_ID.value
-        )
+        (working_df["history_status"] == HistoryStatus.MISSING_OR_INVALID_NATIONAL_ID.value)
         .groupby(working_df["allocation_channel"])
         .sum()
     )
-    same_history_mentor_true = working_df.groupby("allocation_channel")[
-        "same_history_mentor"
-    ].sum()
+    same_history_mentor_true = working_df.groupby("allocation_channel")["same_history_mentor"].sum()
 
-    same_history_mentor_ratio = (
-        same_history_mentor_true.divide(students_total).fillna(0.0)
-    )
+    same_history_mentor_ratio = same_history_mentor_true.divide(students_total).fillna(0.0)
 
     metrics_df = pd.DataFrame(
         {

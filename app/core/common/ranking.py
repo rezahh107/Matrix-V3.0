@@ -137,9 +137,7 @@ def apply_ranking_policy(
         raise KeyError("candidate pool must include 'mentor_id' column after canonicalization")
 
     state_view: Mapping[Any, Mapping[str, object]]
-    state_view = (
-        state if state is not None else build_mentor_state(state_source, policy=policy)
-    )
+    state_view = state if state is not None else build_mentor_state(state_source, policy=policy)
 
     def _state_value(mentor: Any, key: str) -> int:
         entry = state_view.get(mentor)
@@ -232,9 +230,7 @@ def consume_capacity(
     entry["remaining"] = after
     entry["alloc_new"] = _coerce_capacity_value(entry.get("alloc_new", 0)) + 1
     entry["remaining_capacity"] = after
-    entry["current_allocations"] = _coerce_capacity_value(
-        entry.get("current_allocations", 0)
-    ) + 1
+    entry["current_allocations"] = _coerce_capacity_value(entry.get("current_allocations", 0)) + 1
     initial = _coerce_capacity_value(entry.get("initial", before))
     if initial <= 0:
         initial = max(before, 1)

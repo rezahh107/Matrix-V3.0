@@ -102,50 +102,68 @@ class TestGFFieldMapping:
 
 
 class TestSheet2Generation:
-    def test_sheet2_has_correct_column_count(self, sample_allocation_df: pd.DataFrame, exporter_config: dict) -> None:
+    def test_sheet2_has_correct_column_count(
+        self, sample_allocation_df: pd.DataFrame, exporter_config: dict
+    ) -> None:
         sheet2 = build_sheet2_frame(sample_allocation_df, exporter_config)
         assert sheet2.shape[1] == 46
 
-    def test_sheet2_column_order_preserved(self, sample_allocation_df: pd.DataFrame, exporter_config: dict) -> None:
+    def test_sheet2_column_order_preserved(
+        self, sample_allocation_df: pd.DataFrame, exporter_config: dict
+    ) -> None:
         sheet2 = build_sheet2_frame(sample_allocation_df, exporter_config)
         expected_order = list(exporter_config["sheets"]["Sheet2"]["columns"].keys())
         assert list(sheet2.columns) == expected_order
 
-    def test_sheet2_row_count_matches_input(self, sample_allocation_df: pd.DataFrame, exporter_config: dict) -> None:
+    def test_sheet2_row_count_matches_input(
+        self, sample_allocation_df: pd.DataFrame, exporter_config: dict
+    ) -> None:
         sheet2 = build_sheet2_frame(sample_allocation_df, exporter_config)
         assert len(sheet2) == len(sample_allocation_df)
 
-    def test_empty_columns_are_empty(self, sample_allocation_df: pd.DataFrame, exporter_config: dict) -> None:
+    def test_empty_columns_are_empty(
+        self, sample_allocation_df: pd.DataFrame, exporter_config: dict
+    ) -> None:
         sheet2 = build_sheet2_frame(sample_allocation_df, exporter_config)
         assert sheet2["پشتیبان"].str.strip().eq("").all()
         assert sheet2["کد ثبت نام"].str.strip().eq("").all()
 
-    def test_gender_mapping_applied(self, sample_allocation_df: pd.DataFrame, exporter_config: dict) -> None:
+    def test_gender_mapping_applied(
+        self, sample_allocation_df: pd.DataFrame, exporter_config: dict
+    ) -> None:
         sheet2 = build_sheet2_frame(sample_allocation_df, exporter_config)
         assert sheet2.loc[0, "جنسیت"] == "پسر"
         assert sheet2.loc[1, "جنسیت"] == "دختر"
 
-    def test_registration_status_mapping(self, sample_allocation_df: pd.DataFrame, exporter_config: dict) -> None:
+    def test_registration_status_mapping(
+        self, sample_allocation_df: pd.DataFrame, exporter_config: dict
+    ) -> None:
         sheet2 = build_sheet2_frame(sample_allocation_df, exporter_config)
         assert sheet2.loc[0, "وضعیت ثبت نام"] == "عادی"
         assert sheet2.loc[1, "وضعیت ثبت نام"] == "بنیاد"
         assert sheet2.loc[2, "وضعیت ثبت نام"] == "حکمت"
 
-    def test_national_code_normalized(self, sample_allocation_df: pd.DataFrame, exporter_config: dict) -> None:
+    def test_national_code_normalized(
+        self, sample_allocation_df: pd.DataFrame, exporter_config: dict
+    ) -> None:
         sheet2 = build_sheet2_frame(sample_allocation_df, exporter_config)
         for value in sheet2["کد ملی"]:
             if value:
                 assert len(value) == 10
                 assert value.isdigit()
 
-    def test_mobile_normalized(self, sample_allocation_df: pd.DataFrame, exporter_config: dict) -> None:
+    def test_mobile_normalized(
+        self, sample_allocation_df: pd.DataFrame, exporter_config: dict
+    ) -> None:
         sheet2 = build_sheet2_frame(sample_allocation_df, exporter_config)
         for value in sheet2["تلفن همراه"]:
             if value:
                 assert len(value) == 11
                 assert value.startswith("09")
 
-    def test_average_precision(self, sample_allocation_df: pd.DataFrame, exporter_config: dict) -> None:
+    def test_average_precision(
+        self, sample_allocation_df: pd.DataFrame, exporter_config: dict
+    ) -> None:
         sheet2 = build_sheet2_frame(sample_allocation_df, exporter_config)
         avg = sheet2.loc[0, "معدل"]
         if avg:
@@ -153,13 +171,17 @@ class TestSheet2Generation:
 
 
 class TestHekmatConditionalLogic:
-    def test_hekmat_fields_only_for_status_3(self, sample_allocation_df: pd.DataFrame, exporter_config: dict) -> None:
+    def test_hekmat_fields_only_for_status_3(
+        self, sample_allocation_df: pd.DataFrame, exporter_config: dict
+    ) -> None:
         sheet2 = build_sheet2_frame(sample_allocation_df, exporter_config)
         assert sheet2.loc[0, "کد رهگیری حکمت"] == ""
         assert sheet2.loc[1, "کد رهگیری حکمت"] == ""
         assert sheet2.loc[2, "کد رهگیری حکمت"] == "1111111111111111"
 
-    def test_hekmat_code_normalized(self, sample_allocation_df: pd.DataFrame, exporter_config: dict) -> None:
+    def test_hekmat_code_normalized(
+        self, sample_allocation_df: pd.DataFrame, exporter_config: dict
+    ) -> None:
         sheet2 = build_sheet2_frame(sample_allocation_df, exporter_config)
         hekmat_code = sheet2.loc[2, "کد رهگیری حکمت"]
         if hekmat_code:
@@ -168,9 +190,7 @@ class TestHekmatConditionalLogic:
 
 
 class TestRegistrationStatusPreservation:
-    def test_prefixed_status_values_survive_mapping(
-        self, exporter_config: dict
-    ) -> None:
+    def test_prefixed_status_values_survive_mapping(self, exporter_config: dict) -> None:
         allocations_df = pd.DataFrame({"student_id": ["s1", "s2", "s3"], "mentor_id": [1, 2, 3]})
         students_df = pd.DataFrame(
             {
@@ -192,9 +212,7 @@ class TestRegistrationStatusPreservation:
         assert sheet2.loc[1, "وضعیت ثبت نام"] == "حکمت"
         assert sheet2.loc[2, "وضعیت ثبت نام"] == "عادی"
 
-    def test_cli_path_preserves_reg_status_column(
-        self, exporter_config: dict
-    ) -> None:
+    def test_cli_path_preserves_reg_status_column(self, exporter_config: dict) -> None:
         allocations_df = pd.DataFrame(
             {
                 "student_id": ["s1", "s2", "s3"],
@@ -227,9 +245,7 @@ class TestRegistrationStatusPreservation:
 
         assert sheet2["وضعیت ثبت نام"].tolist() == ["عادی", "حکمت", "عادی"]
 
-    def test_debug_log_traces_registration_status(
-        self, exporter_config: dict
-    ) -> None:
+    def test_debug_log_traces_registration_status(self, exporter_config: dict) -> None:
         allocations_df = pd.DataFrame({"student_id": ["s1", "s2"], "mentor_id": [1, 2]})
         students_df = pd.DataFrame(
             {
@@ -282,13 +298,17 @@ class TestDerivedFields:
         assert sheet2.loc[1, "شهر مدرسه 1"] == "اصفهان"
         assert sheet2.loc[2, "شهر مدرسه 1"] == "سایر"
 
-    def test_school_code_9000_uses_name(self, sample_allocation_df: pd.DataFrame, exporter_config: dict) -> None:
+    def test_school_code_9000_uses_name(
+        self, sample_allocation_df: pd.DataFrame, exporter_config: dict
+    ) -> None:
         sheet2 = build_sheet2_frame(sample_allocation_df, exporter_config)
         assert sheet2.loc[2, "کد مدرسه 1"] in {"9000", "مدرسه شهید بهشتی"}
 
 
 class TestAliasRule:
-    def test_postal_code_filled_from_mentor_alias(self, sample_allocation_df: pd.DataFrame, exporter_config: dict) -> None:
+    def test_postal_code_filled_from_mentor_alias(
+        self, sample_allocation_df: pd.DataFrame, exporter_config: dict
+    ) -> None:
         sheet2 = build_sheet2_frame(sample_allocation_df, exporter_config)
         sheet2 = apply_alias_rule(sheet2, sample_allocation_df)
         assert sheet2.loc[0, "کد پستی"] == "1234567890"
@@ -313,7 +333,9 @@ class TestAliasRule:
 
 
 class TestDateFormatting:
-    def test_registration_date_format(self, sample_allocation_df: pd.DataFrame, exporter_config: dict) -> None:
+    def test_registration_date_format(
+        self, sample_allocation_df: pd.DataFrame, exporter_config: dict
+    ) -> None:
         sheet2 = build_sheet2_frame(sample_allocation_df, exporter_config)
         date_str = sheet2.loc[0, "تاریخ ثبت نام"]
         if date_str:
@@ -325,17 +347,23 @@ class TestDateFormatting:
 
 
 class TestEdgeCases:
-    def test_empty_contact2_mobile_stays_empty(self, sample_allocation_df: pd.DataFrame, exporter_config: dict) -> None:
+    def test_empty_contact2_mobile_stays_empty(
+        self, sample_allocation_df: pd.DataFrame, exporter_config: dict
+    ) -> None:
         sheet2 = build_sheet2_frame(sample_allocation_df, exporter_config)
         assert sheet2.loc[1, "تلفن رابط 2"] == ""
 
     def test_missing_columns_result_in_empty_values(self, exporter_config: dict) -> None:
-        minimal_df = pd.DataFrame({"student_id": ["S001"], "mentor_id": ["M001"], "student_first_name": ["علی"]})
+        minimal_df = pd.DataFrame(
+            {"student_id": ["S001"], "mentor_id": ["M001"], "student_first_name": ["علی"]}
+        )
         sheet2 = build_sheet2_frame(minimal_df, exporter_config)
         assert sheet2.loc[0, "نام پدر"] == ""
         assert sheet2.loc[0, "کد ملی"] == ""
 
-    def test_unicode_and_special_chars_preserved(self, sample_allocation_df: pd.DataFrame, exporter_config: dict) -> None:
+    def test_unicode_and_special_chars_preserved(
+        self, sample_allocation_df: pd.DataFrame, exporter_config: dict
+    ) -> None:
         sample_allocation_df.loc[0, "student_first_name"] = "علی‌رضا"
         sheet2 = build_sheet2_frame(sample_allocation_df, exporter_config)
         assert "علی" in sheet2.loc[0, "نام"]
@@ -346,7 +374,9 @@ class TestExcelOutput:
         self, sample_allocation_df: pd.DataFrame, exporter_config: dict, tmp_path: Path
     ) -> None:
         sheet2 = build_sheet2_frame(sample_allocation_df, exporter_config)
-        summary = build_summary_frame(exporter_config, total_students=3, allocated_count=3, error_count=0)
+        summary = build_summary_frame(
+            exporter_config, total_students=3, allocated_count=3, error_count=0
+        )
         errors = build_errors_frame(None, exporter_config)
         output_path = tmp_path / "output.xlsx"
         template_path = tmp_path / "template.xlsx"
@@ -359,7 +389,9 @@ class TestExcelOutput:
         from openpyxl import load_workbook
 
         sheet2 = build_sheet2_frame(sample_allocation_df, exporter_config)
-        summary = build_summary_frame(exporter_config, total_students=3, allocated_count=3, error_count=0)
+        summary = build_summary_frame(
+            exporter_config, total_students=3, allocated_count=3, error_count=0
+        )
         errors = build_errors_frame(None, exporter_config)
         output_path = tmp_path / "output.xlsx"
         template_path = tmp_path / "template.xlsx"
@@ -371,7 +403,9 @@ class TestExcelOutput:
 
 
 class TestNormalizers:
-    def test_apply_normalizers_none_returns_original(self, sample_allocation_df: pd.DataFrame, exporter_config: dict) -> None:
+    def test_apply_normalizers_none_returns_original(
+        self, sample_allocation_df: pd.DataFrame, exporter_config: dict
+    ) -> None:
         series = pd.Series(["abc", "def"])
         result = _apply_normalizers(series, None)
         pd.testing.assert_series_equal(result, series)

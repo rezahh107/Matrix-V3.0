@@ -21,15 +21,9 @@ def qapp() -> QApplication:
 
 def _sample_entries() -> list[MentorPoolEntry]:
     return [
-        MentorPoolEntry(
-            mentor_id="101", mentor_name="Alpha", manager="M1", center="1", capacity=2
-        ),
-        MentorPoolEntry(
-            mentor_id="102", mentor_name="Beta", manager="M1", center="1", capacity=3
-        ),
-        MentorPoolEntry(
-            mentor_id="201", mentor_name="Gamma", manager="M2", center="2", capacity=1
-        ),
+        MentorPoolEntry(mentor_id="101", mentor_name="Alpha", manager="M1", center="1", capacity=2),
+        MentorPoolEntry(mentor_id="102", mentor_name="Beta", manager="M1", center="1", capacity=3),
+        MentorPoolEntry(mentor_id="201", mentor_name="Gamma", manager="M2", center="2", capacity=1),
     ]
 
 

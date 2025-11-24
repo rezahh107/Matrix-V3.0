@@ -21,7 +21,9 @@ def qapp() -> QApplication:
     return app
 
 
-def test_safe_drop_shadow_renders_offscreen(monkeypatch: pytest.MonkeyPatch, qapp: QApplication) -> None:
+def test_safe_drop_shadow_renders_offscreen(
+    monkeypatch: pytest.MonkeyPatch, qapp: QApplication
+) -> None:
     monkeypatch.setattr(painter_guard_module, "painter_guard_enabled", True)
     widget = QWidget()
     widget.resize(160, 120)
@@ -36,7 +38,9 @@ def test_safe_drop_shadow_renders_offscreen(monkeypatch: pytest.MonkeyPatch, qap
     painter.end()
 
 
-def test_safe_opacity_renders_offscreen(monkeypatch: pytest.MonkeyPatch, qapp: QApplication) -> None:
+def test_safe_opacity_renders_offscreen(
+    monkeypatch: pytest.MonkeyPatch, qapp: QApplication
+) -> None:
     monkeypatch.setattr(painter_guard_module, "painter_guard_enabled", True)
     widget = QWidget()
     widget.resize(140, 90)

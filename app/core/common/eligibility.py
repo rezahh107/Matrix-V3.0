@@ -20,9 +20,7 @@ def build_stage_pass_flags(
 
     if policy is None:
         policy = load_policy()
-    flags: dict[TraceStageLiteral, bool] = {
-        stage: False for stage in policy.trace_stage_names
-    }
+    flags: dict[TraceStageLiteral, bool] = {stage: False for stage in policy.trace_stage_names}
     if not stage_candidate_counts:
         return flags
     for stage in policy.trace_stage_names:
@@ -31,4 +29,3 @@ def build_stage_pass_flags(
         except Exception:
             flags[stage] = False
     return flags
-

@@ -1,4 +1,5 @@
 """تعریف خطاهای دامنه برای هستهٔ ماتریس احراز صلاحیت."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -60,4 +61,3 @@ __all__ = [
     "DataMissingError",
     "PolicyVersionMismatchError",
 ]
-

@@ -5,6 +5,7 @@
 ماژول بی‌خبر است و تنها Infra مسئول فراخوانی آن است. خطاهای DB صرفاً
 لاگ می‌شوند تا تجربهٔ کاربر و جریان Excel/Core مختل نشود.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -216,9 +217,7 @@ def log_allocation_run(
             qa_extras=qa_extras,
         )
     except Exception:
-        logger.exception(
-            "Failed to log allocation run to local DB (run_uuid=%s)", run_uuid
-        )
+        logger.exception("Failed to log allocation run to local DB (run_uuid=%s)", run_uuid)
 
 
 def _maybe_store_snapshots(
@@ -265,9 +264,7 @@ def _extract_qa_frames(
     detail_frames: list[pd.DataFrame] = []
     for result in qa_report.results:
         detail_frames.append(qa_report.to_details_frame(result.rule_id))
-    details_df = (
-        pd.concat(detail_frames, ignore_index=True) if detail_frames else pd.DataFrame()
-    )
+    details_df = pd.concat(detail_frames, ignore_index=True) if detail_frames else pd.DataFrame()
     extras_raw = getattr(qa_report, "extras", None) or {}
     extras: dict[str, pd.DataFrame] = {}
     for key, frame in extras_raw.items():

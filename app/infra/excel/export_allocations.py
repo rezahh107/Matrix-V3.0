@@ -179,9 +179,7 @@ def load_sabt_export_profile(
     records.sort(key=lambda col: col.order)
 
     if len(records) != numeric_count:
-        raise ValueError(
-            "Sabt profile mismatch: numeric order rows do not equal exported columns"
-        )
+        raise ValueError("Sabt profile mismatch: numeric order rows do not equal exported columns")
 
     order_values = [column.order for column in records]
     if len(order_values) != len(set(order_values)):
@@ -229,8 +227,7 @@ def _resolve_fallback_student_column(
     """یافتن ستون جایگزین برای مواردی مانند «وضعیت تحصیلی» زمانی که مپ اولیه پیدا نشد."""
 
     normalized_candidates = {
-        _normalize_lookup_key(token)
-        for token in _iter_mapping_candidates(column.header)
+        _normalize_lookup_key(token) for token in _iter_mapping_candidates(column.header)
     }
     normalized_candidates.add(_normalize_lookup_key(column.source_field or column.header))
     for candidate in normalized_candidates:
@@ -442,9 +439,7 @@ def export_sabt_excel(
     """نوشتن خروجی Sabt در فایل Excel مستقل با ساختار پایدار."""
 
     profile = load_sabt_export_profile(profile_path or DEFAULT_SABT_PROFILE_PATH)
-    export_df = build_sabt_export_frame(
-        allocation_df, students_df, profile, summary_df=summary_df
-    )
+    export_df = build_sabt_export_frame(allocation_df, students_df, profile, summary_df=summary_df)
     sheets: dict[str, pd.DataFrame] = {sheet_name: export_df}
     if extra_sheets:
         sheets.update(extra_sheets)
@@ -456,4 +451,3 @@ def export_sabt_excel(
         sheet_prepare_modes={sheet_name: "raw"},
     )
     return output_path
-

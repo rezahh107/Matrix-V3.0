@@ -305,9 +305,7 @@ class AppPreferences:
     def language(self, value: Language | str) -> None:
         normalized = value if isinstance(value, Language) else Language.from_code(value)
         if normalized.code not in SUPPORTED_LANGUAGES:
-            raise ValueError(
-                "Language must be one of: " + ", ".join(sorted(SUPPORTED_LANGUAGES))
-            )
+            raise ValueError("Language must be one of: " + ", ".join(sorted(SUPPORTED_LANGUAGES)))
         self._set_string("ui/language", normalized.code)
 
     @property

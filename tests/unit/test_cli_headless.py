@@ -83,7 +83,9 @@ def policy_file(tmp_path: Path) -> Path:
     return policy_path
 
 
-def test_build_matrix_command_uses_progress(policy_file: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_build_matrix_command_uses_progress(
+    policy_file: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     called: dict[str, str] = {}
 
     def fake_runner(args, policy, progress):  # type: ignore[no-untyped-def]
@@ -117,7 +119,9 @@ def test_build_matrix_command_uses_progress(policy_file: Path, capsys: pytest.Ca
     assert called["policy_version"] == "1.0.3"
 
 
-def test_cli_reports_coverage_threshold_error(policy_file: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_cli_reports_coverage_threshold_error(
+    policy_file: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     def fake_runner(args, policy, progress):  # type: ignore[no-untyped-def]
         error = ValueError("نسبت پوشش پایین است")
         setattr(error, "is_coverage_threshold_error", True)
@@ -146,7 +150,9 @@ def test_cli_reports_coverage_threshold_error(policy_file: Path, capsys: pytest.
     assert captured.out == ""
 
 
-def test_cli_reports_dedup_threshold_error(policy_file: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_cli_reports_dedup_threshold_error(
+    policy_file: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     def fake_runner(args, policy, progress):  # type: ignore[no-untyped-def]
         error = ValueError("حذف رکوردهای تکراری زیاد است")
         setattr(error, "is_dedup_removed_threshold_error", True)
@@ -298,7 +304,9 @@ def test_run_build_matrix_raises_on_duplicate_threshold_exceeded(
         "import_mentor_pool_from_excel",
         lambda *_args, **_kwargs: mentor_pool_with_duplicates,
     )
-    monkeypatch.setattr(cli, "import_school_report_from_excel", lambda *_args, **_kwargs: schools_stub)
+    monkeypatch.setattr(
+        cli, "import_school_report_from_excel", lambda *_args, **_kwargs: schools_stub
+    )
     monkeypatch.setattr(
         cli,
         "import_school_crosswalk_from_excel",
@@ -319,9 +327,13 @@ def test_run_build_matrix_raises_on_duplicate_threshold_exceeded(
         cfg,
         progress,
     ):  # type: ignore[no-untyped-def]
-        assert_frame_equal(insp_df.reset_index(drop=True), mentor_pool_with_duplicates.reset_index(drop=True))
+        assert_frame_equal(
+            insp_df.reset_index(drop=True), mentor_pool_with_duplicates.reset_index(drop=True)
+        )
         assert_frame_equal(schools_df.reset_index(drop=True), schools_stub.reset_index(drop=True))
-        assert_frame_equal(crosswalk_groups_df.reset_index(drop=True), crosswalk_stub.reset_index(drop=True))
+        assert_frame_equal(
+            crosswalk_groups_df.reset_index(drop=True), crosswalk_stub.reset_index(drop=True)
+        )
         validation = pd.DataFrame(
             [
                 {
@@ -380,8 +392,12 @@ def test_run_build_matrix_verifies_policy_version(
         local_db_path=str(tmp_path / "local.db"),
     )
 
-    monkeypatch.setattr(cli, "import_mentor_pool_from_excel", lambda *_args, **_kwargs: mentor_pool_empty)
-    monkeypatch.setattr(cli, "import_school_report_from_excel", lambda *_args, **_kwargs: schools_stub)
+    monkeypatch.setattr(
+        cli, "import_mentor_pool_from_excel", lambda *_args, **_kwargs: mentor_pool_empty
+    )
+    monkeypatch.setattr(
+        cli, "import_school_report_from_excel", lambda *_args, **_kwargs: schools_stub
+    )
     monkeypatch.setattr(
         cli,
         "import_school_crosswalk_from_excel",
@@ -553,7 +569,9 @@ def test_inject_student_ids_ui_mode_disables_prompt(
     monkeypatch.setattr(cli, "canonicalize_headers", _clone)
     monkeypatch.setattr(cli, "enrich_school_columns_en", lambda df, empty_as_zero: df)
     monkeypatch.setattr(cli, "assign_counters", fake_assign)
-    monkeypatch.setattr(cli, "find_duplicate_student_id_groups", lambda counters: {"STD-1": list(counters.index)})
+    monkeypatch.setattr(
+        cli, "find_duplicate_student_id_groups", lambda counters: {"STD-1": list(counters.index)}
+    )
     monkeypatch.setattr(cli, "_apply_counter_duplicate_strategy", fake_apply)
     monkeypatch.setattr(cli, "assert_unique_student_ids", lambda *_: None)
     monkeypatch.setattr(cli.sys, "stdin", _DummyStdin())
@@ -585,9 +603,7 @@ def test_build_duplicate_row_report_handles_numeric_national_id() -> None:
     assert report[0]["rows"][1]["national_id"] == "0042"
 
 
-def test_load_matrix_candidate_pool_filters_virtual(
-    tmp_path: Path, policy_file: Path
-) -> None:
+def test_load_matrix_candidate_pool_filters_virtual(tmp_path: Path, policy_file: Path) -> None:
     engine = None
     for candidate in ("openpyxl", "xlsxwriter"):
         if importlib.util.find_spec(candidate) is not None:

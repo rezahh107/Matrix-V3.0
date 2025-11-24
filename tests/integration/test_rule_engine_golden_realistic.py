@@ -4,15 +4,15 @@ from app.core.allocate_students import allocate_batch
 from app.core.policy_loader import load_policy
 
 _GROUP_NAME = "تجربی"
-ALLOWED_GROUP_CODES = frozenset(
-    {1, 3, 5, 7, 8, 9, 20, 22, 23, 24, 25, 26, 27, 31, 33, 35, 36, 37}
-)
+ALLOWED_GROUP_CODES = frozenset({1, 3, 5, 7, 8, 9, 20, 22, 23, 24, 25, 26, 27, 31, 33, 35, 36, 37})
 _UNMATCHED_MAJORS = (8, 9, 24, 22, 25)
 _CENTER_CODES = (0, 1, 2)
 _FINANCE_VARIANTS = (0, 1, 3)
 
 
-def _student_row(idx: int, *, major: int, gender: int, grad: int, center: int, finance: int, school: int | str) -> dict[str, object]:
+def _student_row(
+    idx: int, *, major: int, gender: int, grad: int, center: int, finance: int, school: int | str
+) -> dict[str, object]:
     return {
         "student_id": f"STU-{idx:03d}",
         "کدرشته": major,
@@ -192,10 +192,8 @@ def test_realistic_high_no_match_scenario_golden() -> None:
         logs2.sort_index(axis=1).sort_values(by="student_id").reset_index(drop=True),
     )
     pd.testing.assert_frame_equal(
-        trace1.sort_index(axis=1)
-        .sort_values(by=["student_id", "stage"], ignore_index=True),
-        trace2.sort_index(axis=1)
-        .sort_values(by=["student_id", "stage"], ignore_index=True),
+        trace1.sort_index(axis=1).sort_values(by=["student_id", "stage"], ignore_index=True),
+        trace2.sort_index(axis=1).sort_values(by=["student_id", "stage"], ignore_index=True),
     )
 
     assert logs1.shape[0] == 82
@@ -214,10 +212,7 @@ def test_realistic_high_no_match_scenario_golden() -> None:
         == 0
     ).all()
     assert (
-        logs1.loc[no_match_mask, "stage_candidate_counts"].apply(
-            lambda stage: stage["type"]
-        )
-        == 0
+        logs1.loc[no_match_mask, "stage_candidate_counts"].apply(lambda stage: stage["type"]) == 0
     ).all()
 
     first_success = logs1.loc[success_mask].iloc[0]
@@ -299,6 +294,4 @@ def test_realistic_high_no_match_scenario_golden() -> None:
             },
         ]
     )
-    pd.testing.assert_frame_equal(
-        _sort_alloc(alloc1), _sort_alloc(expected_allocations)
-    )
+    pd.testing.assert_frame_equal(_sort_alloc(alloc1), _sort_alloc(expected_allocations))

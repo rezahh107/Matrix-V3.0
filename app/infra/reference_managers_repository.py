@@ -80,10 +80,12 @@ def _normalize_manager_frame(df: pd.DataFrame) -> pd.DataFrame:
     if not set(missing).issubset(set(canonical.columns)):
         raise ValueError("ستون‌های موردنیاز ManagerReport یافت نشد: نام مدیر و مرکز گلستان صدرا")
 
-    normalized = canonical[[
-        _MANAGER_COLUMN,
-        _CENTER_COLUMN,
-    ]].copy()
+    normalized = canonical[
+        [
+            _MANAGER_COLUMN,
+            _CENTER_COLUMN,
+        ]
+    ].copy()
     normalized[_MANAGER_COLUMN] = normalized[_MANAGER_COLUMN].astype(str).str.strip()
     normalized[_CENTER_COLUMN] = coerce_int_series(normalized[_CENTER_COLUMN])
     normalized = normalized.dropna(subset=[_MANAGER_COLUMN, _CENTER_COLUMN], how="any")

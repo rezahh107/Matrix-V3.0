@@ -146,9 +146,7 @@ def resolve_student_school_code(
     """استخراج مقدار استاندارد کد مدرسه با درنظرگرفتن سیاست wildcard."""
 
     column = policy.stage_column("school")
-    allow_zero = policy.school_code_empty_as_zero and (
-        column == policy.columns.school_code
-    )
+    allow_zero = policy.school_code_empty_as_zero and (column == policy.columns.school_code)
     normalized = column.replace(" ", "_")
     candidate_keys = (
         column,
@@ -172,6 +170,7 @@ def resolve_student_school_code(
         return StudentSchoolCode(value=0, missing=False, wildcard=True)
 
     return StudentSchoolCode(value=None, missing=True, wildcard=False)
+
 
 FilterFunc = Callable[
     [
@@ -475,9 +474,7 @@ def apply_join_filters(
         policy = load_policy()
 
     current = pool
-    for index, (stage_name, fn) in enumerate(
-        zip(_FILTER_STAGE_NAMES, _FILTER_SEQUENCE)
-    ):
+    for index, (stage_name, fn) in enumerate(zip(_FILTER_STAGE_NAMES, _FILTER_SEQUENCE)):
         current = fn(
             current,
             student,

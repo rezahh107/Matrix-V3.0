@@ -128,7 +128,9 @@ def test_log_history_metrics_with_history(caplog) -> None:
     )
     expected_metrics = compute_history_metrics(enriched)
 
-    logged_lines = [rec.message for rec in caplog.records if rec.message.startswith("HistoryMetrics[")]
+    logged_lines = [
+        rec.message for rec in caplog.records if rec.message.startswith("HistoryMetrics[")
+    ]
     assert len(logged_lines) == len(expected_metrics)
 
     for logged, (_, row) in zip(logged_lines, expected_metrics.iterrows()):

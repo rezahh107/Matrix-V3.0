@@ -108,9 +108,7 @@ def enforce_text_columns(
     return output
 
 
-def attach_contact_columns(
-    target: pd.DataFrame, contacts: pd.DataFrame
-) -> pd.DataFrame:
+def attach_contact_columns(target: pd.DataFrame, contacts: pd.DataFrame) -> pd.DataFrame:
     """افزودن ستون‌های تماس نرمال‌شده و همهٔ نام‌های فارسی متناظر."""
 
     for column in CONTACT_POLICY_COLUMNS:

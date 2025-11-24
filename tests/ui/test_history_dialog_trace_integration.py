@@ -60,9 +60,7 @@ def _insert_run_with_snapshots(db: LocalDatabase) -> None:
             }
         ]
     )
-    db.insert_qa_snapshot(
-        run_id=run_id, qa_summary_df=qa_summary_df, qa_details_df=qa_details_df
-    )
+    db.insert_qa_snapshot(run_id=run_id, qa_summary_df=qa_summary_df, qa_details_df=qa_details_df)
 
     db.insert_run_metrics(
         [RunMetricRow(run_id=run_id, metric_key="SCHOOL.students_total", metric_value=2.0)]

@@ -38,10 +38,12 @@ def debug_column_profile(df: pd.DataFrame, column: str) -> dict[str, Any]:
 def test_float_mobile_values_lose_leading_zero_in_excel(tmp_path: Path) -> None:
     """بازتولید حذف صفر پیشتاز زمانی که ستون موبایل به‌صورت float خوانده شده است."""
 
-    raw = pd.DataFrame({
-        "student_mobile": pd.Series([9171075740.0, 9351234567.0], dtype="float64"),
-        "score": [1, 2],
-    })
+    raw = pd.DataFrame(
+        {
+            "student_mobile": pd.Series([9171075740.0, 9351234567.0], dtype="float64"),
+            "score": [1, 2],
+        }
+    )
 
     profile_before = debug_column_profile(raw, "student_mobile")
 

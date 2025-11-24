@@ -709,6 +709,8 @@ def test_allocate_student_with_string_join_values_matches(_base_pool: pd.DataFra
         if key in student_row:
             student_row[key] = str(student_row[key])
     student_row["کد_مدرسه"] = "3581"
+
+
 def test_allocate_student_center_zero_skips_filter(_base_pool: pd.DataFrame) -> None:
     student_row = _single_student(مرکز_گلستان_صدرا=0).iloc[0].to_dict()
 
@@ -777,9 +779,7 @@ def test_allocate_batch_no_match_sets_error(_base_pool: pd.DataFrame) -> None:
         "mentor_id",
         "mentor_alias_code",
     ]
-    pd.testing.assert_frame_equal(
-        updated_pool[_base_pool.columns], _base_pool, check_dtype=False
-    )
+    pd.testing.assert_frame_equal(updated_pool[_base_pool.columns], _base_pool, check_dtype=False)
     assert "school_code" in updated_pool.columns
     assert logs.iloc[0]["error_type"] == "ELIGIBILITY_NO_MATCH"
     assert logs.iloc[0]["detailed_reason"] == "No candidates matched join keys"
@@ -936,13 +936,13 @@ def test_allocate_student_handles_canonicalization_empty(
 
     assert result.mentor_row is None
     assert result.log["error_type"] == "INTERNAL_ERROR"
-    assert "Canonicalization returned empty ranked view" in str(
-        result.log["detailed_reason"]
-    )
+    assert "Canonicalization returned empty ranked view" in str(result.log["detailed_reason"])
 
 
 def test_allocate_batch_progress_reports_start_and_end(_base_pool: pd.DataFrame) -> None:
-    students = pd.concat([_single_student(), _single_student(student_id="STD-002")], ignore_index=True)
+    students = pd.concat(
+        [_single_student(), _single_student(student_id="STD-002")], ignore_index=True
+    )
     progress_calls: list[tuple[int, str]] = []
 
     def _progress(pct: int, msg: str) -> None:
@@ -1081,9 +1081,7 @@ def test_allocate_batch_missing_school_code_requires_data_when_disabled(
     allocations, updated_pool, logs, _ = allocate_batch(students, _base_pool, policy=policy)
 
     assert allocations.empty
-    pd.testing.assert_frame_equal(
-        updated_pool[_base_pool.columns], _base_pool, check_dtype=False
-    )
+    pd.testing.assert_frame_equal(updated_pool[_base_pool.columns], _base_pool, check_dtype=False)
     record = logs.iloc[0]
     assert record["error_type"] == "DATA_MISSING"
     assert "کد مدرسه" in str(record["detailed_reason"])
@@ -1114,7 +1112,9 @@ def test_allocate_batch_reconciles_numeric_mentor_ids(_base_pool: pd.DataFrame) 
     assert int(updated_pool.loc[0, "remaining_capacity"]) == 1
 
 
-def test_allocate_batch_handles_missing_state(monkeypatch: pytest.MonkeyPatch, _base_pool: pd.DataFrame) -> None:
+def test_allocate_batch_handles_missing_state(
+    monkeypatch: pytest.MonkeyPatch, _base_pool: pd.DataFrame
+) -> None:
     students = _single_student()
 
     def _raise_missing_state(_: object, __: object) -> tuple[int, int, float]:
@@ -1129,9 +1129,7 @@ def test_allocate_batch_handles_missing_state(monkeypatch: pytest.MonkeyPatch, _
     allocations, updated_pool, logs, _ = allocate_batch(students, _base_pool)
 
     assert allocations.empty
-    pd.testing.assert_frame_equal(
-        updated_pool[_base_pool.columns], _base_pool, check_dtype=False
-    )
+    pd.testing.assert_frame_equal(updated_pool[_base_pool.columns], _base_pool, check_dtype=False)
     record = logs.iloc[0]
     assert record["allocation_status"] == "failed"
     assert record["error_type"] == "INTERNAL_ERROR"
@@ -1181,9 +1179,7 @@ def test_allocate_batch_invalid_join_value_sets_error(_base_pool: pd.DataFrame) 
     allocations, updated_pool, logs, _ = allocate_batch(students, _base_pool)
 
     assert allocations.empty
-    pd.testing.assert_frame_equal(
-        updated_pool[_base_pool.columns], _base_pool, check_dtype=False
-    )
+    pd.testing.assert_frame_equal(updated_pool[_base_pool.columns], _base_pool, check_dtype=False)
     record = logs.iloc[0]
     assert record["error_type"] == "DATA_MISSING"
     assert "کدرشته" in str(record["detailed_reason"])
@@ -1215,9 +1211,7 @@ def test_separate_school_students_handles_missing_indicator_column() -> None:
     school, center = _separate_school_students(students, policy)
 
     assert school.empty
-    pd.testing.assert_frame_equal(
-        center.reset_index(drop=True), students.reset_index(drop=True)
-    )
+    pd.testing.assert_frame_equal(center.reset_index(drop=True), students.reset_index(drop=True))
 
 
 def test_school_students_have_priority_without_center_manager_filter() -> None:
@@ -1396,8 +1390,7 @@ def test_allocation_outputs_excel_openable(tmp_path: Path, _base_pool: pd.DataFr
 
 
 @pytest.mark.skipif(
-    importlib.util.find_spec("openpyxl") is None
-    and importlib.util.find_spec("xlsxwriter") is None,
+    importlib.util.find_spec("openpyxl") is None and importlib.util.find_spec("xlsxwriter") is None,
     reason="نیاز به یکی از موتورهای Excel (openpyxl/xlsxwriter)",
 )
 def test_cli_capacity_column_default_from_policy(tmp_path: Path) -> None:

@@ -116,4 +116,3 @@ def test_prepare_db_schema_mismatch_missing_column(tmp_path):
     assert any("ساختار" in msg or "سازگار" in msg for msg in messages)
     assert any("حذف" in msg or "بازسازی" in msg for msg in messages)
     assert not any("دسترسی" in msg and "دیسک" in msg for msg in messages)
-

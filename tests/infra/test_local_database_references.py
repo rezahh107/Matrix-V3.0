@@ -33,9 +33,7 @@ def test_upsert_and_load_crosswalk(tmp_path) -> None:
     db = LocalDatabase(tmp_path / "ref.db")
     db.initialize()
 
-    groups_df = pd.DataFrame(
-        {"کد مدرسه": [1, 2], "کد جایگزین": [11, 22], "title": ["الف", "ب"]}
-    )
+    groups_df = pd.DataFrame({"کد مدرسه": [1, 2], "کد جایگزین": [11, 22], "title": ["الف", "ب"]})
     synonyms_df = pd.DataFrame({"کد مدرسه": [1], "کد جایگزین": [11], "alias": ["الف"]})
 
     db.upsert_school_crosswalk(groups_df, synonyms_df=synonyms_df)

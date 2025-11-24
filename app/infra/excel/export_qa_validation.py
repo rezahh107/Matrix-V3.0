@@ -64,17 +64,21 @@ def _school_binding_sheet(report: QaReport) -> pd.DataFrame:
         mentor_ids = row.get("mentor_ids")
         if isinstance(mentor_ids, (list, tuple)) and mentor_ids:
             for mentor_id in mentor_ids:
-                rows.append({
-                    "mentor_id": mentor_id,
+                rows.append(
+                    {
+                        "mentor_id": mentor_id,
+                        "issue": row.get("message"),
+                        "level": row.get("level"),
+                    }
+                )
+        else:
+            rows.append(
+                {
+                    "mentor_id": row.get("mentor_id"),
                     "issue": row.get("message"),
                     "level": row.get("level"),
-                })
-        else:
-            rows.append({
-                "mentor_id": row.get("mentor_id"),
-                "issue": row.get("message"),
-                "level": row.get("level"),
-            })
+                }
+            )
     if not rows:
         return pd.DataFrame(columns=["mentor_id", "issue", "level"])
     frame = pd.DataFrame(rows)
@@ -85,9 +89,26 @@ def _allocation_capacity_sheet(report: QaReport) -> pd.DataFrame:
     details = report.to_details_frame("QA_RULE_ALLOC_01")
     if details.empty:
         return pd.DataFrame(
-            columns=["mentor_id", "assigned", "remaining", "allocations_new", "expected_ratio", "actual_ratio", "level"]
+            columns=[
+                "mentor_id",
+                "assigned",
+                "remaining",
+                "allocations_new",
+                "expected_ratio",
+                "actual_ratio",
+                "level",
+            ]
         )
-    preferred = ["mentor_id", "assigned", "remaining", "allocations_new", "expected_ratio", "actual_ratio", "message", "level"]
+    preferred = [
+        "mentor_id",
+        "assigned",
+        "remaining",
+        "allocations_new",
+        "expected_ratio",
+        "actual_ratio",
+        "message",
+        "level",
+    ]
     cols = [col for col in preferred if col in details.columns]
     remaining = [col for col in details.columns if col not in cols]
     ordered = details.loc[:, cols + remaining]
@@ -190,4 +211,3 @@ def export_qa_validation(
         sheets["alloc_join_mismatches"] = audit
     sheet_modes = {name: None for name in sheets}
     write_xlsx_atomic(sheets, output, header_mode=None, sheet_header_modes=sheet_modes)
-

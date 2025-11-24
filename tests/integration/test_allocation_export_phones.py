@@ -49,7 +49,10 @@ def test_allocation_exports_share_phone_policy() -> None:
             "Sheet2": {
                 "columns": OrderedDict(
                     [
-                        ("شناسه دانش آموز", {"source": "df", "field": "student_id", "type": "text"}),
+                        (
+                            "شناسه دانش آموز",
+                            {"source": "df", "field": "student_id", "type": "text"},
+                        ),
                         (
                             "وضعیت ثبت نام",
                             {
@@ -71,7 +74,10 @@ def test_allocation_exports_share_phone_policy() -> None:
                             "تلفن رابط 2",
                             {"source": "df", "field": "contact2_mobile", "type": "text"},
                         ),
-                        ("تلفن ثابت", {"source": "df", "field": "student_landline", "type": "text"}),
+                        (
+                            "تلفن ثابت",
+                            {"source": "df", "field": "student_landline", "type": "text"},
+                        ),
                         (
                             "کد رهگیری حکمت",
                             {"source": "df", "field": "hekmat_tracking", "type": "text"},
