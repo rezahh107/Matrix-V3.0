@@ -36,6 +36,7 @@ from app.core.canonical_frames import canonicalize_headers, canonicalize_pool_fr
 from app.core.common.domain import _coerce_finance, _num_to_int_safe
 from app.core.common.normalization import normalize_fa
 from app.core.policy_loader import PolicyConfig
+from app.infra.errors import DatabaseOperationError
 from app.infra.io_utils import read_inspactor_workbook
 from app.infra.local_database import LocalDatabase, _coerce_int_columns
 from app.infra.references.schools import get_school_reference_frames
@@ -57,7 +58,26 @@ def import_mentor_pool_from_excel(
     """
 
     raw_df = read_inspactor_workbook(path)
+    raw_employee = None
+    if "کد کارمندی پشتیبان" in raw_df.columns:
+        candidate = raw_df.loc[:, "کد کارمندی پشتیبان"]
+        if isinstance(candidate, pd.DataFrame):
+            raw_employee = candidate.iloc[:, -1].copy()
+        else:
+            raw_employee = candidate.copy()
+    else:
+        raw_headers = canonicalize_headers(raw_df, header_mode="fa")
+        if "کد کارمندی پشتیبان" in raw_headers.columns:
+            candidate = raw_headers.loc[:, "کد کارمندی پشتیبان"]
+            if isinstance(candidate, pd.DataFrame):
+                candidate = candidate.iloc[:, 0]
+            raw_employee = candidate.copy()
+
     derived, qa_issues = _derive_pool_join_keys(raw_df, db=db, policy=policy)
+    if isinstance(raw_employee, pd.DataFrame):
+        raw_employee = raw_employee.iloc[:, 0]
+    if raw_employee is not None:
+        derived["کد کارمندی پشتیبان (خام)"] = raw_employee.reindex(derived.index)
     normalized = canonicalize_pool_frame(
         derived,
         policy=policy,
@@ -65,6 +85,11 @@ def import_mentor_pool_from_excel(
         pool_source=pool_source,
     )
     normalized.attrs[_POOL_JOIN_KEY_QA_ATTR] = qa_issues
+    _raise_on_duplicate_mentor_ids(
+        normalized,
+        policy=policy,
+        pool_source=pool_source,
+    )
     db.upsert_mentor_pool_cache(normalized, join_keys=policy.join_keys)
     return normalized
 
@@ -75,6 +100,7 @@ def load_mentor_pool_from_cache(
     """بازیابی استخر منتورها از کش SQLite."""
 
     cached = db.load_mentor_pool_cache(join_keys=policy.join_keys)
+    _raise_on_duplicate_mentor_ids(cached, policy=policy, pool_source="cache")
     return _coerce_int_columns(cached, policy.join_keys)
 
 
@@ -82,6 +108,7 @@ __all__ = [
     "import_mentor_pool_from_excel",
     "load_mentor_pool_from_cache",
     "_POOL_JOIN_KEY_QA_ATTR",
+    "_raise_on_duplicate_mentor_ids",
 ]
 
 
@@ -289,6 +316,71 @@ def _derive_pool_join_keys(
 
 
 _POOL_JOIN_KEY_QA_ATTR: Final[str] = "pool_join_key_derivation_issues"
+
+
+def _raise_on_duplicate_mentor_ids(
+    pool: pd.DataFrame, *, policy: PolicyConfig, pool_source: str
+) -> None:
+    """ولیدیت یکتایی ``mentor_id`` قبل/بعد از کش و تولید پیام عملیاتی.
+
+    این بررسی برای جلوگیری از ذخیره/مصرف کش معیوب انجام می‌شود تا خطای ۰٪
+    تخصیص جای خود را به هشدار خواناتر با نمونهٔ ردیف‌های مشکل‌دار بدهد.
+
+    Args:
+        pool: دیتافریم کاننیکال استخر منتورها.
+        policy: پیکربندی سیاست برای دسترسی به کلیدهای الحاقی (شش‌تایی).
+        pool_source: منبع داده (inspactor/matrix/cache) جهت درج در پیام خطا.
+
+    Raises:
+        DatabaseOperationError: در صورت وجود ``mentor_id`` تکراری (به‌جز مقادیر
+            تهی)، همراه با نمونه‌ای از ردیف‌های متضاد برای اقدام اپراتور.
+
+    مثال::
+
+        >>> from app.core.policy_loader import load_policy
+        >>> policy = load_policy()  # doctest: +SKIP
+        >>> df = pd.DataFrame({
+        ...     "mentor_id": ["m1", "m1"],
+        ...     "کد کارمندی پشتیبان": ["E1", "E2"],
+        ...     "کدرشته": [1201, 1201],
+        ...     "جنسیت": [1, 1],
+        ...     "دانش آموز فارغ": [0, 0],
+        ...     "مرکز گلستان صدرا": [1, 1],
+        ...     "مالی حکمت بنیاد": [0, 0],
+        ...     "کد مدرسه": [3581, 3581],
+        ... })
+        >>> _raise_on_duplicate_mentor_ids(df, policy=policy, pool_source="inspactor")
+        Traceback (most recent call last):
+            ...
+        DatabaseOperationError: استخر «inspactor» دارای mentor_id تکراری است؛ نمونه شناسه‌ها: ['m1']; نمونهٔ ردیف‌ها: [{'mentor_id': 'm1', 'کد کارمندی پشتیبان': 'E1', 'کدرشته': 1201, 'جنسیت': 1, 'دانش آموز فارغ': 0, 'مرکز گلستان صدرا': 1, 'مالی حکمت بنیاد': 0, 'کد مدرسه': 3581}, {'mentor_id': 'm1', 'کد کارمندی پشتیبان': 'E2', 'کدرشته': 1201, 'جنسیت': 1, 'دانش آموز فارغ': 0, 'مرکز گلستان صدرا': 1, 'مالی حکمت بنیاد': 0, 'کد مدرسه': 3581}]
+    """
+
+    if pool is None or "mentor_id" not in pool.columns:
+        return
+    mentor_series = pool["mentor_id"].dropna()
+    if mentor_series.empty:
+        return
+    mentor_series = mentor_series.astype("string").str.strip()
+    duplicate_mask = mentor_series.duplicated(keep=False)
+    if not bool(duplicate_mask.any()):
+        return
+
+    duplicate_ids = mentor_series[duplicate_mask].drop_duplicates().head(5).tolist()
+    raw_employee_col = "کد کارمندی پشتیبان (خام)" if "کد کارمندی پشتیبان (خام)" in pool.columns else None
+    employee_col = raw_employee_col or "کد کارمندی پشتیبان"
+    sample_columns = ["mentor_id", employee_col, *policy.join_keys]
+    sample_rows = (
+        pool.loc[mentor_series.index[duplicate_mask], sample_columns]
+        .head(5)
+        .fillna("")
+        .to_dict(orient="records")
+    )
+
+    message = (
+        f"استخر «{pool_source}» دارای mentor_id تکراری است؛ نمونه شناسه‌ها: {duplicate_ids}; "
+        f"نمونهٔ ردیف‌ها: {sample_rows}"
+    )
+    raise DatabaseOperationError(message)
 
 
 def _append_issue(
