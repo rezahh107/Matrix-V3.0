@@ -40,7 +40,7 @@ from app.infra.sqlite_config import configure_connection
 from app.infra.sqlite_types import coerce_int_columns as _sqlite_coerce_int_columns
 from app.infra.sqlite_types import coerce_int_like as _sqlite_coerce_int_like
 
-_SCHEMA_VERSION = 9
+_SCHEMA_VERSION = 10
 _POLICY_VERSION = "1.0.3"
 _SSOT_VERSION = "1.0.2"
 _ISO_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
@@ -1255,6 +1255,7 @@ class LocalDatabase:
     def _migrate_schema(self, conn: sqlite3.Connection, *, from_version: int) -> None:
         """مهاجرت نسخهٔ Schema به نسخهٔ جاری."""
 
+        start_version = from_version
         version = from_version
         while version < _SCHEMA_VERSION:
             if version == 2:
@@ -1286,7 +1287,9 @@ class LocalDatabase:
                 version = 9
                 continue
             if version == 9:
-                self._migrate_v9_to_v10(conn)
+                self._migrate_v9_to_v10(
+                    conn, allow_autofix=start_version >= 9
+                )
                 version = 10
                 continue
             raise SchemaVersionMismatchError(
@@ -1396,13 +1399,31 @@ class LocalDatabase:
             "UPDATE schema_meta SET schema_version = ? WHERE id = 1", (9,),
         )
 
-    def _migrate_v9_to_v10(self, conn: sqlite3.Connection) -> None:
-        """افزودن ستون ``student_id`` به جدول cache دانش‌آموزان در نسخهٔ ۱۰."""
+    def _migrate_v9_to_v10(
+        self, conn: sqlite3.Connection, *, allow_autofix: bool
+    ) -> None:
+        """افزودن ستون ``student_id`` به جدول cache دانش‌آموزان در نسخهٔ ۱۰.
+
+        - اگر مهاجرت از نسخهٔ ۹ انجام شود، ستون به‌صورت خودکار افزوده می‌شود.
+        - برای نسخه‌های قدیمی‌تر، در صورت نبود ستون، خطای ناسازگاری Schema صادر
+          می‌شود تا کاربر پایگاه‌داده را بازنشانی کند.
+        """
 
         if _table_exists(conn, "students_cache"):
             columns = _get_table_columns(conn, "students_cache")
             if "student_id" not in columns:
-                conn.execute("ALTER TABLE students_cache ADD COLUMN student_id TEXT")
+                if allow_autofix:
+                    conn.execute("ALTER TABLE students_cache ADD COLUMN student_id TEXT")
+                else:
+                    diagnostics = {"students_cache": ["student_id"]}
+                    raise DatabaseSchemaMismatchError(
+                        path=str(self.path),
+                        reason=(
+                            "ساختار جدول students_cache فاقد ستون student_id است و با نسخهٔ جدید سازگار نیست."
+                        ),
+                        hint="فایل پایگاه‌داده را حذف یا بازنشانی کنید تا Schema کامل ایجاد شود.",
+                        diagnostics=diagnostics,
+                    )
 
         conn.execute(
             "UPDATE schema_meta SET schema_version = ? WHERE id = 1", (10,),

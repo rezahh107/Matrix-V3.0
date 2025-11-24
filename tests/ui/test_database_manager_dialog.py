@@ -7,7 +7,7 @@ except Exception:  # pragma: no cover - fallback for headless env
     QApplication = None  # type: ignore
     QMessageBox = None  # type: ignore
 
-from app.infra.local_database import LocalDatabase
+from app.infra.local_database import LocalDatabase, _SCHEMA_VERSION
 from app.infra.year_database_manager import YearDatabaseInfo
 from app.ui.database_manager_dialog import DatabaseManagerDialog, _QT_AVAILABLE
 
@@ -25,7 +25,7 @@ def test_database_manager_dialog_shows_counts_and_path(tmp_path: Path, qapp: QAp
         pytest.skip("Qt bindings not available")
     db = LocalDatabase(tmp_path / "sample.sqlite", academic_year="test-year")
     db.initialize()
-    info = YearDatabaseInfo("test-year", db.path, schema_version=9, size_bytes=db.path.stat().st_size)
+    info = YearDatabaseInfo("test-year", db.path, schema_version=_SCHEMA_VERSION, size_bytes=db.path.stat().st_size)
     dialog = DatabaseManagerDialog(db=db, year_info=info)
     assert str(db.path) in dialog._path_label.text()
     assert dialog._counts_table.rowCount() >= 1
@@ -56,7 +56,7 @@ def test_database_manager_dialog_shows_schema_issue(tmp_path: Path, qapp: QAppli
         )
         conn.commit()
     db = LocalDatabase(db_path)
-    info = YearDatabaseInfo("test-year", db.path, schema_version=9, size_bytes=db.path.stat().st_size)
+    info = YearDatabaseInfo("test-year", db.path, schema_version=_SCHEMA_VERSION, size_bytes=db.path.stat().st_size)
     dialog = DatabaseManagerDialog(db=db, year_info=info)
     # ستون student_id باید به‌عنوان مفقود گزارش شود
     issue_rows = [dialog._issues_table.item(r, 1).text() for r in range(dialog._issues_table.rowCount())]
@@ -68,7 +68,7 @@ def test_database_manager_buttons_trigger_actions(tmp_path: Path, qapp: QApplica
         pytest.skip("Qt bindings not available")
     db = LocalDatabase(tmp_path / "to_reset.sqlite")
     db.initialize()
-    info = YearDatabaseInfo("current", db.path, schema_version=9, size_bytes=0)
+    info = YearDatabaseInfo("current", db.path, schema_version=_SCHEMA_VERSION, size_bytes=0)
     dialog = DatabaseManagerDialog(db=db, year_info=info)
     monkeypatch.setattr("app.ui.database_manager_dialog.QMessageBox.information", lambda *args, **kwargs: None)
     monkeypatch.setattr("app.ui.database_manager_dialog.QMessageBox.critical", lambda *args, **kwargs: None)
@@ -90,7 +90,7 @@ def test_full_reset_error_shows_message_box(tmp_path: Path, qapp: QApplication, 
         pytest.skip("Qt bindings not available")
     db = LocalDatabase(tmp_path / "to_reset_error.sqlite")
     db.initialize()
-    info = YearDatabaseInfo("current", db.path, schema_version=9, size_bytes=0)
+    info = YearDatabaseInfo("current", db.path, schema_version=_SCHEMA_VERSION, size_bytes=0)
     dialog = DatabaseManagerDialog(db=db, year_info=info)
     monkeypatch.setattr("app.ui.database_manager_dialog.QMessageBox.question", lambda *args, **kwargs: QMessageBox.Yes)
     captured = {}
