@@ -84,6 +84,68 @@ def test_validate_allocation_join_keys_flags_mismatch():
     assert bool(mismatch_row["any_mismatch"]) is True
     assert bool(mismatch_row["match_جنسیت"]) is False
     assert "جنسیت" in str(mismatch_row["mismatch_summary"])
+    assert result.duplicate_columns == {key: 0 for key in policy.join_keys}
+
+
+def test_validate_allocation_join_keys_handles_duplicate_join_columns_gender():
+    policy, students, pool, allocations = _sample_frames()
+
+    pool.loc[1, "جنسیت"] = 0
+    gender_pos = students.columns.get_loc("جنسیت") + 1
+    students.insert(gender_pos, "gender", students["جنسیت"] * 0)
+    pool.insert(pool.columns.get_loc("جنسیت") + 1, "gender", pool["جنسیت"] * 0)
+
+    result = validate_allocation_join_keys(allocations, students, pool, policy=policy)
+
+    assert result.invalid_count == 0
+    assert result.total == allocations.shape[0]
+    assert result.audit_frame["جنسیت"].dtype == "Int64"
+    assert result.audit_frame["جنسیت_mentor"].dtype == "Int64"
+    assert result.duplicate_columns["جنسیت"] == 2  # one per dataframe copy
+    assert "جنسیت" in result.audit_frame.loc[0, "duplicate_join_key_keys"]
+    assert int(result.audit_frame.loc[0, "duplicate_join_key_columns"]) > 0
+
+
+def test_validate_allocation_join_keys_handles_duplicate_finance_columns():
+    policy, students, pool, allocations = _sample_frames()
+
+    finance_pos_students = students.columns.get_loc("مالی حکمت بنیاد") + 1
+    finance_pos_pool = pool.columns.get_loc("مالی حکمت بنیاد") + 1
+    pool.loc[1, "جنسیت"] = 0
+    students.insert(finance_pos_students, "finance", students["مالی حکمت بنیاد"])
+    pool.insert(finance_pos_pool, "finance", pool["مالی حکمت بنیاد"] * 0)
+
+    result = validate_allocation_join_keys(allocations, students, pool, policy=policy)
+
+    assert result.invalid_count == 0
+    assert result.audit_frame["مالی حکمت بنیاد"].dtype == "Int64"
+    assert result.audit_frame["مالی حکمت بنیاد_mentor"].dtype == "Int64"
+    assert result.duplicate_columns["مالی حکمت بنیاد"] == 2
+    assert "مالی حکمت بنیاد" in result.audit_frame.loc[0, "duplicate_join_key_keys"]
+
+
+def test_validate_allocation_join_keys_handles_mixed_duplicate_columns():
+    policy, students, pool, allocations = _sample_frames()
+
+    gender_pos = students.columns.get_loc("جنسیت") + 1
+    school_pos = students.columns.get_loc("کد مدرسه") + 1
+    pool.loc[1, "جنسیت"] = 0
+    students.insert(gender_pos, "gender", students["جنسیت"])
+    students.insert(school_pos + 1, "school_code", students["کد مدرسه"])
+
+    pool.insert(pool.columns.get_loc("جنسیت") + 1, "gender", pool["جنسیت"])
+    pool.insert(pool.columns.get_loc("کد مدرسه") + 1, "school_code", pool["کد مدرسه"])
+
+    result = validate_allocation_join_keys(allocations, students, pool, policy=policy)
+
+    assert result.invalid_count == 0
+    assert result.total == allocations.shape[0]
+    assert result.duplicate_columns["جنسیت"] >= 2
+    assert result.duplicate_columns["کد مدرسه"] >= 2
+    assert "جنسیت" in result.audit_frame.loc[0, "duplicate_join_key_keys"]
+    assert "کد مدرسه" in result.audit_frame.loc[0, "duplicate_join_key_keys"]
+    assert pd.api.types.is_integer_dtype(result.audit_frame["کد مدرسه"])
+    assert pd.api.types.is_integer_dtype(result.audit_frame["کد مدرسه_mentor"])
 
 
 def test_join_key_audit_and_summary_builders():
