@@ -22,7 +22,15 @@ from __future__ import annotations
 
 import re
 from collections import OrderedDict
-from collections.abc import Iterable, Iterator, KeysView, Mapping, MutableMapping
+from collections.abc import (
+    Iterable,
+    Iterator,
+    ItemsView,
+    KeysView,
+    Mapping,
+    MutableMapping,
+    ValuesView,
+)
 from types import MappingProxyType
 from typing import Any, Literal, TypedDict
 
@@ -60,6 +68,11 @@ def natural_key(s: str) -> tuple[object, ...]:
 
 class JoinKeyValues(Mapping[str, int]):
     """نگهدارندهٔ فقط‌خواندنی برای ۶ کلید join به‌صورت اعداد صحیح.
+
+    این کلاس ترتیب درج و نام‌های قراردادی «کدرشته»، «جنسیت»،
+    «دانش_آموز_فارغ»، «مرکز_گلستان_صدرا»، «مالی_حکمت_بنیاد» و «کد_مدرسه» را
+    حفظ می‌کند و برای ساخت کلید ترکیبی (tuple یا dict) بدون نشتی ``Any``
+    استفاده می‌شود.
 
     مثال کوتاه::
 
@@ -120,15 +133,23 @@ class JoinKeyValues(Mapping[str, int]):
         raise AttributeError("JoinKeyValues is immutable")
 
     def __getitem__(self, key: str) -> int:  # pragma: no cover - Mapping API
+        """دسترسی مستقیم به مقدار هر کلید join (همیشه ``int``)."""
+
         return self._mapping[key]
 
     def __iter__(self) -> Iterator[str]:  # pragma: no cover - Mapping API
-        return (key for key, _ in self._items)
+        """تکرار کلیدها با حفظ ترتیب قراردادی."""
+
+        return iter(self._mapping)
 
     def __len__(self) -> int:  # pragma: no cover - Mapping API
+        """تعداد کلیدها که همواره ۶ است."""
+
         return len(self._items)
 
     def __contains__(self, key: object) -> bool:  # pragma: no cover - Mapping API
+        """بررسی وجود کلید با احترام به نوع ``str`` و ترتیب اصلی."""
+
         return isinstance(key, str) and key in self._mapping
 
     def __repr__(self) -> str:  # pragma: no cover - debug helper
@@ -139,15 +160,15 @@ class JoinKeyValues(Mapping[str, int]):
 
         return self._mapping.keys()
 
-    def items(self) -> tuple[tuple[str, int], ...]:
+    def items(self) -> ItemsView[str, int]:
         """برگشت زوج‌های (کلید، مقدار) به‌ترتیب Policy."""
 
-        return self._items
+        return self._mapping.items()
 
-    def values(self) -> tuple[int, ...]:
+    def values(self) -> ValuesView[int]:
         """مقادیر کلیدها به‌ترتیب درج."""
 
-        return tuple(value for _, value in self._items)
+        return self._mapping.values()
 
     def as_dict(self) -> dict[str, int]:
         """کپی معمولی دیکشنری برای سازگاری با pandas/JSON."""
