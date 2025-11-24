@@ -254,14 +254,14 @@ def test_import_pool_reports_unknown_center_and_finance(tmp_path: Path) -> None:
     assert int(normalized["مالی حکمت بنیاد"].iloc[0]) == policy.finance_variants[0]
 
 
-def test_import_pool_rejects_duplicate_mentor_ids(tmp_path: Path) -> None:
+def test_import_pool_rejects_duplicate_composite_keys(tmp_path: Path) -> None:
     policy = load_policy()
     db = LocalDatabase(tmp_path / "cache.sqlite")
 
     duplicated_pool = pd.DataFrame(
         {
             "mentor_id": ["m1", "m1"],
-            "کد کارمندی پشتیبان": ["E1", "E2"],
+            "کد کارمندی پشتیبان": ["E1", "E1"],
             "کدرشته": [1201, 1201],
             "گروه آزمایشی": ["تجربی", "تجربی"],
             "جنسیت": [1, 1],
@@ -279,5 +279,29 @@ def test_import_pool_rejects_duplicate_mentor_ids(tmp_path: Path) -> None:
 
     message = str(excinfo.value)
     assert "mentor_id" in message
-    assert "نمونهٔ ردیف‌ها" in message
-    assert "E1" in message and "E2" in message
+    assert "کلید ترکیبی" in message
+    assert "کدرشته" in message
+
+
+def test_import_pool_allows_same_mentor_multiple_join_keys(tmp_path: Path) -> None:
+    policy = load_policy()
+    db = LocalDatabase(tmp_path / "cache.sqlite")
+
+    expanded_pool = pd.DataFrame(
+        {
+            "mentor_id": ["m1", "m1"],
+            "کد کارمندی پشتیبان": ["E1", "E1"],
+            "کدرشته": [1201, 1202],
+            "گروه آزمایشی": ["تجربی", "ریاضی"],
+            "جنسیت": [1, 1],
+            "دانش آموز فارغ": [0, 0],
+            "مرکز گلستان صدرا": [1, 2],
+            "مالی حکمت بنیاد": [0, 0],
+            "کد مدرسه": [3581, 3582],
+        }
+    )
+    excel_path = tmp_path / "expanded_pool.xlsx"
+    _write_pool_excel(expanded_pool, excel_path)
+
+    normalized = import_mentor_pool_from_excel(excel_path, db=db, policy=policy)
+    assert len(normalized) == 2
