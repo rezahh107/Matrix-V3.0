@@ -188,6 +188,17 @@ def _resolve_local_db(args: argparse.Namespace) -> LocalDatabase | None:
         return None
 
 
+def reset_local_database(db: LocalDatabase) -> Path | None:
+    """بازنشانی کامل پایگاه‌داده محلی با بکاپ‌گیری ایمن.
+
+    این کمک‌تابع برای استفادهٔ CLI/UI تعبیه شده تا از منطق یکنواخت
+    :class:`LocalDatabase` بهره ببرد و فایل فعلی را با پسوند زمان‌دار
+    بکاپ بگیرد، سپس Schema جدید را مقداردهی کند.
+    """
+
+    return db.reset_full_database()
+
+
 def _format_db_prepare_error(exc: BaseException, *, db_path: Path) -> str:
     """تبدیل خطاهای آماده‌سازی پایگاه داده به پیام کاربرپسند."""
 

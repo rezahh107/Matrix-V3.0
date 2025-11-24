@@ -98,13 +98,19 @@ class DatabaseManagerDialog(QDialog):
 
         btn_row = QHBoxLayout()
         self._btn_refresh = QPushButton("به‌روزرسانی", self)
-        self._btn_reset = QPushButton("بکاپ و بازنشانی پایگاه‌داده", self)
+        self._btn_clear_cache = QPushButton("پاک‌سازی کش پایگاه‌داده", self)
+        self._btn_full_reset = QPushButton("بازنشانی کامل پایگاه‌داده", self)
+        self._status_label = QLabel(self)
+        self._status_label.setWordWrap(True)
         self._btn_refresh.clicked.connect(self._refresh)
-        self._btn_reset.clicked.connect(self._backup_and_reset)
+        self._btn_clear_cache.clicked.connect(self._clear_cache_tables)
+        self._btn_full_reset.clicked.connect(self._full_reset)
         btn_row.addWidget(self._btn_refresh)
-        btn_row.addWidget(self._btn_reset)
+        btn_row.addWidget(self._btn_clear_cache)
+        btn_row.addWidget(self._btn_full_reset)
         btn_row.addStretch(1)
         layout.addLayout(btn_row)
+        layout.addWidget(self._status_label)
 
     def _refresh(self) -> None:
         summary = self.db.get_database_health_summary()
@@ -149,10 +155,25 @@ class DatabaseManagerDialog(QDialog):
             self._issues_table.setItem(idx, 0, QTableWidgetItem(name))
             self._issues_table.setItem(idx, 1, QTableWidgetItem(missing))
 
-    def _backup_and_reset(self) -> None:
+    def _confirm(self, title: str, text: str) -> bool:
+        result = QMessageBox.question(
+            self,
+            title,
+            text,
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        return result == QMessageBox.Yes
+
+    def _full_reset(self) -> None:
+        if not self._confirm(
+            "بازنشانی کامل پایگاه‌داده",
+            "فایل پایگاه‌داده با نام جدید بکاپ می‌شود و نسخهٔ تازه ساخته خواهد شد. ادامه می‌دهید؟",
+        ):
+            return
         backup_path: Path | None = None
         try:
-            backup_path = self.db.backup_and_reset()
+            backup_path = self.db.reset_full_database()
         except Exception as exc:  # pragma: no cover - مسیر خطا نادر
             QMessageBox.critical(
                 self,
@@ -163,5 +184,26 @@ class DatabaseManagerDialog(QDialog):
         message = "پایگاه‌داده با موفقیت بازنشانی شد."
         if backup_path is not None:
             message += f"\nبکاپ: {backup_path}"
+        self._status_label.setText(message)
+        QMessageBox.information(self, "انجام شد", message)
+        self._refresh()
+
+    def _clear_cache_tables(self) -> None:
+        if not self._confirm(
+            "پاک‌سازی کش پایگاه‌داده",
+            "داده‌های کش (دانش‌آموز، پشتیبان، فرم و مدیر) حذف می‌شود اما تاریخچه باقی می‌ماند. ادامه می‌دهید؟",
+        ):
+            return
+        try:
+            self.db.clear_caches()
+        except Exception as exc:  # pragma: no cover - مسیر خطا نادر
+            QMessageBox.critical(
+                self,
+                "خطا در پاک‌سازی",
+                f"پاک‌سازی کش پایگاه‌داده با خطا مواجه شد: {exc}",
+            )
+            return
+        message = "کش پایگاه‌داده با موفقیت پاک شد."
+        self._status_label.setText(message)
         QMessageBox.information(self, "انجام شد", message)
         self._refresh()

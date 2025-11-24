@@ -220,12 +220,25 @@ class LocalDatabase:
             tables=tables,
         )
 
-    def backup_and_reset(self) -> Path | None:
-        """بکاپ‌گیری و بازنشانی پایگاه‌داده برای بازسازی ایمن.
+    def reset_full_database(self) -> Path | None:
+        """بازنشانی کامل پایگاه‌داده با بکاپ‌گیری امن فایل.
 
-        - اگر فایل فعلی وجود داشته باشد، با پسوند زمان‌دار ``.bak-YYYYMMDD-HHMMSS``
-          جابه‌جا می‌شود.
-        - سپس ``initialize`` فراخوانی می‌شود تا Schema سالم ساخته شود.
+        این متد فایل فعلی ``SQLite`` را (در صورت وجود) به یک فایل بکاپ با پسوند
+        ``.bak-YYYYMMDD-HHMMSS`` منتقل می‌کند، سپس پایگاه‌دادهٔ اصلی را از ابتدا
+        با ``initialize`` می‌سازد. اگر فایل وجود نداشته باشد، تنها ``initialize``
+        اجرا می‌شود.
+
+        Returns
+        -------
+        Path | None
+            مسیر فایل بکاپ در صورت جابه‌جایی فایل اصلی، یا ``None`` زمانی که
+            فایلی برای بکاپ وجود نداشت.
+
+        مثال
+        ------
+        >>> db = LocalDatabase(Path("smart_alloc.db"))
+        >>> backup = db.reset_full_database()
+        >>> assert db.path.exists()
         """
 
         backup: Path | None = None
@@ -242,6 +255,56 @@ class LocalDatabase:
                 ) from exc
         self.initialize()
         return backup
+
+    def clear_caches(self) -> None:
+        """پاک‌سازی جداول کش بدون حذف تاریخچه یا متادیتا.
+
+        این متد فقط محتویات جداول کش (students_cache, mentor_pool_cache,
+        managers_reference, forms_entries) را در یک تراکنش حذف می‌کند و سایر
+        جداول مانند ``runs``، ``qa_summary`` یا تاریخچه را دست‌نخورده باقی
+        می‌گذارد. اگر جدول کش در نسخه‌های قدیمی موجود نباشد، به‌طور ایمن
+        صرف‌نظر می‌شود.
+
+        Raises
+        ------
+        DatabaseOperationError
+            اگر حذف تراکنشی جداول با خطا روبه‌رو شود.
+        """
+
+        cache_tables = [
+            "students_cache",
+            "mentor_pool_cache",
+            "managers_reference",
+            "forms_entries",
+        ]
+        try:
+            with self._open_connection() as conn:
+                existing = [table for table in cache_tables if _table_exists(conn, table)]
+                if not existing:
+                    return
+                conn.execute("BEGIN")
+                try:
+                    for table in existing:
+                        conn.execute(f'DELETE FROM "{table}"')
+                    conn.commit()
+                except sqlite3.Error as exc:
+                    conn.rollback()
+                    raise DatabaseOperationError(
+                        reason="پاک‌سازی کش پایگاه‌داده ناکام ماند.",
+                        hint="سلامت فایل یا دسترسی نوشتن را بررسی کنید و دوباره تلاش نمایید.",
+                    ) from exc
+        except DatabaseOperationError:
+            raise
+        except sqlite3.Error as exc:  # pragma: no cover - خطای غیرمنتظره اتصال
+            raise DatabaseOperationError(
+                reason="خطا در اتصال یا اجرای فرمان پاک‌سازی کش.",
+                hint="مجوز نوشتن یا قفل بودن فایل را بررسی کنید.",
+            ) from exc
+
+    def backup_and_reset(self) -> Path | None:
+        """[Deprecated] سازگار با نسخه‌های قدیمی؛ از ``reset_full_database`` استفاده کنید."""
+
+        return self.reset_full_database()
 
     def initialize(self) -> None:
         """ایجاد Schema و اعتبارسنجی نسخه به‌صورت idempotent."""
