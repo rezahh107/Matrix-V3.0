@@ -18,6 +18,8 @@ __all__ = [
 _MISSING_OR_INVALID = "missing_or_invalid_national_code"
 _NO_HISTORY_MATCH = "no_history_match"
 _HISTORY_MATCH = "history_match"
+
+
 def _candidate_columns(*names: str | None) -> tuple[str, ...]:
     return tuple(name for name in names if name)
 
@@ -112,9 +114,7 @@ def build_history_snapshot_from_df(history_df: pd.DataFrame) -> pd.DataFrame:
 
     center_series = _first_present_column(history_df, _CENTER_COLUMN_CANDIDATES)
     if center_series is None:
-        snapshot["history_center_code"] = pd.Series(
-            pd.NA, index=history_df.index, dtype="object"
-        )
+        snapshot["history_center_code"] = pd.Series(pd.NA, index=history_df.index, dtype="object")
     else:
         snapshot["history_center_code"] = center_series.astype("object")
 
@@ -122,9 +122,7 @@ def build_history_snapshot_from_df(history_df: pd.DataFrame) -> pd.DataFrame:
     if snapshot.empty:
         return _empty_snapshot_frame()
 
-    snapshot = snapshot.drop_duplicates(
-        subset=["normalized_national_code"], keep="last"
-    )
+    snapshot = snapshot.drop_duplicates(subset=["normalized_national_code"], keep="last")
     snapshot = snapshot.set_index("normalized_national_code")
     snapshot.index = snapshot.index.astype("string")
     # اطمینان از ترتیب ثابت ستون‌ها
@@ -169,9 +167,7 @@ def dedupe_by_national_id(
     if students_df is None or history_df is None:
         raise ValueError("students_df و history_df نباید None باشند")
 
-    student_series = _first_present_column(
-        students_df, ("national_code", "کد ملی")
-    )
+    student_series = _first_present_column(students_df, ("national_code", "کد ملی"))
     history_series = _first_present_column(history_df, ("national_code", "کد ملی"))
 
     student_norm = _normalize_series(student_series, students_df.index)
@@ -186,18 +182,14 @@ def dedupe_by_national_id(
     history_status = pd.Series(index=students_df.index, dtype="string")
     history_status.loc[already_mask] = HistoryStatus.ALREADY_ALLOCATED.value
     history_status.loc[invalid_mask] = HistoryStatus.MISSING_OR_INVALID_NATIONAL_ID.value
-    history_status.loc[~already_mask & ~invalid_mask] = (
-        HistoryStatus.NO_HISTORY_MATCH.value
-    )
+    history_status.loc[~already_mask & ~invalid_mask] = HistoryStatus.NO_HISTORY_MATCH.value
 
     reasons = pd.Series(index=students_df.index, dtype="string")
     reasons.loc[already_mask] = _HISTORY_MATCH
     reasons.loc[invalid_mask] = _MISSING_OR_INVALID
     reasons.loc[~already_mask & ~invalid_mask] = _NO_HISTORY_MATCH
 
-    def _attach_snapshot(
-        frame: pd.DataFrame, normalized_codes: pd.Series
-    ) -> None:
+    def _attach_snapshot(frame: pd.DataFrame, normalized_codes: pd.Series) -> None:
         for column in HISTORY_SNAPSHOT_COLUMNS:
             if history_snapshot.empty:
                 mapped = pd.Series(pd.NA, index=frame.index, dtype="object")

@@ -36,8 +36,16 @@ def test_apply_ranking_policy_orders_by_policy(
     alloc_b: int,
 ) -> None:
     state = {
-        "MENTOR-1": {"initial": initial_a, "remaining": max(initial_a - alloc_a, 0), "alloc_new": alloc_a},
-        "MENTOR-2": {"initial": initial_b, "remaining": max(initial_b - alloc_b, 0), "alloc_new": alloc_b},
+        "MENTOR-1": {
+            "initial": initial_a,
+            "remaining": max(initial_a - alloc_a, 0),
+            "alloc_new": alloc_a,
+        },
+        "MENTOR-2": {
+            "initial": initial_b,
+            "remaining": max(initial_b - alloc_b, 0),
+            "alloc_new": alloc_b,
+        },
     }
 
     df = pd.DataFrame(

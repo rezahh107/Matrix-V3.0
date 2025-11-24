@@ -188,9 +188,7 @@ def load_selection_reason_policy(
         schema_hash = compute_schema_hash(columns)
 
     if version and expected_version and version != expected_version:
-        message = (
-            f"Policy version mismatch for selection reasons: loaded='{version}' expected='{expected_version}'"
-        )
+        message = f"Policy version mismatch for selection reasons: loaded='{version}' expected='{expected_version}'"
         if on_mismatch == "raise":
             raise ValueError(message)
         warnings.warn(message, RuntimeWarning, stacklevel=3)
@@ -219,4 +217,3 @@ __all__ = [
     "SelectionReasonPolicy",
     "load_selection_reason_policy",
 ]
-

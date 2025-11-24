@@ -3,6 +3,7 @@
 Excel Inspactor تنها یک‌بار خوانده و با قواعد Policy نرمال می‌شود؛ نسخهٔ تمیز
 در جدول ``mentor_pool_cache`` نگه‌داری می‌شود تا اجرای بعدی از SQLite خوانده شود.
 """
+
 from __future__ import annotations
 
 from collections.abc import Iterable
@@ -95,9 +96,7 @@ def import_mentor_pool_from_excel(
     return normalized
 
 
-def load_mentor_pool_from_cache(
-    *, db: LocalDatabase, policy: PolicyConfig
-) -> pd.DataFrame:
+def load_mentor_pool_from_cache(*, db: LocalDatabase, policy: PolicyConfig) -> pd.DataFrame:
     """بازیابی استخر منتورها از کش SQLite."""
 
     cached = db.load_mentor_pool_cache(join_keys=policy.join_keys)
@@ -167,9 +166,7 @@ def _derive_pool_join_keys(
     school_key = policy.stage_column("school")
 
     school_cols = [
-        col
-        for col in (COL_SCHOOL1, COL_SCHOOL2, COL_SCHOOL3, COL_SCHOOL4)
-        if col in pool.columns
+        col for col in (COL_SCHOOL1, COL_SCHOOL2, COL_SCHOOL3, COL_SCHOOL4) if col in pool.columns
     ]
     derived: dict[str, list[int]] = {
         group_key: [],
@@ -291,7 +288,10 @@ def _derive_pool_join_keys(
             )
         else:
             finance_raw_int = _num_to_int_safe(finance_value)
-            if finance_value not in (None, "", 0, "0") and finance_raw_int not in cfg.finance_variants:
+            if (
+                finance_value not in (None, "", 0, "0")
+                and finance_raw_int not in cfg.finance_variants
+            ):
                 _append_issue(
                     qa_issues,
                     reason="FINANCE_UNKNOWN",
@@ -381,7 +381,9 @@ def _raise_on_duplicate_mentor_ids(
         .fillna("")
         .to_dict(orient="records")
     )
-    raw_employee_col = "کد کارمندی پشتیبان (خام)" if "کد کارمندی پشتیبان (خام)" in trimmed.columns else None
+    raw_employee_col = (
+        "کد کارمندی پشتیبان (خام)" if "کد کارمندی پشتیبان (خام)" in trimmed.columns else None
+    )
     employee_col = raw_employee_col or "کد کارمندی پشتیبان"
     sample_columns = ["mentor_id", employee_col, *policy.join_keys]
     sample_rows = (

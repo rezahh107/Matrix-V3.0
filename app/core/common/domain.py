@@ -3,6 +3,7 @@ Domain models and logic for Eligibility Matrix → Allocation system.
 Python 3.10+, stdlib only, no I/O, no side-effects on import.
 Deterministic and fail-safe, adhering to Policy v1.0.3.
 """
+
 from __future__ import annotations
 
 import math
@@ -23,14 +24,15 @@ JoinKeyDict = dict[str, int]
 MentorDict = dict[str, Any]
 
 
-
 # ---------------------------------------------------------------------------
 # Enums
 # ---------------------------------------------------------------------------
 
+
 @final
 class MentorType(Enum):
     """Type of mentor based on postal code and school assignment."""
+
     NORMAL = "normal"
     SCHOOL = "school"
     DUAL = "dual"
@@ -39,6 +41,7 @@ class MentorType(Enum):
 @final
 class Status(IntEnum):
     """Student graduation status."""
+
     STUDENT = 1
     GRADUATE = 0
 
@@ -46,6 +49,7 @@ class Status(IntEnum):
 @final
 class Gender(IntEnum):
     """Gender codes."""
+
     MALE = 1
     FEMALE = 2
 
@@ -53,6 +57,7 @@ class Gender(IntEnum):
 @final
 class FinanceCode(IntEnum):
     """Valid finance codes."""
+
     NORMAL = 0
     FOUNDATION = 1
     HEKMAT = 3
@@ -211,6 +216,7 @@ def _compute_normal_or_dual_alias(postal_code: Any, mentor_id: Any, cfg: BuildCo
 # Configuration
 # ---------------------------------------------------------------------------
 
+
 @final
 @dataclass(frozen=True, slots=True)
 class BuildConfig:
@@ -227,6 +233,7 @@ class BuildConfig:
         alias_rule_school: Alias rule for SCHOOL mentors
         prefer_major_code: Whether StudentReport «کد رشته» overrides group name mapping
     """
+
     version: str = "1.0.3"
     postal_valid_range: tuple[int, int] = (1000, 9999)
     finance_variants: tuple[int, ...] = (0, 1, 3)
@@ -239,7 +246,10 @@ class BuildConfig:
 
     def __post_init__(self):
         """Validate configuration after initialization."""
-        if len(self.postal_valid_range) != 2 or self.postal_valid_range[0] > self.postal_valid_range[1]:
+        if (
+            len(self.postal_valid_range) != 2
+            or self.postal_valid_range[0] > self.postal_valid_range[1]
+        ):
             raise ValueError(f"Invalid postal range: {self.postal_valid_range}")
 
     def center_map_norm(self) -> dict[str, int]:
@@ -255,6 +265,7 @@ class BuildConfig:
 # ---------------------------------------------------------------------------
 # Domain functions
 # ---------------------------------------------------------------------------
+
 
 def norm_status(x: Any) -> int:
     """نرمال‌سازی وضعیت تحصیلی به کد ۰/۱.
@@ -307,9 +318,7 @@ def norm_gender(x: Any, strict: bool = False) -> Gender:
     if normalized_padded:
         if any(f" {token} " in normalized_padded for token in _GENDER_MALE_FA_NORMALIZED):
             return Gender.MALE
-        if any(
-            f" {token} " in normalized_padded for token in _GENDER_FEMALE_FA_NORMALIZED
-        ):
+        if any(f" {token} " in normalized_padded for token in _GENDER_FEMALE_FA_NORMALIZED):
             return Gender.FEMALE
 
     numeric = _num_to_int_safe(raw or normalized)
@@ -339,20 +348,20 @@ def center_from_manager(name: Any, *, cfg: BuildConfig) -> int:
 
     s = normalize_fa(name)
     cmap = cfg.center_map_norm()
-    wildcard = cmap.get('*')
+    wildcard = cmap.get("*")
 
     if s:
         if s in cmap:
             return cmap[s]
 
         for key, val in cmap.items():
-            if key != '*' and key in s:
+            if key != "*" and key in s:
                 return val
 
     if wildcard is not None:
         return wildcard
 
-    raise InvalidCenterMappingError(func='center_from_manager', value=name)
+    raise InvalidCenterMappingError(func="center_from_manager", value=name)
 
 
 def mentor_type(postal_code: Any, school_count: int | None, *, cfg: BuildConfig) -> MentorType:
@@ -391,7 +400,9 @@ def classify_mentor_mode(
     return mentor_type(postal_code, school_count, cfg=cfg)
 
 
-def compute_alias(row_type: MentorType, postal_code: Any, mentor_id: Any, *, cfg: BuildConfig) -> str:
+def compute_alias(
+    row_type: MentorType, postal_code: Any, mentor_id: Any, *, cfg: BuildConfig
+) -> str:
     """تولید مقدار ستون «جایگزین» براساس نوع ردیف.
 
     مثال::
@@ -457,6 +468,7 @@ def compute_mentor_type_str(row_type: MentorType) -> str:
 # Join Key
 # ---------------------------------------------------------------------------
 
+
 @final
 @dataclass(frozen=True, slots=True)
 class JoinKey:
@@ -465,6 +477,7 @@ class JoinKey:
 
     Fields: major, gender, status, center, finance, school_code
     """
+
     major: int
     gender: int
     status: int
@@ -501,7 +514,9 @@ class JoinKey:
         required = {COL_GROUP, COL_GENDER, COL_STATUS, COL_FINANCE}
         missing = [col for col in required if col not in row]
         if missing:
-            raise DataMissingError(func='JoinKey.from_student_row', column=','.join(missing), value=None)
+            raise DataMissingError(
+                func="JoinKey.from_student_row", column=",".join(missing), value=None
+            )
 
         major = _num_to_int_safe(row.get(COL_GROUP, 0))
         gender = norm_gender(row.get(COL_GENDER, 1))
@@ -517,7 +532,7 @@ class JoinKey:
 
         school_val = row.get(COL_SCHOOL, "")
         school_str = to_numlike_str(school_val)
-        school_code = _num_to_int_safe(school_str) if school_str and school_str != '0' else 0
+        school_code = _num_to_int_safe(school_str) if school_str and school_str != "0" else 0
 
         return JoinKey(
             major=major,
@@ -527,7 +542,6 @@ class JoinKey:
             finance=finance,
             school_code=school_code,
         )
-
 
     def as_dict(self) -> JoinKeyDict:
         """
@@ -550,10 +564,12 @@ class JoinKey:
 # Domain models
 # ---------------------------------------------------------------------------
 
+
 @final
 @dataclass(frozen=True, slots=True)
 class MentorIdentity:
     """Mentor identity: ID, name, and manager name."""
+
     mentor_id: str
     mentor_name: str
     manager_name: str
@@ -574,6 +590,7 @@ class Capacity:
         special_limit: Capacity limit for this mentor
         allocations_new: Number of new allocations made (default 0)
     """
+
     covered_now: int
     special_limit: int
     allocations_new: int = 0
@@ -581,11 +598,11 @@ class Capacity:
     def __post_init__(self):
         """Validate capacity values after initialization."""
         if self.special_limit < 0:
-             raise ValueError(f"special_limit must be non-negative, got {self.special_limit}")
+            raise ValueError(f"special_limit must be non-negative, got {self.special_limit}")
         if self.covered_now < 0:
-             raise ValueError(f"covered_now must be non-negative, got {self.covered_now}")
+            raise ValueError(f"covered_now must be non-negative, got {self.covered_now}")
         if self.allocations_new < 0:
-             raise ValueError(f"allocations_new must be non-negative, got {self.allocations_new}")
+            raise ValueError(f"allocations_new must be non-negative, got {self.allocations_new}")
 
     def __repr__(self) -> str:
         """Provide a clear string representation for debugging."""
@@ -607,6 +624,7 @@ class MatrixRow:
 
     Represents one mentor with their eligibility criteria and metadata.
     """
+
     alias: str
     mentor: MentorIdentity
     major: int
@@ -626,7 +644,9 @@ class MatrixRow:
 
     def __repr__(self) -> str:
         """Provide a clear string representation for debugging."""
-        return f"MatrixRow(alias='{self.alias}', mentor={self.mentor}, row_type={self.row_type.value})"
+        return (
+            f"MatrixRow(alias='{self.alias}', mentor={self.mentor}, row_type={self.row_type.value})"
+        )
 
 
 @final
@@ -637,12 +657,15 @@ class ImportToSabtRow:
 
     Contains postal code and mentor name for assignment.
     """
+
     postal_code: str
     mentor_name: str
 
     def __repr__(self) -> str:
         """Provide a clear string representation for debugging."""
-        return f"ImportToSabtRow(postal_code='{self.postal_code}', mentor_name='{self.mentor_name}')"
+        return (
+            f"ImportToSabtRow(postal_code='{self.postal_code}', mentor_name='{self.mentor_name}')"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -656,7 +679,7 @@ DecisionReason = Literal[
     "center_mismatch",
     "school_mismatch",
     "finance_mismatch",
-    "status_policy"
+    "status_policy",
 ]
 
 
@@ -667,6 +690,7 @@ class TraceDict(TypedDict, total=False):
     Required key: 'key' (dict with join keys)
     Optional keys: 'candidates' (int), 'reason' (str), 'top5' (list of mentor dicts)
     """
+
     key: JoinKeyDict  # Six join keys
     candidates: int
     reason: DecisionReason
@@ -678,15 +702,51 @@ class TraceDict(TypedDict, total=False):
 # ---------------------------------------------------------------------------
 
 __all__ = [
-    "COL_GROUP", "COL_GENDER", "COL_STATUS", "COL_CENTER", "COL_FINANCE", "COL_SCHOOL",
-    "COL_SCHOOL_NAME", "COL_SCHOOL_CODE_1", "COL_SCHOOL_CODE_2", "COL_SCHOOL_CODE_3", "COL_SCHOOL_CODE_4",
-    "COL_SCHOOL_NAME_1", "COL_SCHOOL_NAME_2", "COL_SCHOOL_NAME_3", "COL_SCHOOL_NAME_4",
-    "COL_FULL_SCHOOL_CODE", "COL_EDU_CODE",
-    "COL_ALIAS", "COL_MENTOR", "COL_MANAGER", "COL_MENTOR_ID", "COL_MENTOR_ROWID", "COL_MENTOR_TYPE",
-    "MentorType", "Status", "Gender", "FinanceCode",
-    "BuildConfig", "JoinKey", "MentorIdentity", "Capacity", "MatrixRow", "ImportToSabtRow",
-    "norm_status", "norm_gender", "center_from_manager", "mentor_type", "compute_alias", "compute_mentor_type_str",
-    "classify_mentor_mode", "school_code_norm", "finance_cross",
-    "DecisionReason", "TraceDict",
-    "StudentRow", "JoinKeyDict", "MentorDict",
+    "COL_GROUP",
+    "COL_GENDER",
+    "COL_STATUS",
+    "COL_CENTER",
+    "COL_FINANCE",
+    "COL_SCHOOL",
+    "COL_SCHOOL_NAME",
+    "COL_SCHOOL_CODE_1",
+    "COL_SCHOOL_CODE_2",
+    "COL_SCHOOL_CODE_3",
+    "COL_SCHOOL_CODE_4",
+    "COL_SCHOOL_NAME_1",
+    "COL_SCHOOL_NAME_2",
+    "COL_SCHOOL_NAME_3",
+    "COL_SCHOOL_NAME_4",
+    "COL_FULL_SCHOOL_CODE",
+    "COL_EDU_CODE",
+    "COL_ALIAS",
+    "COL_MENTOR",
+    "COL_MANAGER",
+    "COL_MENTOR_ID",
+    "COL_MENTOR_ROWID",
+    "COL_MENTOR_TYPE",
+    "MentorType",
+    "Status",
+    "Gender",
+    "FinanceCode",
+    "BuildConfig",
+    "JoinKey",
+    "MentorIdentity",
+    "Capacity",
+    "MatrixRow",
+    "ImportToSabtRow",
+    "norm_status",
+    "norm_gender",
+    "center_from_manager",
+    "mentor_type",
+    "compute_alias",
+    "compute_mentor_type_str",
+    "classify_mentor_mode",
+    "school_code_norm",
+    "finance_cross",
+    "DecisionReason",
+    "TraceDict",
+    "StudentRow",
+    "JoinKeyDict",
+    "MentorDict",
 ]

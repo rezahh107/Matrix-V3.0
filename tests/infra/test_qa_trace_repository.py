@@ -34,9 +34,7 @@ def test_trace_snapshot_round_trip(tmp_path) -> None:
     now = datetime.now(UTC)
     run_id = db.insert_run(_sample_run_record(now))
 
-    trace_df = pd.DataFrame(
-        {"student_id": [1, 2], "step": ["type", "group"], "candidates": [5, 3]}
-    )
+    trace_df = pd.DataFrame({"student_id": [1, 2], "step": ["type", "group"], "candidates": [5, 3]})
     summary_df = pd.DataFrame({"allocation_channel": ["SCHOOL"], "students_total": [2]})
     history_info_df = pd.DataFrame({"student_id": [1, 2], "history_status": [1, 0]})
     trace_df.attrs["summary_df"] = summary_df
@@ -52,16 +50,16 @@ def test_trace_snapshot_round_trip(tmp_path) -> None:
     restored, restored_summary, restored_history = db.fetch_trace_snapshot(run_id)
     assert restored is not None
     assert_frame_equal(restored.reset_index(drop=True), trace_df.reset_index(drop=True))
-    assert_frame_equal(
-        restored_summary.reset_index(drop=True), summary_df.reset_index(drop=True)
-    )
+    assert_frame_equal(restored_summary.reset_index(drop=True), summary_df.reset_index(drop=True))
     assert_frame_equal(
         restored_history.reset_index(drop=True), history_info_df.reset_index(drop=True)
     )
 
     with db.connect() as conn:
         version = conn.execute("SELECT schema_version FROM schema_meta WHERE id = 1").fetchone()[0]
-        count = conn.execute("SELECT COUNT(*) FROM trace_snapshots WHERE run_id = ?", (run_id,)).fetchone()[0]
+        count = conn.execute(
+            "SELECT COUNT(*) FROM trace_snapshots WHERE run_id = ?", (run_id,)
+        ).fetchone()[0]
 
     assert int(version) == _SCHEMA_VERSION
     assert count == 1
@@ -106,14 +104,22 @@ def test_qa_snapshot_round_trip(tmp_path) -> None:
 
     restored_summary, restored_details, restored_extras = db.fetch_qa_snapshot(run_id)
     assert restored_summary is not None and restored_details is not None
-    assert_frame_equal(restored_summary.reset_index(drop=True), qa_summary_df.reset_index(drop=True))
-    assert_frame_equal(restored_details.reset_index(drop=True), qa_details_df.reset_index(drop=True))
+    assert_frame_equal(
+        restored_summary.reset_index(drop=True), qa_summary_df.reset_index(drop=True)
+    )
+    assert_frame_equal(
+        restored_details.reset_index(drop=True), qa_details_df.reset_index(drop=True)
+    )
     assert "sample" in restored_extras
-    assert_frame_equal(restored_extras["sample"].reset_index(drop=True), qa_extras["sample"].reset_index(drop=True))
+    assert_frame_equal(
+        restored_extras["sample"].reset_index(drop=True), qa_extras["sample"].reset_index(drop=True)
+    )
 
     with db.connect() as conn:
         version = conn.execute("SELECT schema_version FROM schema_meta WHERE id = 1").fetchone()[0]
-        count = conn.execute("SELECT COUNT(*) FROM qa_snapshots WHERE run_id = ?", (run_id,)).fetchone()[0]
+        count = conn.execute(
+            "SELECT COUNT(*) FROM qa_snapshots WHERE run_id = ?", (run_id,)
+        ).fetchone()[0]
 
     assert int(version) == _SCHEMA_VERSION
     assert count == 1
@@ -134,7 +140,9 @@ def test_deserialize_error_is_handled(tmp_path, caplog) -> None:
 
     db.insert_trace_snapshot(run_id=run_id, trace_df=pd.DataFrame({"a": [1]}))
     with db.connect() as conn:
-        conn.execute("UPDATE trace_snapshots SET trace_json = 'invalid-json' WHERE run_id = ?", (run_id,))
+        conn.execute(
+            "UPDATE trace_snapshots SET trace_json = 'invalid-json' WHERE run_id = ?", (run_id,)
+        )
 
     caplog.set_level("ERROR")
     trace_df, summary_df, history_df = db.fetch_trace_snapshot(run_id)

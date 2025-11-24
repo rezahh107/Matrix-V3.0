@@ -359,9 +359,7 @@ def _replace_gender_tokens(series: pd.Series) -> pd.Series:
     return series
 
 
-def enrich_school_columns_en(
-    df: pd.DataFrame, *, empty_as_zero: bool = False
-) -> pd.DataFrame:
+def enrich_school_columns_en(df: pd.DataFrame, *, empty_as_zero: bool = False) -> pd.DataFrame:
     """تولید ستون‌های خام و نرمال مدرسه روی DataFrame انگلیسی.
 
     ستون‌های اضافه‌شده:
@@ -391,10 +389,16 @@ def enrich_school_columns_en(
         raw = school_code_column.astype("string").str.strip()
     else:
         raw = pd.Series(pd.NA, dtype="string", index=index)
-    raw = raw.map(lambda value: strip_school_code_separators(value) if isinstance(value, str) else value)
+    raw = raw.map(
+        lambda value: strip_school_code_separators(value) if isinstance(value, str) else value
+    )
     # حذف نسخه‌های قدیمی برای جلوگیری از ستون‌های تکراری
-    result = result.drop(columns=[col for col in result.columns if col == "school_code_raw"], errors="ignore")
-    result = result.drop(columns=[col for col in result.columns if col == "school_code"], errors="ignore")
+    result = result.drop(
+        columns=[col for col in result.columns if col == "school_code_raw"], errors="ignore"
+    )
+    result = result.drop(
+        columns=[col for col in result.columns if col == "school_code"], errors="ignore"
+    )
 
     result["school_code_raw"] = raw
     normalized = to_int64(raw)
@@ -428,6 +432,7 @@ class _AliasBundle:
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
 
 def _normalize_header(value: object) -> str:
     text = normalize_fa(value)
@@ -477,9 +482,7 @@ def _build_alias_bundle(source: Source) -> _AliasBundle:
     base.update(_policy_aliases(source))
 
     normalized_map: dict[str, str] = {}
-    report_map: dict[str, list[str]] = {
-        CANON_EN_TO_FA[key]: [] for key in CANON_EN_TO_FA
-    }
+    report_map: dict[str, list[str]] = {CANON_EN_TO_FA[key]: [] for key in CANON_EN_TO_FA}
 
     for alias, target in base.items():
         normalized = _normalize_header(alias)
@@ -633,6 +636,7 @@ def _status_to_int(value: object) -> object:
 # Public API
 # ---------------------------------------------------------------------------
 
+
 def resolve_aliases(df: pd.DataFrame, source: Source) -> pd.DataFrame:
     """هم‌نام‌سازی ستون‌های ورودی بر اساس سیاست و سینونیم‌ها."""
 
@@ -776,6 +780,7 @@ def canonicalize_headers(df: pd.DataFrame, header_mode: HeaderMode) -> pd.DataFr
 # Doctest-style examples (برای اسناد داخلی)
 # ---------------------------------------------------------------------------
 
+
 def _example_usage() -> None:  # pragma: no cover - documentation helper
     """نمونهٔ فشرده برای دفترچه توسعه‌دهندگان."""
 
@@ -790,4 +795,3 @@ def _example_usage() -> None:  # pragma: no cover - documentation helper
     resolved = resolve_aliases(data, "report")
     coerced = coerce_semantics(resolved, "report")
     _ = canonicalize_headers(coerced, header_mode="fa_en")
-

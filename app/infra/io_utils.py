@@ -212,9 +212,7 @@ def _stringify_text_sensitive_columns(df: pd.DataFrame) -> None:
 
         return _stringify_cell(value)
 
-    target_columns = [
-        column for column in df.columns if str(column) in TEXT_SENSITIVE_COLUMN_NAMES
-    ]
+    target_columns = [column for column in df.columns if str(column) in TEXT_SENSITIVE_COLUMN_NAMES]
     for column in target_columns:
         series = ensure_series(df[column])
         df[column] = pd.Series(series.map(_stringify_value), index=series.index, dtype="string")
@@ -244,9 +242,7 @@ def _prepare_dataframe_for_excel(df: pd.DataFrame) -> pd.DataFrame:
         fa_name = CANON_EN_TO_FA.get(key, key)
         for column_name in (fa_name, key):
             if column_name in converted.columns:
-                numeric = pd.to_numeric(
-                    ensure_series(converted[column_name]), errors="coerce"
-                )
+                numeric = pd.to_numeric(ensure_series(converted[column_name]), errors="coerce")
                 converted[column_name] = numeric.astype("Int64")
 
     return converted
@@ -274,7 +270,9 @@ def _apply_excel_formatting(
 
 
 @contextlib.contextmanager
-def _temporary_file_path(*, suffix: str = "", directory: Path | str | None = None) -> Iterator[Path]:
+def _temporary_file_path(
+    *, suffix: str = "", directory: Path | str | None = None
+) -> Iterator[Path]:
     """مدیریت مسیر فایل موقتی با پاک‌سازی خودکار پس از اتمام کار."""
 
     fd, name = tempfile.mkstemp(suffix=suffix, dir=directory)
@@ -463,4 +461,3 @@ def read_crosswalk_workbook(
         raise FileNotFoundError(f"فایل Crosswalk یافت نشد: {source}") from exc
     except Exception as exc:  # pragma: no cover - سناریوهای پیش‌بینی‌نشده
         raise ValueError(f"خطا در باز کردن Crosswalk: {exc}") from exc
-

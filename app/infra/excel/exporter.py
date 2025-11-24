@@ -86,7 +86,9 @@ def _format_xlsxwriter(
                 if pd.api.types.is_datetime64_any_dtype(dtype)
             }
             string_columns = {
-                idx for idx, dtype in enumerate(df.dtypes, start=0) if not pd.api.types.is_numeric_dtype(dtype)
+                idx
+                for idx, dtype in enumerate(df.dtypes, start=0)
+                if not pd.api.types.is_numeric_dtype(dtype)
             }
             for idx, column in enumerate(df.columns):
                 if column in datetime_columns:
@@ -207,7 +209,8 @@ def _sanitize_selection_reasons_frame(
 
     base_columns: tuple[str, ...] = tuple(columns)
     extra_columns: tuple[str, ...] = tuple(
-        column for column in (df_reasons.columns if df_reasons is not None else [])
+        column
+        for column in (df_reasons.columns if df_reasons is not None else [])
         if column not in base_columns
     )
     ordered_columns: tuple[str, ...] = base_columns + extra_columns
@@ -261,9 +264,7 @@ def _set_schema_hash_defined_name(writer: pd.ExcelWriter | None, schema_hash: st
         defined_names = workbook.defined_names
         if _SCHEMA_DEFINED_NAME in defined_names:
             del defined_names[_SCHEMA_DEFINED_NAME]
-        defined_names.add(
-            DefinedName(name=_SCHEMA_DEFINED_NAME, attr_text=f'"{schema_hash}"')
-        )
+        defined_names.add(DefinedName(name=_SCHEMA_DEFINED_NAME, attr_text=f'"{schema_hash}"'))
     elif engine == "xlsxwriter":
         workbook.define_name(_SCHEMA_DEFINED_NAME, f'="{schema_hash}"')
 

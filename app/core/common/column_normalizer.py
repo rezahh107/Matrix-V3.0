@@ -105,7 +105,10 @@ def _is_relevant_column(name: str) -> bool:
 
     normalized = normalize_fa(name)
     normalized_without_prefix = normalize_fa(normalized.lstrip("0123456789"))
-    if normalized in _IGNORED_COLUMNS_NORMALIZED or normalized_without_prefix in _IGNORED_COLUMNS_NORMALIZED:
+    if (
+        normalized in _IGNORED_COLUMNS_NORMALIZED
+        or normalized_without_prefix in _IGNORED_COLUMNS_NORMALIZED
+    ):
         return False
     return any(token in normalized for token in ("مدرسه", "school", "اموزش", "آموزش"))
 
@@ -138,9 +141,7 @@ def _normalize_for_rule(series: pd.Series, mode: str) -> tuple[pd.Series, pd.Ser
     return normalized, normalized
 
 
-def _set_column(
-    frame: pd.DataFrame, name: str, series: pd.Series, position: int | None
-) -> bool:
+def _set_column(frame: pd.DataFrame, name: str, series: pd.Series, position: int | None) -> bool:
     if name in frame.columns:
         frame[name] = series
         return False
@@ -202,7 +203,6 @@ def normalize_input_columns(
     if to_drop:
         result = result.drop(columns=list(to_drop))
 
-
     if report and unmatched:
         warnings.warn(
             f"{kind}: ستون‌های ناشناخته یافت شد: {', '.join(sorted(unmatched))}",
@@ -217,4 +217,3 @@ def normalize_input_columns(
     if collector is not None:
         collector(report_obj)
     return result, report_obj
-

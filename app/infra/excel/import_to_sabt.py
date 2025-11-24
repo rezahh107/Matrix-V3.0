@@ -207,7 +207,10 @@ def prepare_allocation_export_frame(
 
     def _capture_status(label: str, frame: pd.DataFrame) -> None:
         status_debug.append(
-            {"label": label, **debug_registration_distribution(frame, REGISTRATION_STATUS_CANDIDATES)}
+            {
+                "label": label,
+                **debug_registration_distribution(frame, REGISTRATION_STATUS_CANDIDATES),
+            }
         )
 
     _capture_status("students_raw", students_df)
@@ -529,8 +532,7 @@ def _safe_merge(
             merge_kwargs=kwargs,
         )
         raise ImportToSabtExportError(
-            "ImportToSabt export failed while joining "
-            f"{context} details: {exc}{duplicate_hint}"
+            "ImportToSabt export failed while joining " f"{context} details: {exc}{duplicate_hint}"
         ) from exc
 
 
@@ -591,7 +593,9 @@ def _format_merge_duplicate_hint(
                 note += f" | matching right frame '{right_label}': {', '.join(matching_right)}"
             notes.append(note)
     if "right" in sides:
-        right_samples, right_duplicate_set = _collect_duplicate_key_samples(right_keys, sample_limit)
+        right_samples, right_duplicate_set = _collect_duplicate_key_samples(
+            right_keys, sample_limit
+        )
         if right_samples:
             matching_left = _matching_duplicate_keys(left_keys, right_duplicate_set, sample_limit)
             note = f"right frame '{right_label}' duplicate keys: {', '.join(right_samples)}"
@@ -629,8 +633,14 @@ def _resolve_merge_join_config(kwargs: Mapping[str, Any]) -> _MergeJoinConfig:
 
     left_on = kwargs.get("left_on")
     right_on = kwargs.get("right_on")
-    left_columns = [left_on] if isinstance(left_on, str) else (list(left_on) if left_on is not None else None)
-    right_columns = [right_on] if isinstance(right_on, str) else (list(right_on) if right_on is not None else None)
+    left_columns = (
+        [left_on] if isinstance(left_on, str) else (list(left_on) if left_on is not None else None)
+    )
+    right_columns = (
+        [right_on]
+        if isinstance(right_on, str)
+        else (list(right_on) if right_on is not None else None)
+    )
     return _MergeJoinConfig(left_columns, right_columns, left_index, right_index)
 
 
@@ -669,7 +679,9 @@ def _build_merge_key_series(
     return data.apply(lambda row: " | ".join(row.astype(str)), axis=1)
 
 
-def _collect_duplicate_key_samples(series: pd.Series, sample_limit: int) -> tuple[list[str], set[str]]:
+def _collect_duplicate_key_samples(
+    series: pd.Series, sample_limit: int
+) -> tuple[list[str], set[str]]:
     """استخراج نمونه شناسه‌های تکراری از یک سری join.
 
     مثال:
@@ -791,7 +803,9 @@ def _resolve_map(map_spec: Any, cfg: Mapping[str, Any]) -> Mapping[Any, Any] | N
     return None
 
 
-def _coerce_type(series: pd.Series, type_name: str | None, precision: int | None = None) -> pd.Series:
+def _coerce_type(
+    series: pd.Series, type_name: str | None, precision: int | None = None
+) -> pd.Series:
     if type_name == "number":
         numeric = pd.to_numeric(series, errors="coerce")
         if precision is not None:
@@ -890,7 +904,9 @@ def _series_from_source(
                     if fallback_series is not None:
                         mask = series.astype("string") == "9000"
                         series = series.copy()
-                        fallback_values = ensure_series(fallback_series).reindex(df.index).fillna("")
+                        fallback_values = (
+                            ensure_series(fallback_series).reindex(df.index).fillna("")
+                        )
                         series.loc[mask] = fallback_values[mask]
                 return series
         return _empty_series()
@@ -1199,7 +1215,9 @@ def build_summary_frame(
     return pd.DataFrame(data, columns=columns)
 
 
-def build_errors_frame(logs_df: pd.DataFrame | None, exporter_cfg: Mapping[str, Any]) -> pd.DataFrame:
+def build_errors_frame(
+    logs_df: pd.DataFrame | None, exporter_cfg: Mapping[str, Any]
+) -> pd.DataFrame:
     sheet_cfg = exporter_cfg.get("sheets", {}).get("Errors")
     if not isinstance(sheet_cfg, Mapping):
         return pd.DataFrame()
@@ -1340,9 +1358,7 @@ def _verify_headers(
     _rewrite_sheet_headers(ws, expected_list)
 
 
-def build_header_signature(
-    headers: Sequence[str], exporter_cfg: Mapping[str, Any] | None
-) -> str:
+def build_header_signature(headers: Sequence[str], exporter_cfg: Mapping[str, Any] | None) -> str:
     """محاسبهٔ امضای هدر بر پایه نسخه و لیست ستون‌ها.
 
     مثال

@@ -59,9 +59,7 @@ def pick_counter_sheet_name(sheet_names: Sequence[str]) -> str | None:
     if not sheet_names:
         return None
 
-    normalized: dict[str, str] = {
-        str(name).strip().lower(): str(name) for name in sheet_names
-    }
+    normalized: dict[str, str] = {str(name).strip().lower(): str(name) for name in sheet_names}
     for candidate in _COUNTER_SHEET_CANDIDATES:
         key = candidate.lower()
         if key in normalized:
@@ -119,9 +117,7 @@ def assert_unique_student_ids(series: pd.Series) -> None:
         if len(samples) >= 3:
             break
     sample_text = "; ".join(samples)
-    raise ValueError(
-        "student_id تکراری در خروجی شمارنده یافت شد؛ نمونه‌ها: " + sample_text
-    )
+    raise ValueError("student_id تکراری در خروجی شمارنده یافت شد؛ نمونه‌ها: " + sample_text)
 
 
 def year_to_yy(academic_year: int) -> int:
@@ -247,13 +243,7 @@ def _normalized_counter_series(df: pd.DataFrame, column: str) -> pd.Series:
         '123456789'
     """
 
-    return (
-        ensure_series(df[column])
-        .astype("string")
-        .fillna("")
-        .str.strip()
-        .map(normalize_digits)
-    )
+    return ensure_series(df[column]).astype("string").fillna("").str.strip().map(normalize_digits)
 
 
 def detect_academic_year_from_counters(
@@ -287,11 +277,7 @@ def infer_year_strict(current_roster_df: pd.DataFrame | None) -> int | None:
 
     series = _normalized_counter_series(current_roster_df, column)
 
-    prefixes = {
-        value[:2]
-        for value in series
-        if value and re.fullmatch(r"\d{9}", value)
-    }
+    prefixes = {value[:2] for value in series if value and re.fullmatch(r"\d{9}", value)}
 
     if len(prefixes) != 1:
         return None
@@ -406,18 +392,12 @@ def assign_counters(
     if work["__gender__"].isna().any():
         raise ValueError("مقدار gender نامعتبر است")
 
-    order = sorted(
-        range(len(work)), key=lambda idx: (natural_key(work.iloc[idx]["__nat__"]), idx)
-    )
+    order = sorted(range(len(work)), key=lambda idx: (natural_key(work.iloc[idx]["__nat__"]), idx))
     result = pd.Series(index=students_df.index, dtype="string", name="student_id")
 
     prior_mapping, prior_conflicts = _prior_map(prior_roster_df)
-    male_max = find_max_sequence_by_prefix(
-        current_roster_df, yy_prefix + policy.male_mid3
-    )
-    female_max = find_max_sequence_by_prefix(
-        current_roster_df, yy_prefix + policy.female_mid3
-    )
+    male_max = find_max_sequence_by_prefix(current_roster_df, yy_prefix + policy.male_mid3)
+    female_max = find_max_sequence_by_prefix(current_roster_df, yy_prefix + policy.female_mid3)
     next_male = male_max + 1
     next_female = female_max + 1
 
@@ -481,6 +461,8 @@ def assign_counters(
     }
 
     return result
+
+
 def strip_hidden_chars(value: str) -> str:
     """حذف کاراکترهای صفرعرض و BOM از متن ورودی."""
 

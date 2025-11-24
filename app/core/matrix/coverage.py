@@ -144,9 +144,11 @@ def compute_group_coverage_debug(
             matrix_keys.groupby(list(join_keys), dropna=False)
             .agg(
                 matrix_row_count=(matrix_keys.columns[0], "size"),
-                matrix_mentor_count=("کد کارمندی پشتیبان", pd.Series.nunique)
-                if "کد کارمندی پشتیبان" in matrix_keys.columns
-                else (matrix_keys.columns[0], "size"),
+                matrix_mentor_count=(
+                    ("کد کارمندی پشتیبان", pd.Series.nunique)
+                    if "کد کارمندی پشتیبان" in matrix_keys.columns
+                    else (matrix_keys.columns[0], "size")
+                ),
             )
             .reset_index()
         )
@@ -158,19 +160,28 @@ def compute_group_coverage_debug(
         sort=True,
         suffixes=("_candidate", "_matrix"),
     )
-    for column in ("candidate_row_count", "candidate_mentor_count", "matrix_row_count", "matrix_mentor_count"):
+    for column in (
+        "candidate_row_count",
+        "candidate_mentor_count",
+        "matrix_row_count",
+        "matrix_mentor_count",
+    ):
         if column not in merged.columns:
             merged[column] = 0
     if "candidate_can_generate" in merged.columns:
-        merged["candidate_can_generate"] = merged["candidate_can_generate"].where(
-            pd.notna(merged["candidate_can_generate"]), False
-        ).astype(bool, copy=False)
+        merged["candidate_can_generate"] = (
+            merged["candidate_can_generate"]
+            .where(pd.notna(merged["candidate_can_generate"]), False)
+            .astype(bool, copy=False)
+        )
     else:
         merged["candidate_can_generate"] = False
     if "candidate_has_alias" in merged.columns:
-        merged["candidate_has_alias"] = merged["candidate_has_alias"].where(
-            pd.notna(merged["candidate_has_alias"]), False
-        ).astype(bool, copy=False)
+        merged["candidate_has_alias"] = (
+            merged["candidate_has_alias"]
+            .where(pd.notna(merged["candidate_has_alias"]), False)
+            .astype(bool, copy=False)
+        )
     else:
         merged["candidate_has_alias"] = False
     if "variant_set" in merged.columns:
@@ -179,13 +190,21 @@ def compute_group_coverage_debug(
         )
     else:
         merged["variant_set"] = pd.Series([tuple()] * len(merged))
-    merged[["candidate_row_count", "candidate_mentor_count", "matrix_row_count", "matrix_mentor_count"]] = merged[
+    merged[
         ["candidate_row_count", "candidate_mentor_count", "matrix_row_count", "matrix_mentor_count"]
-    ].fillna(0)
+    ] = merged[
+        ["candidate_row_count", "candidate_mentor_count", "matrix_row_count", "matrix_mentor_count"]
+    ].fillna(
+        0
+    )
 
-    merged[["candidate_row_count", "candidate_mentor_count", "matrix_row_count", "matrix_mentor_count"]] = merged[
+    merged[
         ["candidate_row_count", "candidate_mentor_count", "matrix_row_count", "matrix_mentor_count"]
-    ].astype(int)
+    ] = merged[
+        ["candidate_row_count", "candidate_mentor_count", "matrix_row_count", "matrix_mentor_count"]
+    ].astype(
+        int
+    )
 
     has_candidate = merged["candidate_row_count"] > 0
     can_generate = merged["candidate_can_generate"].astype(bool, copy=False)
@@ -206,9 +225,7 @@ def compute_group_coverage_debug(
 
     unknown_mask = merged["status"] == "unknown"
     if bool(unknown_mask.any()):
-        raise ValueError(
-            "Group status is ambiguous: no matrix rows and no candidate rows."
-        )
+        raise ValueError("Group status is ambiguous: no matrix rows and no candidate rows.")
 
     summary = {
         "total_groups": int(len(merged)),
@@ -272,7 +289,10 @@ def _denominator_mask(
             student_flags_raw.to_numpy(dtype=bool, na_value=False),
             index=coverage_df.index,
         )
-        if policy.denominator_mode == "mentors_students_intersection" or policy.require_student_presence:
+        if (
+            policy.denominator_mode == "mentors_students_intersection"
+            or policy.require_student_presence
+        ):
             mask &= student_flags
         elif policy.denominator_mode == "mentors_students_union":
             mask |= student_flags
@@ -310,17 +330,11 @@ def compute_coverage_metrics(
     student_groups = _student_group_keys(
         students_df if students_df is not None else pd.DataFrame(), join_keys
     )
-    denominator_mask = _denominator_mask(
-        coverage_df, policy=policy, student_groups=student_groups
-    )
+    denominator_mask = _denominator_mask(coverage_df, policy=policy, student_groups=student_groups)
     coverage_df = coverage_df.copy()
     coverage_df["in_coverage_denominator"] = denominator_mask
-    coverage_df["is_unseen_viable"] = denominator_mask & (
-        coverage_df["matrix_row_count"] <= 0
-    )
-    coverage_df["is_covered"] = denominator_mask & (
-        coverage_df["matrix_row_count"] > 0
-    )
+    coverage_df["is_unseen_viable"] = denominator_mask & (coverage_df["matrix_row_count"] <= 0)
+    coverage_df["is_covered"] = denominator_mask & (coverage_df["matrix_row_count"] > 0)
 
     total_groups = int(denominator_mask.sum())
     covered_groups = int(coverage_df["is_covered"].sum())

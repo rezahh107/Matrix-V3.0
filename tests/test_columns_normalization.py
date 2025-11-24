@@ -78,9 +78,10 @@ def test_resolve_and_coerce_produce_canonical_columns() -> None:
     assert str(inspactor_coerced[group_col].dtype) in {"Int64", "int64"}
     assert inspactor_coerced[mentor_col].dtype == "string"
     assert inspactor_coerced[postal_col].dtype == "string"
-    assert str(
-        inspactor_coerced[columns.CANON_EN_TO_FA["school_code_1"]].dtype
-    ) in {"Int64", "int64"}
+    assert str(inspactor_coerced[columns.CANON_EN_TO_FA["school_code_1"]].dtype) in {
+        "Int64",
+        "int64",
+    }
 
     assert str(school_coerced[school_col].dtype) in {"Int64", "int64"}
     assert school_coerced[columns.CANON_EN_TO_FA["school_name"]].dtype.name in {

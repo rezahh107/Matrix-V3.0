@@ -26,7 +26,9 @@ __all__ = ["LogPanel"]
 class LogPanel(QFrame):
     """ویجت ترکیبی برای نمایش و مدیریت لاگ."""
 
-    def __init__(self, translator: UiTranslator, theme: Theme, parent: QFrame | None = None) -> None:
+    def __init__(
+        self, translator: UiTranslator, theme: Theme, parent: QFrame | None = None
+    ) -> None:
         super().__init__(parent)
         self.setObjectName("logPanel")
         self._translator = translator

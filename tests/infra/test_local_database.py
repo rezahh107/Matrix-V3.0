@@ -84,9 +84,7 @@ def test_schema_created_idempotently(tmp_path) -> None:
     with sqlite3.connect(db_path) as conn:
         tables = {
             row[0]
-            for row in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            ).fetchall()
+            for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
         }
         columns = {
             row[0]: row[1]

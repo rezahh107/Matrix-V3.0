@@ -59,8 +59,7 @@ class RuleResult:
 class Rule(Protocol):
     """پروتکل عمومی اجرای Rule بدون I/O و DataFrame."""
 
-    def __call__(self, context: RuleContext) -> RuleResult:
-        ...
+    def __call__(self, context: RuleContext) -> RuleResult: ...
 
 
 def apply_rule(rule: Rule, context: RuleContext) -> RuleResult:
@@ -294,8 +293,7 @@ def default_stage_rule_map() -> Mapping[TraceStageLiteral, Rule]:
 class StagePhaseGuard(Protocol):
     """رابط عمومی نگهبان فاز برای شمارش قبل از اجرای Ruleهای تخصیص."""
 
-    def before_stage(self, stage: str, students: Sequence[object]) -> Mapping[str, Any] | None:
-        ...
+    def before_stage(self, stage: str, students: Sequence[object]) -> Mapping[str, Any] | None: ...
 
 
 class StudentMentorRule(Protocol):
@@ -305,8 +303,7 @@ class StudentMentorRule(Protocol):
         self,
         student: Mapping[str, Any],
         mentor: Mapping[str, Any] | None,
-    ) -> ReasonCode | None:
-        ...
+    ) -> ReasonCode | None: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -491,8 +488,7 @@ class CenterPriorityRule:
         if self._is_school_student(student):
             return None
         student_center = self._normalize_center_value(
-            student.get(self.center_column)
-            or student.get(self.center_column.replace(" ", "_"))
+            student.get(self.center_column) or student.get(self.center_column.replace(" ", "_"))
         )
         if student_center is None:
             return ReasonCode.INVALID_CENTER_VALUE
@@ -517,9 +513,7 @@ class CenterPriorityRule:
         except Exception:
             return False
 
-    def _extract_mentor_centers(
-        self, mentor: Mapping[str, Any] | None
-    ) -> tuple[int, ...]:
+    def _extract_mentor_centers(self, mentor: Mapping[str, Any] | None) -> tuple[int, ...]:
         if mentor is None:
             return tuple()
         centers: list[int] = []

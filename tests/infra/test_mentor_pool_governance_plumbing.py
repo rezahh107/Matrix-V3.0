@@ -36,7 +36,9 @@ def test_resolve_overrides_merges_ui_and_cli(monkeypatch):
 
 
 def test_apply_overrides_in_run_uses_policy_defaults(tmp_path, monkeypatch):
-    args = argparse.Namespace(mentor_overrides=None, _ui_overrides={"mentor_pool_overrides": {"9": False}})
+    args = argparse.Namespace(
+        mentor_overrides=None, _ui_overrides={"mentor_pool_overrides": {"9": False}}
+    )
     pool = pd.DataFrame({"mentor_id": ["9", "10"], "mentor_status": ["ACTIVE", "ACTIVE"]})
     policy = get_policy()
     result = cli._apply_mentor_pool_overrides(pool, policy, args)
@@ -67,7 +69,8 @@ def test_apply_manager_overrides_filters_rows_before_matrix_build():
 
 def test_resolve_manager_overrides_merges_sources():
     args = argparse.Namespace(
-        manager_overrides=json.dumps({"X": False}), _ui_overrides={"mentor_pool_manager_overrides": {"Y": True}}
+        manager_overrides=json.dumps({"X": False}),
+        _ui_overrides={"mentor_pool_manager_overrides": {"Y": True}},
     )
     merged = cli._resolve_manager_overrides(args)
     assert merged == {"Y": True, "X": False}

@@ -52,7 +52,10 @@ def test_duplicate_report_flags_cross_mentor_collisions() -> None:
     assert len(report) == 2
     assert report[MENTOR_COLUMN].tolist() == ["EMP-1", "EMP-2"]
     assert report["duplicate_group_size"].dropna().unique().tolist() == [2]
-    assert all(tuple(row[join_key] for join_key in join_keys) == tuple(shared_keys) for _, row in report.iterrows())
+    assert all(
+        tuple(row[join_key] for join_key in join_keys) == tuple(shared_keys)
+        for _, row in report.iterrows()
+    )
 
 
 def test_duplicate_report_handles_multiple_duplicate_groups() -> None:

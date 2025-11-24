@@ -184,10 +184,7 @@ def _show_gui_crash_dialog(log_path: Path) -> None:
     box.setIcon(QMessageBox.Icon.Critical)
     box.setWindowTitle("خطای برنامه")
     box.setText("یک خطای غیرمنتظره رخ داد و برنامه متوقف می‌شود.")
-    box.setInformativeText(
-        "جزئیات کامل در فایل لاگ ذخیره شده است.\n"
-        f"مسیر فایل: {log_path}"
-    )
+    box.setInformativeText("جزئیات کامل در فایل لاگ ذخیره شده است.\n" f"مسیر فایل: {log_path}")
     box.setStandardButtons(QMessageBox.StandardButton.Ok)
     box.exec()
     QTimer.singleShot(0, app.quit)
@@ -256,19 +253,19 @@ def setup_environment() -> None:
         os.environ["QT_ENABLE_HIGHDPI_SCALING"] = "1"
         os.environ["QT_SCALE_FACTOR_ROUNDING_POLICY"] = "PassThrough"
         os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "1"
-        
+
         # اضافه کردن مسیرهای مورد نیاز به sys.path
         current_dir = Path(__file__).resolve().parent
         root_dir = current_dir.parent
-        
+
         paths_to_add = [str(root_dir), str(current_dir)]
         for path in paths_to_add:
             if path not in sys.path:
                 sys.path.insert(0, path)
                 logger.info(f"مسیر اضافه شد: {path}")
-        
+
         logger.info("پیکربندی محیط با موفقیت انجام شد")
-        
+
     except Exception as e:
         logger.error(f"خطا در پیکربندی محیط: {e}")
         # ادامه اجرا با تنظیمات پیش‌فرض
@@ -280,26 +277,26 @@ class SingleInstanceGuard:
     کلاس مدیریت نمونه یکتا (Singleton) با استفاده از QSharedMemory
     جلوگیری از اجرای چند نمونه همزمان برنامه
     """
-    
+
     def __init__(self, key: str = "AllocationApp_SingleInstance_v1") -> None:
         """
         مقداردهی اولیه کلاس
-        
+
         Args:
             key: کلید منحصر به فرد برای شناسایی نمونه برنامه
         """
         # اضافه کردن شناسه کاربر برای جلوگیری از تداخل
         user_specific_key = f"{key}_{getpass.getuser()}"
-        
+
         self.key = user_specific_key
         self.shared_memory = QSharedMemory(user_specific_key)
         self._is_attached = False
         atexit.register(self.cleanup)
-        
+
     def is_already_running(self) -> bool:
         """
         بررسی اجرای قبلی برنامه با timeout
-        
+
         Returns:
             bool: True اگر برنامه قبلاً در حال اجراست
         """
@@ -309,22 +306,22 @@ class SingleInstanceGuard:
                 self._is_attached = True
                 logger.warning("نمونه دیگری از برنامه در حال اجراست")
                 return True
-                
+
             # تلاش برای ایجاد shared memory جدید
             if self.shared_memory.create(1):
                 self._is_attached = True
                 logger.info("Shared memory ایجاد شد - اولین نمونه برنامه")
                 return False
-                
+
             # خطا در ایجاد - احتمالاً نمونه دیگری در حال اجراست
             error = self.shared_memory.error()
             logger.error(f"خطا در ایجاد shared memory: {error}")
             return True
-            
+
         except Exception as e:
             logger.error(f"خطا در بررسی singleton: {e}")
             return True
-    
+
     def cleanup(self) -> None:
         """آزادسازی منابع با مدیریت خطا"""
         try:
@@ -333,11 +330,11 @@ class SingleInstanceGuard:
                 logger.info("Shared memory آزاد شد")
         except Exception as e:
             logger.error(f"خطا در آزادسازی shared memory: {e}")
-    
+
     def __enter__(self):
         """پشتیبانی از context manager"""
         return self
-    
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         """تمیزکاری خودکار هنگام خروج از context"""
         self.cleanup()
@@ -348,7 +345,7 @@ def show_already_running_message() -> None:
     app = QApplication.instance()
     if app is None:
         app = QApplication(sys.argv)
-    
+
     msg_box = QMessageBox()
     msg_box.setIcon(QMessageBox.Icon.Warning)
     msg_box.setWindowTitle("برنامه در حال اجرا")
@@ -362,9 +359,10 @@ def show_already_running_message() -> None:
     )
     msg_box.setStandardButtons(QMessageBox.StandardButton.Ok)
     msg_box.setDefaultButton(QMessageBox.StandardButton.Ok)
-    
+
     # تنظیمات ظاهری
-    msg_box.setStyleSheet("""
+    msg_box.setStyleSheet(
+        """
         QMessageBox {
             background-color: #f8f9fa;
             font-family: Segoe UI;
@@ -377,15 +375,16 @@ def show_already_running_message() -> None:
             border-radius: 4px;
             min-width: 80px;
         }
-    """)
-    
+    """
+    )
+
     msg_box.exec()
 
 
 def setup_application() -> QApplication:
     """
     راه‌اندازی QApplication با تنظیمات بهینه و مدیریت خطا
-    
+
     Returns:
         QApplication: نمونه برنامه
     """
@@ -396,19 +395,19 @@ def setup_application() -> QApplication:
 
         # فعال‌سازی High DPI با مدیریت deprecation در نسخه‌های جدید Qt
         _configure_high_dpi_attributes(app, qVersion())
-        
+
         # تنظیمات برنامه
         app.setApplicationName("AllocationApp")
         app.setOrganizationName("YourOrg")
         app.setApplicationVersion(__version__)
         app.setQuitOnLastWindowClosed(True)
-        
+
         font = apply_default_font(app, point_size=8, family_override="Tahoma")
         logger.info("فونت فعال برنامه: %s", font.family())
 
         logger.info("QApplication با موفقیت راه‌اندازی شد")
         return app
-        
+
     except Exception as e:
         logger.error(f"خطا در راه‌اندازی QApplication: {e}")
         raise
@@ -417,7 +416,7 @@ def setup_application() -> QApplication:
 def load_main_window():
     """
     بارگذاری ماژول پنجره اصلی با مدیریت خطای دقیق
-    
+
     Returns:
         MainWindow: کلاس پنجره اصلی
     """
@@ -462,7 +461,7 @@ def show_critical_error(
 ) -> None:
     """
     نمایش خطای بحرانی با جزئیات
-    
+
     Args:
         message: پیام خطا برای کاربر
         technical_details: جزئیات فنی برای توسعه‌دهنده
@@ -471,7 +470,7 @@ def show_critical_error(
     app = QApplication.instance()
     if app is None:
         app = QApplication(sys.argv)
-    
+
     error_msg = QMessageBox()
     error_msg.setIcon(QMessageBox.Icon.Critical)
     error_msg.setWindowTitle("خطای بحرانی")
@@ -481,10 +480,10 @@ def show_critical_error(
     if log_path:
         info_text += f"\n\n📄 مسیر گزارش خطا:\n{log_path}"
     error_msg.setInformativeText(info_text)
-    
+
     if technical_details:
         error_msg.setDetailedText(technical_details)
-    
+
     error_msg.setStandardButtons(QMessageBox.StandardButton.Ok)
     error_msg.exec()
 
@@ -492,7 +491,7 @@ def show_critical_error(
 def main() -> int:
     """
     تابع اصلی اجرای برنامه با مدیریت خطای جامع
-    
+
     Returns:
         int: کد خروج (0 = موفق، 1 = خطا)
     """
@@ -502,39 +501,39 @@ def main() -> int:
         _RESTORE_GUI_EXCEPTION_HOOK = _install_gui_exception_guard()
     guard = None
     app = None
-    
+
     try:
         # لاگ اطلاعات سیستم
         logger.info(f"شروع راه‌اندازی برنامه - نسخه {__version__}")
         logger.info(f"Python: {sys.version}")
         logger.info(f"Platform: {sys.platform}")
-        
+
         # پیکربندی محیط
         setup_environment()
-        
+
         # بررسی Singleton
         guard = SingleInstanceGuard()
         if guard.is_already_running():
             logger.warning("تلاش برای اجرای نمونه دوم برنامه")
             show_already_running_message()
             return 1
-        
+
         # راه‌اندازی برنامه اصلی
         app = setup_application()
-        
+
         # بارگذاری و ایجاد پنجره اصلی
         MainWindowClass = load_main_window()  # noqa: N806 - نام کلاس Qt
         window = MainWindowClass()
         window.show()
-        
+
         logger.info("برنامه با موفقیت راه‌اندازی شد و پنجره اصلی نمایش داده شد")
-        
+
         # اجرای حلقه رویداد
         exit_code = app.exec()
         logger.info(f"برنامه با کد خروج {exit_code} بسته شد")
-        
+
         return exit_code
-        
+
     except ImportError as e:
         # خطاهای مربوط به import ماژول‌ها
         error_msg = str(e)

@@ -115,11 +115,7 @@ def build_trace_plan(
 
     plan: list[TraceStagePlan] = []
     for definition in policy.trace_stages:
-        column = (
-            capacity_column
-            if definition.stage == "capacity_gate"
-            else definition.column
-        )
+        column = capacity_column if definition.stage == "capacity_gate" else definition.column
         plan.append(TraceStagePlan(stage=definition.stage, column=column))
     return plan
 
@@ -394,7 +390,9 @@ def build_allocation_trace(
             stage_extras.setdefault("join_value_norm", school_extras.get("school_code_norm"))
             if mentor_join_value is not None:
                 mentor_raw: object | None = mentor_join_value
-                if isinstance(mentor_join_value, Number) and not isinstance(mentor_join_value, bool):
+                if isinstance(mentor_join_value, Number) and not isinstance(
+                    mentor_join_value, bool
+                ):
                     try:
                         mentor_raw = (
                             None if pd.isna(mentor_join_value) else int(mentor_join_value)  # type: ignore[arg-type]
@@ -414,7 +412,9 @@ def build_allocation_trace(
             stage_extras["join_value_norm"] = _coerce_optional_int(value)
             if mentor_join_value is not None:
                 mentor_raw: object | None = mentor_join_value
-                if isinstance(mentor_join_value, Number) and not isinstance(mentor_join_value, bool):
+                if isinstance(mentor_join_value, Number) and not isinstance(
+                    mentor_join_value, bool
+                ):
                     try:
                         mentor_raw = (
                             None if pd.isna(mentor_join_value) else int(mentor_join_value)  # type: ignore[arg-type]
@@ -616,9 +616,7 @@ def find_allocation_policy_violations(
         if key in summary_slice.columns:
             summary_slice[key] = pd.to_numeric(summary_slice[key], errors="coerce")
 
-    capacity_by_keys = (
-        pool_slice.groupby(list(policy.join_keys))[capacity_col].max().reset_index()
-    )
+    capacity_by_keys = pool_slice.groupby(list(policy.join_keys))[capacity_col].max().reset_index()
     merged = summary_slice.merge(
         capacity_by_keys,
         how="left",

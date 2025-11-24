@@ -50,12 +50,8 @@ def test_dedupe_history_status_labels() -> None:
     new_rows = new_candidates_df.set_index("student_id")
     assert new_rows.loc[2, "history_status"] == HistoryStatus.NO_HISTORY_MATCH.value
     assert new_rows.loc[2, "dedupe_reason"] == "no_history_match"
-    assert (
-        new_rows.loc[3, "history_status"]
-        == HistoryStatus.MISSING_OR_INVALID_NATIONAL_ID.value
-    )
+    assert new_rows.loc[3, "history_status"] == HistoryStatus.MISSING_OR_INVALID_NATIONAL_ID.value
     assert new_rows.loc[3, "dedupe_reason"] == "missing_or_invalid_national_code"
-
 
 
 def test_dedupe_idempotent_with_history_status() -> None:

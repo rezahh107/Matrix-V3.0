@@ -35,9 +35,12 @@ def test_archive_snapshot_roundtrip(tmp_path: Path) -> None:
     assert row is not None
     assert restored is not None
     assert json.loads(row["columns_json"]) == ["a", "b"]
-    assert repo._hash_payload(  # type: ignore[attr-defined]
-        {"columns": ["a", "b"], "rows": restored.to_dict(orient="records")}
-    ) == row["row_hash"]
+    assert (
+        repo._hash_payload(  # type: ignore[attr-defined]
+            {"columns": ["a", "b"], "rows": restored.to_dict(orient="records")}
+        )
+        == row["row_hash"]
+    )
     # column order should be normalized
     assert list(restored.columns) == ["a", "b"]
     assert list(restored.to_dict(orient="records")) == [
@@ -130,4 +133,6 @@ def test_migration_from_v6_to_v7(tmp_path: Path) -> None:
         assert "row_limit" in columns
         assert "is_truncated" in columns
         # existing tables still operable
-        conn.execute("INSERT INTO exporter_snapshots (exporter_name, created_at, row_count, row_hash, columns_json, row_limit, is_truncated) VALUES ('x', '2020-01-01T00:00:00Z', 0, 'h', '[]', -1, 0)")
+        conn.execute(
+            "INSERT INTO exporter_snapshots (exporter_name, created_at, row_count, row_hash, columns_json, row_limit, is_truncated) VALUES ('x', '2020-01-01T00:00:00Z', 0, 'h', '[]', -1, 0)"
+        )

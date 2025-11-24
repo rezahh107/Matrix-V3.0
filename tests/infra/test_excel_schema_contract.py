@@ -95,5 +95,8 @@ def test_schema_hash_roundtrip_defined_name() -> None:
     buffer.seek(0)
     workbook = openpyxl.load_workbook(buffer, data_only=True)
     defined_names = _defined_name_map(workbook)
-    assert defined_names.get("__SELECTION_REASON_SCHEMA_HASH__") == f'"{policy.emission.selection_reasons.schema_hash}"'
+    assert (
+        defined_names.get("__SELECTION_REASON_SCHEMA_HASH__")
+        == f'"{policy.emission.selection_reasons.schema_hash}"'
+    )
     assert sheet_name in workbook.sheetnames

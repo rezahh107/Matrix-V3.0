@@ -90,7 +90,12 @@ def _build_fixture_base() -> tuple[
     remaining_col = cfg.remaining_capacity_column or "remaining_capacity"
     school_code_col = cfg.school_code_column or COL_SCHOOL
 
-    return base_df, code_to_name_school, cfg, (cap_current_col, cap_special_col, remaining_col, school_code_col)
+    return (
+        base_df,
+        code_to_name_school,
+        cfg,
+        (cap_current_col, cap_special_col, remaining_col, school_code_col),
+    )
 
 
 def _canonicalize(

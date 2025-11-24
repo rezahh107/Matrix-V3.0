@@ -54,7 +54,12 @@ _EXPORTER_CFG = {
                     ("تلفن ثابت", {"source": "df", "field": "student_landline", "type": "text"}),
                     (
                         "کد رهگیری حکمت",
-                        {"source": "df", "field": "hekmat_tracking", "normalize": "digits_16", "type": "text"},
+                        {
+                            "source": "df",
+                            "field": "hekmat_tracking",
+                            "normalize": "digits_16",
+                            "type": "text",
+                        },
                     ),
                 ]
             ),

@@ -16,7 +16,9 @@ def test_sqlite_reference_repository_roundtrip(tmp_path: Path):
         join_keys=("کدرشته",),
     )
 
-    df = pd.DataFrame({"کد مدرسه": [101, "102", None], "کدرشته": [1, 1, 2], "title": ["a", "b", "c"]})
+    df = pd.DataFrame(
+        {"کد مدرسه": [101, "102", None], "کدرشته": [1, 1, 2], "title": ["a", "b", "c"]}
+    )
     repo.upsert_frame(df, source="unit-test")
 
     loaded = repo.load_frame()

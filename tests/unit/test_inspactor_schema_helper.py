@@ -90,9 +90,11 @@ def test_partial_derived_missing_are_defaulted() -> None:
 
 def test_mixed_derived_preserve_existing_values() -> None:
     policy = load_policy()
-    raw = _valid_inspactor_frame().assign(
-        **{COL_SCHOOL_COUNT: [3], CAPACITY_CURRENT_COL: [7]}
-    ).drop(columns=[COL_POSTAL])
+    raw = (
+        _valid_inspactor_frame()
+        .assign(**{COL_SCHOOL_COUNT: [3], CAPACITY_CURRENT_COL: [7]})
+        .drop(columns=[COL_POSTAL])
+    )
 
     ensured = assert_inspactor_schema(raw, policy)
 
@@ -116,9 +118,7 @@ def test_missing_required_non_derived_columns_fail() -> None:
 
 def test_missing_required_columns_report_diagnostics() -> None:
     policy = load_policy()
-    broken = _valid_inspactor_frame().drop(
-        columns=[COL_MENTOR_NAME, COL_MANAGER_NAME, COL_GROUP]
-    )
+    broken = _valid_inspactor_frame().drop(columns=[COL_MENTOR_NAME, COL_MANAGER_NAME, COL_GROUP])
 
     with pytest.raises(KeyError) as excinfo:
         assert_inspactor_schema(broken, policy)
@@ -260,5 +260,3 @@ def test_ensure_required_columns_with_aliases() -> None:
     ensured = ensure_required_columns(aliased, required, "inspactor")
 
     assert required.issubset(set(ensured.columns))
-
-

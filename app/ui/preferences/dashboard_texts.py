@@ -40,18 +40,9 @@ class DashboardTextBundle:
 
 _DEFAULT_DATA = {
     "cards": {
-        "files": {
-            "title": "فایل‌های کلیدی",
-            "description": "آخرین مسیرهای ذخیره‌شده"
-        },
-        "checklist": {
-            "title": "چک‌لیست",
-            "description": "مرور سریع گام‌ها"
-        },
-        "actions": {
-            "title": "میانبرها",
-            "description": "دسترسی به سناریوها"
-        },
+        "files": {"title": "فایل‌های کلیدی", "description": "آخرین مسیرهای ذخیره‌شده"},
+        "checklist": {"title": "چک‌لیست", "description": "مرور سریع گام‌ها"},
+        "actions": {"title": "میانبرها", "description": "دسترسی به سناریوها"},
     },
     "checklist": [
         {"id": "inputs", "text": "ورودی‌ها آماده هستند"},
@@ -93,14 +84,23 @@ def load_dashboard_texts(translator: UiTranslator) -> DashboardTextBundle:
     checklist_card = cards.get("checklist", {})
     actions_card = cards.get("actions", {})
     default_items = [
-        {"id": "inputs", "text": translator.text("dashboard.checklist.item.inputs", "ورودی‌ها آماده هستند")},
-        {"id": "policy", "text": translator.text("dashboard.checklist.item.policy", "سیاست صحیح انتخاب شده")},
+        {
+            "id": "inputs",
+            "text": translator.text("dashboard.checklist.item.inputs", "ورودی‌ها آماده هستند"),
+        },
+        {
+            "id": "policy",
+            "text": translator.text("dashboard.checklist.item.policy", "سیاست صحیح انتخاب شده"),
+        },
     ]
     raw_items = payload.get("checklist", default_items)
     return DashboardTextBundle(
-        files_title=str(files_card.get("title") or translator.text("dashboard.files.title", "فایل‌های کلیدی")),
+        files_title=str(
+            files_card.get("title") or translator.text("dashboard.files.title", "فایل‌های کلیدی")
+        ),
         files_description=str(
-            files_card.get("description") or translator.text("dashboard.files.description", "آخرین مسیرها")
+            files_card.get("description")
+            or translator.text("dashboard.files.description", "آخرین مسیرها")
         ),
         checklist_title=str(
             checklist_card.get("title") or translator.text("dashboard.checklist.title", "چک‌لیست")
@@ -109,9 +109,12 @@ def load_dashboard_texts(translator: UiTranslator) -> DashboardTextBundle:
             checklist_card.get("description")
             or translator.text("dashboard.checklist.description", "مرور سریع گام‌ها")
         ),
-        actions_title=str(actions_card.get("title") or translator.text("dashboard.actions.title", "میانبرها")),
+        actions_title=str(
+            actions_card.get("title") or translator.text("dashboard.actions.title", "میانبرها")
+        ),
         actions_description=str(
-            actions_card.get("description") or translator.text("dashboard.actions.description", "دسترسی سریع")
+            actions_card.get("description")
+            or translator.text("dashboard.actions.description", "دسترسی سریع")
         ),
         checklist_items=_normalize_items(raw_items),
     )

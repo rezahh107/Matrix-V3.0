@@ -79,13 +79,13 @@ def build_mentor_entries_from_dataframe(
         normalized = canonicalize_headers(resolved, header_mode="en")
     else:
         normalized = pd.DataFrame()
-    overrides = {str(k).strip(): bool(v) for k, v in (existing_overrides or {}).items() if str(k).strip()}
+    overrides = {
+        str(k).strip(): bool(v) for k, v in (existing_overrides or {}).items() if str(k).strip()
+    }
     entries: list[MentorPoolEntry] = []
 
     for record in normalized.to_dict(orient="records"):
-        mentor_id = _string_value(
-            _first_present(record, ("mentor_id", "alias", "mentorid"))
-        )
+        mentor_id = _string_value(_first_present(record, ("mentor_id", "alias", "mentorid")))
         if not mentor_id:
             continue
 
@@ -109,9 +109,7 @@ def build_mentor_entries_from_dataframe(
 
         center_name_value = _first_present(
             record,
-            (
-                "center_name",
-            ),
+            ("center_name",),
         )
         center_value: str | int | None
         if _string_value(center_name_value):
@@ -131,9 +129,7 @@ def build_mentor_entries_from_dataframe(
 
         school_name_value = _first_present(
             record,
-            (
-                "school_name",
-            ),
+            ("school_name",),
         )
         school_value: str | None
         if _string_value(school_name_value):
@@ -182,4 +178,3 @@ def build_mentor_entries_from_dataframe(
         )
 
     return entries
-

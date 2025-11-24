@@ -18,7 +18,9 @@ class HistoryMetricsModel(QAbstractTableModel):
         دیتافریم خروجی :func:`compute_history_metrics`.
     """
 
-    def __init__(self, metrics_df: pd.DataFrame | None = None, parent: QWidget | None = None) -> None:
+    def __init__(
+        self, metrics_df: pd.DataFrame | None = None, parent: QWidget | None = None
+    ) -> None:
         super().__init__(parent)
         self._metrics_df = self._normalize(metrics_df)
 
@@ -132,4 +134,3 @@ class HistoryMetricsDialog(QDialog):
 
     def update_metrics(self, metrics_df: pd.DataFrame | None) -> None:
         self._panel.set_metrics(metrics_df)
-

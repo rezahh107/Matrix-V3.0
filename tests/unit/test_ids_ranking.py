@@ -306,9 +306,7 @@ def test_build_mentor_state_prefers_explicit_capacity_column(
     )
     canonical_pool = canonicalize_headers(pool, header_mode="en")
 
-    state = build_mentor_state(
-        canonical_pool, capacity_column="capacity_current", policy=_policy
-    )
+    state = build_mentor_state(canonical_pool, capacity_column="capacity_current", policy=_policy)
 
     assert state["EMP-1"]["initial"] == 7
     assert state["EMP-1"]["remaining"] == 7

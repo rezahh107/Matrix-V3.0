@@ -48,7 +48,10 @@ def test_registration_status_shared_between_sheet2_and_allocations_sabt() -> Non
             "Sheet2": {
                 "columns": OrderedDict(
                     [
-                        ("شناسه دانش آموز", {"source": "df", "field": "student_id", "type": "text"}),
+                        (
+                            "شناسه دانش آموز",
+                            {"source": "df", "field": "student_id", "type": "text"},
+                        ),
                         (
                             "وضعیت ثبت نام",
                             {

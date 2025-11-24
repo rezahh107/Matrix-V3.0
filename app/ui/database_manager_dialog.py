@@ -20,6 +20,7 @@ try:  # pragma: no cover - وابستگی Qt ممکن است در CI غایب ب
         QVBoxLayout,
         QWidget,
     )
+
     _QT_AVAILABLE = True
 except Exception as exc:  # pragma: no cover - fallback
     Qt = None  # type: ignore
@@ -131,9 +132,7 @@ class DatabaseManagerDialog(QDialog):
         }.get(summary.status.value, "")
         self.setWindowTitle(f"مدیریت پایگاه داده {status_prefix}")
 
-    def _populate_counts_table(
-        self, counts: dict[str, int], table_diags: Iterable[object]
-    ) -> None:
+    def _populate_counts_table(self, counts: dict[str, int], table_diags: Iterable[object]) -> None:
         rows: list[tuple[str, str, str]] = []
         for diag in table_diags:
             missing = ", ".join(diag.missing_required_columns)

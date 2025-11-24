@@ -99,9 +99,7 @@ def test_compute_coverage_metrics_excludes_blocked_candidates() -> None:
     assert metrics.unseen_viable_groups == 1
     assert metrics.invalid_group_token_count == 2
     assert metrics.blocked_groups == 1  # recorded for debug even if excluded
-    assert (
-        coverage_df.loc[coverage_df["is_unseen_viable"], "کدرشته"].iat[0] == 103
-    )
+    assert coverage_df.loc[coverage_df["is_unseen_viable"], "کدرشته"].iat[0] == 103
 
 
 def test_compute_coverage_metrics_intersects_with_students_when_requested() -> None:
@@ -252,7 +250,10 @@ def test_coverage_metrics_regression_many_invalid_tokens_all_viable_groups_cover
     base_df = pd.DataFrame(valid_rows + [blocked_row])
 
     matrix_df = pd.DataFrame(
-        [dict(zip(JOIN_KEYS, group_vals), row_id=f"R{i}") for i, group_vals in enumerate(valid_groups, start=1)]
+        [
+            dict(zip(JOIN_KEYS, group_vals), row_id=f"R{i}")
+            for i, group_vals in enumerate(valid_groups, start=1)
+        ]
     )
 
     policy_cfg = CoveragePolicyConfig(

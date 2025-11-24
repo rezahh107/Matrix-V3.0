@@ -108,4 +108,3 @@ class SQLiteReferenceRepository(ReferenceRepository):
             source=source,
             row_count=row_count,
         )
-

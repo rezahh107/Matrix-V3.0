@@ -340,6 +340,7 @@ def _log_history_metrics(
         )
     return history_metrics_df
 
+
 def _load_forms_repository(args: argparse.Namespace, db: LocalDatabase) -> FormsRepository:
     """ساخت FormsRepository با توجه به حالت online/offline."""
 
@@ -394,9 +395,7 @@ def _resolve_reference_frames(
         if schools_df is None:
             schools_df = schools_db
             inputs.setdefault("schools", f"sqlite://{db.path}")
-            inputs_mtime.setdefault(
-                "schools", db.path.stat().st_mtime if db.path.exists() else 0.0
-            )
+            inputs_mtime.setdefault("schools", db.path.stat().st_mtime if db.path.exists() else 0.0)
         if crosswalk_groups_df is None:
             crosswalk_groups_df = crosswalk_db
             inputs.setdefault("crosswalk", f"sqlite://{db.path}")
@@ -417,13 +416,9 @@ def _resolve_students_frame(
     if getattr(args, "students", None):
         students_path = Path(args.students)
         if db:
-            df = import_student_report_from_excel(
-                students_path, db=db, policy=policy
-            )
+            df = import_student_report_from_excel(students_path, db=db, policy=policy)
         else:
-            df = canonicalize_students_frame(
-                read_excel_first_sheet(students_path), policy=policy
-            )
+            df = canonicalize_students_frame(read_excel_first_sheet(students_path), policy=policy)
         inputs = {"students": str(students_path)}
         inputs_mtime = {"students": students_path.stat().st_mtime}
         return df, inputs, inputs_mtime
@@ -495,6 +490,8 @@ def _export_qa_validation_workbook(
     output_path = _qa_validation_output_path(base_output, stem_override=stem_override)
     export_qa_validation(report, output=output_path, context=context)
     return output_path
+
+
 def _normalize_override_mapping(data: Mapping[object, object] | None) -> dict[str, bool]:
     if not data:
         return {}
@@ -514,7 +511,9 @@ def _resolve_mentor_pool_overrides(args: argparse.Namespace) -> dict[str, bool]:
     overrides: dict[str, bool] = {}
     ui_overrides = getattr(args, "_ui_overrides", {}) or {}
     ui_mapping = ui_overrides.get("mentor_pool_overrides")
-    overrides.update(_normalize_override_mapping(ui_mapping if isinstance(ui_mapping, Mapping) else {}))
+    overrides.update(
+        _normalize_override_mapping(ui_mapping if isinstance(ui_mapping, Mapping) else {})
+    )
 
     raw = getattr(args, "mentor_overrides", None)
     if raw:
@@ -529,7 +528,9 @@ def _resolve_manager_overrides(args: argparse.Namespace) -> dict[str, bool]:
     overrides: dict[str, bool] = {}
     ui_overrides = getattr(args, "_ui_overrides", {}) or {}
     ui_mapping = ui_overrides.get("mentor_pool_manager_overrides")
-    overrides.update(_normalize_override_mapping(ui_mapping if isinstance(ui_mapping, Mapping) else {}))
+    overrides.update(
+        _normalize_override_mapping(ui_mapping if isinstance(ui_mapping, Mapping) else {})
+    )
 
     raw = getattr(args, "manager_overrides", None)
     if raw:
@@ -563,10 +564,12 @@ def _detect_reader(path: Path) -> Callable[[Path], pd.DataFrame]:
     suffix = path.suffix.lower()
     dtype_map = {ALT_CODE_COLUMN: str}
     if suffix in {".xlsx", ".xls", ".xlsm"}:
+
         def _read_xlsx(p: Path) -> pd.DataFrame:
             with pd.ExcelFile(p) as xls:
                 sheet = "matrix" if "matrix" in xls.sheet_names else xls.sheet_names[0]
                 return xls.parse(sheet, dtype=dtype_map)
+
         return _read_xlsx
     return lambda p: pd.read_csv(p, dtype=dtype_map)
 
@@ -579,9 +582,7 @@ def _normalize_min_coverage_arg(value: float | None) -> float | None:
     if ratio > 1:
         ratio /= 100.0
     if ratio < 0 or ratio > 1:
-        raise ValueError(
-            "حداقل نسبت پوشش باید عددی بین 0 و 1 باشد یا به‌صورت درصد معتبر وارد شود."
-        )
+        raise ValueError("حداقل نسبت پوشش باید عددی بین 0 و 1 باشد یا به‌صورت درصد معتبر وارد شود.")
     return ratio
 
 
@@ -590,9 +591,10 @@ def _is_empty_arraylike(x) -> bool:
     """بررسی می‌کند که آیا x یک آرایه خالی است یا خیر"""
     if isinstance(x, (pd.Series, pd.DataFrame, list, tuple)):
         return len(x) == 0
-    if hasattr(x, 'size') and hasattr(x, '__len__'):
+    if hasattr(x, "size") and hasattr(x, "__len__"):
         return x.size == 0
     return False
+
 
 def _safe_isna(x) -> bool:
     """نسخه ایمن از pd.isna که با آرایه‌های خالی کار می‌کند"""
@@ -610,12 +612,14 @@ def _safe_isna(x) -> bool:
     except Exception:
         return True
 
+
 def _safe_json_dumps(x) -> str:
     """نسخه ایمن از json.dumps"""
     try:
         return json.dumps(x, ensure_ascii=False)
     except (TypeError, ValueError):
         return str(x)
+
 
 def _coalesce_duplicate_columns(df: pd.DataFrame) -> pd.DataFrame:
     """ادغام امن ستون‌های تکراری حتی با نام‌های تهی/NaN."""
@@ -653,15 +657,17 @@ def _coalesce_duplicate_columns(df: pd.DataFrame) -> pd.DataFrame:
 
     return result_df
 
+
 def _is_complex_safe(x) -> bool:
     """چک می‌کند آیا یک مقدار، یک شیء پیچیده است یا نه (ایمن در برابر ndarray خالی)."""
     if isinstance(x, (dict, list, tuple, set)):
         return True
-    
+
     if isinstance(x, (pd.Series, pd.DataFrame)):
         return x.size > 0
-    
+
     return False
+
 
 def _make_excel_safe(df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -670,16 +676,16 @@ def _make_excel_safe(df: pd.DataFrame) -> pd.DataFrame:
     """
     if df.empty:
         return df.copy()
-    
+
     # ابتدا ستون‌های تکراری را ادغام می‌کنیم
     df = _coalesce_duplicate_columns(df)
-    
+
     out = df.copy()
-    
+
     # پردازش هر ستون
     for col in out.columns:
         s = out[col]
-        
+
         # اطمینان از اینکه s یک Series است (نه DataFrame)
         if isinstance(s, pd.DataFrame):
             if s.shape[1] > 0:
@@ -689,7 +695,7 @@ def _make_excel_safe(df: pd.DataFrame) -> pd.DataFrame:
                 # اگر DataFrame خالی بود
                 out[col] = pd.Series([""] * len(out), index=out.index)
                 continue
-        
+
         # برای ستون‌های از نوع object
         if pd_types.is_object_dtype(s.dtype):
             # تابع تبدیل ایمن برای هر مقدار
@@ -701,19 +707,20 @@ def _make_excel_safe(df: pd.DataFrame) -> pd.DataFrame:
                 if isinstance(v, (pd.Series, pd.DataFrame)) and v.size == 0:
                     return ""
                 return str(v)
-            
+
             # استفاده از apply به جای map برای حساسیت کمتر به انواع داده
             out[col] = s.apply(_safe_convert)
-        
+
         # برای ستون‌های عددی که ممکن است شامل NaN باشند
         elif pd_types.is_numeric_dtype(s.dtype):
             out[col] = s.fillna(0)
-        
+
         # برای سایر انواع
         else:
             out[col] = s.fillna("")
-    
+
     return out
+
 
 def _ensure_valid_dataframe(df: pd.DataFrame, name: str = "") -> pd.DataFrame:
     """
@@ -723,30 +730,34 @@ def _ensure_valid_dataframe(df: pd.DataFrame, name: str = "") -> pd.DataFrame:
     1. ستون‌های تکراری وجود نداشته باشند
     2. هیچ سلولی حاوی شیء پیچیده نباشد
     3. هیچ سلولی NaN نباشد
-    
+
     و در صورت لزوم، تبدیلات لازم را انجام می‌دهد.
     """
     if df.empty:
         print(f"⚠️  هشدار: دیتافریم {name} خالی است!")
         return df
-    
+
     # 1. بررسی و ادغام ستون‌های تکراری
     duplicate_cols = df.columns[df.columns.duplicated()]
     if len(duplicate_cols) > 0:
-        print(f"⚠️  هشدار: دیتافریم {name} دارای {len(duplicate_cols)} ستون تکراری است: {list(duplicate_cols.unique())}")
+        print(
+            f"⚠️  هشدار: دیتافریم {name} دارای {len(duplicate_cols)} ستون تکراری است: {list(duplicate_cols.unique())}"
+        )
         df = _coalesce_duplicate_columns(df)
-    
+
     # 2. اطمینان از اینکه هیچ ستونی DataFrame نیست
     complex_cols = []
     for col in df.columns:
         if isinstance(df[col], pd.DataFrame):
             complex_cols.append(col)
-    
+
     if len(complex_cols) > 0:
         print(f"⚠️  هشدار: دیتافریم {name} دارای ستون‌های پیچیده است: {complex_cols}")
         df = _make_excel_safe(df)
-    
+
     return df
+
+
 # --- پایان توابع کمکی ---
 
 
@@ -851,9 +862,7 @@ def _parse_center_priority(priority_str: str | None) -> list[int] | None:
         try:
             result.append(int(text))
         except ValueError as exc:
-            raise ValueError(
-                f"فرمت نامعتبر برای اولویت مراکز: {priority_str}"
-            ) from exc
+            raise ValueError(f"فرمت نامعتبر برای اولویت مراکز: {priority_str}") from exc
     return result or None
 
 
@@ -890,9 +899,7 @@ def _merge_center_manager_maps(
     return target
 
 
-def _resolve_center_preferences(
-    args: argparse.Namespace, policy: PolicyConfig
-) -> tuple[
+def _resolve_center_preferences(args: argparse.Namespace, policy: PolicyConfig) -> tuple[
     Mapping[int, Sequence[str]] | None,
     Mapping[int, Sequence[str]] | None,
     list[int] | None,
@@ -909,9 +916,7 @@ def _resolve_center_preferences(
         data = json.loads(json_payload)
         if not isinstance(data, Mapping):
             raise ValueError("center-managers must be a JSON object")
-        cli_mapping = _merge_center_manager_maps(
-            cli_mapping, _normalize_center_override_map(data)
-        )
+        cli_mapping = _merge_center_manager_maps(cli_mapping, _normalize_center_override_map(data))
     legacy = {"golestan_manager": 1, "sadra_manager": 2}
     for attr, center_id in legacy.items():
         text = getattr(args, attr, None)
@@ -952,9 +957,7 @@ def _collect_cli_center_manager_overrides(
         data = json.loads(json_payload)
         if not isinstance(data, Mapping):
             raise ValueError("center-managers must be a JSON object")
-        cli_mapping = _merge_center_manager_maps(
-            cli_mapping, _normalize_center_override_map(data)
-        )
+        cli_mapping = _merge_center_manager_maps(cli_mapping, _normalize_center_override_map(data))
     legacy = {"golestan_manager": 1, "sadra_manager": 2}
     for attr, center_id in legacy.items():
         text = getattr(args, attr, None)
@@ -1194,9 +1197,9 @@ def _assign_new_counters_for_duplicates(
         summary["next_male_start"] = next_male
         summary["next_female_start"] = next_female
         summary["duplicate_resolution_mode"] = "assign-new"
-        summary["duplicate_resolution_count"] = int(
-            summary.get("duplicate_resolution_count", 0)
-        ) + resolved_rows
+        summary["duplicate_resolution_count"] = (
+            int(summary.get("duplicate_resolution_count", 0)) + resolved_rows
+        )
         counters.attrs["counter_summary"] = summary
     return counters, resolved_rows
 
@@ -1234,9 +1237,7 @@ def _apply_counter_duplicate_strategy(
         print(report_text)
 
     if normalized_strategy == "abort":
-        raise ValueError(
-            "student_id تکراری یافت شد؛ اجرای شمارنده متوقف شد تا ورودی اصلاح شود."
-        )
+        raise ValueError("student_id تکراری یافت شد؛ اجرای شمارنده متوقف شد تا ورودی اصلاح شود.")
 
     if normalized_strategy == "drop":
         drop_indexes: list[object] = []
@@ -1351,8 +1352,10 @@ def _inject_student_ids(
                 continue
         break
 
-    students_en = final_students_en if final_students_en is not None else canonicalize_headers(
-        students_df, header_mode="en"
+    students_en = (
+        final_students_en
+        if final_students_en is not None
+        else canonicalize_headers(students_df, header_mode="en")
     )
     students_fa = canonicalize_headers(students_en, header_mode="fa")
     school_fa = CANON_EN_TO_FA.get("school_code", "کد مدرسه")
@@ -1383,7 +1386,6 @@ def _inject_student_ids(
     )
 
     return counters, summary, students_df
-
 
 
 def _run_build_matrix(args: argparse.Namespace, policy: PolicyConfig, progress: ProgressFn) -> int:
@@ -1542,8 +1544,7 @@ def _run_build_matrix(args: argparse.Namespace, policy: PolicyConfig, progress: 
         failed_rules = {violation.rule_id for violation in qa_report.violations}
         detail = "; ".join(f"{v.rule_id}: {v.message}" for v in qa_report.violations)
         raise ValueError(
-            "QA invariants failed: "
-            f"rules={sorted(failed_rules)} details={detail or 'n/a'}"
+            "QA invariants failed: " f"rules={sorted(failed_rules)} details={detail or 'n/a'}"
         )
     sheets = {
         "matrix": matrix,
@@ -1570,8 +1571,7 @@ def _run_build_matrix(args: argparse.Namespace, policy: PolicyConfig, progress: 
         sheets["group_coverage_unseen"] = unseen_slice
     header_internal = policy.excel.header_mode_internal
     prepared_sheets = {
-        name: canonicalize_headers(df, header_mode=header_internal)
-        for name, df in sheets.items()
+        name: canonicalize_headers(df, header_mode=header_internal) for name, df in sheets.items()
     }
     write_xlsx_atomic(
         prepared_sheets,
@@ -1657,9 +1657,7 @@ def _load_matrix_candidate_pool(matrix_path: Path, policy: PolicyConfig) -> pd.D
     except Exception as exc:  # pragma: no cover - خطای خواندن پیش‌بینی‌نشده
         raise ValueError(f"خطا در خواندن ماتریس {matrix_path}: {exc}") from exc
 
-    return canonicalize_headers(
-        frame, header_mode=policy.excel.header_mode_internal
-    )
+    return canonicalize_headers(frame, header_mode=policy.excel.header_mode_internal)
 
 
 def _prepare_allocation_frames(
@@ -1679,6 +1677,52 @@ def _prepare_allocation_frames(
         sanitize_pool=sanitize_pool,
         pool_source=pool_source,
     )
+
+
+def _sanitize_pool_for_allocation(pool_df: pd.DataFrame, *, policy: PolicyConfig) -> pd.DataFrame:
+    """پاک‌سازی استخر منتورها برای تخصیص بر اساس Policy.
+
+    این تابع لایهٔ Infra تنها وظیفهٔ فوروارد کردن استخر خام به منطق خالص
+    :func:`app.core.canonical_frames.canonicalize_pool_frame` را دارد تا
+    منتورهای مجازی حذف شوند، کلیدهای join به نوع صحیح `Int64` تبدیل شوند و
+    آمار اصلاحات در ``df.attrs["pool_canonicalization_stats"]`` ثبت شود.
+
+    مثال::
+
+        >>> import pandas as pd
+        >>> from app.core.policy_loader import load_policy
+        >>> policy = load_policy()  # doctest: +SKIP
+        >>> raw = pd.DataFrame({
+        ...     "mentor_name": ["مجازی", "علی"],
+        ...     "alias": [7501, 102],
+        ...     "remaining_capacity": [0, 3],
+        ... })
+        >>> clean = _sanitize_pool_for_allocation(raw, policy=policy)  # doctest: +SKIP
+        >>> int(clean["remaining_capacity"].sum())  # doctest: +SKIP
+        3
+
+    Args:
+        pool_df: دیتافریم خام استخر منتورها (inspactor یا matrix).
+        policy: سیاست فعال برای تشخیص منتور مجازی و اعمال قواعد ستون‌ها.
+
+    Returns:
+        دیتافریم استاندارد و فاقد منتور مجازی برای ورودی ``allocate_batch``.
+    """
+
+    sanitized = canonicalize_pool_frame(
+        pool_df,
+        policy=policy,
+        sanitize_pool=True,
+        pool_source="inspactor",
+        require_join_keys=True,
+    )
+
+    sanitized_en = canonicalize_headers(sanitized, header_mode="en")
+    sanitized_en = sanitized_en.loc[:, ~sanitized_en.columns.duplicated()]
+    sanitized_en.attrs.update(sanitized.attrs)
+
+    return sanitized_en
+
 
 def _allocate_and_write(
     students_base: pd.DataFrame,
@@ -1704,9 +1748,7 @@ def _allocate_and_write(
     success = False
     status_message = "success"
 
-    student_ids, counter_summary, students_base = _inject_student_ids(
-        students_base, args, policy
-    )
+    student_ids, counter_summary, students_base = _inject_student_ids(students_base, args, policy)
     setattr(args, "_counter_summary", counter_summary)
 
     ui_center_map, cli_center_map, center_priority, strict_validation = _resolve_center_preferences(
@@ -1742,12 +1784,8 @@ def _allocate_and_write(
             if ensure_existing and "student_id" in en_frame.columns:
                 existing = en_frame["student_id"].astype("string")
                 existing_mask = existing.str.strip().eq("") | existing.isna()
-                en_frame.loc[existing_mask, "student_id"] = aligned_string.reindex(
-                    en_frame.index
-                )
-                en_frame.loc[~existing_mask, "student_id"] = existing.loc[
-                    ~existing_mask
-                ]
+                en_frame.loc[existing_mask, "student_id"] = aligned_string.reindex(en_frame.index)
+                en_frame.loc[~existing_mask, "student_id"] = existing.loc[~existing_mask]
             else:
                 en_frame["student_id"] = aligned_string
             return canonicalize_headers(en_frame, header_mode=header_internal)
@@ -1761,8 +1799,8 @@ def _allocate_and_write(
             args, "export_profile_path", str(_DEFAULT_ALLOC_PROFILE_PATH)
         ) or str(_DEFAULT_ALLOC_PROFILE_PATH)
         students_for_export = canonicalize_headers(students_base, header_mode=header_internal)
-        students_for_export["student_id"] = (
-            student_ids.reindex(students_for_export.index).astype("string")
+        students_for_export["student_id"] = student_ids.reindex(students_for_export.index).astype(
+            "string"
         )
         if export_profile_choice == "sabt":
             sabt_profile = load_sabt_export_profile(Path(export_profile_path))
@@ -1832,8 +1870,7 @@ def _allocate_and_write(
             failed_rules = {violation.rule_id for violation in qa_report.violations}
             detail = "; ".join(f"{v.rule_id}: {v.message}" for v in qa_report.violations)
             raise ValueError(
-                "QA invariants failed: "
-                f"rules={sorted(failed_rules)} details={detail or 'n/a'}"
+                "QA invariants failed: " f"rules={sorted(failed_rules)} details={detail or 'n/a'}"
             )
 
         # تبدیل نهایی به فرمت‌های قابل نوشتن در Excel
@@ -1973,9 +2010,7 @@ def _allocate_and_write(
             allocations_df.shape[0] if isinstance(allocations_df, pd.DataFrame) else None
         )
         unallocated_students = (
-            total_students - allocated_students
-            if allocated_students is not None
-            else None
+            total_students - allocated_students if allocated_students is not None else None
         )
         qa_outcome = history_store.summarize_qa(qa_report)
         run_ctx = history_store.build_run_context(
@@ -2042,15 +2077,17 @@ def _run_allocate(args: argparse.Namespace, policy: PolicyConfig, progress: Prog
         capacity_column=capacity_column,
         db=db,
         command_name="allocate",
-        input_students_path=(Path(args.students) if getattr(args, "students", None) else (db.path if db else None)),
-        input_pool_path=(Path(args.pool) if getattr(args, "pool", None) else (db.path if db else None)),
+        input_students_path=(
+            Path(args.students) if getattr(args, "students", None) else (db.path if db else None)
+        ),
+        input_pool_path=(
+            Path(args.pool) if getattr(args, "pool", None) else (db.path if db else None)
+        ),
         policy_path=policy_path,
     )
 
 
-def _run_rule_engine(
-    args: argparse.Namespace, policy: PolicyConfig, progress: ProgressFn
-) -> int:
+def _run_rule_engine(args: argparse.Namespace, policy: PolicyConfig, progress: ProgressFn) -> int:
     """اجرای موتور قواعد روی ماتریس ساخته‌شده بدون نیاز به استخر جداگانه."""
 
     students_path = Path(args.students)
@@ -2092,9 +2129,7 @@ def _run_rule_engine(
     )
 
 
-def _import_students_from_forms_cache(
-    *, db: LocalDatabase, policy: PolicyConfig
-) -> pd.DataFrame:
+def _import_students_from_forms_cache(*, db: LocalDatabase, policy: PolicyConfig) -> pd.DataFrame:
     """بارگذاری forms_entries و ذخیره در کش دانش‌آموزان برای Core."""
 
     repo = FormsRepository(client=None, db=db)
@@ -2140,9 +2175,7 @@ def _run_sync_forms(args: argparse.Namespace, policy: PolicyConfig, progress: Pr
 
     since_dt = _parse_since(getattr(args, "since", None))
     result = repo.sync_from_wordpress(since=since_dt)
-    print(
-        f"forms synced: fetched={result.fetched_count}, persisted={result.persisted_count}"
-    )
+    print(f"forms synced: fetched={result.fetched_count}, persisted={result.persisted_count}")
     return 0
 
 
@@ -2193,7 +2226,9 @@ def _build_parser() -> argparse.ArgumentParser:
             "در شیت invalid_mentors ثبت می‌کند."
         ),
     )
-    build_cmd.add_argument("--inspactor", required=False, help="(اختیاری) مسیر فایل inspactor برای بروزرسانی کش")
+    build_cmd.add_argument(
+        "--inspactor", required=False, help="(اختیاری) مسیر فایل inspactor برای بروزرسانی کش"
+    )
     build_cmd.add_argument(
         "--schools",
         required=False,
@@ -2297,8 +2332,16 @@ def _build_parser() -> argparse.ArgumentParser:
     _add_local_db_args(forms_cmd)
 
     alloc_cmd = sub.add_parser("allocate", help="تخصیص دانش‌آموزان به منتورها")
-    alloc_cmd.add_argument("--students", required=False, help="مسیر فایل دانش‌آموزان؛ در صورت عدم ارائه از کش SQLite خوانده می‌شود")
-    alloc_cmd.add_argument("--pool", required=False, help="مسیر استخر منتورها؛ در صورت عدم ارائه از کش SQLite خوانده می‌شود")
+    alloc_cmd.add_argument(
+        "--students",
+        required=False,
+        help="مسیر فایل دانش‌آموزان؛ در صورت عدم ارائه از کش SQLite خوانده می‌شود",
+    )
+    alloc_cmd.add_argument(
+        "--pool",
+        required=False,
+        help="مسیر استخر منتورها؛ در صورت عدم ارائه از کش SQLite خوانده می‌شود",
+    )
     alloc_cmd.add_argument("--output", required=True, help="مسیر Excel خروجی تخصیص")
     alloc_cmd.add_argument(
         "--capacity-column",
@@ -2531,8 +2574,7 @@ def main(
     progress_factory: Callable[[], ProgressFn] | None = None,
     build_runner: Callable[[argparse.Namespace, PolicyConfig, ProgressFn], int] | None = None,
     allocate_runner: Callable[[argparse.Namespace, PolicyConfig, ProgressFn], int] | None = None,
-    rule_engine_runner: Callable[[argparse.Namespace, PolicyConfig, ProgressFn], int]
-    | None = None,
+    rule_engine_runner: Callable[[argparse.Namespace, PolicyConfig, ProgressFn], int] | None = None,
     ui_overrides: dict[str, object] | None = None,
 ) -> int:
     """نقطهٔ ورود CLI؛ خروجی ۰ به معنای موفقیت است."""
@@ -2634,14 +2676,9 @@ def main(
         is_coverage_error = getattr(exc, "is_coverage_threshold_error", False)
         is_dedup_error = getattr(exc, "is_dedup_removed_threshold_error", False)
         is_duplicate_error = getattr(exc, "is_join_key_duplicate_threshold_error", False)
-        is_school_lookup_error = getattr(
-            exc, "is_school_lookup_threshold_error", False
-        )
+        is_school_lookup_error = getattr(exc, "is_school_lookup_threshold_error", False)
         if not (
-            is_coverage_error
-            or is_dedup_error
-            or is_duplicate_error
-            or is_school_lookup_error
+            is_coverage_error or is_dedup_error or is_duplicate_error or is_school_lookup_error
         ):
             raise
         print(f"❌ {exc}", file=sys.stderr)

@@ -52,9 +52,7 @@ def test_schema_version_mismatch_raises(tmp_path):
     db = LocalDatabase(tmp_path / "schema_mismatch.sqlite")
     db.initialize()
     with db.connect() as conn:
-        conn.execute(
-            "UPDATE schema_meta SET schema_version = schema_version + 1 WHERE id = 1"
-        )
+        conn.execute("UPDATE schema_meta SET schema_version = schema_version + 1 WHERE id = 1")
         conn.commit()
     with pytest.raises(SchemaVersionMismatchError) as excinfo:
         db.initialize()
@@ -117,9 +115,7 @@ def test_schema_contains_student_and_mentor_cache_tables(tmp_path: Path) -> None
     with db.connect() as conn:
         tables = {
             row[0]
-            for row in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            ).fetchall()
+            for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
         }
         assert "students_cache" in tables
         assert "mentor_pool_cache" in tables
@@ -151,14 +147,10 @@ def test_schema_contains_student_and_mentor_cache_tables(tmp_path: Path) -> None
         ]:
             assert col in mentor_cols
 
-        idx_student = conn.execute(
-            "PRAGMA index_list('students_cache')"
-        ).fetchall()
+        idx_student = conn.execute("PRAGMA index_list('students_cache')").fetchall()
         assert any("student_id" in str(row[1]) for row in idx_student)
 
-        idx_mentor = conn.execute(
-            "PRAGMA index_list('mentor_pool_cache')"
-        ).fetchall()
+        idx_mentor = conn.execute("PRAGMA index_list('mentor_pool_cache')").fetchall()
         assert any("mentor_id" in str(row[1]) for row in idx_mentor)
 
 
@@ -177,11 +169,11 @@ def test_migrate_from_v5_creates_managers_reference(tmp_path: Path) -> None:
     db.initialize()
 
     with db.connect() as conn:
-        version = conn.execute(
-            "SELECT schema_version FROM schema_meta WHERE id = 1"
-        ).fetchone()[0]
+        version = conn.execute("SELECT schema_version FROM schema_meta WHERE id = 1").fetchone()[0]
         manager_info = conn.execute("PRAGMA table_info(managers_reference)").fetchall()
-        manager_indexes = {row[1] for row in conn.execute("PRAGMA index_list('managers_reference')").fetchall()}
+        manager_indexes = {
+            row[1] for row in conn.execute("PRAGMA index_list('managers_reference')").fetchall()
+        }
 
     assert int(version) == _SCHEMA_VERSION
     manager_cols = [row[1] for row in manager_info]
@@ -223,8 +215,6 @@ def test_upsert_schools_rebuilds_indexes_without_conflict(tmp_path: Path) -> Non
     assert_frame_equal(restored, expected)
 
     with db.connect() as conn:
-        index_names = {
-            row[1] for row in conn.execute("PRAGMA index_list('schools')").fetchall()
-        }
+        index_names = {row[1] for row in conn.execute("PRAGMA index_list('schools')").fetchall()}
 
     assert any("idx_schools_code" in name for name in index_names)
