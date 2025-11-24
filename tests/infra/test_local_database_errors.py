@@ -1,5 +1,6 @@
 # file: tests/infra/test_local_database_errors.py
 import sqlite3
+from pathlib import Path
 
 import pandas as pd
 import pytest
@@ -77,6 +78,51 @@ def test_initialize_reports_corrupt_file_with_backup(tmp_path):
             "SELECT schema_version FROM schema_meta WHERE id = 1"
         ).fetchone()[0]
     assert version == _SCHEMA_VERSION
+
+
+def test_initialize_repairs_missing_mentor_group_column(tmp_path: Path) -> None:
+    db_path = tmp_path / "missing_group.sqlite"
+    db = LocalDatabase(db_path)
+
+    with db.connect() as conn:
+        LocalDatabase._ensure_schema_meta_table(conn)
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO schema_meta(
+                id, schema_version, policy_version, ssot_version, created_at
+            )
+            VALUES (1, ?, '1.0.3', '1.0.2', strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+            """,
+            (_SCHEMA_VERSION,),
+        )
+        conn.execute(
+            """
+            CREATE TABLE mentor_pool_cache (
+                mentor_id TEXT,
+                "کد کارمندی پشتیبان" TEXT,
+                "کدرشته" INTEGER,
+                "جنسیت" INTEGER,
+                "دانش آموز فارغ" INTEGER,
+                "مرکز گلستان صدرا" INTEGER,
+                "مالی حکمت بنیاد" INTEGER,
+                "کد مدرسه" INTEGER,
+                remaining_capacity REAL,
+                allocations_new INTEGER,
+                occupancy_ratio REAL
+            )
+            """,
+        )
+        conn.commit()
+
+    db.initialize()
+
+    with db.connect() as conn:
+        columns = {
+            row[1]
+            for row in conn.execute("PRAGMA table_info(mentor_pool_cache)").fetchall()
+        }
+
+    assert "گروه آزمایشی" in columns
 
 
 def test_initialize_repairs_schema_when_students_cache_missing_student_id(tmp_path):

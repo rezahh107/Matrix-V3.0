@@ -434,6 +434,15 @@ class LocalDatabase:
             )
             repaired = True
 
+        if table == "mentor_pool_cache" and "گروه آزمایشی" in missing_columns:
+            _ensure_column_exists(
+                conn,
+                table="mentor_pool_cache",
+                column='"گروه آزمایشی"',
+                definition="TEXT",
+            )
+            repaired = True
+
         return repaired
 
     def _recover_corrupt_database(self) -> Path | None:
