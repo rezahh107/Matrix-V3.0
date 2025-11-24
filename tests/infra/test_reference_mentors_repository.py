@@ -6,6 +6,7 @@ import pytest
 
 from app.core.canonical_frames import canonicalize_pool_frame
 from app.core.policy_loader import load_policy
+from app.infra.errors import DatabaseOperationError
 from app.infra.local_database import LocalDatabase
 from app.infra.reference_mentors_repository import (
     import_mentor_pool_from_excel,
@@ -251,3 +252,32 @@ def test_import_pool_reports_unknown_center_and_finance(tmp_path: Path) -> None:
     assert "CENTER_FALLBACK_WILDCARD" in reasons
     assert "FINANCE_UNKNOWN" in reasons
     assert int(normalized["مالی حکمت بنیاد"].iloc[0]) == policy.finance_variants[0]
+
+
+def test_import_pool_rejects_duplicate_mentor_ids(tmp_path: Path) -> None:
+    policy = load_policy()
+    db = LocalDatabase(tmp_path / "cache.sqlite")
+
+    duplicated_pool = pd.DataFrame(
+        {
+            "mentor_id": ["m1", "m1"],
+            "کد کارمندی پشتیبان": ["E1", "E2"],
+            "کدرشته": [1201, 1201],
+            "گروه آزمایشی": ["تجربی", "تجربی"],
+            "جنسیت": [1, 1],
+            "دانش آموز فارغ": [0, 0],
+            "مرکز گلستان صدرا": [1, 1],
+            "مالی حکمت بنیاد": [0, 0],
+            "کد مدرسه": [3581, 3581],
+        }
+    )
+    excel_path = tmp_path / "dup_pool.xlsx"
+    _write_pool_excel(duplicated_pool, excel_path)
+
+    with pytest.raises(DatabaseOperationError) as excinfo:
+        import_mentor_pool_from_excel(excel_path, db=db, policy=policy)
+
+    message = str(excinfo.value)
+    assert "mentor_id" in message
+    assert "نمونهٔ ردیف‌ها" in message
+    assert "E1" in message and "E2" in message
