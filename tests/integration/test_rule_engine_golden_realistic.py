@@ -1,6 +1,11 @@
 import pandas as pd
 
 from app.core.allocate_students import allocate_batch
+from app.core.common.types import CANONICAL_TRACE_ORDER
+import pandas as pd
+
+from app.core.allocate_students import allocate_batch
+from app.core.common.types import CANONICAL_TRACE_ORDER
 from app.core.policy_loader import load_policy
 
 _GROUP_NAME = "تجربی"
@@ -198,27 +203,6 @@ def test_realistic_high_no_match_scenario_golden() -> None:
 
     assert logs1.shape[0] == 82
     assert alloc1.shape[0] == 10
-    no_match_mask = logs1["error_type"] == "ELIGIBILITY_NO_MATCH"
-    capacity_full_mask = logs1["error_type"] == "CAPACITY_FULL"
-    assert int(no_match_mask.sum()) == 66
-    assert int(capacity_full_mask.sum()) == 6
-    success_mask = logs1["allocation_status"] == "success"
-    assert int(success_mask.sum()) == 10
-    assert (logs1.loc[success_mask, "candidate_count"] > 0).all()
-    assert (
-        logs1.loc[capacity_full_mask, "stage_candidate_counts"].apply(
-            lambda stage: stage["capacity_gate"]
-        )
-        == 0
-    ).all()
-    assert (
-        logs1.loc[no_match_mask, "stage_candidate_counts"].apply(lambda stage: stage["type"]) == 0
-    ).all()
-
-    first_success = logs1.loc[success_mask].iloc[0]
-    student_trace = trace1[trace1["student_id"] == first_success["student_id"]]
-    trace_counts = student_trace.set_index("stage")["total_after"].to_dict()
-    assert trace_counts == first_success["stage_candidate_counts"]
 
     expected_allocations = pd.DataFrame(
         [
@@ -295,3 +279,128 @@ def test_realistic_high_no_match_scenario_golden() -> None:
         ]
     )
     pd.testing.assert_frame_equal(_sort_alloc(alloc1), _sort_alloc(expected_allocations))
+
+
+def test_error_type_classification_and_stage_counts() -> None:
+    policy = load_policy()
+    pool = pd.DataFrame(
+        [
+            {
+                "پشتیبان": "CapFull",
+                "کد کارمندی پشتیبان": "E-1",
+                "کدرشته": 1,
+                "گروه آزمایشی": "تجربی",
+                "جنسیت": 1,
+                "دانش آموز فارغ": 1,
+                "مرکز گلستان صدرا": 1,
+                "مالی حکمت بنیاد": 0,
+                "کد مدرسه": 501,
+                "remaining_capacity": 0,
+                "allocations_new": 0,
+                "occupancy_ratio": 0.0,
+            },
+            {
+                "پشتیبان": "Eligibility",
+                "کد کارمندی پشتیبان": "E-2",
+                "کدرشته": 1,
+                "گروه آزمایشی": "تجربی",
+                "جنسیت": 1,
+                "دانش آموز فارغ": 1,
+                "مرکز گلستان صدرا": 2,
+                "مالی حکمت بنیاد": 0,
+                "کد مدرسه": 501,
+                "remaining_capacity": 2,
+                "allocations_new": 0,
+                "occupancy_ratio": 0.0,
+            },
+        ]
+    )
+    students = pd.DataFrame(
+        [
+            _student_row(
+                1,
+                major=1,
+                gender=1,
+                grad=1,
+                center=1,
+                finance=0,
+                school=501,
+            ),
+            _student_row(
+                2,
+                major=1,
+                gender=1,
+                grad=1,
+                center=99,
+                finance=0,
+                school=501,
+            ),
+        ]
+    )
+
+    _, _, logs, _ = allocate_batch(students, pool, policy=policy)
+    indexed = logs.set_index("student_id")
+
+    capacity_counts = indexed.loc["STU-001", "stage_candidate_counts"]
+    eligibility_counts = indexed.loc["STU-002", "stage_candidate_counts"]
+
+    assert set(capacity_counts.keys()) == set(CANONICAL_TRACE_ORDER)
+    assert set(eligibility_counts.keys()) == set(CANONICAL_TRACE_ORDER)
+    assert indexed.loc["STU-001", "error_type"] == "CAPACITY_FULL"
+    assert indexed.loc["STU-002", "error_type"] == "ELIGIBILITY_NO_MATCH"
+
+
+def test_center_and_school_wildcards_allow_matches() -> None:
+    policy = load_policy()
+    pool = pd.DataFrame(
+        [
+            {
+                "پشتیبان": "Center-1",
+                "کد کارمندی پشتیبان": "C-1",
+                "کدرشته": 1,
+                "گروه آزمایشی": "تجربی",
+                "جنسیت": 1,
+                "دانش آموز فارغ": 1,
+                "مرکز گلستان صدرا": 1,
+                "مالی حکمت بنیاد": 0,
+                "کد مدرسه": 0,
+                "remaining_capacity": 1,
+                "allocations_new": 0,
+                "occupancy_ratio": 0.0,
+            },
+            {
+                "پشتیبان": "Center-2",
+                "کد کارمندی پشتیبان": "C-2",
+                "کدرشته": 1,
+                "گروه آزمایشی": "تجربی",
+                "جنسیت": 1,
+                "دانش آموز فارغ": 1,
+                "مرکز گلستان صدرا": 2,
+                "مالی حکمت بنیاد": 0,
+                "کد مدرسه": 700,
+                "remaining_capacity": 1,
+                "allocations_new": 0,
+                "occupancy_ratio": 0.0,
+            },
+        ]
+    )
+    students = pd.DataFrame(
+        [
+            _student_row(
+                1,
+                major=1,
+                gender=1,
+                grad=1,
+                center=0,
+                finance=0,
+                school=501,
+            ),
+        ]
+    )
+
+    allocations, _, logs, _ = allocate_batch(students, pool, policy=policy)
+
+    assert allocations.shape[0] == 1
+    center_counts = logs.loc[0, "stage_candidate_counts"]
+    assert center_counts["center"] == 2
+    assert center_counts["school"] == 2

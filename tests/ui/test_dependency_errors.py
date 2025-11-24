@@ -92,11 +92,6 @@ class _StubMessageBox:
 
 
 def _install_pyside_stub(monkeypatch):
-    try:
-        return
-    except Exception:  # pragma: no cover - در صورت نبود PySide6 فعال می‌شود
-        pass
-
     qtcore = types.ModuleType("PySide6.QtCore")
     qtcore.Qt = types.SimpleNamespace(ApplicationAttribute=types.SimpleNamespace())
     qtcore.QSharedMemory = _StubSharedMemory
@@ -122,6 +117,14 @@ def main_module(monkeypatch):
     import app.main as module
 
     return importlib.reload(module)
+
+
+def test_app_main_import_uses_stubbed_pyside(monkeypatch) -> None:
+    _install_pyside_stub(monkeypatch)
+    module = importlib.reload(importlib.import_module("app.main"))
+
+    assert sys.modules["PySide6"].QtWidgets.QApplication is _StubApplication
+    assert module.QApplication is _StubApplication
 
 
 def test_load_main_window_reports_missing_dependency(monkeypatch, main_module):

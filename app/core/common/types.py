@@ -155,19 +155,34 @@ class JoinKeyValues(Mapping[str, int]):
         return dict(self._items)
 
     @classmethod
-    def from_policy(cls, data: Mapping[str, int], join_keys: Iterable[str]) -> JoinKeyValues:
-        """ساخت نمونه از روی Policy با اجبار ترتیب کلیدها.
+    def from_policy(
+        cls, data: Mapping[str, int | str | float | bool], join_keys: Iterable[str]
+    ) -> JoinKeyValues:
+        """ساخت نمونه از روی Policy با اجبار ترتیب کلیدها و تبدیل به int.
 
         Args:
-            data: نگاشت ورودی شامل مقادیر کلیدها.
-            join_keys: ترتیب دقیق کلیدها که باید ۶ تایی و int باشد.
+            data: نگاشت ورودی شامل مقادیر کلیدها (قابل تبدیل به int نظیر str/float).
+            join_keys: ترتیب دقیق کلیدها که باید ۶ تایی باشد.
+
+        Raises:
+            ValueError: اگر هر کلید موردانتظار در داده وجود نداشته باشد.
+            TypeError: اگر تبدیل مقدار به int شکست بخورد.
         """
 
         expected_keys = tuple(str(key) for key in join_keys)
         missing = [key for key in expected_keys if key not in data]
         if missing:
             raise ValueError(f"join key values missing for: {', '.join(missing)}")
-        ordered = {key: data[key] for key in expected_keys}
+
+        ordered: OrderedDict[str, int] = OrderedDict()
+        for key in expected_keys:
+            raw_value = data[key]
+            try:
+                coerced = int(raw_value)
+            except (TypeError, ValueError):
+                raise TypeError(f"Join key '{key}' must be int-convertible")
+            ordered[key] = coerced
+
         return cls(ordered, expected_keys=expected_keys)
 
 
