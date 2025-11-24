@@ -4,7 +4,6 @@ import pytest
 
 from app.core.common.types import JoinKeyValues
 
-
 JOIN_KEYS = (
     "کدرشته",
     "جنسیت",

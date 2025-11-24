@@ -23,9 +23,9 @@ from __future__ import annotations
 import re
 from collections import OrderedDict
 from collections.abc import (
+    ItemsView,
     Iterable,
     Iterator,
-    ItemsView,
     KeysView,
     Mapping,
     MutableMapping,
