@@ -112,9 +112,7 @@ def validate_allocation_join_keys(
     True
     """
 
-    allocations = dedupe_columns(
-        canonicalize_headers(allocations_df, header_mode="fa")
-    ).copy()
+    allocations = dedupe_columns(canonicalize_headers(allocations_df, header_mode="fa")).copy()
     students = canonicalize_headers(students_df, header_mode="fa").copy()
     pool = canonicalize_headers(pool_df, header_mode="fa").copy()
 
@@ -136,9 +134,7 @@ def validate_allocation_join_keys(
     student_subset = students.loc[
         :, [col for col in student_columns if col in students.columns]
     ].copy()
-    student_subset, student_duplicates = _prepare_join_keys(
-        student_subset, policy.join_keys
-    )
+    student_subset, student_duplicates = _prepare_join_keys(student_subset, policy.join_keys)
 
     mentor_keys = policy.join_keys
     mentor_subset = pool[[col for col in mentor_keys if col in pool.columns]].copy()
