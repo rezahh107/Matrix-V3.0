@@ -115,7 +115,6 @@ def test_initialize_adds_student_id_column_when_missing(tmp_path: Path) -> None:
     assert int(version) == _SCHEMA_VERSION
     assert "student_id" in columns
 
-
 def test_initialize_is_idempotent_when_student_id_already_exists(tmp_path: Path) -> None:
     canonical_path = tmp_path / "canonical.sqlite"
     canonical = LocalDatabase(canonical_path)
