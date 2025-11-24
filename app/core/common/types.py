@@ -43,30 +43,42 @@ def natural_key(s: str) -> tuple[object, ...]:
         return ("",)
 
     parts: list[object] = []
-    has_text = False
     for token in _NUM.split(text):
         if not token:
             continue
         if token.isdecimal():
-            number = int(token)
-            if not parts:
-                parts.append("")
-            parts.append(number)
+            parts.append(int(token))
         else:
             parts.append(token.lower())
-            has_text = True
 
     if not parts:
         return ("",)
-    if not has_text and not isinstance(parts[0], str):
+    if not isinstance(parts[0], str):
         parts.insert(0, "")
     return tuple(parts)
 
 
 class JoinKeyValues(Mapping[str, int]):
-    """نگهدارندهٔ فقط‌خواندنی برای کلیدهای join با اجبار ۶ مقدار صحیح."""
+    """نگهدارندهٔ فقط‌خواندنی برای ۶ کلید join به‌صورت اعداد صحیح.
+
+    مثال کوتاه::
+
+        >>> keys = JoinKeyValues({
+        ...     "کدرشته": 1201,
+        ...     "جنسیت": 1,
+        ...     "دانش_آموز_فارغ": 0,
+        ...     "مرکز_گلستان_صدرا": 1,
+        ...     "مالی_حکمت_بنیاد": 0,
+        ...     "کد_مدرسه": 10,
+        ... })
+        >>> keys["کدرشته"]
+        1201
+    """
 
     __slots__ = ("_items", "_mapping")
+
+    _items: tuple[tuple[str, int], ...]
+    _mapping: Mapping[str, int]
 
     def __init__(
         self,
@@ -74,30 +86,39 @@ class JoinKeyValues(Mapping[str, int]):
         *,
         expected_keys: Iterable[str] | None = None,
     ):
-        ordered = OrderedDict[str, int]()
+        ordered: OrderedDict[str, int] = OrderedDict()
         for key, value in data.items():
             normalized_key = str(key)
-            try:
-                coerced_value = int(value)
-            except (TypeError, ValueError) as exc:  # pragma: no cover - guard
-                raise TypeError(
-                    f"Join key '{normalized_key}' must be int-compatible",
-                ) from exc
-            ordered[normalized_key] = coerced_value
+            if not isinstance(value, int):
+                raise TypeError(f"Join key '{normalized_key}' must be int")
+            ordered[normalized_key] = value
 
         if len(ordered) != 6:
             raise ValueError("JoinKeyValues must contain exactly six entries")
 
         if expected_keys is not None:
             expected = tuple(str(key) for key in expected_keys)
+            missing = tuple(key for key in expected if key not in ordered)
+            extra = tuple(key for key in ordered if key not in expected)
+            if missing or extra:
+                raise ValueError(
+                    "JoinKeyValues keys mismatch; "
+                    f"missing={missing} extra={extra}"
+                )
             if tuple(ordered.keys()) != expected:
                 raise ValueError(
-                    "JoinKeyValues order/key mismatch; expected "
+                    "JoinKeyValues order mismatch; expected "
                     f"{expected} got {tuple(ordered.keys())}"
                 )
 
         object.__setattr__(self, "_items", tuple(ordered.items()))
         object.__setattr__(self, "_mapping", MappingProxyType(dict(ordered)))
+
+    def __setattr__(self, name: str, value: object) -> None:  # pragma: no cover - immutability guard
+        raise AttributeError("JoinKeyValues is immutable")
+
+    def __delattr__(self, name: str) -> None:  # pragma: no cover - immutability guard
+        raise AttributeError("JoinKeyValues is immutable")
 
     def __getitem__(self, key: str) -> int:  # pragma: no cover - Mapping API
         return self._mapping[key]
@@ -107,6 +128,9 @@ class JoinKeyValues(Mapping[str, int]):
 
     def __len__(self) -> int:  # pragma: no cover - Mapping API
         return len(self._items)
+
+    def __contains__(self, key: object) -> bool:  # pragma: no cover - Mapping API
+        return isinstance(key, str) and key in self._mapping
 
     def __repr__(self) -> str:  # pragma: no cover - debug helper
         return f"JoinKeyValues({dict(self._items)!r})"
@@ -120,6 +144,11 @@ class JoinKeyValues(Mapping[str, int]):
         """برگشت زوج‌های (کلید، مقدار) به‌ترتیب Policy."""
 
         return self._items
+
+    def values(self) -> tuple[int, ...]:
+        """مقادیر کلیدها به‌ترتیب درج."""
+
+        return tuple(value for _, value in self._items)
 
     def as_dict(self) -> dict[str, int]:
         """کپی معمولی دیکشنری برای سازگاری با pandas/JSON."""
