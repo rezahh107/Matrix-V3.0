@@ -1,9 +1,9 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pandas as pd
 from pandas.testing import assert_frame_equal
 
-from app.infra.local_database import LocalDatabase, RunRecord, _SCHEMA_VERSION
+from app.infra.local_database import _SCHEMA_VERSION, LocalDatabase, RunRecord
 
 
 def _sample_run_record(start: datetime) -> RunRecord:
@@ -31,7 +31,7 @@ def _sample_run_record(start: datetime) -> RunRecord:
 def test_trace_snapshot_round_trip(tmp_path) -> None:
     db = LocalDatabase(tmp_path / "snap.db")
     db.initialize()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     run_id = db.insert_run(_sample_run_record(now))
 
     trace_df = pd.DataFrame(
@@ -70,7 +70,7 @@ def test_trace_snapshot_round_trip(tmp_path) -> None:
 def test_qa_snapshot_round_trip(tmp_path) -> None:
     db = LocalDatabase(tmp_path / "snap.db")
     db.initialize()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     run_id = db.insert_run(_sample_run_record(now))
 
     qa_summary_df = pd.DataFrame(
@@ -129,7 +129,7 @@ def test_fetch_returns_none_for_missing_rows(tmp_path) -> None:
 def test_deserialize_error_is_handled(tmp_path, caplog) -> None:
     db = LocalDatabase(tmp_path / "snap.db")
     db.initialize()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     run_id = db.insert_run(_sample_run_record(now))
 
     db.insert_trace_snapshot(run_id=run_id, trace_df=pd.DataFrame({"a": [1]}))

@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 CORE_DIR = Path("app/core")
 
 

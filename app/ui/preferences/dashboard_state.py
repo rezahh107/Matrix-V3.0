@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import List, Sequence
 
 from ..app_preferences import AppPreferences
 from ..texts import UiTranslator
@@ -69,10 +69,10 @@ def _path_from_prefs(prefs: AppPreferences, attr: str) -> str:
     return str(value or "").strip()
 
 
-def collect_file_statuses(prefs: AppPreferences, translator: UiTranslator) -> List[FileStatusViewModel]:
+def collect_file_statuses(prefs: AppPreferences, translator: UiTranslator) -> list[FileStatusViewModel]:
     """ساخت مدل وضعیت فایل‌ها بر اساس مسیرهای ذخیره‌شده."""
 
-    statuses: List[FileStatusViewModel] = []
+    statuses: list[FileStatusViewModel] = []
     for key, attr in _FILE_STATUS_DEFINITIONS:
         label_key, description_fallback = _FILE_STATUS_TEXT.get(key, (key, key))
         label = translator.text(label_key, label_key)

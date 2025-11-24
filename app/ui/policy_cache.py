@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """کش ساده برای سیاست بارگذاری‌شده.
 
 نمونهٔ استفاده::
@@ -7,6 +5,8 @@ from __future__ import annotations
     policy = get_cached_policy()
     invalidate_policy_cache()
 """
+
+from __future__ import annotations
 
 from functools import lru_cache
 

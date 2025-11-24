@@ -6,12 +6,12 @@ import pytest
 
 pytest.importorskip("PySide6.QtWidgets", reason="PySide6 not available in test environment")
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QFont, QColor
+from PySide6.QtGui import QColor, QFont
 from PySide6.QtWidgets import QApplication, QLabel
 
 from app.ui import fonts, theme
-from app.ui.i18n import Language
 from app.ui.fonts import create_app_font, resolve_vazir_family_name
+from app.ui.i18n import Language
 
 
 @pytest.fixture()

@@ -11,6 +11,7 @@ except ImportError as exc:
     pytest.skip(f"PySide6 unavailable: {exc}", allow_module_level=True)
 
 from app.infra.local_database import DatabaseHealthStatus, DatabaseHealthSummary
+
 try:
     from app.ui.theme import build_theme
 except ImportError as exc:

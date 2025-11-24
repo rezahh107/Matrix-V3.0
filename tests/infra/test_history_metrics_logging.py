@@ -133,16 +133,10 @@ def test_log_history_metrics_with_history(caplog) -> None:
 
     for logged, (_, row) in zip(logged_lines, expected_metrics.iterrows()):
         expected_line = (
-            "HistoryMetrics[channel=%s] total=%d already=%d no_match=%d missing=%d same_mentor=%d ratio=%.3f"
-            % (
-                row["allocation_channel"],
-                row["students_total"],
-                row["history_already_allocated"],
-                row["history_no_history_match"],
-                row["history_missing_or_invalid"],
-                row["same_history_mentor_true"],
-                row["same_history_mentor_ratio"],
-            )
+            f"HistoryMetrics[channel={row['allocation_channel']}] total={row['students_total']} "
+            f"already={row['history_already_allocated']} no_match={row['history_no_history_match']} "
+            f"missing={row['history_missing_or_invalid']} same_mentor={row['same_history_mentor_true']} "
+            f"ratio={row['same_history_mentor_ratio']:.3f}"
         )
         assert logged == expected_line
 

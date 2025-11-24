@@ -6,8 +6,9 @@ import pytest
 
 pytest.importorskip("PySide6.QtGui", reason="PySide6 not available in test environment")
 
-from app.ui import fonts
 from PySide6.QtGui import QFont
+
+from app.ui import fonts
 
 
 def test_embedded_vazirmatn_materialized(tmp_path, monkeypatch):

@@ -5,8 +5,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable
 
 from PySide6.QtCore import QSortFilterProxyModel, Qt
 from PySide6.QtGui import QStandardItem, QStandardItemModel
@@ -35,7 +35,7 @@ class ManagerMentorFilterProxy(QSortFilterProxyModel):
         self._query = (text or "").strip().lower()
         self.invalidateFilter()
 
-    def filterAcceptsRow(self, source_row: int, source_parent):  # type: ignore[override]
+    def filterAcceptsRow(self, source_row: int, source_parent):  # type: ignore[override]  # noqa: N802 - امضای Qt
         if not self._query:
             return True
         model = self.sourceModel()

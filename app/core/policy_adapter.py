@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Mapping, Optional
+from typing import Any
 
 from .policy_loader import PolicyConfig, load_policy
 
@@ -23,7 +24,7 @@ class PolicyAdapter:
             self._config = load_policy(self._path)
         return self._config
 
-    def stage_column(self, stage: str) -> Optional[str]:
+    def stage_column(self, stage: str) -> str | None:
         for stage_def in self.config.trace_stages:
             if stage_def.stage == stage:
                 return stage_def.column

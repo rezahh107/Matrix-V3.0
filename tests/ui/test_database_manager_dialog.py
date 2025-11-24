@@ -1,15 +1,16 @@
 from pathlib import Path
 
 import pytest
+
 try:  # pragma: no cover - محیط CI ممکن است وابستگی Qt نداشته باشد
     from PySide6.QtWidgets import QApplication, QMessageBox
 except Exception:  # pragma: no cover - fallback for headless env
     QApplication = None  # type: ignore
     QMessageBox = None  # type: ignore
 
-from app.infra.local_database import LocalDatabase, _SCHEMA_VERSION
+from app.infra.local_database import _SCHEMA_VERSION, LocalDatabase
 from app.infra.year_database_manager import YearDatabaseInfo
-from app.ui.database_manager_dialog import DatabaseManagerDialog, _QT_AVAILABLE
+from app.ui.database_manager_dialog import _QT_AVAILABLE, DatabaseManagerDialog
 
 
 @pytest.fixture(scope="module")

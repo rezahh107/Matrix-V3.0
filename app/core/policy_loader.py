@@ -10,11 +10,11 @@ from __future__ import annotations
 import json
 import re
 import warnings
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import Enum
 from functools import lru_cache
 from pathlib import Path
-from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 from typing import Literal, cast
 
 from app.core.policy.config import AllocationChannelConfig
@@ -294,7 +294,7 @@ class MentorStatus(str, Enum):
     INACTIVE = "inactive"
 
     @classmethod
-    def from_value(cls, value: object) -> "MentorStatus":
+    def from_value(cls, value: object) -> MentorStatus:
         """تبدیل مقدار متنی به Enum؛ در صورت مقدار ناشناخته خطا می‌دهد."""
 
         text = str(value).strip().lower()
@@ -341,12 +341,12 @@ class PolicyConfig:
     """ساختار دادهٔ فقط‌خواندنی برای نگهداری سیاست بارگذاری‌شده."""
 
     version: str
-    normal_statuses: List[int]
-    school_statuses: List[int]
-    join_keys: List[str]
-    required_student_fields: List[str]
-    ranking_rules: List["RankingRule"]
-    trace_stages: List["TraceStageDefinition"]
+    normal_statuses: list[int]
+    school_statuses: list[int]
+    join_keys: list[str]
+    required_student_fields: list[str]
+    ranking_rules: list[RankingRule]
+    trace_stages: list[TraceStageDefinition]
     gender_codes: GenderCodes
     postal_valid_range: tuple[int, int]
     finance_variants: tuple[int, ...]
@@ -359,10 +359,10 @@ class PolicyConfig:
     join_key_duplicate_threshold: int
     alias_rule: PolicyAliasRule
     columns: PolicyColumns
-    column_aliases: Mapping[str, Dict[str, str]]
+    column_aliases: Mapping[str, dict[str, str]]
     excel: ExcelOptions
-    virtual_alias_ranges: Tuple[Tuple[int, int], ...]
-    virtual_name_patterns: Tuple[str, ...]
+    virtual_alias_ranges: tuple[tuple[int, int], ...]
+    virtual_name_patterns: tuple[str, ...]
     emission: EmissionOptions
     fairness_strategy: str
     center_management: CenterManagementConfig
@@ -388,7 +388,7 @@ class PolicyConfig:
     )
 
     @property
-    def ranking(self) -> List[str]:
+    def ranking(self) -> list[str]:
         """ترتیب قوانین رتبه‌بندی بر اساس نام قانون."""
 
         return [rule.name for rule in self.ranking_rules]
@@ -420,7 +420,7 @@ class PolicyConfig:
         return self.center_management.default_center_for_invalid
 
     @property
-    def join_stage_columns(self) -> List[str]:
+    def join_stage_columns(self) -> list[str]:
         """لیست ستون‌های فیلتر join به ترتیب تعریف‌شده در Policy."""
 
         return [item.column for item in self.trace_stages if item.stage != "capacity_gate"]
@@ -559,14 +559,13 @@ def _normalize_policy_payload(data: Mapping[str, object]) -> Mapping[str, object
         "coverage_options": coverage_options,
         "mentor_pool_governance": mentor_pool_governance,
         "allocation_channels": allocation_channels,
-        "mentor_pool_governance": mentor_pool_governance,
     }
 
 
-def _ensure_int_sequence(name: str, value: object) -> List[int]:
+def _ensure_int_sequence(name: str, value: object) -> list[int]:
     if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
         raise TypeError(f"{name} must be a sequence of ints")
-    result: List[int] = []
+    result: list[int] = []
     for item in value:
         if not isinstance(item, int):
             raise TypeError(f"All {name} items must be int")
@@ -630,10 +629,7 @@ def _normalize_fairness_strategy(value: object) -> str:
     if value is None:
         return "none"
     candidate: object
-    if isinstance(value, Mapping):
-        candidate = value.get("strategy", "none")
-    else:
-        candidate = value
+    candidate = value.get("strategy", "none") if isinstance(value, Mapping) else value
     text = str(candidate).strip().lower()
     if text not in _VALID_FAIRNESS_STRATEGIES:
         raise ValueError(
@@ -822,7 +818,7 @@ def _normalize_allocation_channels(
     center_payload = payload.get("center_channels", {})
     if not isinstance(center_payload, Mapping):
         raise TypeError("allocation_channels.center_channels must be a mapping")
-    center_channels: Dict[str, Tuple[int, ...]] = {}
+    center_channels: dict[str, tuple[int, ...]] = {}
     for name, values in center_payload.items():
         normalized_name = str(name or "").strip().upper()
         if not normalized_name:
@@ -910,12 +906,12 @@ def _normalize_columns(value: object) -> Mapping[str, str]:
     return normalized
 
 
-def _normalize_column_aliases(value: object) -> Mapping[str, Dict[str, str]]:
+def _normalize_column_aliases(value: object) -> Mapping[str, dict[str, str]]:
     if value is None:
         return {}
     if not isinstance(value, Mapping):
         raise TypeError("column_aliases must be a mapping from source to alias map")
-    normalized: Dict[str, Dict[str, str]] = {}
+    normalized: dict[str, dict[str, str]] = {}
     for source, alias_map in value.items():
         if not isinstance(source, str):
             raise TypeError("column_aliases keys must be strings")
@@ -928,10 +924,10 @@ def _normalize_column_aliases(value: object) -> Mapping[str, Dict[str, str]]:
         }
     return normalized
 
-def _normalize_virtual_alias_ranges(raw: object) -> Tuple[Tuple[int, int], ...]:
+def _normalize_virtual_alias_ranges(raw: object) -> tuple[tuple[int, int], ...]:
     if not isinstance(raw, Sequence) or isinstance(raw, (str, bytes)):
         raise TypeError("virtual_alias_ranges must be a sequence of [start, end]")
-    ranges: list[Tuple[int, int]] = []
+    ranges: list[tuple[int, int]] = []
     for item in raw:
         if not isinstance(item, Sequence) or isinstance(item, (str, bytes)) or len(item) != 2:
             raise ValueError("Each virtual_alias_range must be a pair [start, end]")
@@ -949,7 +945,7 @@ def _normalize_virtual_alias_ranges(raw: object) -> Tuple[Tuple[int, int], ...]:
     return tuple(ranges)
 
 
-def _normalize_virtual_name_patterns(raw: object) -> Tuple[str, ...]:
+def _normalize_virtual_name_patterns(raw: object) -> tuple[str, ...]:
     if not isinstance(raw, Sequence) or isinstance(raw, (str, bytes)):
         raise TypeError("virtual_name_patterns must be a sequence of strings")
     patterns: list[str] = []
@@ -967,7 +963,7 @@ def _normalize_virtual_name_patterns(raw: object) -> Tuple[str, ...]:
     return tuple(patterns)
 
 
-def _normalize_join_keys(raw: object) -> List[str]:
+def _normalize_join_keys(raw: object) -> list[str]:
     if not isinstance(raw, Sequence) or isinstance(raw, (str, bytes)):
         raise TypeError("join_keys must be a sequence of strings")
     join_keys = [str(item).strip() for item in raw]
@@ -994,7 +990,7 @@ def _normalize_join_keys(raw: object) -> List[str]:
 
 def _normalize_required_student_fields(
     raw: object | None, join_keys: Sequence[str]
-) -> List[str]:
+) -> list[str]:
     """نرمال‌سازی فهرست ستون‌های ضروری دانش‌آموز از Policy."""
 
     if raw is None:
@@ -1029,7 +1025,7 @@ def _normalize_required_student_fields(
     return normalized
 
 
-def _normalize_ranking_rules(raw: object) -> List[Mapping[str, object]]:
+def _normalize_ranking_rules(raw: object) -> list[Mapping[str, object]]:
     if not isinstance(raw, Sequence) or isinstance(raw, (str, bytes)):
         raise TypeError("ranking must be a sequence of rules")
     ranking_items = list(raw)
@@ -1039,8 +1035,8 @@ def _normalize_ranking_rules(raw: object) -> List[Mapping[str, object]]:
         raise ValueError(
             f"ranking must contain exactly {_EXPECTED_RANKING_ITEMS_COUNT} items",
         )
-    normalized: List[Mapping[str, object]] = []
-    ranking_names: List[str] = []
+    normalized: list[Mapping[str, object]] = []
+    ranking_names: list[str] = []
     for item in ranking_items:
         if isinstance(item, Mapping):
             if "name" not in item or "column" not in item:
@@ -1063,7 +1059,7 @@ def _normalize_ranking_rules(raw: object) -> List[Mapping[str, object]]:
     return normalized
 
 
-def _normalize_trace_stages(raw: object | None, join_keys: Sequence[str]) -> List[Mapping[str, str]]:
+def _normalize_trace_stages(raw: object | None, join_keys: Sequence[str]) -> list[Mapping[str, str]]:
     if raw is None:
         stages = [
             {"stage": stage, "column": _LEGACY_TRACE_DEFAULTS[stage]}
@@ -1116,7 +1112,7 @@ def _parse_semver(value: str) -> tuple[int, int, int]:
 
 def _version_gate(
     loaded_version: str,
-    expected_version: Optional[str],
+    expected_version: str | None,
     on_version_mismatch: VersionMismatchMode,
 ) -> None:
     if expected_version is None:
@@ -1320,7 +1316,7 @@ def _to_gender_codes(payload: Mapping[str, Mapping[str, object]]) -> GenderCodes
 
 def parse_policy_dict(
     data: Mapping[str, object],
-    expected_version: Optional[str] = DEFAULT_POLICY_VERSION,
+    expected_version: str | None = DEFAULT_POLICY_VERSION,
     on_version_mismatch: VersionMismatchMode = "raise",
 ) -> PolicyConfig:
     """مسیر خالص برای تبدیل dict به :class:`PolicyConfig`."""
@@ -1332,7 +1328,7 @@ def parse_policy_dict(
     return config
 
 
-def _apply_schema_defaults(data: Dict[str, object]) -> Dict[str, object]:
+def _apply_schema_defaults(data: dict[str, object]) -> dict[str, object]:
     """تزریق کلیدهای ضروری در صورت فقدان برای مهاجرت نسخه."""
 
     data.setdefault("virtual_alias_ranges", list(_DEFAULT_VIRTUAL_ALIAS_RANGES))
@@ -1401,7 +1397,7 @@ def _apply_schema_defaults(data: Dict[str, object]) -> Dict[str, object]:
     return data
 
 
-def _normalize_excel_options(payload: Mapping[str, object]) -> Dict[str, object]:
+def _normalize_excel_options(payload: Mapping[str, object]) -> dict[str, object]:
     """اعتبارسنجی و نرمال‌سازی گزینه‌های Excel."""
 
     rtl = bool(payload.get("rtl", _DEFAULT_EXCEL_OPTIONS["rtl"]))
@@ -1424,7 +1420,7 @@ def _normalize_excel_options(payload: Mapping[str, object]) -> Dict[str, object]
     }
 
 
-def _normalize_coverage_options(payload: Mapping[str, object]) -> Dict[str, object]:
+def _normalize_coverage_options(payload: Mapping[str, object]) -> dict[str, object]:
     """اعتبارسنجی تنظیمات پوشش ماتریس."""
 
     if not isinstance(payload, Mapping):
@@ -1534,7 +1530,7 @@ def _finalize_reason_trace_labels(values: Sequence[object]) -> tuple[str, ...]:
 
 def _normalize_reason_labels(value: object) -> Mapping[str, tuple[str, ...]]:
     default_reason = _DEFAULT_SELECTION_REASON_OPTIONS["labels"].get("reason", {})
-    resolved: Dict[str, tuple[str, ...]] = {}
+    resolved: dict[str, tuple[str, ...]] = {}
     source: Mapping[str, object] | None = None
     if isinstance(value, Mapping):
         candidate = value.get("reason") if "reason" in value else value
@@ -1614,7 +1610,7 @@ def _to_emission_options(data: Mapping[str, object]) -> EmissionOptions:
 
 def _prepare_policy_payload(
     data: Mapping[str, object],
-    expected_version: Optional[str],
+    expected_version: str | None,
     mode: VersionMismatchMode,
 ) -> Mapping[str, object]:
     """آماده‌سازی اولیهٔ دادهٔ Policy با لحاظ مهاجرت و هشدار نسخه."""
@@ -1681,7 +1677,7 @@ def _load_policy_cached(
     resolved_path: str,
     raw: str,
     mtime_ns: int,
-    expected_version: Optional[str],
+    expected_version: str | None,
     on_version_mismatch: VersionMismatchMode,
 ) -> PolicyConfig:
     try:
@@ -1698,7 +1694,7 @@ def _load_policy_cached(
 def load_policy(
     path: str | Path = "config/policy.json",
     *,
-    expected_version: Optional[str] = DEFAULT_POLICY_VERSION,
+    expected_version: str | None = DEFAULT_POLICY_VERSION,
     on_version_mismatch: VersionMismatchMode = "raise",
 ) -> PolicyConfig:
     """بارگذاری سیاست از فایل JSON و بازگشت ساختار کش‌شونده."""

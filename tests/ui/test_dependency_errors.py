@@ -29,7 +29,8 @@ class _StubSharedMemory:
 
 class _StubTimer:
     @staticmethod
-    def singleShot(_interval, _func):  # pragma: no cover - تنها برای سازگاری
+    def singleShot(_interval, _func):  # noqa: N802 - امضای Qt
+        # pragma: no cover - تنها برای سازگاری
         return None
 
 
@@ -44,16 +45,16 @@ class _StubApplication:
     def setAttribute(self, attr, value):  # noqa: N802 - امضای Qt
         self.attributes.append((attr, value))
 
-    def setApplicationName(self, *_args, **_kwargs):
+    def setApplicationName(self, *_args, **_kwargs):  # noqa: N802 - امضای Qt
         return None
 
-    def setOrganizationName(self, *_args, **_kwargs):
+    def setOrganizationName(self, *_args, **_kwargs):  # noqa: N802 - امضای Qt
         return None
 
-    def setApplicationVersion(self, *_args, **_kwargs):
+    def setApplicationVersion(self, *_args, **_kwargs):  # noqa: N802 - امضای Qt
         return None
 
-    def setQuitOnLastWindowClosed(self, *_args, **_kwargs):
+    def setQuitOnLastWindowClosed(self, *_args, **_kwargs):  # noqa: N802 - امضای Qt
         return None
 
     def exec(self):  # noqa: A003 - هم‌نام Qt
@@ -92,8 +93,6 @@ class _StubMessageBox:
 
 def _install_pyside_stub(monkeypatch):
     try:
-        import PySide6.QtWidgets  # type: ignore
-        import PySide6.QtCore  # type: ignore
         return
     except Exception:  # pragma: no cover - در صورت نبود PySide6 فعال می‌شود
         pass

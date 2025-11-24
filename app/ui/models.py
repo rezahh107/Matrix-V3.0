@@ -1,9 +1,9 @@
-from __future__ import annotations
-
 """مدل‌های ساده‌ی UI برای نگاشت داده‌های استخر منتورها."""
 
+from __future__ import annotations
+
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from typing import Iterable, Mapping
 
 import pandas as pd
 

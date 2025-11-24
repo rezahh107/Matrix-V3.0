@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import List
-
 import importlib
+from pathlib import Path
 
 import pandas as pd
 import pytest
@@ -15,8 +13,8 @@ from app.infra.excel.tables import TableNameRegistry  # noqa: E402
 from app.infra.io_utils import write_xlsx_atomic  # noqa: E402
 
 
-def _engines() -> List[str]:
-    engines: List[str] = []
+def _engines() -> list[str]:
+    engines: list[str] = []
     for name in ("openpyxl", "xlsxwriter"):
         if importlib.util.find_spec(name) is not None:
             engines.append(name)

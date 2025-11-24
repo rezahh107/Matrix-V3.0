@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Mapping
 
 import pandas as pd
 
@@ -152,7 +152,7 @@ def _meta_sheet(context: QaValidationContext, report: QaReport) -> pd.DataFrame:
     meta: dict[str, object] = {}
     if context.meta:
         meta.update(context.meta)
-    meta.setdefault("generated_at", datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"))
+    meta.setdefault("generated_at", datetime.now(UTC).isoformat().replace("+00:00", "Z"))
     meta.setdefault("rules_total", len(report.results))
     meta.setdefault("rules_failed", sum(not r.passed for r in report.results))
     meta.setdefault("policy_version", meta.get("policy_version"))

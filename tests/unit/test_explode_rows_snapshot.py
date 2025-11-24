@@ -1,15 +1,14 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Tuple
 
 import pandas as pd
 import pandas.testing as pdt
 
 from app.core.build_matrix import (
-    BuildConfig,
     CAPACITY_CURRENT_COL,
     CAPACITY_SPECIAL_COL,
+    BuildConfig,
     _as_domain_config,
     _explode_rows,
     _prepare_base_rows,
@@ -59,7 +58,7 @@ def _build_fixture_base() -> tuple[
     pd.DataFrame,
     dict[str, str],
     BuildConfig,
-    Tuple[str, str, str, str],
+    tuple[str, str, str, str],
 ]:
     insp_df, schools_df, crosswalk_df = _create_sample_inputs()
     insp_df = insp_df.copy()

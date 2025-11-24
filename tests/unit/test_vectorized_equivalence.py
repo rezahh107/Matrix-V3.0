@@ -8,12 +8,12 @@ from app.core.build_matrix import (
     CAPACITY_CURRENT_COL,
     CAPACITY_SPECIAL_COL,
     BuildConfig,
+    _as_domain_config,
+    _prepare_base_rows,
     build_matrix,
     build_school_maps,
     generate_row_variants,
     prepare_crosswalk_mappings,
-    _prepare_base_rows,
-    _as_domain_config,
 )
 
 

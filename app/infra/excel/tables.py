@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Dict, Iterable, List
 
 import pandas as pd
 
@@ -63,11 +63,11 @@ class TableNameRegistry:
         return candidate
 
 
-def dedupe_headers(columns: Iterable[object]) -> List[str]:
+def dedupe_headers(columns: Iterable[object]) -> list[str]:
     """تولید هدرهای یکتا با حفظ ترتیب ورودی."""
 
-    seen: Dict[str, int] = {}
-    deduped: List[str] = []
+    seen: dict[str, int] = {}
+    deduped: list[str] = []
     for column in columns:
         text = str(column)
         base = text if text else "Column"
@@ -77,7 +77,7 @@ def dedupe_headers(columns: Iterable[object]) -> List[str]:
     return deduped
 
 
-def _build_columns(df: pd.DataFrame) -> List[dict[str, str]]:
+def _build_columns(df: pd.DataFrame) -> list[dict[str, str]]:
     """تولید آرایهٔ ستون‌ها با هدرهای یکتا برای جدول‌های Excel."""
 
     return [{"header": header} for header in dedupe_headers(df.columns)]
@@ -93,7 +93,7 @@ def build_xlsxwriter_table(df: pd.DataFrame, table_name: str) -> dict[str, objec
     }
 
 
-def build_openpyxl_table(table_name: str, ref: str, headers: List[str]):
+def build_openpyxl_table(table_name: str, ref: str, headers: list[str]):
     """ساخت نمونهٔ جدول openpyxl با استایل خنثی و هدر یکتا."""
 
     from openpyxl.worksheet.table import Table, TableColumn, TableStyleInfo

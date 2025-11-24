@@ -12,12 +12,12 @@ from app.infra.excel.exporter import write_selection_reasons_sheet
 openpyxl = pytest.importorskip("openpyxl")
 
 
-def _defined_name_map(workbook: "openpyxl.Workbook") -> dict[str, str]:
+def _defined_name_map(workbook: openpyxl.Workbook) -> dict[str, str]:
     container = workbook.defined_names
     if hasattr(container, "definedName"):
         entries = container.definedName or []
         return {entry.name: entry.attr_text for entry in entries}
-    return {name: container[name].attr_text for name in container.keys()}
+    return {name: container[name].attr_text for name in container}
 
 
 @pytest.mark.parametrize("engine", ["openpyxl", "xlsxwriter"])

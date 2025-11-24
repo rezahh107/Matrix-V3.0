@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from typing import List, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 
 import pandas as pd
 
 from app.core.common.columns import enforce_join_key_types
-from app.core.common.domain import COL_GROUP, COL_GENDER, COL_STATUS
+from app.core.common.domain import COL_GENDER, COL_GROUP, COL_STATUS
 
 __all__ = ["build_candidate_group_keys"]
 
@@ -72,7 +72,7 @@ def build_candidate_group_keys(
         columns = list(join_keys) + ["variant", "has_alias", "can_generate", "mentor_id"]
         return pd.DataFrame(columns=columns)
 
-    records: List[Mapping[str, object]] = []
+    records: list[Mapping[str, object]] = []
 
     keys_iter = iter(join_keys)
     track_key = next(keys_iter, COL_GROUP)
@@ -148,7 +148,7 @@ def build_candidate_group_keys(
     present_keys = [key for key in join_keys if key in frame.columns]
     if present_keys:
         frame = enforce_join_key_types(frame, present_keys)
-    ordered_columns: List[str] = list(join_keys) + ["variant", "has_alias", "can_generate", "mentor_id"]
+    ordered_columns: list[str] = list(join_keys) + ["variant", "has_alias", "can_generate", "mentor_id"]
     for column in ordered_columns:
         if column not in frame.columns:
             frame[column] = pd.NA

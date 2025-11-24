@@ -1,11 +1,11 @@
-from __future__ import annotations
-
 """بایگانی دترمینیستیک خروجی‌های ImportToSabt در SQLite."""
+
+from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Iterable, Mapping, Sequence
 
 import pandas as pd
 

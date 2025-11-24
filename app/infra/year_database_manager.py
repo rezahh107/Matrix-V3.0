@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import sqlite3
 from pathlib import Path
-from typing import List
 
 from app.infra.local_database import LocalDatabase
 
@@ -31,10 +29,10 @@ class YearDatabaseManager:
         safe = year_id.replace("/", "-").replace(" ", "_")
         return self.base_dir / f"smart_alloc_{safe}.sqlite"
 
-    def list_years(self) -> List[YearDatabaseInfo]:
+    def list_years(self) -> list[YearDatabaseInfo]:
         """برگرداندن فهرست سال‌های موجود به‌صورت مرتب."""
 
-        infos: List[YearDatabaseInfo] = []
+        infos: list[YearDatabaseInfo] = []
         for path in sorted(self.base_dir.glob("smart_alloc_*.sqlite")):
             year_id = path.stem.replace("smart_alloc_", "")
             db = LocalDatabase(path)

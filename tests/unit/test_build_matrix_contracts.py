@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import pandas as pd
 
-from app.core.build_matrix import BuildConfig, _validate_alias_contract, _validate_school_code_contract
+from app.core.build_matrix import (
+    BuildConfig,
+    _validate_alias_contract,
+    _validate_school_code_contract,
+)
 
 
 def test_validate_alias_contract_handles_duplicate_columns() -> None:

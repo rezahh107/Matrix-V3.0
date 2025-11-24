@@ -3,7 +3,6 @@ import pandas as pd
 from app.core.allocate_students import allocate_batch
 from app.core.policy_loader import load_policy
 
-
 _GROUP_NAME = "تجربی"
 ALLOWED_GROUP_CODES = frozenset(
     {1, 3, 5, 7, 8, 9, 20, 22, 23, 24, 25, 26, 27, 31, 33, 35, 36, 37}

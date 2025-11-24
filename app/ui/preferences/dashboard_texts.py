@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, List
 
-from app.utils.path_utils import resource_path
 from app.ui.texts import UiTranslator
+from app.utils.path_utils import resource_path
 
 __all__ = [
     "ChecklistItem",
@@ -35,7 +35,7 @@ class DashboardTextBundle:
     checklist_description: str
     actions_title: str
     actions_description: str
-    checklist_items: List[ChecklistItem]
+    checklist_items: list[ChecklistItem]
 
 
 _DEFAULT_DATA = {
@@ -71,10 +71,10 @@ def _load_json_payload(path: Path) -> dict:
         return _DEFAULT_DATA
 
 
-def _normalize_items(items: Iterable[dict]) -> List[ChecklistItem]:
+def _normalize_items(items: Iterable[dict]) -> list[ChecklistItem]:
     """تبدیل دادهٔ ورودی به لیست آیتم‌های معتبر."""
 
-    normalized: List[ChecklistItem] = []
+    normalized: list[ChecklistItem] = []
     for raw in items:
         item_id = str(raw.get("id") or "item")
         text = str(raw.get("text") or "")

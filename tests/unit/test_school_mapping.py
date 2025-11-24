@@ -5,9 +5,9 @@ from __future__ import annotations
 import pandas as pd
 
 from app.core.allocate_students import _normalize_students
+from app.core.build_matrix import BuildConfig, _detect_school_lookup_mismatches, build_school_maps
 from app.core.common.columns import CANON_EN_TO_FA
 from app.core.policy_loader import load_policy
-from app.core.build_matrix import build_school_maps, _detect_school_lookup_mismatches, BuildConfig
 
 
 def _base_student_frame(values: list[str | None]) -> pd.DataFrame:

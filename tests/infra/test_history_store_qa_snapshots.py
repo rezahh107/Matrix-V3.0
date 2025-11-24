@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pandas as pd
@@ -14,7 +14,7 @@ def test_history_store_persists_join_key_duplicates(tmp_path) -> None:
     db.initialize()
 
     run_uuid = "uuid-test"
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     ctx = build_run_context(
         command="build-matrix",
         cli_args="--test",

@@ -8,18 +8,18 @@ import pytest
 from openpyxl import Workbook
 
 from app.infra.excel.import_to_sabt import (  # noqa: E402
+    ImportToSabtExportError,
+    _coalesce_duplicate_identifier_rows,
+    _safe_merge,
     apply_alias_rule,
     build_errors_frame,
     build_optional_sheet_frame,
     build_sheet2_frame,
     build_summary_frame,
     ensure_template_workbook,
-    ImportToSabtExportError,
     load_exporter_config,
     prepare_allocation_export_frame,
     write_import_to_sabt_excel,
-    _coalesce_duplicate_identifier_rows,
-    _safe_merge,
 )
 
 

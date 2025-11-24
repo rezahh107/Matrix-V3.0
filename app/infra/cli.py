@@ -18,12 +18,12 @@ import json
 import logging
 import platform
 import sys
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any, Callable, Dict, Literal, Mapping, Sequence
-from uuid import uuid4
-
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any, Literal
+from uuid import uuid4
 
 import pandas as pd
 from pandas import testing as pd_testing
@@ -37,28 +37,46 @@ from app.core.allocation.mentor_pool import (
     apply_manager_mentor_governance,
     apply_mentor_pool_governance,
 )
+from app.core.canonical_frames import sanitize_pool_for_allocation as _sanitize_pool_for_allocation
+from app.core.build_matrix import BuildConfig, build_matrix
 from app.core.canonical_frames import (
     canonicalize_allocation_frames,
     canonicalize_pool_frame,
     canonicalize_students_frame,
-    sanitize_pool_for_allocation as _sanitize_pool_for_allocation,
 )
-from app.core.build_matrix import BuildConfig, build_matrix
+
+# --- واردات اصلاح شده از app.core ---
+from app.core.common.columns import (
+    CANON_EN_TO_FA,
+    HeaderMode,
+    canonicalize_headers,
+    enrich_school_columns_en,
+)
+from app.core.counter import (
+    assert_unique_student_ids,
+    assign_counters,
+    build_registration_id,
+    find_duplicate_student_id_groups,
+    infer_year_strict,
+    pick_counter_sheet_name,
+    year_to_yy,
+)
 from app.core.policy_loader import MentorStatus, PolicyConfig, load_policy
-from app.core.qa.invariants import run_all_invariants
-from app.infra.excel_writer import write_selection_reasons_sheet
-from app.infra.excel.export_allocations import (
-    DEFAULT_SABT_PROFILE_PATH,
-    build_sabt_export_frame,
-    collect_trace_debug_sheets,
-    load_sabt_export_profile,
-)
+from app.core.qa.invariants import QaReport, run_all_invariants
+from app.infra import history_store
+from app.infra.audit_allocations import audit_allocations, summarize_report
 from app.infra.errors import (
     DatabaseCorruptError,
     DatabasePreparationError,
     DatabaseSchemaMismatchError,
     ReferenceDataMissingError,
     SchemaVersionMismatchError,
+)
+from app.infra.excel.export_allocations import (
+    DEFAULT_SABT_PROFILE_PATH,
+    build_sabt_export_frame,
+    collect_trace_debug_sheets,
+    load_sabt_export_profile,
 )
 from app.infra.excel.export_qa_validation import (
     QaValidationContext,
@@ -74,52 +92,34 @@ from app.infra.excel.import_to_sabt import (
     prepare_allocation_export_frame,
     write_import_to_sabt_excel,
 )
+from app.infra.excel_writer import write_selection_reasons_sheet
+from app.infra.exporter_archive_repository import (
+    ExporterArchiveConfig,
+    ExporterArchiveRepository,
+)
+from app.infra.forms_repository import FormsRepository, WordPressFormsClient
 from app.infra.io_utils import (
     ALT_CODE_COLUMN,
-    read_crosswalk_workbook,
     read_excel_first_sheet,
     read_inspactor_workbook,
     write_xlsx_atomic,
 )
 from app.infra.local_database import LocalDatabase
-from app.infra.exporter_archive_repository import (
-    ExporterArchiveConfig,
-    ExporterArchiveRepository,
+from app.infra.reference_managers_repository import import_managers_from_excel
+from app.infra.reference_mentors_repository import (
+    import_mentor_pool_from_excel,
+    load_mentor_pool_from_cache,
 )
 from app.infra.reference_schools_repository import (
     get_school_reference_frames,
     import_school_crosswalk_from_excel,
     import_school_report_from_excel,
 )
-from app.infra.reference_managers_repository import import_managers_from_excel
 from app.infra.reference_students_repository import (
     import_student_report_from_excel,
     load_students_from_cache,
 )
-from app.infra.forms_repository import FormsRepository, WordPressFormsClient
-from app.infra.reference_mentors_repository import (
-    import_mentor_pool_from_excel,
-    load_mentor_pool_from_cache,
-)
-from app.infra import history_store
-from app.infra.audit_allocations import audit_allocations, summarize_report
-# --- واردات اصلاح شده از app.core ---
-from app.core.common.columns import (
-    CANON_EN_TO_FA,
-    HeaderMode,
-    canonicalize_headers,
-    enrich_school_columns_en,
-)
-from app.core.counter import (
-    assert_unique_student_ids,
-    assign_counters,
-    build_registration_id,
-    detect_academic_year_from_counters,
-    find_duplicate_student_id_groups,
-    infer_year_strict,
-    pick_counter_sheet_name,
-    year_to_yy,
-)
+
 # --- پایان واردات اصلاح شده ---
 
 ProgressFn = Callable[[int, str], None]
@@ -259,7 +259,7 @@ def _resolve_forms_client(args: argparse.Namespace) -> WordPressFormsClient:
     )
 
 
-def _print_audit_summary(report: Dict[str, Dict[str, Any]]) -> None:
+def _print_audit_summary(report: dict[str, dict[str, Any]]) -> None:
     """چاپ خلاصهٔ گزارش ممیزی تخصیص."""
 
     print("=== Allocation Audit ===")
@@ -272,7 +272,7 @@ def _print_audit_summary(report: Dict[str, Dict[str, Any]]) -> None:
             print(f"  samples: {preview}")
 
 
-def _print_metrics(report: Dict[str, Dict[str, Any]]) -> None:
+def _print_metrics(report: dict[str, dict[str, Any]]) -> None:
     """چاپ JSON ساخت‌یافته برای سامانه‌های Observability."""
 
     summary = summarize_report(report)
@@ -387,10 +387,10 @@ def _resolve_reference_frames(
             raise ReferenceDataMissingError(
                 table=exc.table,
                 message=(
-                    "جدول {table} در پایگاه داده یافت نشد؛ «build-matrix» را با "
+                    f"جدول {exc.table} در پایگاه داده یافت نشد؛ «build-matrix» را با "
                     "گزینه‌های --schools و --crosswalk اجرا کنید یا ابتدا «import-schools»/"
                     "«import-crosswalk» را برای پر کردن کش SQLite اجرا نمایید."
-                ).format(table=exc.table),
+                ),
             ) from exc
         if schools_df is None:
             schools_df = schools_db
@@ -484,7 +484,7 @@ def _qa_validation_output_path(base: Path, *, stem_override: str | None = None) 
 
 def _export_qa_validation_workbook(
     *,
-    report: "QaReport",
+    report: QaReport,
     base_output: Path,
     context: QaValidationContext,
     stem_override: str | None = None,
@@ -1076,10 +1076,9 @@ def _build_duplicate_row_report(
                 national_id = ""
             else:
                 raw_national_id = row.get("national_id", "")
-                if pd.isna(raw_national_id):  # type: ignore[arg-type]
-                    national_id = ""
-                else:
-                    national_id = str(raw_national_id).strip()
+                national_id = (
+                    "" if pd.isna(raw_national_id) else str(raw_national_id).strip()  # type: ignore[arg-type]
+                )
             rows.append(
                 {
                     "index": index_label,
@@ -1268,7 +1267,7 @@ def _inject_student_ids(
     students_df: pd.DataFrame,
     args: argparse.Namespace,
     policy: PolicyConfig,
-) -> tuple[pd.Series, Dict[str, int], pd.DataFrame]:
+) -> tuple[pd.Series, dict[str, int], pd.DataFrame]:
     """ساخت ستون student_id با رعایت Policy و ورودی‌های UI/CLI."""
 
     overrides = getattr(args, "_ui_overrides", {}) or {}
@@ -1484,11 +1483,11 @@ def _run_build_matrix(args: argparse.Namespace, policy: PolicyConfig, progress: 
             ),
         )
         message = (
-            "تعداد ردیف‌های دارای کلید تکراری برای همان پشتیبان ({rows}) از "
-            "آستانهٔ مجاز ({threshold}) بیشتر است. هر پشتیبان باید حداکثر یک"
+            f"تعداد ردیف‌های دارای کلید تکراری برای همان پشتیبان ({duplicate_rows}) از "
+            f"آستانهٔ مجاز ({duplicate_threshold}) بیشتر است. هر پشتیبان باید حداکثر یک"
             " بار روی هر ترکیب ۶ کلید ظاهر شود؛ وجود پشتیبان‌های متفاوت روی"
             " یک کلید مجاز است."
-        ).format(rows=duplicate_rows, threshold=duplicate_threshold)
+        )
         if preview:
             message += f" نمونه: {preview}"
         error = ValueError(message)
@@ -1499,7 +1498,7 @@ def _run_build_matrix(args: argparse.Namespace, policy: PolicyConfig, progress: 
     meta = {
         "policy_version": policy.version,
         "ssot_version": "1.0.2",
-        "build_time": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "build_time": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "build_host": platform.node(),
         "inputs": inputs,
         "inputs_mtime": inputs_mtime,
@@ -1564,9 +1563,7 @@ def _run_build_matrix(args: argparse.Namespace, policy: PolicyConfig, progress: 
     if isinstance(group_coverage_df, pd.DataFrame):
         sheets["group_coverage_debug"] = group_coverage_df
         if "is_unseen_viable" in group_coverage_df.columns:
-            unseen_slice = group_coverage_df[
-                group_coverage_df["is_unseen_viable"] == True
-            ]
+            unseen_slice = group_coverage_df[group_coverage_df["is_unseen_viable"]]
         else:
             unseen_slice = group_coverage_df[
                 group_coverage_df["status"].isin(["candidate_only", "blocked_candidate"])
@@ -1701,7 +1698,7 @@ def _allocate_and_write(
 ) -> int:
     """اجرای تخصیص، الصاق شناسه‌ها و نوشتن خروجی‌های Excel."""
     run_uuid = uuid4().hex
-    started_at = datetime.now(timezone.utc)
+    started_at = datetime.now(UTC)
     cli_args_text = " ".join(getattr(args, "_raw_argv", [])).strip() or None
     qa_report: object | None = None
     history_metrics_df: pd.DataFrame | None = None
@@ -1965,7 +1962,7 @@ def _allocate_and_write(
         status_message = str(exc)
         raise
     finally:
-        completed_at = datetime.now(timezone.utc)
+        completed_at = datetime.now(UTC)
         total_students = len(students_base)
         allocated_students = (
             allocations_df.shape[0] if isinstance(allocations_df, pd.DataFrame) else None

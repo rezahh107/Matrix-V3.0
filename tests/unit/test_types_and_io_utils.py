@@ -6,7 +6,6 @@ import pytest
 from app.core.common.types import JoinKeyValues, natural_key
 from app.infra.io_utils import _coalesce_duplicate_columns
 
-
 CANONICAL_JOIN_KEYS = [
     "کدرشته",
     "جنسیت",

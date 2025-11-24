@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Callable, Iterable, Sequence
 from pathlib import Path
-from typing import Callable, Dict, Iterable, List, Sequence, Tuple
 
 import pandas as pd
 from PySide6.QtCore import (
@@ -15,9 +15,9 @@ from PySide6.QtCore import (
     QPropertyAnimation,
     QSettings,
     Qt,
-    Slot,
     QTimer,
     QUrl,
+    Slot,
 )
 from PySide6.QtGui import (
     QAction,
@@ -29,66 +29,64 @@ from PySide6.QtGui import (
     QPalette,
 )
 from PySide6.QtWidgets import (
-    QApplication,
     QAbstractItemView,
+    QApplication,
     QComboBox,
     QDialog,
     QFileDialog,
     QFormLayout,
     QFrame,
+    QGraphicsOpacityEffect,
     QGroupBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QMainWindow,
     QMessageBox,
-    QPushButton,
     QProgressBar,
+    QPushButton,
     QScrollArea,
-    QSizePolicy,
-    QStackedLayout,
     QSplitter,
     QSplitterHandle,
-    QStatusBar,
-    QTabWidget,
     QTableWidget,
     QTableWidgetItem,
+    QTabWidget,
     QTextEdit,
     QToolBar,
-    QGraphicsOpacityEffect,
     QVBoxLayout,
     QWidget,
     QWidgetAction,
 )
 
 from app.core.allocation.history_metrics import METRIC_COLUMNS
-from app.core.common.columns import CANON_EN_TO_FA, canonicalize_headers, ensure_series
+from app.core.common.columns import canonicalize_headers
 from app.core.counter import find_max_sequence_by_prefix, year_to_yy
 from app.core.policy_loader import get_policy
 from app.infra import cli
 from app.infra.local_database import LocalDatabase
-from app.utils.path_utils import resource_path
-
+from app.infra.year_database_manager import YearDatabaseInfo, YearDatabaseManager
+from app.ui.database_manager_dialog import DatabaseManagerDialog
+from app.ui.fonts import get_app_font
 from app.ui.helpers.counter_helpers import detect_year_candidates
 from app.ui.helpers.manager_helpers import extract_manager_names
 from app.ui.history_metrics import HistoryMetricsDialog
-from app.ui.database_manager_dialog import DatabaseManagerDialog
 from app.ui.loaders import ExcelLoader
 from app.ui.mentor_pool_dialog import MentorPoolDialog
 from app.ui.models import MentorPoolEntry, build_mentor_entries_from_dataframe
 from app.ui.policy_cache import get_cached_policy
-from app.ui.fonts import get_app_font
-from .task_runner import ProgressFn, Worker
-from .widgets import DatabaseStatusWidget, FilePicker, ThemedStatusBar
+from app.utils.path_utils import resource_path
+
 from .app_preferences import AppPreferences
+from .effects import SafeOpacityEffect
 from .i18n import Language
+from .log_panel import LogPanel
 from .preferences import (
     format_last_run_label,
     read_last_run_info,
 )
 from .preferences.language_dialog import LanguageDialog
-from .log_panel import LogPanel
-from .effects import SafeOpacityEffect
+from .task_runner import ProgressFn, Worker
+from .texts import UiTranslator
 from .theme import (
     Theme,
     apply_card_shadow,
@@ -97,13 +95,11 @@ from .theme import (
     apply_theme_mode,
     build_theme,
 )
-from .texts import UiTranslator
-from app.infra.year_database_manager import YearDatabaseManager, YearDatabaseInfo
-from app.infra.local_database import LocalDatabase
+from .widgets import DatabaseStatusWidget, FilePicker, ThemedStatusBar
 
 logger = logging.getLogger(__name__)
 
-_EN_TEXT_DEFAULTS: Dict[str, str] = {
+_EN_TEXT_DEFAULTS: dict[str, str] = {
     "app.title": "Student-Mentor Allocation",
     "status.ready": "Ready",
     "status.waiting": "Pending",
@@ -157,7 +153,6 @@ _EN_TEXT_DEFAULTS: Dict[str, str] = {
     "statusbar.ready": "Status: Ready",
     "statusbar.running": "Status: Running",
     "statusbar.error": "Status: Error",
-    "status.cancelled.detail": "Operation stopped",
     "dashboard.button.build": "Build",
     "dashboard.button.allocate": "Allocate",
     "dashboard.button.rule_engine": "Rule Engine",
@@ -180,9 +175,6 @@ _EN_TEXT_DEFAULTS: Dict[str, str] = {
     "files.mentors": "Mentors",
     "files.output.matrix": "Matrix output",
     "stage.pick_scenario": "Select a scenario to start",
-    "status.cancelled": "Cancelled",
-    "status.complete": "Complete",
-    "status.complete.detail": "Finished successfully",
 }
 _PERSIAN_PATTERN = re.compile(r"[\u0600-\u06FF]")
 
@@ -214,12 +206,12 @@ class AccentSplitterHandle(QSplitterHandle):
         self._theme = theme
         self._apply_colors()
 
-    def enterEvent(self, event) -> None:  # type: ignore[override]
+    def enterEvent(self, event) -> None:  # type: ignore[override]  # noqa: N802 - امضای Qt
         self._hover = True
         super().enterEvent(event)
         self._apply_colors()
 
-    def leaveEvent(self, event) -> None:  # type: ignore[override]
+    def leaveEvent(self, event) -> None:  # type: ignore[override]  # noqa: N802 - امضای Qt
         self._hover = False
         super().leaveEvent(event)
         self._apply_colors()
@@ -258,7 +250,7 @@ class AccentSplitter(QSplitter):
         self._theme = theme
         self.setHandleWidth(5)
 
-    def createHandle(self) -> QSplitterHandle:  # type: ignore[override]
+    def createHandle(self) -> QSplitterHandle:  # type: ignore[override]  # noqa: N802 - امضای Qt
         return AccentSplitterHandle(self.orientation(), self, self._theme)
 
     def set_theme(self, theme: Theme) -> None:
@@ -308,7 +300,7 @@ class MainWindow(QMainWindow):
         self._btn_open_output_folder: QPushButton | None = None
         self._btn_mentor_pool: QPushButton | None = None
         self._btn_matrix_mentor_pool: QPushButton | None = None
-        self._center_manager_combos: Dict[int, QComboBox] = {}
+        self._center_manager_combos: dict[int, QComboBox] = {}
         self._manager_names_cache: list[str] = []
         self._btn_reset_managers: QPushButton | None = None
         self._log: QTextEdit | None = None
@@ -326,7 +318,7 @@ class MainWindow(QMainWindow):
         self._matrix_mentor_pool_source: str = ""
         self._matrix_mentor_pool_dialog: MentorPoolDialog | None = None
         self._mentor_pool_dialog_class = MentorPoolDialog
-        self._toolbar_actions: Dict[str, QAction] = {}
+        self._toolbar_actions: dict[str, QAction] = {}
         self._toolbar_theme_label: QLabel | None = None
         self._stage_badge: QLabel | None = None
         self._stage_detail: QLabel | None = None
@@ -483,7 +475,7 @@ class MainWindow(QMainWindow):
         if isinstance(state, QByteArray):
             self._splitter.restoreState(state)
 
-        self._interactive: List[QWidget] = []
+        self._interactive: list[QWidget] = []
         self._is_busy_cursor = False
         self._register_interactive_controls()
         self._update_output_folder_button_state()
@@ -755,7 +747,7 @@ class MainWindow(QMainWindow):
         scroll.setWidget(page)
         return scroll
 
-    def resizeEvent(self, event) -> None:  # type: ignore[override]
+    def resizeEvent(self, event) -> None:  # type: ignore[override]  # noqa: N802 - امضای Qt
         super().resizeEvent(event)
         self._update_overlay_geometry()
 
@@ -2264,22 +2256,22 @@ class MainWindow(QMainWindow):
             self._on_center_manager_changed(center.id, default_manager)
         self._append_log("✅ مدیران به پیش‌فرض Policy بازنشانی شدند")
 
-    def get_center_manager_map(self) -> Dict[int, List[str]]:
+    def get_center_manager_map(self) -> dict[int, list[str]]:
         """دریافت نگاشت مراکز به مدیران از UI."""
 
-        result: Dict[int, List[str]] = {}
+        result: dict[int, list[str]] = {}
         for center_id, combo in self._center_manager_combos.items():
             manager = combo.currentText().strip()
             if manager:
                 result[int(center_id)] = [manager]
         return result
 
-    def _get_default_managers(self) -> List[str]:
+    def _get_default_managers(self) -> list[str]:
         """دریافت لیست پیش‌فرض مدیران از Policy."""
 
         try:
             policy = get_cached_policy()
-            managers: List[str] = []
+            managers: list[str] = []
             seen: set[str] = set()
             for center in policy.center_management.centers:
                 if center.default_manager:
@@ -2650,7 +2642,7 @@ class MainWindow(QMainWindow):
         if self._btn_open_output_folder is not None:
             self._btn_open_output_folder.setEnabled(available)
 
-    def _ensure_filled(self, fields: Iterable[Tuple[FilePicker | QLineEdit, str]]) -> bool:
+    def _ensure_filled(self, fields: Iterable[tuple[FilePicker | QLineEdit, str]]) -> bool:
         """بررسی پر بودن فیلدهای ضروری و نمایش هشدار در صورت نقص."""
 
         missing = [label for widget, label in fields if not widget.text().strip()]
@@ -2689,10 +2681,7 @@ class MainWindow(QMainWindow):
 
         if error is not None:
             msg = str(error)
-            if isinstance(error, FileNotFoundError):
-                color = self._theme.colors.error
-                QMessageBox.critical(self, self._t("status.error", "خطا"), msg)
-            elif isinstance(error, PermissionError):
+            if isinstance(error, (FileNotFoundError, PermissionError)):
                 color = self._theme.colors.error
                 QMessageBox.critical(self, self._t("status.error", "خطا"), msg)
             elif isinstance(error, ValueError):
@@ -2739,7 +2728,7 @@ class MainWindow(QMainWindow):
                 self._append_log(f"⚠️ خطا در ذخیره تنظیمات: {exc}")
 
     # -------------------------------------------------------------- Qt events
-    def closeEvent(self, event: QCloseEvent) -> None:
+    def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 - امضای Qt
         """در صورت اجرای تسک فعال، تلاش برای لغو امن و سپس بستن."""
 
         if self._worker is not None and self._worker.isRunning():

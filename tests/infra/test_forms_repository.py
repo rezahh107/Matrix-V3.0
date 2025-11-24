@@ -1,11 +1,11 @@
+import sqlite3
 from datetime import datetime
 from pathlib import Path
-import sqlite3
 
 import pandas as pd
 
 from app.infra.forms_repository import FormsRepository
-from app.infra.local_database import LocalDatabase, _SCHEMA_VERSION
+from app.infra.local_database import _SCHEMA_VERSION, LocalDatabase
 
 
 class _FakeFormsClient:

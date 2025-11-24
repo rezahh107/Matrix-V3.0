@@ -1,5 +1,5 @@
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.infra.local_database import LocalDatabase, QaSummaryRow, RunMetricRow, RunRecord
 
@@ -33,7 +33,7 @@ def test_initialize_and_insert_run(tmp_path) -> None:
     db = LocalDatabase(db_path)
     db.initialize()
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     run_id = db.insert_run(_sample_run(now))
 
     rows = db.fetch_runs()
@@ -55,7 +55,7 @@ def test_initialize_and_insert_run(tmp_path) -> None:
 def test_insert_metrics_and_qa(tmp_path) -> None:
     db = LocalDatabase(tmp_path / "metrics.db")
     db.initialize()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     run_id = db.insert_run(_sample_run(now))
 
     metric_row = RunMetricRow(run_id=run_id, metric_key="SCHOOL.students_total", metric_value=5)

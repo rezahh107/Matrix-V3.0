@@ -3,7 +3,7 @@ import math
 import pandas as pd
 import pytest
 
-from app.core.allocate_students import allocate_batch, _normalize_pool, _normalize_students
+from app.core.allocate_students import _normalize_pool, _normalize_students, allocate_batch
 from app.core.policy_loader import PolicyConfig, load_policy
 
 

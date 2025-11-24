@@ -1,15 +1,14 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QPalette
-from PySide6.QtWidgets import QLabel, QHBoxLayout, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QWidget
 
+from app.infra.local_database import DatabaseHealthStatus, DatabaseHealthSummary
 from app.ui.fonts import get_app_font
 from app.ui.theme import Theme
-from app.infra.local_database import DatabaseHealthStatus, DatabaseHealthSummary
 
 __all__ = ["DatabaseStatusWidget"]
 
@@ -21,9 +20,9 @@ class DatabaseStatusWidget(QWidget):
     (مثلاً توسط پنجره اصلی) تهیه می‌شود دریافت می‌کند.
     """
 
-    databaseManagerRequested = Signal()
+    databaseManagerRequested = Signal()  # noqa: N815 - نام سیگنال Qt
 
-    def __init__(self, theme: Theme, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, theme: Theme, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._theme = theme
         self._icon_label = QLabel("●", self)
@@ -79,6 +78,6 @@ class DatabaseStatusWidget(QWidget):
             return summary.message
         return " — ".join(parts)
 
-    def mousePressEvent(self, event):  # type: ignore[override]
+    def mousePressEvent(self, event):  # type: ignore[override]  # noqa: N802 - امضای Qt
         super().mousePressEvent(event)
         self.databaseManagerRequested.emit()

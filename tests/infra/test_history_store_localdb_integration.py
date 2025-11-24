@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -23,7 +23,7 @@ def test_history_store_persists_run_and_metrics(tmp_path) -> None:
     policy_path = _write_file(tmp_path / "policy.json")
     output_path = tmp_path / "output.xlsx"
 
-    start = datetime.now(timezone.utc)
+    start = datetime.now(UTC)
     end = start
     ctx = build_run_context(
         command="allocate",
@@ -94,7 +94,7 @@ def test_history_store_handles_db_error(tmp_path, caplog) -> None:
             raise RuntimeError("boom")
 
     db = FailingDb()
-    start = datetime.now(timezone.utc)
+    start = datetime.now(UTC)
     ctx = build_run_context(
         command="allocate",
         cli_args=None,

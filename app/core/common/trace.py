@@ -24,18 +24,19 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import Enum
 from numbers import Number
-from typing import Any, Iterable, List, Mapping, Sequence
+from typing import Any
 
 import pandas as pd
 
 from ..policy_loader import PolicyConfig, load_policy
-from .filters import filter_school_by_value, resolve_student_school_code
 from .columns import normalize_bool_like, to_int64
-from .rules import Rule, RuleContext, apply_rule, default_stage_rule_map
 from .eligibility import build_stage_pass_flags
+from .filters import filter_school_by_value, resolve_student_school_code
+from .rules import Rule, RuleContext, apply_rule, default_stage_rule_map
 from .types import (
     CANONICAL_TRACE_ORDER,
     StudentRow,
@@ -104,7 +105,7 @@ def build_trace_plan(
     policy: PolicyConfig,
     *,
     capacity_column: str = "remaining_capacity",
-) -> List[TraceStagePlan]:
+) -> list[TraceStagePlan]:
     """ساخت برنامهٔ پیش‌فرض مراحل تریس از روی Policy."""
 
     if policy.trace_stage_names != CANONICAL_TRACE_ORDER:
@@ -112,7 +113,7 @@ def build_trace_plan(
             "Policy trace stages must match the canonical 8-stage order",
         )
 
-    plan: List[TraceStagePlan] = []
+    plan: list[TraceStagePlan] = []
     for definition in policy.trace_stages:
         column = (
             capacity_column
@@ -351,7 +352,7 @@ def build_allocation_trace(
     stage_plan: Sequence[TraceStagePlan] | None = None,
     capacity_column: str = "remaining_capacity",
     stage_rules: Mapping[TraceStageLiteral, Rule] | None = None,
-) -> List[TraceStageRecord]:
+) -> list[TraceStageRecord]:
     """ایجاد تریس ۸ مرحله‌ای مطابق Policy."""
 
     if policy is None:
@@ -372,7 +373,7 @@ def build_allocation_trace(
     columns_needed = [plan.column for plan in non_capacity_plan] + [capacity_stage.column]
     _ensure_columns(candidate_pool, columns_needed)
 
-    trace: List[TraceStageRecord] = []
+    trace: list[TraceStageRecord] = []
     current = candidate_pool
     for plan in non_capacity_plan:
         before = int(current.shape[0])
@@ -391,27 +392,40 @@ def build_allocation_trace(
             stage_extras.update(school_extras)
             stage_extras.setdefault("join_value_raw", school_extras.get("school_code_raw"))
             stage_extras.setdefault("join_value_norm", school_extras.get("school_code_norm"))
+            if mentor_join_value is not None:
+                mentor_raw: object | None = mentor_join_value
+                if isinstance(mentor_join_value, Number) and not isinstance(mentor_join_value, bool):
+                    try:
+                        mentor_raw = (
+                            None if pd.isna(mentor_join_value) else int(mentor_join_value)  # type: ignore[arg-type]
+                        )
+                    except Exception:
+                        mentor_raw = None
+                if mentor_raw is not None:
+                    stage_extras["mentor_value_raw"] = mentor_raw
+                mentor_norm = _coerce_optional_int(mentor_join_value)
+                if mentor_norm is not None:
+                    stage_extras["mentor_value_norm"] = mentor_norm
         else:
             value = _student_value(student, plan.column)
             filtered = _filter_stage(current, plan.column, value)
             expected_value = value
             stage_extras["join_value_raw"] = value
             stage_extras["join_value_norm"] = _coerce_optional_int(value)
-        if mentor_join_value is not None:
-            mentor_raw: object | None = mentor_join_value
-            if isinstance(mentor_join_value, Number) and not isinstance(mentor_join_value, bool):
-                try:
-                    if pd.isna(mentor_join_value):  # type: ignore[arg-type]
+            if mentor_join_value is not None:
+                mentor_raw: object | None = mentor_join_value
+                if isinstance(mentor_join_value, Number) and not isinstance(mentor_join_value, bool):
+                    try:
+                        mentor_raw = (
+                            None if pd.isna(mentor_join_value) else int(mentor_join_value)  # type: ignore[arg-type]
+                        )
+                    except Exception:
                         mentor_raw = None
-                    else:
-                        mentor_raw = int(mentor_join_value)
-                except Exception:
-                    mentor_raw = None
-            if mentor_raw is not None:
-                stage_extras["mentor_value_raw"] = mentor_raw
-            mentor_norm = _coerce_optional_int(mentor_join_value)
-            if mentor_norm is not None:
-                stage_extras["mentor_value_norm"] = mentor_norm
+                if mentor_raw is not None:
+                    stage_extras["mentor_value_raw"] = mentor_raw
+                mentor_norm = _coerce_optional_int(mentor_join_value)
+                if mentor_norm is not None:
+                    stage_extras["mentor_value_norm"] = mentor_norm
         stage_extras["expected_op"] = expected_op
         stage_extras["expected_threshold"] = expected_threshold
         trace.append(

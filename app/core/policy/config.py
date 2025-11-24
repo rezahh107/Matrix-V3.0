@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Mapping
 
 
 @dataclass(frozen=True)
@@ -35,7 +35,7 @@ class AllocationChannelConfig:
     active_status_values: tuple[int, ...]
 
     @staticmethod
-    def empty() -> "AllocationChannelConfig":
+    def empty() -> AllocationChannelConfig:
         """نسخهٔ بدون قانون ویژه برای fallback Policy."""
 
         return AllocationChannelConfig(

@@ -18,7 +18,7 @@ def _policy_with_governance(base_payload: dict, governance: dict):
 
 
 def _base_policy_payload() -> dict:
-    with open("config/policy.json", "r", encoding="utf-8") as handle:
+    with open("config/policy.json", encoding="utf-8") as handle:
         return json.load(handle)
 
 

@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-import json
-from collections import OrderedDict
-from datetime import datetime
 import hashlib
+import json
 import re
+from collections import OrderedDict
+from collections.abc import Callable, Iterable, Mapping, MutableMapping, Sequence
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Iterable, Mapping, MutableMapping, NamedTuple, Sequence, Final
+from typing import Any, Final, NamedTuple
 
 import pandas as pd
 
@@ -18,12 +19,12 @@ from app.core.common.phone_rules import (
     normalize_landline_series,
     normalize_mobile,
 )
-from app.infra.excel._writer import ensure_text_columns
 from app.core.pipeline import (
     REGISTRATION_STATUS_CANDIDATES,
     debug_registration_distribution,
     enrich_student_contacts,
 )
+from app.infra.excel._writer import ensure_text_columns
 from app.infra.excel.common import attach_contact_columns
 
 GF_FIELD_TO_COL: Mapping[str, Sequence[str]] = {
@@ -471,9 +472,10 @@ def _series_semantically_equal(left: pd.Series, right: pd.Series) -> bool:
 
     left_numeric = pd.to_numeric(left_series, errors="coerce")
     right_numeric = pd.to_numeric(right_series, errors="coerce")
-    if left_numeric.notna().any() or right_numeric.notna().any():
-        if left_numeric.equals(right_numeric):
-            return True
+    if (left_numeric.notna().any() or right_numeric.notna().any()) and left_numeric.equals(
+        right_numeric
+    ):
+        return True
 
     left_normalized = left_series.astype("string").fillna("").str.strip()
     right_normalized = right_series.astype("string").fillna("").str.strip()
@@ -970,9 +972,7 @@ def build_sheet2_frame(
         )
     sheet_cfg = exporter_cfg["sheets"]["Sheet2"]
     columns_cfg = sheet_cfg["columns"]
-    if isinstance(columns_cfg, OrderedDict):
-        ordered_columns = list(columns_cfg.keys())
-    elif isinstance(columns_cfg, Mapping):
+    if isinstance(columns_cfg, (OrderedDict, Mapping)):
         ordered_columns = list(columns_cfg.keys())
     else:
         raise TypeError("'columns' config must be a mapping")
@@ -1247,7 +1247,7 @@ def ensure_template_workbook(template_path: str | Path, exporter_cfg: Mapping[st
         if isinstance(sheet_cfg, Mapping):
             columns = sheet_cfg.get("columns", [])
             if isinstance(columns, Mapping):
-                return [str(key) for key in columns.keys()]
+                return [str(key) for key in columns]
             if isinstance(columns, Sequence):
                 return [str(value) for value in columns]
             return []

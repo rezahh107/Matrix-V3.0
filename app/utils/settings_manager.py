@@ -3,12 +3,13 @@
 الگوی Singleton برای دسترسی سراسری
 """
 
-from PySide6.QtCore import QSettings, QByteArray
-from typing import Any, Optional, Dict
-from pathlib import Path
-import json
 import base64
+import json
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Optional
+
+from PySide6.QtCore import QSettings
 
 
 class SettingsManager:
@@ -30,7 +31,7 @@ class SettingsManager:
             app_name: نام برنامه
         """
         self._settings = QSettings(org_name, app_name)
-        self._cache: Dict[str, Any] = {}
+        self._cache: dict[str, Any] = {}
         self._load_cache()
         
     @classmethod
@@ -45,10 +46,10 @@ class SettingsManager:
     def _serialize_value(self, value: Any) -> Any:
         """Serialize values safely for JSON (handles QByteArray/bytes)."""
         try:
-            from PySide6.QtCore import QByteArray
+            from PySide6.QtCore import QByteArray as qbytearray_cls  # noqa: N813
         except Exception:
-            QByteArray = None
-        if QByteArray and isinstance(value, QByteArray):
+            qbytearray_cls = None
+        if qbytearray_cls and isinstance(value, qbytearray_cls):
             value = bytes(value)
         if isinstance(value, (bytes, bytearray)):
             return {"__type__": "bytes", "encoding": "base64", "data": base64.b64encode(bytes(value)).decode("ascii")}
@@ -57,12 +58,12 @@ class SettingsManager:
     def _deserialize_value(self, value: Any) -> Any:
         """Deserialize values serialized by _serialize_value."""
         try:
-            from PySide6.QtCore import QByteArray
+            from PySide6.QtCore import QByteArray as qbytearray_cls  # noqa: N813
         except Exception:
-            QByteArray = None
+            qbytearray_cls = None
         if isinstance(value, dict) and value.get("__type__") == "bytes" and value.get("encoding") == "base64":
             raw = base64.b64decode(value.get("data", ""))
-            return QByteArray(raw) if QByteArray else raw
+            return qbytearray_cls(raw) if qbytearray_cls else raw
         return value
 
     def _load_cache(self):
@@ -149,7 +150,7 @@ class SettingsManager:
     
     def import_from_file(self, file_path: Path) -> None:
         """وارد کردن تنظیمات از فایل JSON با deserialize ایمن"""
-        with open(file_path, 'r', encoding='utf-8') as f:
+        with open(file_path, encoding='utf-8') as f:
             data = json.load(f)
         if 'settings' in data:
             for key, value in data['settings'].items():

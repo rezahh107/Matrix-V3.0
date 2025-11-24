@@ -1,9 +1,9 @@
-from __future__ import annotations
-
 """لایهٔ مرکزی QA برای اینورینت‌های ماتریس و تخصیص."""
 
+from __future__ import annotations
+
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Iterable, Mapping, Sequence
 
 import pandas as pd
 from pandas.api import types as ptypes
@@ -211,7 +211,7 @@ def _resolve_mentor_column(frame: pd.DataFrame | None) -> str | None:
     return None
 
 
-def check_STU_01(
+def check_STU_01(  # noqa: N802
     *,
     matrix: pd.DataFrame | None,
     allocation: pd.DataFrame | None,
@@ -244,7 +244,7 @@ def check_STU_01(
     )
 
 
-def check_STU_02(
+def check_STU_02(  # noqa: N802
     *,
     allocation: pd.DataFrame | None,
     inspactor: pd.DataFrame | None,
@@ -307,7 +307,9 @@ def check_STU_02(
     )
 
 
-def check_JOIN_01(*, matrix: pd.DataFrame | None, policy: PolicyConfig) -> QaRuleResult:
+def check_JOIN_01(  # noqa: N802
+    *, matrix: pd.DataFrame | None, policy: PolicyConfig
+) -> QaRuleResult:
     """QA_RULE_JOIN_01 — سلامت ۶ کلید join در ماتریس."""
 
     violations: list[QaViolation] = []
@@ -354,7 +356,7 @@ def check_JOIN_01(*, matrix: pd.DataFrame | None, policy: PolicyConfig) -> QaRul
     )
 
 
-def check_SCHOOL_01(
+def check_SCHOOL_01(  # noqa: N802
     *,
     matrix: pd.DataFrame | None,
     invalid_mentors: pd.DataFrame | None,
@@ -441,7 +443,7 @@ def check_SCHOOL_01(
     )
 
 
-def check_GOV_01(
+def check_GOV_01(  # noqa: N802
     *,
     allocation: pd.DataFrame | None,
     allocation_summary: pd.DataFrame | None,
@@ -490,7 +492,7 @@ def check_GOV_01(
     )
 
 
-def check_ALLOC_01(
+def check_ALLOC_01(  # noqa: N802
     *,
     allocation: pd.DataFrame | None,
     allocation_summary: pd.DataFrame | None,

@@ -18,7 +18,7 @@ class Language(str, Enum):
     FA = "fa"
 
     @classmethod
-    def from_code(cls, code: str | None) -> "Language":
+    def from_code(cls, code: str | None) -> Language:
         """تبدیل کد زبان (fa/en) به enum با پیش‌فرض امن."""
 
         normalized = (code or "en").strip().lower()

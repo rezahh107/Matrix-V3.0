@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Tuple
+from typing import Any
 
 from PySide6.QtCore import QThread, Signal
 
@@ -12,15 +13,15 @@ ProgressFn = Callable[[int, str], None]
 __all__ = ["Worker", "WorkerCancelled", "ProgressFn"]
 
 
-class WorkerCancelled(RuntimeError):
+class WorkerCancelled(RuntimeError):  # noqa: N818 - نام استثناء حفظ شده
     """استثناء داخلی برای اعلام لغو امن."""
 
 
 @dataclass(slots=True)
 class _Invocation:
     func: Callable[..., Any]
-    args: Tuple[Any, ...]
-    kwargs: Dict[str, Any]
+    args: tuple[Any, ...]
+    kwargs: dict[str, Any]
 
 
 class Worker(QThread):

@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+# ruff: noqa: I001
+
 import pandas as pd
 import pytest
 
-hypothesis = pytest.importorskip("hypothesis")
-from hypothesis import given, settings  # type: ignore  # noqa: E402
-from hypothesis import strategies as st  # type: ignore  # noqa: E402
+try:
+    from hypothesis import given, settings
+    from hypothesis import strategies as st  # type: ignore
+except ModuleNotFoundError:  # pragma: no cover - hypothesis optional
+    pytest.skip("hypothesis not available", allow_module_level=True)
 
 from app.core.common.ranking import apply_ranking_policy, natural_key
 

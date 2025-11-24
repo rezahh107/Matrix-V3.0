@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import os
 import sys
-from functools import lru_cache
+from collections.abc import Iterable
+from functools import cache, lru_cache
 from pathlib import Path
-from typing import Iterable
 
 __all__ = [
     "get_app_base_path",
@@ -32,10 +32,7 @@ def _normalize_parts(parts: Iterable[str | os.PathLike[str]]) -> Path:
     path = Path()
     for piece in parts:
         candidate = Path(os.fspath(piece))
-        if candidate.is_absolute():
-            path = candidate
-        else:
-            path = path / candidate
+        path = candidate if candidate.is_absolute() else path / candidate
     return path
 
 
@@ -50,7 +47,7 @@ def resource_path(*parts: str | os.PathLike[str]) -> Path:
     return get_app_base_path() / candidate
 
 
-@lru_cache(maxsize=None)
+@cache
 def get_user_data_dir(app_name: str = "Matrix2") -> Path:
     """پوشهٔ کاربر برای نگهداری لاگ و Prefs جانبی."""
 
@@ -59,7 +56,7 @@ def get_user_data_dir(app_name: str = "Matrix2") -> Path:
     return base
 
 
-@lru_cache(maxsize=None)
+@cache
 def get_log_directory(subdir: str = "logs", app_name: str = "Matrix2") -> Path:
     """ساخت/بازگرداندن پوشهٔ لاگ عمومی برنامه."""
 

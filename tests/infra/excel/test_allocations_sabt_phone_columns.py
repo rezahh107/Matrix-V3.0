@@ -58,7 +58,6 @@ def test_allocations_sabt_phone_columns_roundtrip(tmp_path: Path) -> None:
             assert first_types[idx] in {"s", "inlineStr"}
 
     # ensure second row also stored as text for phone columns
-    second_row = rows[1]
     second_types = types[1]
     for column in (
         "تلفن همراه داوطلب",

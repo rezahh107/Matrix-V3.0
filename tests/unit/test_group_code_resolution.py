@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-from typing import Dict
 
 import pandas as pd
 import pytest
@@ -11,7 +10,7 @@ from app.core.common.normalization import normalize_header, resolve_group_code
 
 
 @pytest.fixture()
-def _group_map() -> Dict[str, int]:
+def _group_map() -> dict[str, int]:
     return {"تجربی": 2, "انسانی": 1}
 
 
@@ -19,9 +18,9 @@ def test_normalize_header_handles_zwnj_and_arabic_variants() -> None:
     assert normalize_header("كُد‌ رشته") == "کد رشته"
 
 
-def test_resolve_group_code_prefers_major_code(_group_map: Dict[str, int]) -> None:
+def test_resolve_group_code_prefers_major_code(_group_map: dict[str, int]) -> None:
     row = pd.Series({"کد رشته": "3", "گروه آزمایشی": "تجربی", "student_id": "A"})
-    stats: Dict[str, int] = {}
+    stats: dict[str, int] = {}
 
     code = resolve_group_code(
         row,
@@ -36,7 +35,7 @@ def test_resolve_group_code_prefers_major_code(_group_map: Dict[str, int]) -> No
     assert stats.get("resolved_by_crosswalk", 0) == 0
 
 
-def test_resolve_group_code_supports_persian_digits(_group_map: Dict[str, int]) -> None:
+def test_resolve_group_code_supports_persian_digits(_group_map: dict[str, int]) -> None:
     row = pd.Series({"کد رشته": "۳", "student_id": "B"})
 
     code = resolve_group_code(
@@ -49,7 +48,7 @@ def test_resolve_group_code_supports_persian_digits(_group_map: Dict[str, int]) 
     assert code == 3
 
 
-def test_resolve_group_code_trims_zero_padding(_group_map: Dict[str, int]) -> None:
+def test_resolve_group_code_trims_zero_padding(_group_map: dict[str, int]) -> None:
     row = pd.Series({"کد رشته": "003", "student_id": "C"})
 
     code = resolve_group_code(
@@ -62,7 +61,7 @@ def test_resolve_group_code_trims_zero_padding(_group_map: Dict[str, int]) -> No
     assert code == 3
 
 
-def test_resolve_group_code_falls_back_to_crosswalk(_group_map: Dict[str, int]) -> None:
+def test_resolve_group_code_falls_back_to_crosswalk(_group_map: dict[str, int]) -> None:
     row = pd.Series({"کد رشته": "", "گروه آزمایشی": "تجربی", "student_id": "D"})
 
     code = resolve_group_code(
@@ -75,7 +74,7 @@ def test_resolve_group_code_falls_back_to_crosswalk(_group_map: Dict[str, int]) 
     assert code == 2
 
 
-def test_resolve_group_code_logs_mismatch_warning(caplog: pytest.LogCaptureFixture, _group_map: Dict[str, int]) -> None:
+def test_resolve_group_code_logs_mismatch_warning(caplog: pytest.LogCaptureFixture, _group_map: dict[str, int]) -> None:
     row = pd.Series({"کد رشته": 3, "گروه آزمایشی": "انسانی", "student_id": "E"})
 
     with caplog.at_level(logging.WARNING):

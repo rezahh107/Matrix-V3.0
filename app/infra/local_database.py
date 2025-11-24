@@ -19,11 +19,12 @@ import io
 import json
 import logging
 import sqlite3
+from collections.abc import Iterable, Mapping, Sequence
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Dict, Iterable, List, Mapping, Optional, Sequence
 
 import pandas as pd
 from pandas.api.types import is_integer_dtype
@@ -37,8 +38,10 @@ from app.infra.errors import (
     SchemaVersionMismatchError,
 )
 from app.infra.sqlite_config import configure_connection
-from app.infra.sqlite_types import coerce_int_columns as _sqlite_coerce_int_columns
-from app.infra.sqlite_types import coerce_int_like as _sqlite_coerce_int_like
+from app.infra.sqlite_types import (
+    coerce_int_columns as _sqlite_coerce_int_columns,
+    coerce_int_like as _sqlite_coerce_int_like,
+)
 
 _SCHEMA_VERSION = 10
 _POLICY_VERSION = "1.0.3"
@@ -62,8 +65,8 @@ class DatabaseHealthSummary:
 
     status: DatabaseHealthStatus
     message: str
-    counts: Dict[str, int]
-    last_updated: Optional[datetime] = None
+    counts: dict[str, int]
+    last_updated: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -583,7 +586,7 @@ class LocalDatabase:
         except sqlite3.Error as exc:
             raise DatabaseOperationError("ثبت خلاصهٔ QA با خطا روبه‌رو شد.") from exc
 
-    def fetch_runs(self) -> List[sqlite3.Row]:
+    def fetch_runs(self) -> list[sqlite3.Row]:
         """بازیابی همهٔ اجراها (برای تست/دیباگ)."""
 
         with self._open_connection() as conn:
@@ -592,7 +595,7 @@ class LocalDatabase:
             )
             return cursor.fetchall()
 
-    def fetch_metrics_for_run(self, run_id: int) -> List[sqlite3.Row]:
+    def fetch_metrics_for_run(self, run_id: int) -> list[sqlite3.Row]:
         """بازیابی KPI تاریخچه برای یک شناسه اجرا."""
 
         with self._open_connection() as conn:
@@ -602,7 +605,7 @@ class LocalDatabase:
             )
             return cursor.fetchall()
 
-    def fetch_qa_summary(self, run_id: int) -> List[sqlite3.Row]:
+    def fetch_qa_summary(self, run_id: int) -> list[sqlite3.Row]:
         """بازیابی خلاصهٔ QA برای یک اجرا."""
 
         with self._open_connection() as conn:
@@ -927,11 +930,10 @@ class LocalDatabase:
         for name, required in self._required_tables.items():
             if _table_exists(conn, name):
                 table_diag = self._collect_table_diagnostics(conn, name, required)
-                if table_diag.missing_required_columns:
-                    if allow_repair and self._repair_required_schema(
-                        conn, name, table_diag.missing_required_columns
-                    ):
-                        table_diag = self._collect_table_diagnostics(conn, name, required)
+                if table_diag.missing_required_columns and allow_repair and self._repair_required_schema(
+                    conn, name, table_diag.missing_required_columns
+                ):
+                    table_diag = self._collect_table_diagnostics(conn, name, required)
 
                 if table_diag.missing_required_columns:
                     missing_text = ", ".join(table_diag.missing_required_columns)
@@ -1862,15 +1864,11 @@ class LocalDatabase:
                 conn.execute(stmt)
             conn.commit()
         except sqlite3.Error as exc:
-            try:
+            with suppress(sqlite3.Error):
                 conn.rollback()
-            except sqlite3.Error:
-                pass
-            try:
+            with suppress(sqlite3.Error):
                 conn.execute(f"DROP TABLE IF EXISTS {quoted_temp}")
                 conn.execute(f"DROP TABLE IF EXISTS {quoted_backup}")
-            except sqlite3.Error:
-                pass
             raise DatabaseOperationError(
                 f"جایگزینی جدول به‌صورت اتمیک با خطا مواجه شد: {exc}"
             ) from exc
@@ -2184,6 +2182,4 @@ def _format_duplicate_error(*, table_name: str, column: str, samples: Sequence[s
     خروجی همواره شامل نام جدول، نام ستون و چند نمونه از مقادیر تکراری است.
     """
 
-    return "جدول {table} دارای مقادیر تکراری در ستون «{column}» است؛ نمونه‌ها: {samples}".format(
-        table=table_name, column=column, samples=list(samples)
-    )
+    return f"جدول {table_name} دارای مقادیر تکراری در ستون «{column}» است؛ نمونه‌ها: {list(samples)}"

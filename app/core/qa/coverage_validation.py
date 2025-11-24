@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Dict
-
 from app.core.matrix.coverage import CoverageMetrics
 
 __all__ = ["build_coverage_validation_fields"]
@@ -12,7 +10,7 @@ def build_coverage_validation_fields(
     metrics: CoverageMetrics,
     coverage_threshold: float,
     total_rows: int,
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """ساخت فیلدهای پوشش برای شیت validation.
 
     اعداد کلیدی پوشش از روی :class:`CoverageMetrics` و تعداد سطرهای ماتریس

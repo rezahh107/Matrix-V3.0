@@ -2,12 +2,12 @@ import json
 
 import pandas as pd
 
-from app.core.qa import invariants
 from app.core.policy_loader import MentorStatus, parse_policy_dict
+from app.core.qa import invariants
 
 
 def _policy_with_disabled(mentor_id: int):
-    with open("config/policy.json", "r", encoding="utf-8") as handle:
+    with open("config/policy.json", encoding="utf-8") as handle:
         payload = json.load(handle)
     payload["mentor_pool_governance"] = {
         "default_status": "active",
@@ -47,7 +47,7 @@ def test_governance_override_enables_disabled_mentor():
 
 
 def test_default_inactive_blocks_unknown():
-    with open("config/policy.json", "r", encoding="utf-8") as handle:
+    with open("config/policy.json", encoding="utf-8") as handle:
         payload = json.load(handle)
     payload["mentor_pool_governance"] = {
         "default_status": "inactive",
@@ -69,7 +69,7 @@ def test_default_inactive_blocks_unknown():
 
 
 def test_gov_01_matches_compute_effective_status():
-    with open("config/policy.json", "r", encoding="utf-8") as handle:
+    with open("config/policy.json", encoding="utf-8") as handle:
         payload = json.load(handle)
     payload["mentor_pool_governance"] = {
         "default_status": "active",

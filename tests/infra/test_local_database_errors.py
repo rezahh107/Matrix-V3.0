@@ -9,7 +9,6 @@ from app.core.policy_loader import load_policy
 from app.infra.errors import (
     DatabaseCorruptError,
     DatabaseOperationError,
-    DatabaseSchemaMismatchError,
     ReferenceDataMissingError,
     SchemaVersionMismatchError,
 )

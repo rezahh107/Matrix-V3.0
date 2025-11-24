@@ -1,17 +1,17 @@
 from pathlib import Path
 
 import pandas as pd
-from pandas.testing import assert_frame_equal
 import pytest
+from pandas.testing import assert_frame_equal
 
 from app.core.canonical_frames import canonicalize_pool_frame
 from app.core.policy_loader import load_policy
 from app.infra.errors import DatabaseOperationError
 from app.infra.local_database import LocalDatabase
 from app.infra.reference_mentors_repository import (
+    _POOL_JOIN_KEY_QA_ATTR,
     import_mentor_pool_from_excel,
     load_mentor_pool_from_cache,
-    _POOL_JOIN_KEY_QA_ATTR,
 )
 from app.infra.references.schools import (
     import_school_crosswalk_from_excel,

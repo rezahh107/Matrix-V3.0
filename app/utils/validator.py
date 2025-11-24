@@ -2,10 +2,11 @@
 سیستم اعتبارسنجی با Decorator Pattern و پیام‌های کاربرپسند
 """
 
-from pathlib import Path
-from typing import Callable, Any
-import pandas as pd
+from collections.abc import Callable
 from functools import wraps
+from pathlib import Path
+
+import pandas as pd
 
 
 class ValidationError(Exception):
@@ -119,8 +120,8 @@ def validate_output_directory(path_str: str) -> Path:
         test_file.unlink()
     except Exception:
         raise ValidationError(
-            f"مجوز نوشتن در پوشه خروجی وجود ندارد\n"
-            f"لطفاً یک پوشه دیگر انتخاب کنید"
+            "مجوز نوشتن در پوشه خروجی وجود ندارد\n"
+            "لطفاً یک پوشه دیگر انتخاب کنید"
         )
     
     return dir_path

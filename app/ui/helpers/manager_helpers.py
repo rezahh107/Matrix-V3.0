@@ -1,13 +1,13 @@
-from __future__ import annotations
-
 """توابع کمکی خالص برای استخراج نام مدیران مراکز.
 
 نمونه:
     >>> load_manager_names_from_pool(Path("pool.xlsx"))
 """
 
+from __future__ import annotations
+
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 
 import pandas as pd
 
@@ -57,8 +57,5 @@ def load_manager_names_from_pool(pool_path: Path) -> list[str]:
     if pool_path.is_dir():
         raise IsADirectoryError(pool_path)
     suffix = pool_path.suffix.lower()
-    if suffix == ".csv":
-        df = pd.read_csv(pool_path)
-    else:
-        df = pd.read_excel(pool_path)
+    df = pd.read_csv(pool_path) if suffix == ".csv" else pd.read_excel(pool_path)
     return extract_manager_names(df)

@@ -3,11 +3,13 @@
 الگوهای استفاده‌شده: Command, Observer, Context Manager
 """
 
-from PySide6.QtCore import QObject, Signal, QThread
-from typing import Any, Callable, Optional
 import traceback
-from dataclasses import dataclass
+from collections.abc import Callable
 from contextlib import contextmanager
+from dataclasses import dataclass
+from typing import Any
+
+from PySide6.QtCore import QObject, QThread, Signal
 
 
 @dataclass
@@ -15,8 +17,8 @@ class TaskResult:
     """نتیجه اجرای تسک"""
     success: bool
     data: Any = None
-    error: Optional[str] = None
-    traceback: Optional[str] = None
+    error: str | None = None
+    traceback: str | None = None
 
 
 class TaskRunner(QObject):
@@ -39,7 +41,7 @@ class TaskRunner(QObject):
         self.args = args
         self.kwargs = kwargs
         self._cancelled = False
-        self._thread: Optional[QThread] = None
+        self._thread: QThread | None = None
         
     def run(self) -> None:
         """اجرای تسک با مدیریت خطا"""
