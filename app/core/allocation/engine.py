@@ -27,8 +27,10 @@ def annotate_students_with_channel(
 def derive_channel_map(students_df: pd.DataFrame, policy: PolicyConfig) -> pd.Series:
     """نگاشت شناسهٔ دانش‌آموز به نام کانال (رشته) را برمی‌گرداند."""
 
-    if "student_id" not in students_df.columns:
-        raise KeyError("students_df must contain 'student_id' column for channel mapping")
+    if students_df is None:
+        raise ValueError("students_df نباید None باشد")
+    if students_df.empty or "student_id" not in students_df.columns:
+        return pd.Series(dtype="string")
     channel_strings = derive_channels_for_students(students_df, policy).map(
         lambda item: item.value
     )
