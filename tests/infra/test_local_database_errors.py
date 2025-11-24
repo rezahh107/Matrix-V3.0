@@ -79,7 +79,7 @@ def test_initialize_reports_corrupt_file_with_backup(tmp_path):
     assert version == _SCHEMA_VERSION
 
 
-def test_initialize_reports_schema_mismatch_for_missing_column(tmp_path):
+def test_initialize_repairs_schema_when_students_cache_missing_student_id(tmp_path):
     db_path = tmp_path / "missing_column.sqlite"
     with sqlite3.connect(db_path) as conn:
         conn.execute(
@@ -119,8 +119,14 @@ def test_initialize_reports_schema_mismatch_for_missing_column(tmp_path):
 
     db = LocalDatabase(db_path)
 
-    with pytest.raises(DatabaseSchemaMismatchError):
-        db.initialize()
+    db.initialize()
+
+    with db.connect() as conn:
+        columns = {
+            row[1] for row in conn.execute("PRAGMA table_info('students_cache')")
+        }
+
+    assert "student_id" in columns
 
 
 def test_initialize_creates_students_cache_with_student_id_column(tmp_path):

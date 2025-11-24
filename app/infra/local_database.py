@@ -412,6 +412,30 @@ class LocalDatabase:
             self._assert_required_schema(conn)
             conn.commit()
 
+    def _repair_required_schema(
+        self, conn: sqlite3.Connection, table: str, missing_columns: list[str]
+    ) -> bool:
+        """رفع خودکار ستون‌های بحرانی برای انطباق با Schema جاری.
+
+        این متد تنها برای ستون‌های شناخته‌شده و بدون نیاز به مهاجرت پیچیده
+        اعمال می‌شود تا کاربران مجبور به بازنشانی کامل پایگاه‌داده در حالت‌های
+        رایج (مثل نبودن ``student_id``) نشوند. در صورت انجام تغییر، ``True``
+        برگردانده می‌شود تا اعتبارسنجی مجدد Schema صورت گیرد.
+        """
+
+        repaired = False
+
+        if table == "students_cache" and "student_id" in missing_columns:
+            _ensure_column_exists(
+                conn,
+                table="students_cache",
+                column="student_id",
+                definition="TEXT",
+            )
+            repaired = True
+
+        return repaired
+
     def _recover_corrupt_database(self) -> Path | None:
         """پشتیبان‌گیری از فایل خراب و بازسازی پایگاه داده.
 
@@ -879,6 +903,12 @@ class LocalDatabase:
         for name, required in self._required_tables.items():
             if _table_exists(conn, name):
                 table_diag = self._collect_table_diagnostics(conn, name, required)
+                if table_diag.missing_required_columns:
+                    if self._repair_required_schema(
+                        conn, name, table_diag.missing_required_columns
+                    ):
+                        table_diag = self._collect_table_diagnostics(conn, name, required)
+
                 if table_diag.missing_required_columns:
                     missing_text = ", ".join(table_diag.missing_required_columns)
                     raise DatabaseSchemaMismatchError(
