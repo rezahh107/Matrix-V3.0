@@ -1399,13 +1399,21 @@ def _run_build_matrix(args: argparse.Namespace, policy: PolicyConfig, progress: 
         )
 
     progress(0, f"policy {policy.version} loaded")
+    resolve_kwargs: dict[str, object] = {"args": args, "db": db}
+    try:
+        import inspect
+
+        if "progress" in inspect.signature(_resolve_reference_frames).parameters:
+            resolve_kwargs["progress"] = progress
+    except Exception:
+        resolve_kwargs["progress"] = progress
     (
         schools_df,
         crosswalk_groups_df,
         crosswalk_synonyms_df,
         ref_inputs,
         ref_inputs_mtime,
-    ) = _resolve_reference_frames(args=args, db=db, progress=progress)
+    ) = _resolve_reference_frames(**resolve_kwargs)
     insp_df, pool_inputs, pool_inputs_mtime = _resolve_mentor_pool_frame(
         args, policy, db=db, pool_arg="inspactor", pool_source="inspactor"
     )

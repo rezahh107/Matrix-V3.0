@@ -40,7 +40,7 @@ from app.infra.sqlite_config import configure_connection
 from app.infra.sqlite_types import coerce_int_columns as _sqlite_coerce_int_columns
 from app.infra.sqlite_types import coerce_int_like as _sqlite_coerce_int_like
 
-_SCHEMA_VERSION = 10
+_SCHEMA_VERSION = 9
 _POLICY_VERSION = "1.0.3"
 _SSOT_VERSION = "1.0.2"
 _ISO_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
@@ -405,7 +405,16 @@ class LocalDatabase:
                     message="نسخهٔ Schema پایگاه داده از نسخهٔ برنامه جدیدتر است.",
                 )
 
-            self._ensure_schema(conn)
+            # پس از مهاجرت، نسخهٔ جاری خوانده می‌شود اما ترمیم ستون‌ها تنها زمانی
+            # مجاز است که پایگاه داده پیش‌تر در نسخهٔ سازگار بوده یا تازه ساخته
+            # شده باشد؛ برای نسخه‌های قدیمی‌تر پیام بازسازی باید به کاربر برسد.
+            current_version = self._get_schema_version(conn)
+            migrated_from_older = existing_version is not None and existing_version < _SCHEMA_VERSION
+            allow_repair = (
+                (current_version is None or current_version >= _SCHEMA_VERSION)
+                and not migrated_from_older
+            )
+            self._ensure_schema(conn, allow_repair=allow_repair)
             # NEW: ensure year meta also after migrations/schema ensure
             self._ensure_year_meta(conn)
             self._validate_schema_version(conn)
@@ -906,14 +915,20 @@ class LocalDatabase:
                 diagnostics=diagnostics,
             )
 
-    def _ensure_schema(self, conn: sqlite3.Connection) -> None:
-        """ساخت جدول‌های runs/run_metrics/qa_summary و مراجع به‌صورت idempotent."""
+    def _ensure_schema(self, conn: sqlite3.Connection, *, allow_repair: bool = True) -> None:
+        """ساخت جدول‌های runs/run_metrics/qa_summary و مراجع به‌صورت idempotent.
+
+        پارامتر ``allow_repair`` مشخص می‌کند آیا در صورت نبود ستون‌های کلیدی،
+        تلاش برای اصلاح خودکار (مثلاً افزودن ``student_id``) انجام شود یا خطای
+        ناسازگاری صادر گردد. این گزینه در مهاجرت از نسخه‌های قدیمی غیرفعال
+        می‌شود تا اپراتور پیام بازسازی را دریافت کند.
+        """
 
         for name, required in self._required_tables.items():
             if _table_exists(conn, name):
                 table_diag = self._collect_table_diagnostics(conn, name, required)
                 if table_diag.missing_required_columns:
-                    if self._repair_required_schema(
+                    if allow_repair and self._repair_required_schema(
                         conn, name, table_diag.missing_required_columns
                     ):
                         table_diag = self._collect_table_diagnostics(conn, name, required)
@@ -925,7 +940,9 @@ class LocalDatabase:
                         reason=(
                             f"ساختار جدول {name} ناقص است؛ ستون‌های مفقود: {missing_text}"
                         ),
-                        hint="فایل را بازنشانی کنید تا Schema کامل ایجاد شود.",
+                        hint=(
+                            "فایل را حذف یا بازسازی کنید تا Schema کامل ایجاد شود."
+                        ),
                         diagnostics={name: table_diag.missing_required_columns},
                     )
 

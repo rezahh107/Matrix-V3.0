@@ -119,12 +119,16 @@ def _make_unique_columns(columns: Sequence[str]) -> list[str]:
 
 
 def _empty_join_key_report(
-    join_keys: Sequence[str], mentor_column: str, pool_source: str | None
+    join_keys: Sequence[str],
+    mentor_column: str,
+    pool_source: str | None,
+    *,
+    include_pool_columns: bool,
 ) -> pd.DataFrame:
     """ساخت دیتافریم تهی برای گزارش تکرار کلید شش‌تایی.
 
-    ستون‌ها شامل شش کلید، شناسهٔ پشتیبان، اندازهٔ گروه تکراری، ایندکس
-    منبع و منبع استخر است تا سازگاری schema با خروجی پرشده حفظ شود.
+    اگر ``include_pool_columns`` فعال باشد، ستون‌های کمکی ``pool_row_index`` و
+    ``pool_source`` نیز افزوده می‌شوند تا ارتباط با استخر ورودی حفظ شود.
     """
 
     data: dict[str, pd.Series] = {
@@ -132,10 +136,11 @@ def _empty_join_key_report(
     }
     data[mentor_column] = pd.Series(dtype="string")
     data["duplicate_group_size"] = pd.Series(dtype="Int64")
-    data["pool_row_index"] = pd.Series(dtype="Int64")
-    data["pool_source"] = pd.Series(dtype="string")
-    if pool_source is not None:
-        data["pool_source"] = pd.Series([pool_source], dtype="string").iloc[:0]
+    if include_pool_columns:
+        data["pool_row_index"] = pd.Series(dtype="Int64")
+        data["pool_source"] = pd.Series(dtype="string")
+        if pool_source is not None:
+            data["pool_source"] = pd.Series([pool_source], dtype="string").iloc[:0]
     return pd.DataFrame(data)
 
 
@@ -190,26 +195,46 @@ def _build_join_key_duplicate_report(
 
     """
 
+    include_pool_columns = pool_source is not None
     if any(column not in frame.columns for column in join_keys):
-        return _empty_join_key_report(join_keys, mentor_column, pool_source)
+        return _empty_join_key_report(
+            join_keys,
+            mentor_column,
+            pool_source,
+            include_pool_columns=include_pool_columns,
+        )
     if mentor_column not in frame.columns:
-        return _empty_join_key_report(join_keys, mentor_column, pool_source)
+        return _empty_join_key_report(
+            join_keys,
+            mentor_column,
+            pool_source,
+            include_pool_columns=include_pool_columns,
+        )
     subset_columns = list(join_keys) + [mentor_column]
     detection_subset = list(join_keys)
     if not include_distinct_mentors:
         detection_subset = subset_columns
     mask_duplicates = frame.duplicated(subset=detection_subset, keep=False)
     if not bool(mask_duplicates.any()):
-        return _empty_join_key_report(join_keys, mentor_column, pool_source)
+        return _empty_join_key_report(
+            join_keys,
+            mentor_column,
+            pool_source,
+            include_pool_columns=include_pool_columns,
+        )
     report = frame.loc[mask_duplicates, subset_columns].copy()
-    pool_row_index = pd.Series(frame.index[mask_duplicates], index=report.index)
-    pool_row_numeric = pd.to_numeric(pool_row_index, errors="coerce")
-    if pool_row_numeric.notna().any():
-        report["pool_row_index"] = pool_row_numeric.astype("Int64")
-    else:
-        report["pool_row_index"] = pool_row_index.astype("string")
-    report["pool_source"] = pool_source if pool_source is not None else ""
-    sort_keys = subset_columns + ["pool_row_index"]
+    report["duplicate_group_size"] = (
+        report.duplicated(subset=subset_columns, keep=False).groupby(report.index).transform("sum")
+    )
+    if include_pool_columns:
+        pool_row_index = pd.Series(frame.index[mask_duplicates], index=report.index)
+        pool_row_numeric = pd.to_numeric(pool_row_index, errors="coerce")
+        if pool_row_numeric.notna().any():
+            report["pool_row_index"] = pool_row_numeric.astype("Int64")
+        else:
+            report["pool_row_index"] = pool_row_index.astype("string")
+        report["pool_source"] = pool_source if pool_source is not None else ""
+    sort_keys = subset_columns + (["pool_row_index"] if include_pool_columns else [])
     report = report.sort_values(sort_keys, kind="stable")
     group_sizes = (
         report.groupby(detection_subset, sort=False)[mentor_column]
