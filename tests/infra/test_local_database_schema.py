@@ -100,6 +100,16 @@ def test_atomic_schools_import_rolls_back_on_failure(tmp_path, monkeypatch):
     assert_frame_equal(restored.sort_values(by="کد مدرسه").reset_index(drop=True), initial)
 
 
+def test_replace_table_atomic_supports_special_table_names(tmp_path: Path) -> None:
+    df = pd.DataFrame({"value": [1]})
+
+    with sqlite3.connect(tmp_path / "special.sqlite") as conn:
+        LocalDatabase._replace_table_atomic(conn, table_name="manager-list", df=df)
+        restored = pd.read_sql_query('SELECT * FROM "manager-list"', conn)
+
+    assert_frame_equal(restored, df)
+
+
 def test_schema_contains_student_and_mentor_cache_tables(tmp_path: Path) -> None:
     db = LocalDatabase(tmp_path / "schema_cache.sqlite")
     db.initialize()
