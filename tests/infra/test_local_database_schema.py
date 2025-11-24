@@ -196,3 +196,25 @@ def test_initialize_raises_on_newer_schema(tmp_path: Path) -> None:
 
     with pytest.raises(SchemaVersionMismatchError):
         db.initialize()
+
+
+def test_upsert_schools_rebuilds_indexes_without_conflict(tmp_path: Path) -> None:
+    db = LocalDatabase(tmp_path / "schools_replace.sqlite")
+    initial = pd.DataFrame({"کد مدرسه": [1, 2], "نام مدرسه": ["الف", "ب"]})
+    updated = pd.DataFrame({"کد مدرسه": [2, 3], "نام مدرسه": ["ب", "پ"]})
+
+    db.upsert_schools(initial)
+    db.upsert_schools(updated)
+
+    restored = db.load_schools().sort_values(by="کد مدرسه").reset_index(drop=True)
+    expected = (
+        updated.sort_values(by="کد مدرسه").reset_index(drop=True).astype({"کد مدرسه": "Int64"})
+    )
+    assert_frame_equal(restored, expected)
+
+    with db.connect() as conn:
+        index_names = {
+            row[1] for row in conn.execute("PRAGMA index_list('schools')").fetchall()
+        }
+
+    assert any("idx_schools_code" in name for name in index_names)
