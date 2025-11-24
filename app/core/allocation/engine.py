@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import pandas as pd
+from collections.abc import Mapping
 
-from typing import Mapping
+import pandas as pd
 
 from app.core.policy_loader import PolicyConfig
 

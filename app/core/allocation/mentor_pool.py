@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """توابع حاکمیت استخر منتورها (POOL_01) با ورودی Override ساده.
 
 این ماژول هیچ I/O یا وابستگی به Qt ندارد و صرفاً روی DataFrame
@@ -7,8 +5,9 @@ from __future__ import annotations
 را فعال/غیرفعال کند.
 """
 
-from dataclasses import dataclass
-from typing import Mapping
+from __future__ import annotations
+
+from collections.abc import Mapping
 
 import pandas as pd
 
@@ -88,7 +87,9 @@ def compute_effective_status(
                 mentor_id = int(raw_id)
             except (TypeError, ValueError):
                 continue
-            override_map[mentor_id] = MentorStatus.ACTIVE if bool(enabled) else MentorStatus.INACTIVE
+            override_map[mentor_id] = (
+                MentorStatus.ACTIVE if bool(enabled) else MentorStatus.INACTIVE
+            )
 
     if override_map:
         override_status = mentor_ids.map(override_map)
