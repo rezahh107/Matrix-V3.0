@@ -2,10 +2,6 @@ import pandas as pd
 
 from app.core.allocate_students import allocate_batch
 from app.core.common.types import CANONICAL_TRACE_ORDER
-import pandas as pd
-
-from app.core.allocate_students import allocate_batch
-from app.core.common.types import CANONICAL_TRACE_ORDER
 from app.core.policy_loader import load_policy
 
 _GROUP_NAME = "تجربی"

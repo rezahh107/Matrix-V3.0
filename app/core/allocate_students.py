@@ -40,12 +40,12 @@ from .common.trace import (
     summarize_trace_outcome,
 )
 from .common.types import (
+    CANONICAL_TRACE_ORDER,
     AllocationAlertRecord,
     AllocationLogRecord,
     JoinKeyValues,
     MentorStateDelta,
     MentorStateSnapshot,
-    CANONICAL_TRACE_ORDER,
     TraceStageLiteral,
     TraceStageRecord,
 )
@@ -572,16 +572,14 @@ def _validate_policy_join_keys(
             mentor_value = mentor_row.get(column)
         if student_value is None:
             continue
-        if column == policy.stage_column("center"):
-            if _matches_center_with_wildcard(
-                int(student_value), _coerce_int(mentor_value), center_wildcard
-            ):
-                continue
-        elif column == policy.columns.school_code:
-            if _matches_school_with_wildcard(
-                int(student_value), _coerce_int(mentor_value), policy.school_code_empty_as_zero
-            ):
-                continue
+        if column == policy.stage_column("center") and _matches_center_with_wildcard(
+            int(student_value), _coerce_int(mentor_value), center_wildcard
+        ):
+            continue
+        if column == policy.columns.school_code and _matches_school_with_wildcard(
+            int(student_value), _coerce_int(mentor_value), policy.school_code_empty_as_zero
+        ):
+            continue
         if _coerce_int(mentor_value) != int(student_value):
             mismatches.append(
                 {
