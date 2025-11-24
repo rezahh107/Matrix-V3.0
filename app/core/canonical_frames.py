@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Sequence
+from typing import Any
 
 import pandas as pd
 
@@ -15,9 +16,9 @@ from .common.columns import (
     HeaderMode,
     canonicalize_headers,
     coerce_semantics,
+    enforce_join_key_types,
     enrich_school_columns_en,
     ensure_series,
-    enforce_join_key_types,
     resolve_aliases,
 )
 from .common.ids import build_mentor_alias_map, extract_alias_code_series

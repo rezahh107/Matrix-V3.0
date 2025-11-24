@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import re
-from typing import Final, Iterable
+from typing import Final
 
 import pandas as pd
 

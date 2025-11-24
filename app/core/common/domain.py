@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Domain models and logic for Eligibility Matrix → Allocation system.
 Python 3.10+, stdlib only, no I/O, no side-effects on import.
@@ -6,10 +5,11 @@ Deterministic and fail-safe, adhering to Policy v1.0.3.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import math
+from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass, field
 from enum import Enum, IntEnum
-from typing import Any, Iterable, Mapping, Literal, Sequence, TypedDict, final, TypeGuard
+from typing import Any, Literal, TypedDict, TypeGuard, final
 
 from .errors import DataMissingError, InvalidCenterMappingError, InvalidGenderValueError
 from .normalization import normalize_fa, to_numlike_str
@@ -480,7 +480,7 @@ class JoinKey:
         )
 
     @staticmethod
-    def from_student_row(row: StudentRow, *, cfg: BuildConfig) -> "JoinKey":
+    def from_student_row(row: StudentRow, *, cfg: BuildConfig) -> JoinKey:
         """ساخت کلید الحاق از سطر دانش‌آموز.
 
         مثال::

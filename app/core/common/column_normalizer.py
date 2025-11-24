@@ -6,9 +6,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Callable, Dict, List, Mapping, Tuple
 import warnings
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 
 import pandas as pd
 
@@ -47,11 +47,11 @@ class ColumnNormalizationReport:
     """خلاصهٔ اعمال نرمال‌سازی روی DataFrame ورودی."""
 
     renamed: Mapping[str, str]
-    aliases_added: Tuple[str, ...]
-    unmatched: Tuple[str, ...]
+    aliases_added: tuple[str, ...]
+    unmatched: tuple[str, ...]
 
 
-_RULES: Tuple[ColumnRule, ...] = (
+_RULES: tuple[ColumnRule, ...] = (
     ColumnRule(COL_SCHOOL, "school_code", "numlike"),
     ColumnRule(COL_SCHOOL_NAME, "school_name", "text"),
     ColumnRule(COL_SCHOOL_CODE_1, "school_code_1", "numlike"),
@@ -67,7 +67,7 @@ _RULES: Tuple[ColumnRule, ...] = (
 )
 
 
-_LOOKUP: Dict[str, ColumnRule] = {}
+_LOOKUP: dict[str, ColumnRule] = {}
 for rule in _RULES:
     _LOOKUP.setdefault(normalize_fa(rule.persian), rule)
     _LOOKUP.setdefault(normalize_fa(rule.standard), rule)
@@ -173,11 +173,11 @@ def normalize_input_columns(
     """
 
     result = df.copy()
-    renamed: Dict[str, str] = {}
-    aliases_added: List[str] = []
-    unmatched: List[str] = []
+    renamed: dict[str, str] = {}
+    aliases_added: list[str] = []
+    unmatched: list[str] = []
     to_drop: set[str] = set()
-    positions: Dict[str, int] = {}
+    positions: dict[str, int] = {}
 
     for idx, column in enumerate(df.columns):
         normalized_name = normalize_fa(column)
@@ -194,9 +194,10 @@ def normalize_input_columns(
             renamed[column] = rule.persian
             to_drop.add(column)
         alias_position = positions.get(rule.persian, idx) + 1
-        if include_alias or rule.standard in result.columns:
-            if _set_column(result, rule.standard, alias_series, alias_position):
-                aliases_added.append(rule.standard)
+        if (include_alias or rule.standard in result.columns) and _set_column(
+            result, rule.standard, alias_series, alias_position
+        ):
+            aliases_added.append(rule.standard)
 
     if to_drop:
         result = result.drop(columns=list(to_drop))
