@@ -5,6 +5,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from app.core.policy_loader import load_policy
 from app.infra.errors import (
     DatabaseCorruptError,
     DatabaseOperationError,
@@ -59,6 +60,192 @@ def test_generic_sqlite_error_wrapped(tmp_path, monkeypatch):
     monkeypatch.setattr(db, "_replace_table_atomic", boom)
     with pytest.raises(DatabaseOperationError):
         db.upsert_schools(df)
+
+
+def test_upsert_mentor_pool_cache_rejects_duplicate_ids(tmp_path: Path) -> None:
+    policy = load_policy()
+    db = LocalDatabase(tmp_path / "duplicate.sqlite")
+
+    duplicated_pool = pd.DataFrame(
+        {
+            "mentor_id": ["m1", "m1"],
+            "کد کارمندی پشتیبان": ["E1", "E2"],
+            "کدرشته": [1201, 1201],
+            "جنسیت": [1, 1],
+            "دانش آموز فارغ": [0, 0],
+            "مرکز گلستان صدرا": [1, 1],
+            "مالی حکمت بنیاد": [0, 0],
+            "کد مدرسه": [3581, 3581],
+        }
+    )
+
+    with pytest.raises(DatabaseOperationError) as excinfo:
+        db.upsert_mentor_pool_cache(duplicated_pool, join_keys=policy.join_keys)
+
+    message = str(excinfo.value)
+    assert "mentor_pool_cache" in message
+    assert "mentor_id" in message
+    assert "m1" in message
+
+
+def test_upsert_mentor_pool_cache_rejects_duplicate_employee_code(tmp_path: Path) -> None:
+    policy = load_policy()
+    db = LocalDatabase(tmp_path / "duplicate_employee.sqlite")
+
+    duplicated_pool = pd.DataFrame(
+        {
+            "mentor_id": ["m1", "m2"],
+            "کد کارمندی پشتیبان": ["E1", "E1"],
+            "کدرشته": [1201, 1202],
+            "جنسیت": [1, 1],
+            "دانش آموز فارغ": [0, 0],
+            "مرکز گلستان صدرا": [1, 1],
+            "مالی حکمت بنیاد": [0, 0],
+            "کد مدرسه": [3581, 3582],
+        }
+    )
+
+    with pytest.raises(DatabaseOperationError) as excinfo:
+        db.upsert_mentor_pool_cache(duplicated_pool, join_keys=policy.join_keys)
+
+    message = str(excinfo.value)
+    assert "mentor_pool_cache" in message
+    assert "کد کارمندی پشتیبان" in message
+    assert "E1" in message
+
+
+def test_upsert_students_cache_rejects_duplicate_student_ids(tmp_path: Path) -> None:
+    policy = load_policy()
+    db = LocalDatabase(tmp_path / "students_dup.sqlite")
+
+    duplicated_students = pd.DataFrame(
+        {
+            "student_id": ["s1", "s1"],
+            "کد ملی": ["1", "2"],
+            "کدرشته": [1201, 1201],
+            "گروه آزمایشی": ["A", "A"],
+            "جنسیت": [1, 1],
+            "دانش آموز فارغ": [0, 0],
+            "مرکز گلستان صدرا": [1, 1],
+            "مالی حکمت بنیاد": [0, 0],
+            "کد مدرسه": [3581, 3581],
+            "school_code_raw": ["x", "y"],
+            "school_code_norm": [3581, 3581],
+            "school_status_resolved": [1, 1],
+        }
+    )
+
+    with pytest.raises(DatabaseOperationError) as excinfo:
+        db.upsert_students_cache(duplicated_students, join_keys=policy.join_keys)
+
+    message = str(excinfo.value)
+    assert "students_cache" in message
+    assert "student_id" in message
+    assert "s1" in message
+
+
+def test_upsert_caches_allow_nulls_in_unique_columns(tmp_path: Path) -> None:
+    policy = load_policy()
+    db = LocalDatabase(tmp_path / "nulls.sqlite")
+
+    mentor_pool = pd.DataFrame(
+        {
+            "mentor_id": [None, None, "m2"],
+            "کد کارمندی پشتیبان": [None, "E1", "E2"],
+            "کدرشته": [1201, 1201, 1201],
+            "جنسیت": [1, 1, 1],
+            "دانش آموز فارغ": [0, 0, 0],
+            "مرکز گلستان صدرا": [1, 1, 1],
+            "مالی حکمت بنیاد": [0, 0, 0],
+            "کد مدرسه": [3581, 3581, 3581],
+            "remaining_capacity": [1.0, 1.0, 1.0],
+            "allocations_new": [0, 0, 0],
+            "occupancy_ratio": [0.0, 0.0, 0.0],
+        }
+    )
+
+    students = pd.DataFrame(
+        {
+            "student_id": [None, None, "s3"],
+            "کد ملی": ["1", "2", "3"],
+            "کدرشته": [1201, 1201, 1201],
+            "گروه آزمایشی": ["A", "A", "A"],
+            "جنسیت": [1, 1, 1],
+            "دانش آموز فارغ": [0, 0, 0],
+            "مرکز گلستان صدرا": [1, 1, 1],
+            "مالی حکمت بنیاد": [0, 0, 0],
+            "کد مدرسه": [3581, 3581, 3581],
+            "school_code_raw": ["x", "y", "z"],
+            "school_code_norm": [3581, 3581, 3581],
+            "school_status_resolved": [1, 1, 1],
+        }
+    )
+
+    # نباید به‌خاطر NULL در ستون‌های کلید طبیعی خطا بدهد
+    db.upsert_mentor_pool_cache(mentor_pool, join_keys=policy.join_keys)
+    db.upsert_students_cache(students, join_keys=policy.join_keys)
+
+
+def test_upsert_caches_create_unique_indexes(tmp_path: Path) -> None:
+    policy = load_policy()
+    db = LocalDatabase(tmp_path / "indexes.sqlite")
+
+    mentor_pool = pd.DataFrame(
+        {
+            "mentor_id": ["m1", "m2"],
+            "کد کارمندی پشتیبان": ["E1", "E2"],
+            "کدرشته": [1201, 1202],
+            "گروه آزمایشی": ["A", "B"],
+            "جنسیت": [1, 1],
+            "دانش آموز فارغ": [0, 0],
+            "مرکز گلستان صدرا": [1, 1],
+            "مالی حکمت بنیاد": [0, 0],
+            "کد مدرسه": [3581, 3582],
+            "remaining_capacity": [1.0, 1.0],
+            "allocations_new": [0, 0],
+            "occupancy_ratio": [0.0, 0.0],
+        }
+    )
+
+    students = pd.DataFrame(
+        {
+            "student_id": ["s1", "s2"],
+            "کد ملی": ["1", "2"],
+            "کدرشته": [1201, 1202],
+            "گروه آزمایشی": ["A", "B"],
+            "جنسیت": [1, 1],
+            "دانش آموز فارغ": [0, 0],
+            "مرکز گلستان صدرا": [1, 1],
+            "مالی حکمت بنیاد": [0, 0],
+            "کد مدرسه": [3581, 3582],
+            "school_code_raw": ["x", "y"],
+            "school_code_norm": [3581, 3582],
+            "school_status_resolved": [1, 1],
+        }
+    )
+
+    db.upsert_mentor_pool_cache(mentor_pool, join_keys=policy.join_keys)
+    db.upsert_students_cache(students, join_keys=policy.join_keys)
+
+    with db.connect() as conn:
+        mentor_indexes = conn.execute("PRAGMA index_list('mentor_pool_cache')").fetchall()
+        mentor_unique = {row[1] for row in mentor_indexes if row[2]}
+        assert len(mentor_unique) >= 2
+
+        # تلاش برای وارد کردن شناسه تکراری باید به دلیل ایندکس UNIQUE شکست بخورد
+        with pytest.raises(sqlite3.IntegrityError):
+            conn.execute(
+                "INSERT INTO mentor_pool_cache(mentor_id) VALUES (?)", ("m1",)
+            )
+
+        student_indexes = conn.execute("PRAGMA index_list('students_cache')").fetchall()
+        student_unique = {row[1] for row in student_indexes if row[2]}
+        assert len(student_unique) >= 1
+
+        with pytest.raises(sqlite3.IntegrityError):
+            conn.execute(
+                "INSERT INTO students_cache(student_id) VALUES (?)", ("s1",)
+            )
 
 
 def test_initialize_reports_corrupt_file_with_backup(tmp_path):
