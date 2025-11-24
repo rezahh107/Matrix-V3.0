@@ -1,8 +1,8 @@
 """اعتبارسنجی تطابق کلیدهای join بین تخصیص و استخر پشتیبان.
 
-این ماژول صرفاً در لایهٔ Infra عمل می‌کند و هیچ منطق رتبه‌بندی یا تخصیص
-جدیدی اضافه نمی‌کند؛ تنها از خروجی‌های Core (تخصیص و لاگ) و دادهٔ ورودی
-استخر استفاده می‌کند تا گزارش QA و audit بسازد.
+این ماژول صرفاً در لایه Infra عمل میکند و هیچ منطق رتبهبندی یا تخصیص
+جدیدی اضافه نمیکند؛ تنها از خروجیهای Core (تخصیص و لاگ) و داده ورودی
+استخر استفاده میکند تا گزارش QA و audit بسازد.
 """
 
 from __future__ import annotations
@@ -12,13 +12,24 @@ from dataclasses import dataclass
 
 import pandas as pd
 
-from app.core.common.columns import canonicalize_headers, ensure_series
+from app.core.common.columns import canonicalize_headers, dedupe_columns, ensure_series
 from app.core.policy_loader import PolicyConfig
 
 __all__ = [
     "JoinKeyAuditResult",
     "validate_allocation_join_keys",
 ]
+
+
+# شش کلید join مطابق Policy/SSoT
+JOIN_KEYS: tuple[str, ...] = (
+    "کدرشته",
+    "جنسیت",
+    "دانش آموز فارغ",
+    "مرکز گلستان صدرا",
+    "مالی حکمت بنیاد",
+    "کد مدرسه",
+)
 
 
 @dataclass(frozen=True)
@@ -28,16 +39,19 @@ class JoinKeyAuditResult:
     Attributes
     ----------
     audit_frame:
-        دیتافریم شامل ستون‌های تطبیق دانش‌آموز/منتور و پرچم مغایرت.
+        دیتافریم شامل ستونهای تطبیق دانشآموز/منتور و پرچم مغایرت.
     invalid_count:
-        تعداد دانش‌آموزانی که حداقل یک مغایرت دارند.
+        تعداد دانشآموزانی که حداقل یک مغایرت دارند.
     total:
-        تعداد کل ردیف‌های تخصیص بررسی‌شده.
+        تعداد کل ردیفهای تخصیص بررسیشده.
+    duplicate_columns:
+        شمارش ستونهای تکراری شناساییشده برای هر کلید join.
     """
 
     audit_frame: pd.DataFrame
     invalid_count: int
     total: int
+    duplicate_columns: dict[str, int]
 
 
 def _pick_column(frame: pd.DataFrame, candidates: Sequence[str]) -> str | None:
@@ -47,13 +61,34 @@ def _pick_column(frame: pd.DataFrame, candidates: Sequence[str]) -> str | None:
     return None
 
 
-def _prepare_join_keys(df: pd.DataFrame, columns: Sequence[str]) -> pd.DataFrame:
-    coerced = df.copy()
+def _dedupe_join_key_columns(
+    df: pd.DataFrame, join_keys: Sequence[str]
+) -> tuple[pd.DataFrame, dict[str, int]]:
+    """حذف پایدار ستونهای تکراری کلید join با حفظ اولین وقوع."""
+
+    working = df.copy()
+    duplicate_counts = {key: 0 for key in join_keys}
+    duplicated_mask = working.columns.duplicated(keep="first")
+    if duplicated_mask.any():
+        duplicated_columns = working.columns[duplicated_mask]
+        for name in duplicated_columns:
+            if name in duplicate_counts:
+                duplicate_counts[name] += 1
+        working = working.loc[:, ~duplicated_mask].copy()
+    return working, duplicate_counts
+
+
+def _prepare_join_keys(
+    df: pd.DataFrame, columns: Sequence[str]
+) -> tuple[pd.DataFrame, dict[str, int]]:
+    prepared, duplicate_counts = _dedupe_join_key_columns(df, columns)
+    coerced = prepared.copy()
     for column in columns:
         if column not in coerced.columns:
             coerced[column] = pd.Series([pd.NA] * len(coerced), index=coerced.index)
-        coerced[column] = pd.to_numeric(coerced[column], errors="coerce").astype("Int64")
-    return coerced
+        series = ensure_series(coerced[column])
+        coerced[column] = pd.to_numeric(series, errors="coerce").astype("Int64")
+    return coerced, duplicate_counts
 
 
 def validate_allocation_join_keys(
@@ -65,8 +100,8 @@ def validate_allocation_join_keys(
 ) -> JoinKeyAuditResult:
     """بررسی برابری شش کلید join بین تخصیص و استخر.
 
-    ورودی‌ها باید پیش‌تر توسط Core تولید شده باشند؛ این تابع فقط نام ستون‌ها را
-    کاننیکال می‌کند، مقادیر را به int تبدیل می‌کند و پرچم مغایرت می‌سازد.
+    ورودیها باید پیشتر توسط Core تولید شده باشند؛ این تابع فقط نام ستونها را
+    کاننیکال میکند، مقادیر را به int تبدیل میکند و پرچم مغایرت میسازد.
 
     مثال
     -----
@@ -77,7 +112,7 @@ def validate_allocation_join_keys(
     True
     """
 
-    allocations = canonicalize_headers(allocations_df, header_mode="fa").copy()
+    allocations = dedupe_columns(canonicalize_headers(allocations_df, header_mode="fa")).copy()
     students = canonicalize_headers(students_df, header_mode="fa").copy()
     pool = canonicalize_headers(pool_df, header_mode="fa").copy()
 
@@ -91,17 +126,19 @@ def validate_allocation_join_keys(
     )
 
     if mentor_id_column is None and alias_column is None:
-        return JoinKeyAuditResult(pd.DataFrame(), 0, int(allocations.shape[0]))
+        return JoinKeyAuditResult(
+            pd.DataFrame(), 0, int(allocations.shape[0]), {key: 0 for key in policy.join_keys}
+        )
 
     student_columns = ["student_id", *policy.join_keys]
     student_subset = students.loc[
         :, [col for col in student_columns if col in students.columns]
     ].copy()
-    student_subset = _prepare_join_keys(student_subset, policy.join_keys)
+    student_subset, student_duplicates = _prepare_join_keys(student_subset, policy.join_keys)
 
     mentor_keys = policy.join_keys
     mentor_subset = pool[[col for col in mentor_keys if col in pool.columns]].copy()
-    mentor_subset = _prepare_join_keys(mentor_subset, mentor_keys)
+    mentor_subset, mentor_duplicates = _prepare_join_keys(mentor_subset, mentor_keys)
     if mentor_id_column:
         mentor_subset["mentor_id"] = (
             ensure_series(pool[mentor_id_column]).astype("string").str.strip()
@@ -162,5 +199,19 @@ def validate_allocation_join_keys(
         audit["any_mismatch"] = False
         audit["mismatch_summary"] = ""
 
+    combined_duplicates: dict[str, int] = {
+        key: student_duplicates.get(key, 0) + mentor_duplicates.get(key, 0)
+        for key in policy.join_keys
+    }
+    duplicate_total = sum(combined_duplicates.values())
+    duplicate_keys = [key for key, count in combined_duplicates.items() if count > 0]
+    audit["duplicate_join_key_columns"] = duplicate_total
+    audit["duplicate_join_key_keys"] = ", ".join(duplicate_keys)
+
     invalid_count = int(audit["any_mismatch"].sum()) if not audit.empty else 0
-    return JoinKeyAuditResult(audit, invalid_count, int(audit.shape[0]))
+    return JoinKeyAuditResult(
+        audit,
+        invalid_count,
+        int(audit.shape[0]),
+        combined_duplicates,
+    )
