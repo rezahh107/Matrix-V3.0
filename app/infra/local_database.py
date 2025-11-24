@@ -1577,6 +1577,7 @@ class LocalDatabase:
             raise ValueError("DataFrame دانش‌آموزان تهی است؛ ورودی معتبر بدهید.")
         self.initialize()
         _validate_join_keys(df, join_keys)
+        _ensure_unique_columns(df, columns=("student_id",), table_name="students_cache")
         index_statements = _build_index_statements(
             table_name="students_cache",
             df=df,
@@ -1632,6 +1633,11 @@ class LocalDatabase:
             raise ValueError("DataFrame استخر منتورها تهی است؛ ورودی معتبر بدهید.")
         self.initialize()
         _validate_join_keys(df, join_keys)
+        _ensure_unique_columns(
+            df,
+            columns=("mentor_id", "کد کارمندی پشتیبان"),
+            table_name="mentor_pool_cache",
+        )
         index_statements = _build_index_statements(
             table_name="mentor_pool_cache",
             df=df,
@@ -2133,3 +2139,51 @@ def _validate_join_keys(df: pd.DataFrame, join_keys: Sequence[str]) -> None:
                 df[col] = series.astype("Int64")
             except Exception as exc:  # pragma: no cover - مسیر خطا
                 raise ValueError(f"ستون {col} باید عددی باشد.") from exc
+
+
+def _ensure_unique_columns(
+    df: pd.DataFrame, *, columns: Sequence[str], table_name: str
+) -> None:
+    """ولیدیت یکتایی کلیدهای طبیعی پیش از ایجاد ایندکس‌های UNIQUE.
+
+    - فقط ستون‌های موجود در دیتافریم را بررسی می‌کند و دیتافریم را تغییر نمی‌دهد.
+    - مقادیر تهی (NaN/None) نادیده گرفته می‌شوند؛ این رفتار منطبق با UNIQUE در
+      SQLite است که NULL را خلاف یکتایی نمی‌داند.
+    - در صورت کشف مقدار تکراری، پیام خطا به‌صورت متمرکز توسط
+      :func:`_format_duplicate_error` ساخته و همراه نام جدول/ستون و نمونه‌هایی
+      از مقادیر مشکل‌دار درون ``DatabaseOperationError`` گزارش می‌شود.
+
+    مثال:
+        >>> df = pd.DataFrame({"mentor_id": ["m1", "m1", "m2"]})
+        >>> _ensure_unique_columns(df, columns=("mentor_id",), table_name="mentor_pool_cache")
+        Traceback (most recent call last):
+            ...
+        DatabaseOperationError: جدول mentor_pool_cache دارای مقادیر تکراری در ستون «mentor_id» است؛ نمونه‌ها: ['m1']
+    """
+
+    for column in columns:
+        if column not in df.columns:
+            continue
+        non_null = df[column].dropna()
+        duplicates = non_null[non_null.duplicated(keep=False)]
+        if duplicates.empty:
+            continue
+        samples = duplicates.drop_duplicates().astype(str).head(5).tolist()
+        raise DatabaseOperationError(
+            _format_duplicate_error(
+                table_name=table_name, column=column, samples=samples
+            )
+        )
+
+
+def _format_duplicate_error(*, table_name: str, column: str, samples: Sequence[str]) -> str:
+    """ساخت پیام خطای یکتایی به‌صورت متمرکز و دترمینیستیک.
+
+    این تابع تنها نقطهٔ فرمت پیام برای خطای تکراری کلید طبیعی است تا
+    ماژول بتواند قبل از ایجاد ایندکس UNIQUE، هشدار خوانا به اپراتور بدهد.
+    خروجی همواره شامل نام جدول، نام ستون و چند نمونه از مقادیر تکراری است.
+    """
+
+    return "جدول {table} دارای مقادیر تکراری در ستون «{column}» است؛ نمونه‌ها: {samples}".format(
+        table=table_name, column=column, samples=list(samples)
+    )
