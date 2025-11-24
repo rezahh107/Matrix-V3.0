@@ -66,9 +66,7 @@ class DatabaseStatusWidget(QWidget):
     def _build_tooltip(self, summary: DatabaseHealthSummary) -> str:
         parts: list[str] = []
         if summary.counts:
-            counts_text = " | ".join(
-                f"{key}: {value:,}" for key, value in summary.counts.items()
-            )
+            counts_text = " | ".join(f"{key}: {value:,}" for key, value in summary.counts.items())
             parts.append(counts_text)
         if summary.last_updated:
             last = summary.last_updated

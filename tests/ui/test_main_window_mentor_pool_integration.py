@@ -30,7 +30,9 @@ class _FakeMentorPoolDialog(QDialog):
         return self._overrides
 
 
-def test_build_allocate_overrides_contains_mentor_map(qapp: QApplication, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_build_allocate_overrides_contains_mentor_map(
+    qapp: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
     window = MainWindow()
     window._mentor_pool_dialog_class = _FakeMentorPoolDialog
     window._mentor_pool_entries = [
@@ -55,7 +57,9 @@ def test_reset_cache_clears_overrides(qapp: QApplication) -> None:
     assert window._mentor_pool_overrides == {}
 
 
-def test_toolbar_has_mentor_pool_action(qapp: QApplication, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_toolbar_has_mentor_pool_action(
+    qapp: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
     window = MainWindow()
     triggered: list[bool] = []
     monkeypatch.setattr(window, "_open_mentor_pool_governance", lambda: triggered.append(True))

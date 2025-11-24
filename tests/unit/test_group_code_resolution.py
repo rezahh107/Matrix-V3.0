@@ -74,7 +74,9 @@ def test_resolve_group_code_falls_back_to_crosswalk(_group_map: dict[str, int]) 
     assert code == 2
 
 
-def test_resolve_group_code_logs_mismatch_warning(caplog: pytest.LogCaptureFixture, _group_map: dict[str, int]) -> None:
+def test_resolve_group_code_logs_mismatch_warning(
+    caplog: pytest.LogCaptureFixture, _group_map: dict[str, int]
+) -> None:
     row = pd.Series({"کد رشته": 3, "گروه آزمایشی": "انسانی", "student_id": "E"})
 
     with caplog.at_level(logging.WARNING):

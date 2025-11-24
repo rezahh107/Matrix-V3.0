@@ -106,8 +106,10 @@ def derive_allocation_channel(student: pd.Series, policy: PolicyConfig) -> Alloc
 
     rules = policy.allocation_channels
     school_code = _to_int_safe(student.get(policy.columns.school_code))
-    if school_code is not None and school_code in rules.school_codes and _is_active_student(
-        student, policy
+    if (
+        school_code is not None
+        and school_code in rules.school_codes
+        and _is_active_student(student, policy)
     ):
         return AllocationChannel.SCHOOL
 
@@ -129,9 +131,7 @@ def derive_allocation_channel(student: pd.Series, policy: PolicyConfig) -> Alloc
     return AllocationChannel.GENERIC
 
 
-def derive_channels_for_students(
-    students_df: pd.DataFrame, policy: PolicyConfig
-) -> pd.Series:
+def derive_channels_for_students(students_df: pd.DataFrame, policy: PolicyConfig) -> pd.Series:
     """برچسب‌گذاری کانال تخصیص به‌صورت برداری و دترمینیسیک."""
 
     if students_df.empty:
@@ -157,12 +157,8 @@ def derive_channels_for_students(
 
     for column in (center_column, rules.registration_center_column):
         series = _column_as_int(students_df, column)
-        _apply_center_channel(
-            result, series, rules=rules, channel=AllocationChannel.GOLESTAN
-        )
-        _apply_center_channel(
-            result, series, rules=rules, channel=AllocationChannel.SADRA
-        )
+        _apply_center_channel(result, series, rules=rules, channel=AllocationChannel.GOLESTAN)
+        _apply_center_channel(result, series, rules=rules, channel=AllocationChannel.SADRA)
 
     return result
 

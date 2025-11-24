@@ -113,11 +113,15 @@ def test_allocation_matches_excel_and_db(tmp_path: Path) -> None:
     allocations_excel, _, _, _ = allocate_batch(
         students, matrix_excel, policy=policy, progress=lambda *_: None
     )
-    allocations_db, _, _, _ = allocate_batch(students, matrix_db, policy=policy, progress=lambda *_: None)
-
-    allocations_excel_sorted = allocations_excel.sort_values(by=["student_id"], kind="stable").reset_index(
-        drop=True
+    allocations_db, _, _, _ = allocate_batch(
+        students, matrix_db, policy=policy, progress=lambda *_: None
     )
-    allocations_db_sorted = allocations_db.sort_values(by=["student_id"], kind="stable").reset_index(drop=True)
+
+    allocations_excel_sorted = allocations_excel.sort_values(
+        by=["student_id"], kind="stable"
+    ).reset_index(drop=True)
+    allocations_db_sorted = allocations_db.sort_values(
+        by=["student_id"], kind="stable"
+    ).reset_index(drop=True)
 
     pdt.assert_frame_equal(allocations_excel_sorted, allocations_db_sorted, check_dtype=False)

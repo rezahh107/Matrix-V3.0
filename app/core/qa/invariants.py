@@ -133,7 +133,9 @@ class QaReport:
         ordered_columns = base_columns + sorted(detail_keys)
         frame = pd.DataFrame(rows, columns=ordered_columns)
         if not frame.empty:
-            sort_keys = [col for col in ordered_columns if col in frame.columns and col not in {"message"}]
+            sort_keys = [
+                col for col in ordered_columns if col in frame.columns and col not in {"message"}
+            ]
             if sort_keys:
                 frame = frame.sort_values(by=sort_keys, kind="stable").reset_index(drop=True)
         return frame
@@ -420,9 +422,7 @@ def check_SCHOOL_01(  # noqa: N802
             offenders: Iterable[int] = ()
             if mentor_col:
                 offenders = (
-                    pd.to_numeric(
-                        restricted_rows.loc[missing_school, mentor_col], errors="coerce"
-                    )
+                    pd.to_numeric(restricted_rows.loc[missing_school, mentor_col], errors="coerce")
                     .dropna()
                     .astype(int)
                     .tolist()
@@ -456,19 +456,14 @@ def check_GOV_01(  # noqa: N802
     if allocation is None:
         return QaRuleResult("QA_RULE_GOV_01", True, violations)
 
-    mentor_col = _resolve_mentor_column(allocation) or _resolve_mentor_column(
-        allocation_summary
-    )
+    mentor_col = _resolve_mentor_column(allocation) or _resolve_mentor_column(allocation_summary)
     if mentor_col is None:
         return QaRuleResult("QA_RULE_GOV_01", True, violations)
 
     governance = policy.mentor_pool_governance
 
     allocated_ids = (
-        pd.to_numeric(allocation[mentor_col], errors="coerce")
-        .dropna()
-        .astype(int)
-        .unique()
+        pd.to_numeric(allocation[mentor_col], errors="coerce").dropna().astype(int).unique()
     )
     if allocated_ids.size == 0:
         return QaRuleResult("QA_RULE_GOV_01", True, violations)
@@ -487,9 +482,7 @@ def check_GOV_01(  # noqa: N802
                 )
             )
 
-    return QaRuleResult(
-        rule_id="QA_RULE_GOV_01", passed=not violations, violations=violations
-    )
+    return QaRuleResult(rule_id="QA_RULE_GOV_01", passed=not violations, violations=violations)
 
 
 def check_ALLOC_01(  # noqa: N802
@@ -509,10 +502,7 @@ def check_ALLOC_01(  # noqa: N802
         return QaRuleResult("QA_RULE_ALLOC_01", True, violations)
 
     assigned = (
-        pd.to_numeric(allocation[mentor_col], errors="coerce")
-        .dropna()
-        .astype(int)
-        .value_counts()
+        pd.to_numeric(allocation[mentor_col], errors="coerce").dropna().astype(int).value_counts()
     )
 
     summary = allocation_summary.copy()

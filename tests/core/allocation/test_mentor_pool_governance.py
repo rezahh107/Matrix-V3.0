@@ -100,12 +100,8 @@ def test_override_disables_active_idempotent():
     )
     mentors = pd.DataFrame({"mentor_id": [31, 32, 33]})
 
-    first = filter_active_mentors(
-        mentors, policy.mentor_pool_governance, overrides={32: False}
-    )
-    second = filter_active_mentors(
-        mentors, policy.mentor_pool_governance, overrides={32: False}
-    )
+    first = filter_active_mentors(mentors, policy.mentor_pool_governance, overrides={32: False})
+    second = filter_active_mentors(mentors, policy.mentor_pool_governance, overrides={32: False})
 
     assert first.equals(second)
     assert first["mentor_id"].tolist() == [31, 33]
@@ -125,9 +121,7 @@ def test_default_inactive_requires_override():
     filtered = filter_active_mentors(mentors, policy.mentor_pool_governance)
     assert filtered.empty
 
-    overridden = filter_active_mentors(
-        mentors, policy.mentor_pool_governance, overrides={41: True}
-    )
+    overridden = filter_active_mentors(mentors, policy.mentor_pool_governance, overrides={41: True})
     assert overridden["mentor_id"].tolist() == [41]
 
 

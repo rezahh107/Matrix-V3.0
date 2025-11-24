@@ -339,17 +339,23 @@ def test_prepare_allocation_export_frame_preserves_length_and_index() -> None:
 
 
 def test_prepare_allocation_export_frame_reports_missing_student_identifier(tmp_path: Path) -> None:
-    alloc = pd.DataFrame([
-        {"student_id": "STD-1", "mentor_id": "EMP-1"},
-    ])
-    students = pd.DataFrame([
-        {"GF_FirstName": "سارا"},
-    ])
+    alloc = pd.DataFrame(
+        [
+            {"student_id": "STD-1", "mentor_id": "EMP-1"},
+        ]
+    )
+    students = pd.DataFrame(
+        [
+            {"GF_FirstName": "سارا"},
+        ]
+    )
     students.attrs["sheet_name"] = "Students"
     students.attrs["source_path"] = tmp_path / "students.xlsx"
-    mentors = pd.DataFrame([
-        {"mentor_id": "EMP-1", "mentor_name": "پشتیبان"},
-    ])
+    mentors = pd.DataFrame(
+        [
+            {"mentor_id": "EMP-1", "mentor_name": "پشتیبان"},
+        ]
+    )
 
     with pytest.raises(ImportToSabtExportError) as excinfo:
         prepare_allocation_export_frame(alloc, students, mentors)
@@ -362,15 +368,21 @@ def test_prepare_allocation_export_frame_reports_missing_student_identifier(tmp_
 
 
 def test_prepare_allocation_export_frame_injects_student_identifier_from_series() -> None:
-    alloc = pd.DataFrame([
-        {"student_id": "STD-1", "mentor_id": "EMP-1"},
-    ])
-    students = pd.DataFrame([
-        {"GF_FirstName": "سارا"},
-    ])
-    mentors = pd.DataFrame([
-        {"mentor_id": "EMP-1", "mentor_name": "پشتیبان"},
-    ])
+    alloc = pd.DataFrame(
+        [
+            {"student_id": "STD-1", "mentor_id": "EMP-1"},
+        ]
+    )
+    students = pd.DataFrame(
+        [
+            {"GF_FirstName": "سارا"},
+        ]
+    )
+    mentors = pd.DataFrame(
+        [
+            {"mentor_id": "EMP-1", "mentor_name": "پشتیبان"},
+        ]
+    )
     student_ids = pd.Series(["STD-1"], index=students.index, name="student_id")
 
     merged = prepare_allocation_export_frame(
@@ -385,15 +397,21 @@ def test_prepare_allocation_export_frame_injects_student_identifier_from_series(
 
 
 def test_prepare_allocation_export_frame_reports_missing_mentor_identifier(tmp_path: Path) -> None:
-    alloc = pd.DataFrame([
-        {"student_id": "STD-1", "mentor_id": "EMP-1"},
-    ])
-    students = pd.DataFrame([
-        {"student_id": "STD-1", "GF_FirstName": "سارا"},
-    ])
-    mentors = pd.DataFrame([
-        {"mentor_name": "پشتیبان"},
-    ])
+    alloc = pd.DataFrame(
+        [
+            {"student_id": "STD-1", "mentor_id": "EMP-1"},
+        ]
+    )
+    students = pd.DataFrame(
+        [
+            {"student_id": "STD-1", "GF_FirstName": "سارا"},
+        ]
+    )
+    mentors = pd.DataFrame(
+        [
+            {"mentor_name": "پشتیبان"},
+        ]
+    )
     mentors.attrs["sheet_name"] = "Mentors"
     mentors.attrs["source_path"] = tmp_path / "mentors.xlsx"
 
@@ -409,18 +427,22 @@ def test_prepare_allocation_export_frame_reports_missing_mentor_identifier(tmp_p
 
 
 def test_prepare_allocation_export_frame_rejects_duplicate_students() -> None:
-    alloc = pd.DataFrame([
-        {"student_id": "STD-1", "mentor_id": "EMP-1"},
-    ])
+    alloc = pd.DataFrame(
+        [
+            {"student_id": "STD-1", "mentor_id": "EMP-1"},
+        ]
+    )
     students = pd.DataFrame(
         [
             {"student_id": "STD-1", "GF_FirstName": "سارا"},
             {"student_id": "STD-1", "GF_FirstName": "زهرا"},
         ]
     )
-    mentors = pd.DataFrame([
-        {"mentor_id": "EMP-1", "mentor_name": "پشتیبان ۱"},
-    ])
+    mentors = pd.DataFrame(
+        [
+            {"mentor_id": "EMP-1", "mentor_name": "پشتیبان ۱"},
+        ]
+    )
 
     with pytest.raises(ImportToSabtExportError) as excinfo:
         prepare_allocation_export_frame(alloc, students, mentors)
@@ -453,12 +475,16 @@ def test_safe_merge_duplicate_error_includes_samples() -> None:
 
 
 def test_prepare_allocation_export_frame_coalesces_duplicate_mentor_rows() -> None:
-    alloc = pd.DataFrame([
-        {"student_id": "STD-1", "mentor_id": "EMP-1"},
-    ])
-    students = pd.DataFrame([
-        {"student_id": "STD-1", "GF_FirstName": "سارا"},
-    ])
+    alloc = pd.DataFrame(
+        [
+            {"student_id": "STD-1", "mentor_id": "EMP-1"},
+        ]
+    )
+    students = pd.DataFrame(
+        [
+            {"student_id": "STD-1", "GF_FirstName": "سارا"},
+        ]
+    )
     mentors = pd.DataFrame(
         [
             {
@@ -572,6 +598,7 @@ def test_prepare_allocation_export_frame_raises_on_conflicting_duplicate_columns
         prepare_allocation_export_frame(alloc, students, mentors)
 
     assert "duplicate columns" in str(excinfo.value)
+
 
 def test_coalesce_duplicate_identifier_rows_handles_duplicate_columns() -> None:
     frame = pd.DataFrame(

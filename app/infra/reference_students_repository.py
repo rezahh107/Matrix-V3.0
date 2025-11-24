@@ -4,6 +4,7 @@
 ذخیرهٔ نسخهٔ تمیز در جدول ``students_cache`` است. Core از تغییرات ذخیره‌سازی
 بی‌خبر می‌ماند و همچنان DataFrame دریافت می‌کند.
 """
+
 from __future__ import annotations
 
 from pathlib import Path

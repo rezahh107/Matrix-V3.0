@@ -200,9 +200,7 @@ def test_duplicate_mentors_are_filtered_before_row_generation() -> None:
         cfg=BuildConfig(),
     )
 
-    duplicate_reasons = invalid_df.loc[
-        invalid_df["reason"] == "duplicate mentor employee code"
-    ]
+    duplicate_reasons = invalid_df.loc[invalid_df["reason"] == "duplicate mentor employee code"]
     assert len(duplicate_reasons) == 2
     assert set(duplicate_reasons["پشتیبان"]) == {"زهرا", "زهرا تکراری"}
 
@@ -240,9 +238,7 @@ def test_validation_captures_unmatched_school_counts() -> None:
     total_rows = validation["total_rows"].iat[0]
     total_candidates = validation["total_candidates"].iat[0]
     assert total_candidates > 0
-    assert validation["coverage_ratio"].iat[0] == pytest.approx(
-        total_rows / total_candidates
-    )
+    assert validation["coverage_ratio"].iat[0] == pytest.approx(total_rows / total_candidates)
 
 
 def test_global_mentors_with_zero_school_values_remain_valid() -> None:
@@ -423,9 +419,7 @@ def test_progress_log_captures_normalization_alias_diffs() -> None:
         cfg=BuildConfig(),
     )
 
-    school_row_alias = progress_log_alias.loc[
-        progress_log_alias["dataset"] == "schools"
-    ].iloc[0]
+    school_row_alias = progress_log_alias.loc[progress_log_alias["dataset"] == "schools"].iloc[0]
     assert school_row_alias["aliases_added_count"] < school_row["aliases_added_count"]
     assert "school_code" not in str(school_row_alias["aliases_added"])
 
@@ -456,18 +450,14 @@ def test_build_matrix_raises_when_dedup_threshold_exceeded(
     original_drop_duplicates = pd.DataFrame.drop_duplicates
 
     def _fake_drop_duplicates(self, subset=None, keep="first", *args, **kwargs):
-        result = original_drop_duplicates(
-            self, subset=subset, keep=keep, *args, **kwargs
-        )
+        result = original_drop_duplicates(self, subset=subset, keep=keep, *args, **kwargs)
         subset_cols = subset or []
         if any(col == "پشتیبان" for col in subset_cols) and len(result) > 1:
             return result.iloc[:-1].copy()
         return result
 
     monkeypatch.setattr(pd.DataFrame, "drop_duplicates", _fake_drop_duplicates)
-    monkeypatch.setattr(
-        build_module, "_validate_finance_invariants", lambda *_, **__: None
-    )
+    monkeypatch.setattr(build_module, "_validate_finance_invariants", lambda *_, **__: None)
 
     with pytest.raises(ValueError, match="حذف رکوردهای تکراری") as excinfo:
         build_matrix(

@@ -31,7 +31,11 @@ class UiTranslator:
     language: str | Language
 
     def __post_init__(self) -> None:
-        lang_enum = self.language if isinstance(self.language, Language) else Language.from_code(self.language)
+        lang_enum = (
+            self.language
+            if isinstance(self.language, Language)
+            else Language.from_code(self.language)
+        )
         object.__setattr__(self, "language", lang_enum.code)
         object.__setattr__(self, "_language_enum", lang_enum)
         object.__setattr__(self, "_lang", lang_enum.code)

@@ -45,6 +45,7 @@ CONTACT_POLICY_ALIAS_GROUPS: Mapping[str, tuple[str, ...]] = {
 def _optional_names(*candidates: str | None) -> tuple[str, ...]:
     return tuple(name for name in candidates if name)
 
+
 def _alias_names(column: str) -> tuple[str, ...]:
     return CONTACT_POLICY_ALIAS_GROUPS.get(column, ())
 
@@ -287,7 +288,9 @@ def enrich_student_contacts(df: pd.DataFrame) -> pd.DataFrame:
     if status_column != canonical_status_column:
         result[status_column] = status_numeric
 
-    tracking_column = _first_existing(result, _TRACKING_CODE_CANDIDATES, _TRACKING_CODE_CANDIDATES[0])
+    tracking_column = _first_existing(
+        result, _TRACKING_CODE_CANDIDATES, _TRACKING_CODE_CANDIDATES[0]
+    )
     _ensure_column(result, tracking_column)
     canonical_tracking_column = "hekmat_tracking"
     if tracking_column != canonical_tracking_column:

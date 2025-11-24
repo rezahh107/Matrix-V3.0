@@ -29,8 +29,10 @@ def _string_constants_without_docstrings(source: str) -> list[str]:
     tree = ast.parse(source)
     docstring_ids: set[int] = set()
     for node in ast.walk(tree):
-        if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)) and node.body and isinstance(
-            node.body[0], ast.Expr
+        if (
+            isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
+            and node.body
+            and isinstance(node.body[0], ast.Expr)
         ):
             value = getattr(node.body[0], "value", None)
             if isinstance(value, ast.Constant) and isinstance(value.value, str):

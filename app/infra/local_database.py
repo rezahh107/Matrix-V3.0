@@ -205,13 +205,9 @@ class LocalDatabase:
             with self._open_connection() as conn:
                 actual_version = self._get_schema_version(conn)
                 for name, required_cols in self._required_tables.items():
-                    tables.append(
-                        self._collect_table_diagnostics(conn, name, required_cols)
-                    )
+                    tables.append(self._collect_table_diagnostics(conn, name, required_cols))
                 # جدول runs نیز برای ردیابی سلامت مهم است
-                tables.append(
-                    self._collect_table_diagnostics(conn, "runs", [])
-                )
+                tables.append(self._collect_table_diagnostics(conn, "runs", []))
         except sqlite3.Error:
             logger.exception("Failed to read schema diagnostics for %s", self.path)
 
@@ -412,11 +408,12 @@ class LocalDatabase:
             # مجاز است که پایگاه داده پیش‌تر در نسخهٔ سازگار بوده یا تازه ساخته
             # شده باشد؛ برای نسخه‌های قدیمی‌تر پیام بازسازی باید به کاربر برسد.
             current_version = self._get_schema_version(conn)
-            migrated_from_older = existing_version is not None and existing_version < _SCHEMA_VERSION
-            allow_repair = (
-                (current_version is None or current_version >= _SCHEMA_VERSION)
-                and not migrated_from_older
+            migrated_from_older = (
+                existing_version is not None and existing_version < _SCHEMA_VERSION
             )
+            allow_repair = (
+                current_version is None or current_version >= _SCHEMA_VERSION
+            ) and not migrated_from_older
             self._ensure_schema(conn, allow_repair=allow_repair)
             # NEW: ensure year meta also after migrations/schema ensure
             self._ensure_year_meta(conn)
@@ -484,10 +481,7 @@ class LocalDatabase:
     def _is_corruption_error(exc: sqlite3.Error) -> bool:
         """تشخیص پیام‌های خطای مرتبط با خراب بودن فایل SQLite."""
         message = str(exc).lower()
-        return (
-            "file is not a database" in message
-            or "malformed" in message
-        )
+        return "file is not a database" in message or "malformed" in message
 
     @staticmethod
     def _is_schema_mismatch_error(exc: sqlite3.Error) -> bool:
@@ -495,7 +489,6 @@ class LocalDatabase:
 
         message = str(exc).lower()
         return "no such column" in message or "has no column named" in message
-
 
     def insert_run(self, record: RunRecord) -> int:
         """درج ردیف جدید در جدول ``runs`` و بازگرداندن شناسه."""
@@ -567,9 +560,7 @@ class LocalDatabase:
     def insert_qa_summary(self, rows: Iterable[QaSummaryRow]) -> None:
         """ثبت خلاصهٔ QA برای یک اجرا."""
 
-        payload = [
-            (row.run_id, row.violation_code, row.severity, row.count) for row in rows
-        ]
+        payload = [(row.run_id, row.violation_code, row.severity, row.count) for row in rows]
         if not payload:
             logger.debug("No QA rows to insert for qa_summary")
             return
@@ -590,9 +581,7 @@ class LocalDatabase:
         """بازیابی همهٔ اجراها (برای تست/دیباگ)."""
 
         with self._open_connection() as conn:
-            cursor = conn.execute(
-                "SELECT * FROM runs ORDER BY started_at ASC, id ASC"
-            )
+            cursor = conn.execute("SELECT * FROM runs ORDER BY started_at ASC, id ASC")
             return cursor.fetchall()
 
     def fetch_metrics_for_run(self, run_id: int) -> list[sqlite3.Row]:
@@ -722,12 +711,8 @@ class LocalDatabase:
             row = cursor.fetchone()
         if row is None:
             return None, None, {}
-        summary_df = _safe_deserialize_dataframe(
-            row["qa_summary_json"], label="qa_summary_json"
-        )
-        details_df = _safe_deserialize_dataframe(
-            row["qa_details_json"], label="qa_details_json"
-        )
+        summary_df = _safe_deserialize_dataframe(row["qa_summary_json"], label="qa_summary_json")
+        details_df = _safe_deserialize_dataframe(row["qa_details_json"], label="qa_details_json")
         extras = _safe_deserialize_dataframe_map(row["qa_extras_json"])
         return summary_df, details_df, extras
 
@@ -797,13 +782,16 @@ class LocalDatabase:
             )
             return cursor.fetchall()
 
-    def fetch_exporter_snapshot(self, snapshot_id: int) -> tuple[sqlite3.Row | None, pd.DataFrame | None]:
+    def fetch_exporter_snapshot(
+        self, snapshot_id: int
+    ) -> tuple[sqlite3.Row | None, pd.DataFrame | None]:
         """بازیابی Snapshot خروجی Exporter بر اساس شناسه."""
 
         with self._open_connection() as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.execute(
-                "SELECT * FROM exporter_snapshots WHERE id = ?", (snapshot_id,),
+                "SELECT * FROM exporter_snapshots WHERE id = ?",
+                (snapshot_id,),
             )
             row = cursor.fetchone()
         if row is None:
@@ -830,7 +818,9 @@ class LocalDatabase:
                     "اجرا": "runs",
                 }
                 missing = [
-                    label for label, table in expected_tables.items() if not _table_exists(conn, table)
+                    label
+                    for label, table in expected_tables.items()
+                    if not _table_exists(conn, table)
                 ]
                 counts: dict[str, int] = {}
                 degraded_tables: list[str] = []
@@ -883,9 +873,7 @@ class LocalDatabase:
             columns = [str(row[1]) for row in cursor.fetchall()]
             missing = [col for col in required_columns if col not in columns]
             try:
-                row_count = int(
-                    conn.execute(f'SELECT COUNT(*) FROM "{table}"').fetchone()[0]
-                )
+                row_count = int(conn.execute(f'SELECT COUNT(*) FROM "{table}"').fetchone()[0])
             except sqlite3.Error:
                 row_count = None
         else:
@@ -930,8 +918,12 @@ class LocalDatabase:
         for name, required in self._required_tables.items():
             if _table_exists(conn, name):
                 table_diag = self._collect_table_diagnostics(conn, name, required)
-                if table_diag.missing_required_columns and allow_repair and self._repair_required_schema(
-                    conn, name, table_diag.missing_required_columns
+                if (
+                    table_diag.missing_required_columns
+                    and allow_repair
+                    and self._repair_required_schema(
+                        conn, name, table_diag.missing_required_columns
+                    )
                 ):
                     table_diag = self._collect_table_diagnostics(conn, name, required)
 
@@ -939,12 +931,8 @@ class LocalDatabase:
                     missing_text = ", ".join(table_diag.missing_required_columns)
                     raise DatabaseSchemaMismatchError(
                         path=str(self.path),
-                        reason=(
-                            f"ساختار جدول {name} ناقص است؛ ستون‌های مفقود: {missing_text}"
-                        ),
-                        hint=(
-                            "فایل را حذف یا بازسازی کنید تا Schema کامل ایجاد شود."
-                        ),
+                        reason=(f"ساختار جدول {name} ناقص است؛ ستون‌های مفقود: {missing_text}"),
+                        hint=("فایل را حذف یا بازسازی کنید تا Schema کامل ایجاد شود."),
                         diagnostics={name: table_diag.missing_required_columns},
                     )
 
@@ -1209,9 +1197,7 @@ class LocalDatabase:
         """بازیابی شناسهٔ سال ذخیره‌شده در پایگاه داده."""
 
         with self._open_connection() as conn:
-            cursor = conn.execute(
-                "SELECT academic_year FROM year_meta WHERE id = 1"
-            )
+            cursor = conn.execute("SELECT academic_year FROM year_meta WHERE id = 1")
             row = cursor.fetchone()
             return str(row[0]) if row else None
 
@@ -1289,9 +1275,7 @@ class LocalDatabase:
                 version = 9
                 continue
             if version == 9:
-                self._migrate_v9_to_v10(
-                    conn, allow_autofix=start_version >= 9
-                )
+                self._migrate_v9_to_v10(conn, allow_autofix=start_version >= 9)
                 version = 10
                 continue
             raise SchemaVersionMismatchError(
@@ -1322,9 +1306,7 @@ class LocalDatabase:
             );
             """
         )
-        conn.execute(
-            "UPDATE schema_meta SET schema_version = ? WHERE id = 1", (3,)
-        )
+        conn.execute("UPDATE schema_meta SET schema_version = ? WHERE id = 1", (3,))
 
     def _migrate_v3_to_v4(self, conn: sqlite3.Connection) -> None:
         """افزودن جدول متادیتای کش مراجع برای نسخهٔ ۴."""
@@ -1339,9 +1321,7 @@ class LocalDatabase:
             );
             """
         )
-        conn.execute(
-            "UPDATE schema_meta SET schema_version = ? WHERE id = 1", (4,)
-        )
+        conn.execute("UPDATE schema_meta SET schema_version = ? WHERE id = 1", (4,))
 
     def _migrate_v4_to_v5(self, conn: sqlite3.Connection) -> None:
         """افزودن جدول کش ورودی‌های فرم برای نسخهٔ ۵."""
@@ -1361,7 +1341,8 @@ class LocalDatabase:
             """
         )
         conn.execute(
-            "UPDATE schema_meta SET schema_version = ? WHERE id = 1", (5,),
+            "UPDATE schema_meta SET schema_version = ? WHERE id = 1",
+            (5,),
         )
 
     def _migrate_v5_to_v6(self, conn: sqlite3.Connection) -> None:
@@ -1369,7 +1350,8 @@ class LocalDatabase:
 
         LocalDatabase._ensure_managers_reference_schema(conn)
         conn.execute(
-            "UPDATE schema_meta SET schema_version = ? WHERE id = 1", (6,),
+            "UPDATE schema_meta SET schema_version = ? WHERE id = 1",
+            (6,),
         )
 
     def _migrate_v6_to_v7(self, conn: sqlite3.Connection) -> None:
@@ -1377,7 +1359,8 @@ class LocalDatabase:
 
         LocalDatabase._ensure_exporter_archive_schema(conn)
         conn.execute(
-            "UPDATE schema_meta SET schema_version = ? WHERE id = 1", (7,),
+            "UPDATE schema_meta SET schema_version = ? WHERE id = 1",
+            (7,),
         )
 
     def _migrate_v7_to_v8(self, conn: sqlite3.Connection) -> None:
@@ -1385,7 +1368,8 @@ class LocalDatabase:
 
         LocalDatabase._ensure_year_tables(conn)
         conn.execute(
-            "UPDATE schema_meta SET schema_version = ? WHERE id = 1", (8,),
+            "UPDATE schema_meta SET schema_version = ? WHERE id = 1",
+            (8,),
         )
 
     def _migrate_v8_to_v9(self, conn: sqlite3.Connection) -> None:
@@ -1394,16 +1378,13 @@ class LocalDatabase:
         if _table_exists(conn, "qa_snapshots"):
             columns = _get_table_columns(conn, "qa_snapshots")
             if "qa_extras_json" not in columns:
-                conn.execute(
-                    "ALTER TABLE qa_snapshots ADD COLUMN qa_extras_json TEXT"
-                )
+                conn.execute("ALTER TABLE qa_snapshots ADD COLUMN qa_extras_json TEXT")
         conn.execute(
-            "UPDATE schema_meta SET schema_version = ? WHERE id = 1", (9,),
+            "UPDATE schema_meta SET schema_version = ? WHERE id = 1",
+            (9,),
         )
 
-    def _migrate_v9_to_v10(
-        self, conn: sqlite3.Connection, *, allow_autofix: bool
-    ) -> None:
+    def _migrate_v9_to_v10(self, conn: sqlite3.Connection, *, allow_autofix: bool) -> None:
         """افزودن ستون ``student_id`` به جدول cache دانش‌آموزان در نسخهٔ ۱۰.
 
         - اگر مهاجرت از نسخهٔ ۹ انجام شود، ستون به‌صورت خودکار افزوده می‌شود.
@@ -1428,7 +1409,8 @@ class LocalDatabase:
                     )
 
         conn.execute(
-            "UPDATE schema_meta SET schema_version = ? WHERE id = 1", (10,),
+            "UPDATE schema_meta SET schema_version = ? WHERE id = 1",
+            (10,),
         )
 
     @staticmethod
@@ -1472,7 +1454,9 @@ class LocalDatabase:
                     table_name="schools",
                     df=df,
                     index_statements=(
-                        ['CREATE UNIQUE INDEX IF NOT EXISTS idx_schools_code ON schools("کد مدرسه")']
+                        [
+                            'CREATE UNIQUE INDEX IF NOT EXISTS idx_schools_code ON schools("کد مدرسه")'
+                        ]
                         if "کد مدرسه" in df.columns
                         else []
                     ),
@@ -1551,9 +1535,7 @@ class LocalDatabase:
                 groups_df = pd.read_sql_query("SELECT * FROM school_crosswalk_groups", conn)
                 synonyms_df = None
                 if _table_exists(conn, "school_crosswalk_synonyms"):
-                    synonyms_df = pd.read_sql_query(
-                        "SELECT * FROM school_crosswalk_synonyms", conn
-                    )
+                    synonyms_df = pd.read_sql_query("SELECT * FROM school_crosswalk_synonyms", conn)
             return _coerce_int_columns(groups_df, ["کد مدرسه", "کد جایگزین"]), synonyms_df
         except sqlite3.OperationalError as exc:
             if "no such table" in str(exc).lower():
@@ -1566,9 +1548,7 @@ class LocalDatabase:
     # ------------------------------------------------------------------
     # کش گزارش دانش‌آموز و استخر منتورها
     # ------------------------------------------------------------------
-    def upsert_students_cache(
-        self, df: pd.DataFrame, *, join_keys: Sequence[str]
-    ) -> None:
+    def upsert_students_cache(self, df: pd.DataFrame, *, join_keys: Sequence[str]) -> None:
         """جایگزینی دیتافریم دانش‌آموزان در جدول ``students_cache``.
 
         دیتافریم ورودی باید پیش‌تر بر اساس Policy نرمال شده باشد؛ این تابع تنها
@@ -1595,9 +1575,7 @@ class LocalDatabase:
                     index_statements=index_statements,
                 )
         except sqlite3.Error as exc:
-            raise DatabaseOperationError(
-                "ذخیرهٔ کش دانش‌آموزان در SQLite ناکام ماند."
-            ) from exc
+            raise DatabaseOperationError("ذخیرهٔ کش دانش‌آموزان در SQLite ناکام ماند.") from exc
 
     def load_students_cache(self, *, join_keys: Sequence[str]) -> pd.DataFrame:
         """خواندن دیتافریم دانش‌آموزان از کش SQLite با حفظ نوع کلیدها."""
@@ -1626,9 +1604,7 @@ class LocalDatabase:
         except sqlite3.Error as exc:
             raise DatabaseOperationError("خواندن کش دانش‌آموزان با خطا مواجه شد.") from exc
 
-    def upsert_mentor_pool_cache(
-        self, df: pd.DataFrame, *, join_keys: Sequence[str]
-    ) -> None:
+    def upsert_mentor_pool_cache(self, df: pd.DataFrame, *, join_keys: Sequence[str]) -> None:
         """جایگزینی دیتافریم استخر منتورها در جدول ``mentor_pool_cache``."""
 
         if df is None:
@@ -1656,9 +1632,7 @@ class LocalDatabase:
                     index_statements=index_statements,
                 )
         except sqlite3.Error as exc:
-            raise DatabaseOperationError(
-                "ذخیرهٔ کش استخر منتورها در SQLite ناکام ماند."
-            ) from exc
+            raise DatabaseOperationError("ذخیرهٔ کش استخر منتورها در SQLite ناکام ماند.") from exc
 
     def load_mentor_pool_cache(self, *, join_keys: Sequence[str]) -> pd.DataFrame:
         """خواندن دیتافریم استخر منتورها از کش SQLite با حفظ نوع کلیدها."""
@@ -1709,10 +1683,12 @@ class LocalDatabase:
             raise ValueError("ستون entry_id برای ذخیرهٔ کش فرم ضروری است.")
 
         normalized = _normalize_forms_timestamps(df)
-        normalized = normalized.dropna(subset=["entry_id"])\
-            .drop_duplicates(subset=["entry_id"], keep="last")\
-            .sort_values(by=["received_at", "entry_id"], kind="stable")\
+        normalized = (
+            normalized.dropna(subset=["entry_id"])
+            .drop_duplicates(subset=["entry_id"], keep="last")
+            .sort_values(by=["received_at", "entry_id"], kind="stable")
             .reset_index(drop=True)
+        )
 
         self.initialize()
         index_statements = _build_index_statements(
@@ -1752,9 +1728,7 @@ class LocalDatabase:
             )
         if df.empty:
             return df
-        restored = _restore_timestamp_columns(
-            df, columns=("received_at", "normalized_at")
-        )
+        restored = _restore_timestamp_columns(df, columns=("received_at", "normalized_at"))
         return restored
 
     def record_reference_meta(
@@ -1856,9 +1830,7 @@ class LocalDatabase:
 
             conn.execute("BEGIN IMMEDIATE")
             if _table_exists(conn, table_name):
-                conn.execute(
-                    f"ALTER TABLE {quoted_table} RENAME TO {quoted_backup}"
-                )
+                conn.execute(f"ALTER TABLE {quoted_table} RENAME TO {quoted_backup}")
             conn.execute(f"ALTER TABLE {quoted_temp} RENAME TO {quoted_table}")
             conn.execute(f"DROP TABLE IF EXISTS {quoted_backup}")
             for stmt in index_statements or []:
@@ -1884,9 +1856,7 @@ def _to_iso(dt: datetime) -> str:
 def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
     """بررسی وجود جدول به‌صورت امن و دترمینیستیک."""
 
-    cursor = conn.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table,)
-    )
+    cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table,))
     return cursor.fetchone() is not None
 
 
@@ -1908,7 +1878,7 @@ def _quote_identifier(name: str) -> str:
 
     if not name:
         raise ValueError("Identifier cannot be empty.")
-    escaped = name.replace("\"", "\"\"")
+    escaped = name.replace('"', '""')
     return f'"{escaped}"'
 
 
@@ -1918,9 +1888,7 @@ def _coerce_int_columns(df: pd.DataFrame, columns: Iterable[str]) -> pd.DataFram
     return _sqlite_coerce_int_columns(df, list(columns))
 
 
-def _normalize_timestamp_columns(
-    df: pd.DataFrame, *, columns: Iterable[str]
-) -> pd.DataFrame:
+def _normalize_timestamp_columns(df: pd.DataFrame, *, columns: Iterable[str]) -> pd.DataFrame:
     """تبدیل ستون‌های زمانی به datetime و ذخیره به‌صورت ISO8601."""
 
     normalized = df.copy()
@@ -1931,9 +1899,7 @@ def _normalize_timestamp_columns(
     return normalized
 
 
-def _restore_timestamp_columns(
-    df: pd.DataFrame, *, columns: Iterable[str]
-) -> pd.DataFrame:
+def _restore_timestamp_columns(df: pd.DataFrame, *, columns: Iterable[str]) -> pd.DataFrame:
     """بازگردانی ستون‌های زمانی به نوع datetime با timezone آگاه."""
 
     restored = df.copy()
@@ -1956,10 +1922,9 @@ def _normalize_forms_timestamps(df: pd.DataFrame) -> pd.DataFrame:
         normalized["normalized_at"] = datetime.utcnow()
     for col in ("received_at", "normalized_at"):
         if col in normalized.columns:
-            normalized[col] = (
-                pd.to_datetime(normalized[col], errors="coerce", utc=True)
-                .dt.strftime(_ISO_FORMAT)
-            )
+            normalized[col] = pd.to_datetime(
+                normalized[col], errors="coerce", utc=True
+            ).dt.strftime(_ISO_FORMAT)
     return normalized
 
 
@@ -2104,22 +2069,16 @@ def _build_index_statements(
         if not all(col in df.columns for col in key_columns):
             continue
         composite_name = "_".join(key_columns)
-        idx = _normalize_index_name(
-            f"idx_{table_name}_{composite_name}_uniq"
-        )
+        idx = _normalize_index_name(f"idx_{table_name}_{composite_name}_uniq")
         if idx not in seen:
             joined = ", ".join(f'"{col}"' for col in key_columns)
-            statements.append(
-                f"CREATE UNIQUE INDEX IF NOT EXISTS {idx} ON {table_name}({joined})"
-            )
+            statements.append(f"CREATE UNIQUE INDEX IF NOT EXISTS {idx} ON {table_name}({joined})")
             seen.add(idx)
     for column in join_keys:
         if column in df.columns:
             idx = _normalize_index_name(f"idx_{table_name}_{column}")
             if idx not in seen:
-                statements.append(
-                    f'CREATE INDEX IF NOT EXISTS {idx} ON {table_name}("{column}")'
-                )
+                statements.append(f'CREATE INDEX IF NOT EXISTS {idx} ON {table_name}("{column}")')
                 seen.add(idx)
     if table_name == "managers_reference":
         manager_col = "نام مدیر"
@@ -2132,9 +2091,7 @@ def _build_index_statements(
                 )
                 seen.add(idx_manager)
         if manager_col in df.columns and center_col in df.columns:
-            idx_composite = _normalize_index_name(
-                "idx_managers_reference_center_manager"
-            )
+            idx_composite = _normalize_index_name("idx_managers_reference_center_manager")
             if idx_composite not in seen:
                 statements.append(
                     f'CREATE UNIQUE INDEX IF NOT EXISTS {idx_composite} ON {table_name}("{center_col}", "{manager_col}")'
@@ -2158,9 +2115,7 @@ def _validate_join_keys(df: pd.DataFrame, join_keys: Sequence[str]) -> None:
                 raise ValueError(f"ستون {col} باید عددی باشد.") from exc
 
 
-def _ensure_unique_columns(
-    df: pd.DataFrame, *, columns: Sequence[str], table_name: str
-) -> None:
+def _ensure_unique_columns(df: pd.DataFrame, *, columns: Sequence[str], table_name: str) -> None:
     """ولیدیت یکتایی کلیدهای طبیعی پیش از ایجاد ایندکس‌های UNIQUE.
 
     - فقط ستون‌های موجود در دیتافریم را بررسی می‌کند و دیتافریم را تغییر نمی‌دهد.
@@ -2187,9 +2142,7 @@ def _ensure_unique_columns(
             continue
         samples = duplicates.drop_duplicates().astype(str).head(5).tolist()
         raise DatabaseOperationError(
-            _format_duplicate_error(
-                table_name=table_name, column=column, samples=samples
-            )
+            _format_duplicate_error(table_name=table_name, column=column, samples=samples)
         )
 
 

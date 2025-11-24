@@ -83,7 +83,9 @@ def test_forms_to_allocation_matches_baseline(tmp_path: Path):
 
     baseline_students = pd.DataFrame([_baseline_student_row()])
     for key in policy.join_keys:
-        baseline_students[key] = pd.to_numeric(baseline_students[key], errors="coerce").astype("Int64")
+        baseline_students[key] = pd.to_numeric(baseline_students[key], errors="coerce").astype(
+            "Int64"
+        )
     baseline_allocs, baseline_pool, baseline_logs, baseline_trace = _run_allocation(
         baseline_students, policy
     )

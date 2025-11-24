@@ -91,4 +91,3 @@ def test_export_qa_validation_builds_expected_sheets(tmp_path: Path) -> None:
 
     meta = sheets["meta"].iloc[0].to_dict()
     assert meta.get("policy_version") == "1.0.3"
-

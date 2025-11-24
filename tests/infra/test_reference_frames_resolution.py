@@ -85,4 +85,3 @@ def test_build_matrix_resolves_references_before_pool(monkeypatch, tmp_path):
 
     assert result == 0
     assert call_order[:2] == ["refs", "pool"]
-

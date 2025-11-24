@@ -16,7 +16,9 @@ from app.core.common.columns import canonicalize_headers, resolve_aliases
 
 def _validate_manager_column(columns: Iterable[str]) -> None:
     if "manager_name" not in columns:
-        raise ValueError("ستون manager_name/مدیر در فایل استخر یافت نشد؛ لطفاً ستون مدیر را اضافه کنید")
+        raise ValueError(
+            "ستون manager_name/مدیر در فایل استخر یافت نشد؛ لطفاً ستون مدیر را اضافه کنید"
+        )
 
 
 def extract_manager_names(dataframe: pd.DataFrame) -> list[str]:

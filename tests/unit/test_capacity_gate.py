@@ -42,8 +42,7 @@ def test_capacity_gate_reports_metrics_when_special_consumed(
     assert metrics.total_removed == len(removed) == 2
     expected_loss = int(
         _capacity_gate_pool.loc[
-            _capacity_gate_pool[CAPACITY_CURRENT_COL]
-            >= _capacity_gate_pool[CAPACITY_SPECIAL_COL],
+            _capacity_gate_pool[CAPACITY_CURRENT_COL] >= _capacity_gate_pool[CAPACITY_SPECIAL_COL],
             CAPACITY_SPECIAL_COL,
         ].sum()
     )

@@ -8,9 +8,7 @@ from collections.abc import Iterable, Sequence
 
 _RESERVED_PREFIXES: tuple[str, ...] = ("__",)
 _RESERVED_EQUIVALENTS: tuple[str, ...] = ("index",)
-_RESERVED_PATTERNS: tuple[re.Pattern[str], ...] = (
-    re.compile(r"^Unnamed(?::|\s)", re.IGNORECASE),
-)
+_RESERVED_PATTERNS: tuple[re.Pattern[str], ...] = (re.compile(r"^Unnamed(?::|\s)", re.IGNORECASE),)
 _INVALID_COLUMN_CHARS = re.compile(r"[\x00-\x1F]+")
 _MAX_COLUMN_LENGTH = 64
 

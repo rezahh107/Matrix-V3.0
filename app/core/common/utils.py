@@ -12,6 +12,7 @@
     >>> to_numlike_str("٠٠۷")
     '7'
 """
+
 from __future__ import annotations
 
 import re

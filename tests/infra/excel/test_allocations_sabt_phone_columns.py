@@ -68,4 +68,3 @@ def test_allocations_sabt_phone_columns_roundtrip(tmp_path: Path) -> None:
     ):
         idx = col_index[column]
         assert second_types[idx] in {"s", "inlineStr"}
-

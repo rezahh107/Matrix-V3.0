@@ -1,4 +1,5 @@
 """مدل خطای لایهٔ Infra برای عملیات پایگاه داده."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field

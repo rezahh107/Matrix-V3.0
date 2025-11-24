@@ -1,4 +1,5 @@
 """پیکربندی ایمن اتصال SQLite برای لایهٔ Infra."""
+
 from __future__ import annotations
 
 import sqlite3

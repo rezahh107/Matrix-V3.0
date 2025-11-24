@@ -37,7 +37,9 @@ def test_cli_import_managers_idempotent(tmp_path: Path) -> None:
     db_path = tmp_path / "cache.sqlite"
 
     first = cli.main(["import-managers", "--manager-report", str(path), "--local-db", str(db_path)])
-    second = cli.main(["import-managers", "--manager-report", str(path), "--local-db", str(db_path)])
+    second = cli.main(
+        ["import-managers", "--manager-report", str(path), "--local-db", str(db_path)]
+    )
 
     assert first == 0
     assert second == 0
@@ -46,7 +48,9 @@ def test_cli_import_managers_idempotent(tmp_path: Path) -> None:
     assert int(loaded.iloc[0]["مرکز گلستان صدرا"]) == 2
 
 
-def test_cli_import_managers_newer_schema_error(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_cli_import_managers_newer_schema_error(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     db_path = tmp_path / "newer.sqlite"
     db = LocalDatabase(db_path)
     with db.connect() as conn:

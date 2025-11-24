@@ -90,7 +90,9 @@ def _normalize_extras(extras: dict[str, object]) -> dict[str, object]:
     return normalized
 
 
-def _record_trace(student: dict[str, object], pool: pd.DataFrame, policy: PolicyConfig) -> list[dict[str, object]]:
+def _record_trace(
+    student: dict[str, object], pool: pd.DataFrame, policy: PolicyConfig
+) -> list[dict[str, object]]:
     trace = build_allocation_trace(student, pool, policy=policy)
     serialized: list[dict[str, object]] = []
     for record in trace:
@@ -111,25 +113,25 @@ def _record_trace(student: dict[str, object], pool: pd.DataFrame, policy: Policy
     return _ordered_trace(serialized)
 
 
-def _build_snapshot_payload(policy: PolicyConfig, pool: pd.DataFrame, students: dict[str, dict[str, object]]) -> dict[str, list[dict[str, object]]]:
+def _build_snapshot_payload(
+    policy: PolicyConfig, pool: pd.DataFrame, students: dict[str, dict[str, object]]
+) -> dict[str, list[dict[str, object]]]:
     return {
         "pass": _record_trace(students["pass"], pool, policy),
         "fail": _record_trace(students["fail"], pool, policy),
     }
 
 
-def test_allocation_trace_snapshot(allocation_trace_fixture: tuple[PolicyConfig, pd.DataFrame, dict[str, dict[str, object]]]) -> None:
+def test_allocation_trace_snapshot(
+    allocation_trace_fixture: tuple[PolicyConfig, pd.DataFrame, dict[str, dict[str, object]]],
+) -> None:
     policy, pool, students = allocation_trace_fixture
     snapshot = _build_snapshot_payload(policy, pool, students)
 
-    pass_codes = [
-        ReasonCode(entry["extras"]["rule_reason_code"]) for entry in snapshot["pass"]
-    ]
+    pass_codes = [ReasonCode(entry["extras"]["rule_reason_code"]) for entry in snapshot["pass"]]
     assert pass_codes == [ReasonCode.OK] * len(CANONICAL_TRACE_ORDER)
 
-    fail_codes = [
-        ReasonCode(entry["extras"]["rule_reason_code"]) for entry in snapshot["fail"]
-    ]
+    fail_codes = [ReasonCode(entry["extras"]["rule_reason_code"]) for entry in snapshot["fail"]]
     assert fail_codes == [
         ReasonCode.TYPE_MISMATCH,
         ReasonCode.GROUP_MISMATCH,

@@ -97,7 +97,17 @@ class ManagerMentorModel(QStandardItemModel):
             for extra in (name_item, id_item, center_item, school_item, capacity_item):
                 extra.setEditable(False)
 
-            self.appendRow([manager_item, name_item, id_item, QStandardItem(group.name), center_item, school_item, capacity_item])
+            self.appendRow(
+                [
+                    manager_item,
+                    name_item,
+                    id_item,
+                    QStandardItem(group.name),
+                    center_item,
+                    school_item,
+                    capacity_item,
+                ]
+            )
 
             for mentor in group.mentors:
                 child_enabled = Qt.Checked if mentor.enabled else Qt.Unchecked

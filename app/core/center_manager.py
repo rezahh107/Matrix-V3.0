@@ -78,8 +78,7 @@ def _normalize_priority_sequence(
             normalized.append(center_id)
             seen.add(center_id)
     default_order: Sequence[int] = (
-        policy.center_management.priority_order
-        or policy.center_management.center_ids()
+        policy.center_management.priority_order or policy.center_management.center_ids()
     )
     for center_id in default_order:
         if center_id in seen:

@@ -87,7 +87,7 @@ def _insert_cache_rows(db: LocalDatabase) -> None:
             ),
         )
         conn.execute(
-            "INSERT INTO managers_reference (\"نام مدیر\", \"مرکز گلستان صدرا\") VALUES (?, ?)",
+            'INSERT INTO managers_reference ("نام مدیر", "مرکز گلستان صدرا") VALUES (?, ?)',
             ("مدیر", 10),
         )
         conn.execute(
@@ -127,8 +127,12 @@ def test_clear_caches_truncates_cache_tables_but_preserves_history(tmp_path: Pat
     with db.connect() as conn:
         cache_counts = {
             "students_cache": conn.execute("SELECT COUNT(*) FROM students_cache").fetchone()[0],
-            "mentor_pool_cache": conn.execute("SELECT COUNT(*) FROM mentor_pool_cache").fetchone()[0],
-            "managers_reference": conn.execute("SELECT COUNT(*) FROM managers_reference").fetchone()[0],
+            "mentor_pool_cache": conn.execute("SELECT COUNT(*) FROM mentor_pool_cache").fetchone()[
+                0
+            ],
+            "managers_reference": conn.execute(
+                "SELECT COUNT(*) FROM managers_reference"
+            ).fetchone()[0],
             "forms_entries": conn.execute("SELECT COUNT(*) FROM forms_entries").fetchone()[0],
         }
         runs_count = conn.execute("SELECT COUNT(*) FROM runs").fetchone()[0]

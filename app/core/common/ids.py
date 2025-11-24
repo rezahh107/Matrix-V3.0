@@ -95,9 +95,7 @@ def _resolve_mentor_name_column(df: pd.DataFrame) -> str:
     for column in candidates:
         if column in df.columns:
             return column
-    raise KeyError(
-        f"Missing mentor name column; tried {candidates} — seen: {list(df.columns)}"
-    )
+    raise KeyError(f"Missing mentor name column; tried {candidates} — seen: {list(df.columns)}")
 
 
 def _normalize_code_raw(value: Any) -> str:
@@ -201,6 +199,8 @@ def ensure_ranking_columns(pool: pd.DataFrame) -> pd.DataFrame:
     result["mentor_id_str"] = result["کد کارمندی پشتیبان"].map(to_numlike_str)
     result["mentor_sort_key"] = result["کد کارمندی پشتیبان"].map(natural_key)
     return result
+
+
 _MENTOR_ALIAS_COLUMNS: tuple[str, ...] = tuple(
     dict.fromkeys(
         [

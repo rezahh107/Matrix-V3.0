@@ -7,9 +7,7 @@ from app.core.qa.invariants import check_JOIN_01, check_SCHOOL_01
 
 
 def _sample_matrix(policy) -> pd.DataFrame:
-    data = {
-        key: [1201] for key in policy.join_keys
-    }
+    data = {key: [1201] for key in policy.join_keys}
     data["has_school_constraint"] = [False]
     data[policy.columns.school_code] = [1010]
     data["mentor_id"] = [1]
@@ -64,4 +62,3 @@ def test_school_rule_requires_school_for_restricted() -> None:
     violation = result.violations[0]
     assert violation.rule_id == "QA_RULE_SCHOOL_01"
     assert violation.message == "منتور مقید مدرسه بدون کد مدرسه معتبر"
-

@@ -24,7 +24,9 @@ def _synthetic_inputs(size: int) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFra
             "کدپستی": rng.choice(["12345", "67890", ""], size=size, p=[0.45, 0.45, 0.10]),
             "تعداد داوطلبان تحت پوشش": rng.integers(0, 10, size=size),
             "تعداد تحت پوشش خاص": rng.integers(10, 20, size=size),
-            "نام مدرسه 1": rng.choice(["", "مدرسه نمونه 1", "مدرسه نمونه 2"], size=size, p=[0.6, 0.2, 0.2]),
+            "نام مدرسه 1": rng.choice(
+                ["", "مدرسه نمونه 1", "مدرسه نمونه 2"], size=size, p=[0.6, 0.2, 0.2]
+            ),
             "تعداد مدارس تحت پوشش": rng.integers(0, 2, size=size),
             "امکان جذب دانش آموز": ["بلی"] * size,
             "مالی حکمت بنیاد": rng.choice([0, 1, 3], size=size),

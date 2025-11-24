@@ -76,4 +76,3 @@ class HistoryMetricsDialog(QDialog):
     @property
     def panel(self) -> HistoryMetricsPanel:
         return self._panel
-

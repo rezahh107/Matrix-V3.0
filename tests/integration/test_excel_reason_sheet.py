@@ -24,9 +24,7 @@ def _ensure_engine(monkeypatch: pytest.MonkeyPatch) -> None:
     pytest.skip("هیچ engine اکسل در محیط تست نصب نیست")
 
 
-def test_reason_sheet_schema_and_snapshot(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_reason_sheet_schema_and_snapshot(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _ensure_engine(monkeypatch)
     policy = load_policy()
     expected_columns = list(policy.emission.selection_reasons.columns)
@@ -145,9 +143,7 @@ def test_reason_sheet_schema_and_snapshot(
     expected = pd.read_csv(snapshot_path, dtype=str)
     if "student_id" not in expected.columns:
         expected["student_id"] = ""
-    expected["student_id"] = (
-        parsed.head(len(expected))["student_id"].fillna("").astype(str).values
-    )
+    expected["student_id"] = parsed.head(len(expected))["student_id"].fillna("").astype(str).values
     pd_testing.assert_frame_equal(
         parsed.head(len(expected)).loc[:, expected_columns],
         expected.loc[:, expected_columns],

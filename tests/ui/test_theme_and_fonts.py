@@ -65,7 +65,9 @@ def test_resolve_vazir_family_prefers_vazirmatn(monkeypatch: pytest.MonkeyPatch)
     assert family == "Vazirmatn"
 
 
-def test_apply_global_font_sets_qapplication_font(qapp: QApplication, tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_apply_global_font_sets_qapplication_font(
+    qapp: QApplication, tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     fonts_dir = tmp_path / "fonts"
     monkeypatch.setattr(fonts, "FONTS_DIR", fonts_dir)
     monkeypatch.setattr(fonts, "_windows_candidates", lambda: [])
@@ -85,7 +87,9 @@ def test_apply_global_font_sets_qapplication_font(qapp: QApplication, tmp_path, 
         assert app_font.hintingPreference() == hint_pref
 
 
-def test_widgets_inherit_global_font(qapp: QApplication, tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_widgets_inherit_global_font(
+    qapp: QApplication, tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     fonts_dir = tmp_path / "fonts"
     monkeypatch.setattr(fonts, "FONTS_DIR", fonts_dir)
     monkeypatch.setattr(fonts, "_windows_candidates", lambda: [])

@@ -17,6 +17,7 @@ class InspactorDefaultConfig:
     school_count_column: str
     derived_factories: Mapping[str, Callable[[pd.DataFrame], pd.Series]]
 
+
 def missing_inspactor_columns(df: pd.DataFrame, required: Collection[str]) -> list[str]:
     columns = set(map(str, df.columns))
     return sorted(col for col in required if col not in columns)
@@ -85,9 +86,7 @@ def missing_inspactor_diagnostics(df: pd.DataFrame, missing: Collection[str]) ->
     if not missing:
         return ""
 
-    synonyms = {
-        column: accepted_synonyms("inspactor", column) for column in missing
-    }
+    synonyms = {column: accepted_synonyms("inspactor", column) for column in missing}
     seen = [str(column) for column in df.columns]
     preview = ", ".join(seen[:8]) if seen else "<no columns>"
     return f" | accepted: {synonyms} | seen: {preview} (total={len(seen)})"

@@ -111,9 +111,7 @@ class FormsRepository:
         return base
 
     @staticmethod
-    def _default_normalizer(
-        raw_entries: Sequence[Mapping[str, Any]]
-    ) -> pd.DataFrame:
+    def _default_normalizer(raw_entries: Sequence[Mapping[str, Any]]) -> pd.DataFrame:
         """نرمال‌سازی پایهٔ ورودی‌های WordPress به DataFrame تمیز.
 
         * ستون‌های پایه: entry_id, form_id, received_at (datetime-aware)
@@ -125,9 +123,7 @@ class FormsRepository:
             entry_id = entry.get("id") or entry.get("entry_id")
             form_id = entry.get("form_id") or entry.get("formId")
             received_at = (
-                entry.get("date_created")
-                or entry.get("created_at")
-                or entry.get("submitted_at")
+                entry.get("date_created") or entry.get("created_at") or entry.get("submitted_at")
             )
             base = {
                 "entry_id": str(entry_id) if entry_id is not None else None,

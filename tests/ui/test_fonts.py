@@ -20,7 +20,9 @@ def qapp() -> QApplication:
     return app
 
 
-def test_create_app_font_does_not_raise_without_full_hinting_preference(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_create_app_font_does_not_raise_without_full_hinting_preference(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     if hasattr(QFont, "HintingPreference"):
         monkeypatch.delattr(QFont.HintingPreference, "PreferFullHinting", raising=False)
     font = fonts.create_app_font(point_size=9)
@@ -34,7 +36,9 @@ def test_create_app_font_sets_antialias_and_quality_flags() -> None:
     assert strategy & QFont.StyleStrategy.PreferAntialias
     assert strategy & QFont.StyleStrategy.PreferQuality
 
-    if hasattr(QFont, "HintingPreference") and hasattr(QFont.HintingPreference, "PreferFullHinting"):
+    if hasattr(QFont, "HintingPreference") and hasattr(
+        QFont.HintingPreference, "PreferFullHinting"
+    ):
         assert font.hintingPreference() == QFont.HintingPreference.PreferFullHinting
 
 
@@ -66,7 +70,9 @@ def test_create_app_font_falls_back_when_vazir_missing(monkeypatch: pytest.Monke
     assert font.pointSize() == 9
 
 
-def test_apply_default_font_on_dummy_app(qapp: QApplication, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_apply_default_font_on_dummy_app(
+    qapp: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setattr(fonts, "load_vazir_font", lambda point_size=None: None)
 
     font = fonts.apply_default_font(qapp, point_size=8, family_override="Tahoma")

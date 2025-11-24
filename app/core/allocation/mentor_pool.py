@@ -73,9 +73,7 @@ def compute_effective_status(
         raise KeyError("mentors_df must contain 'mentor_id' column")
 
     mentor_ids = pd.to_numeric(mentors_df["mentor_id"], errors="coerce")
-    statuses = pd.Series(
-        governance.default_status, index=mentors_df.index, dtype=object
-    )
+    statuses = pd.Series(governance.default_status, index=mentors_df.index, dtype=object)
 
     policy_status = mentor_ids.map(governance.mentor_status_map)
     statuses = statuses.where(policy_status.isna(), policy_status)

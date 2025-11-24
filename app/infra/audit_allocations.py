@@ -161,7 +161,11 @@ def _trace_mismatch(
     failing_ids: list[Any] = []
     for student_id, group in grouped:
         stage_count = group["stage"].nunique(dropna=True) if "stage" in group else 0
-        all_matched = bool(group.get("matched", pd.Series([], dtype=bool)).all()) if "matched" in group else True
+        all_matched = (
+            bool(group.get("matched", pd.Series([], dtype=bool)).all())
+            if "matched" in group
+            else True
+        )
         if stage_count < expected_stage_count or not all_matched:
             failing_ids.append(student_id)
 

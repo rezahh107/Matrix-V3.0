@@ -73,9 +73,11 @@ def test_trace_summary_includes_unallocated_and_allocated() -> None:
     assert {"candidate_count", "has_candidates", "capacity_candidate_count"}.issubset(
         summary_df.columns
     )
-    assert {"student_educational_status", "student_registration_status", "student_national_code"}.issubset(
-        summary_df.columns
-    )
+    assert {
+        "student_educational_status",
+        "student_registration_status",
+        "student_national_code",
+    }.issubset(summary_df.columns)
     assert {"student_first_name", "student_last_name"}.issubset(summary_df.columns)
 
     school_row = summary_df.loc[summary_df[policy.stage_column("school")] == 1112].iloc[0]

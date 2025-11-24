@@ -190,7 +190,9 @@ def test_is_deprecated_application_attribute(main_module, qt, attr_name, qt_vers
     "attr_name",
     ["AA_EnableHighDpiScaling", "AA_UseHighDpiPixmaps"],
 )
-def test_set_attribute_if_supported_respects_deprecation(main_module, qt, monkeypatch, version_str, is_deprecated, attr_name):
+def test_set_attribute_if_supported_respects_deprecation(
+    main_module, qt, monkeypatch, version_str, is_deprecated, attr_name
+):
     fake_app = _FakeApp()
     monkeypatch.setattr(main_module, "qVersion", lambda: version_str)
 
@@ -213,7 +215,9 @@ def test_set_attribute_if_supported_respects_deprecation(main_module, qt, monkey
         ("6.8.0", []),
     ],
 )
-def test_configure_high_dpi_attributes_startup_path(main_module, qt, monkeypatch, version_str, expected_calls):
+def test_configure_high_dpi_attributes_startup_path(
+    main_module, qt, monkeypatch, version_str, expected_calls
+):
     fake_app = _FakeApp()
 
     monkeypatch.setattr(main_module, "qVersion", lambda: version_str)
@@ -230,4 +234,3 @@ def test_configure_high_dpi_attributes_startup_path(main_module, qt, monkeypatch
         getattr(qt.ApplicationAttribute, name).name for name in expected_calls
     ]
     assert applied == expected_calls
-

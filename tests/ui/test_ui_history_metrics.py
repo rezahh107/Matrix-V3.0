@@ -47,7 +47,9 @@ def test_history_metrics_model_counts_and_values(qapp: QApplication) -> None:
     assert model.columnCount() == len(METRIC_COLUMNS)
 
     first_channel = model.data(model.index(0, 0), Qt.DisplayRole)
-    ratio_value = model.data(model.index(0, METRIC_COLUMNS.index("same_history_mentor_ratio")), Qt.DisplayRole)
+    ratio_value = model.data(
+        model.index(0, METRIC_COLUMNS.index("same_history_mentor_ratio")), Qt.DisplayRole
+    )
 
     assert first_channel == "A"
     assert ratio_value == "0.500"

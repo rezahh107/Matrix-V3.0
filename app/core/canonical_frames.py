@@ -89,9 +89,7 @@ def _attach_pool_stats(frame: pd.DataFrame, stats: PoolCanonicalizationStats) ->
     return frame
 
 
-def _coerce_capacity_series(
-    series: pd.Series, stats: PoolCanonicalizationStats
-) -> pd.Series:
+def _coerce_capacity_series(series: pd.Series, stats: PoolCanonicalizationStats) -> pd.Series:
     """تبدیل مقادیر ظرفیت به Int64 و افزایش شمارندهٔ اصلاحات."""
 
     numeric = pd.to_numeric(series, errors="coerce")
@@ -132,9 +130,7 @@ def _empty_join_key_report(
     ``pool_source`` نیز افزوده می‌شوند تا ارتباط با استخر ورودی حفظ شود.
     """
 
-    data: dict[str, pd.Series] = {
-        column: pd.Series(dtype="Int64") for column in join_keys
-    }
+    data: dict[str, pd.Series] = {column: pd.Series(dtype="Int64") for column in join_keys}
     data[mentor_column] = pd.Series(dtype="string")
     data["duplicate_group_size"] = pd.Series(dtype="Int64")
     if include_pool_columns:
@@ -285,8 +281,7 @@ def _build_duplicate_summary(
         return {"total": 0, "sample": [], "duplicate_scope": duplicate_scope}
     sample_rows = report.head(sample_size).to_dict(orient="records")
     safe_rows = [
-        {key: _json_safe_value(value) for key, value in row.items()}
-        for row in sample_rows
+        {key: _json_safe_value(value) for key, value in row.items()} for row in sample_rows
     ]
     return {
         "total": int(len(report)),
@@ -329,9 +324,7 @@ def sanitize_pool_for_allocation(
     stats = PoolCanonicalizationStats()
     frame = canonicalize_headers(df, header_mode=policy.excel.header_mode_internal).copy()
     if isinstance(frame.columns, pd.MultiIndex):
-        frame.columns = [
-            "__".join(map(str, tpl)).strip() for tpl in frame.columns.to_flat_index()
-        ]
+        frame.columns = ["__".join(map(str, tpl)).strip() for tpl in frame.columns.to_flat_index()]
     if frame.columns.duplicated().any():
         frame.columns = _make_unique_columns(list(map(str, frame.columns)))
 
@@ -387,9 +380,7 @@ def sanitize_pool_for_allocation(
     return _attach_pool_stats(result, stats)
 
 
-def _append_bilingual_alias_columns(
-    frame: pd.DataFrame, policy: PolicyConfig
-) -> pd.DataFrame:
+def _append_bilingual_alias_columns(frame: pd.DataFrame, policy: PolicyConfig) -> pd.DataFrame:
     """افزودن ستون‌های دوزبانه برای کلیدهای Join جهت خوانایی."""
 
     alias_targets = list(dict.fromkeys(policy.join_keys))
@@ -489,9 +480,7 @@ def canonicalize_students_frame(
         # نخستین ستون انتخاب شده و از خطای «DataFrame.str» جلوگیری گردد.
         pre_normal_raw = ensure_series(students[school_fa]).astype("string").str.strip()
     else:
-        pre_normal_raw = pd.Series(
-            [pd.NA] * len(students), dtype="string", index=students.index
-        )
+        pre_normal_raw = pd.Series([pd.NA] * len(students), dtype="string", index=students.index)
     students = _ensure_student_defaults(students, policy)
     students = coerce_semantics(students, "report")
     students, _ = normalize_input_columns(
@@ -586,9 +575,7 @@ def canonicalize_pool_frame(
     join_key_aliases = canonicalize_headers(pool, header_mode="fa")
     for join_key in policy.join_keys:
         if join_key not in pool.columns and join_key in join_key_aliases.columns:
-            pool[join_key] = ensure_series(join_key_aliases[join_key]).reindex(
-                pool.index
-            )
+            pool[join_key] = ensure_series(join_key_aliases[join_key]).reindex(pool.index)
 
     mentor_column = "کد کارمندی پشتیبان"
     if mentor_column in pool.columns:
@@ -710,4 +697,3 @@ def canonicalize_allocation_frames(
         pool_source=pool_source,
     )
     return students, pool
-

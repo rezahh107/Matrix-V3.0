@@ -198,9 +198,7 @@ def _normalize_mentor_identifier(value: object) -> object | None:
     return value
 
 
-def _resolve_mentor_identifier(
-    result: AllocationResult, *, policy: PolicyConfig
-) -> object:
+def _resolve_mentor_identifier(result: AllocationResult, *, policy: PolicyConfig) -> object:
     """بازیابی شناسهٔ پشتیبان با اولویت: log → سطر فارسی → سطر canonical.
 
     مثال::
@@ -217,9 +215,7 @@ def _resolve_mentor_identifier(
     if result.mentor_row is None:
         raise KeyError("Mentor identifier missing: row not provided")
 
-    mentor_identifier = _normalize_mentor_identifier(
-        result.mentor_row.get("کد کارمندی پشتیبان")
-    )
+    mentor_identifier = _normalize_mentor_identifier(result.mentor_row.get("کد کارمندی پشتیبان"))
     if mentor_identifier is not None:
         result.log["mentor_id"] = mentor_identifier
         return mentor_identifier
@@ -401,9 +397,7 @@ def _snapshot_state_entry(
     return snapshot
 
 
-def _build_state_delta(
-    before: MentorStateSnapshot, after: MentorStateSnapshot
-) -> MentorStateDelta:
+def _build_state_delta(before: MentorStateSnapshot, after: MentorStateSnapshot) -> MentorStateDelta:
     """محاسبهٔ diff بین دو snapshot برای استفاده در ExplainAgent.
 
     مثال::
@@ -430,9 +424,7 @@ def _build_state_delta(
 class JoinKeyDataMissingError(ValueError):
     """خطای اختصاصی برای کمبود دادهٔ کلیدهای Join در ورودی دانش‌آموز."""
 
-    def __init__(
-        self, missing_columns: Sequence[str], join_map: Mapping[str, int]
-    ) -> None:
+    def __init__(self, missing_columns: Sequence[str], join_map: Mapping[str, int]) -> None:
         super().__init__("DATA_MISSING")
         self.missing_columns: tuple[str, ...] = tuple(missing_columns)
         self.join_map: dict[str, int] = dict(join_map)
@@ -583,15 +575,13 @@ def _filter_candidates_by_join_map(
             )
             continue
 
-        mentor_series = pd.to_numeric(
-            ensure_series(candidates[column]), errors="coerce"
-        ).astype("Int64")
+        mentor_series = pd.to_numeric(ensure_series(candidates[column]), errors="coerce").astype(
+            "Int64"
+        )
         col_mask = mentor_series == int(student_value)
         mask &= col_mask.fillna(False)
         if not bool(col_mask.all()):
-            mentor_sample = (
-                mentor_series.loc[~col_mask].dropna().unique().tolist()[:5]
-            )
+            mentor_sample = mentor_series.loc[~col_mask].dropna().unique().tolist()[:5]
             mismatches.append(
                 {
                     "column": column,
@@ -636,9 +626,7 @@ def _resolve_student_center_info(
     normalized = _maybe_int_from_text(value)
     text_value = str(value).strip() if isinstance(value, str) else value
     is_invalid = bool(
-        value is None
-        or (isinstance(text_value, str) and not text_value)
-        or normalized is None
+        value is None or (isinstance(text_value, str) and not text_value) or normalized is None
     )
     return StudentCenterInfo(
         column=str(source),
@@ -765,9 +753,7 @@ def _phase_guard_source(students: pd.DataFrame, policy: PolicyConfig) -> Sequenc
     return [False] * len(students)
 
 
-def _phase_stage_extras(
-    stage: str, pool: pd.DataFrame, capacity_column: str
-) -> Mapping[str, Any]:
+def _phase_stage_extras(stage: str, pool: pd.DataFrame, capacity_column: str) -> Mapping[str, Any]:
     """تولید پیام مرحله‌ای ثابت برای Trace Rule Engine."""
 
     if stage == "school_phase_start":
@@ -966,9 +952,7 @@ def _build_center_manager_index(
     if missing_centers and (
         policy.center_management.strict_manager_validation or strict_validation
     ):
-        raise ValueError(
-            f"مدیران مورد نیاز برای مراکز {missing_centers} در استخر یافت نشدند"
-        )
+        raise ValueError(f"مدیران مورد نیاز برای مراکز {missing_centers} در استخر یافت نشدند")
     return result, missing_centers
 
 
@@ -1098,11 +1082,7 @@ def _append_invalid_center_alert(
                 break
     if duplicate:
         return
-    fallback_text = (
-        "بدون محدودیت"
-        if fallback_center is None
-        else str(fallback_center)
-    )
+    fallback_text = "بدون محدودیت" if fallback_center is None else str(fallback_center)
     original_text = "" if original_center is None else str(original_center)
     message = f"مرکز نامعتبر '{original_text or 'نامشخص'}' به {fallback_text} تغییر یافت"
     context: dict[str, Any] = {
@@ -1214,9 +1194,7 @@ def _normalize_pool(df: pd.DataFrame, policy: PolicyConfig) -> pd.DataFrame:
     )
 
 
-def _ensure_students_canonical(
-    df: pd.DataFrame, policy: PolicyConfig
-) -> pd.DataFrame:
+def _ensure_students_canonical(df: pd.DataFrame, policy: PolicyConfig) -> pd.DataFrame:
     students = df.copy(deep=True)
     missing = [column for column in policy.join_keys if column not in students.columns]
     if missing:
@@ -1413,9 +1391,7 @@ def allocate_student(
                 candidate_pool, join_map=join_map, policy=policy
             )
         extra_updates = (
-            {"join_key_mismatches": join_mismatch_details}
-            if join_mismatch_details
-            else None
+            {"join_key_mismatches": join_mismatch_details} if join_mismatch_details else None
         )
         return _fail_allocation(
             "No candidates matched join keys",
@@ -1426,9 +1402,7 @@ def allocate_student(
 
     progress(30, "capacity")
     state_frame = pool_state_view if pool_state_view is not None else candidate_pool
-    state_view_en = dedupe_columns(
-        canonicalize_headers(state_frame, header_mode="en")
-    )
+    state_view_en = dedupe_columns(canonicalize_headers(state_frame, header_mode="en"))
 
     capacity_candidates: list[str] = []
     if "remaining_capacity" in state_view_en.columns:
@@ -1479,9 +1453,7 @@ def allocate_student(
     active_state = (
         state
         if state is not None
-        else build_mentor_state(
-            state_view_en, capacity_column=capacity_column_name, policy=policy
-        )
+        else build_mentor_state(state_view_en, capacity_column=capacity_column_name, policy=policy)
     )
     ranked = apply_ranking_policy(ranking_input, state=active_state, policy=policy)
     fairness_reason = ranked.attrs.get("fairness_reason")
@@ -1561,9 +1533,7 @@ def allocate_student(
     occupancy_value = float(chosen_row.get("occupancy_ratio", 0.0))
 
     selected_row = capacity_filtered.loc[chosen_index]
-    join_valid, join_mismatches = _validate_policy_join_keys(
-        selected_row, join_map, policy
-    )
+    join_valid, join_mismatches = _validate_policy_join_keys(selected_row, join_map, policy)
     if not join_valid:
         return _fail_allocation(
             "Selected mentor does not match student join keys",
@@ -1692,9 +1662,7 @@ def allocate_batch(
 
     def _validate_pool(frame: pd.DataFrame) -> pd.DataFrame:
         try:
-            return _ensure_pool_canonical(
-                frame, policy, resolved_capacity_column
-            )
+            return _ensure_pool_canonical(frame, policy, resolved_capacity_column)
         except ValueError as exc:
             if frames_already_canonical:
                 raise ValueError("DATA_MISSING") from exc
@@ -1717,22 +1685,16 @@ def allocate_batch(
     for message in config_warnings:
         warnings.warn(message, UserWarning, stacklevel=2)
 
-    sorted_students = _sort_students_by_center_priority(
-        students_norm, policy, final_priority
-    )
+    sorted_students = _sort_students_by_center_priority(students_norm, policy, final_priority)
     school_students, center_students = _separate_school_students(sorted_students, policy)
     students_norm = pd.concat([school_students, center_students], axis=0)
     pool_stats = pool_norm.attrs.get("pool_canonicalization_stats")
     alias_autofill = int(getattr(pool_stats, "alias_autofill", 0) or 0) if pool_stats else 0
     alias_unmatched = int(getattr(pool_stats, "alias_unmatched", 0) or 0) if pool_stats else 0
-    extra_columns = [
-        column for column in pool_norm.columns if column not in candidate_pool.columns
-    ]
+    extra_columns = [column for column in pool_norm.columns if column not in candidate_pool.columns]
     pool_with_ids = inject_mentor_id(pool_norm, build_mentor_id_map(pool_norm))
     if "mentor_sort_key" not in pool_with_ids.columns:
-        pool_with_ids["mentor_sort_key"] = pool_with_ids["کد کارمندی پشتیبان"].map(
-            natural_key
-        )
+        pool_with_ids["mentor_sort_key"] = pool_with_ids["کد کارمندی پشتیبان"].map(natural_key)
     if "allocations_new" not in pool_with_ids.columns:
         pool_with_ids["allocations_new"] = 0
     if "occupancy_ratio" not in pool_with_ids.columns:
@@ -1808,20 +1770,14 @@ def allocate_batch(
         if group.empty:
             return
         stage_students = _phase_guard_source(group, policy)
-        stage_extras = _phase_stage_extras(
-            phase_stage, pool_with_ids, resolved_capacity_column
-        )
-        base_phase_trace = rule_engine.run_stage(
-            phase_stage, stage_students, extras=stage_extras
-        )
+        stage_extras = _phase_stage_extras(phase_stage, pool_with_ids, resolved_capacity_column)
+        base_phase_trace = rule_engine.run_stage(phase_stage, stage_students, extras=stage_extras)
         is_school_phase = not enforce_center_manager
         for _, student_row in group.iterrows():
             processed += 1
             student_dict = student_row.to_dict()
             progress(int(processed * 100 / total), f"allocating {processed}/{total}")
-            student_center, center_is_valid = _extract_and_validate_center(
-                student_dict, policy
-            )
+            student_center, center_is_valid = _extract_and_validate_center(student_dict, policy)
             invalid_center_payload: dict[str, object] | None = None
             if not center_is_valid:
                 invalid_center_payload = {
@@ -1849,9 +1805,7 @@ def allocate_batch(
                 alert_progress=progress,
             )
             if invalid_center_payload is not None:
-                _append_invalid_center_alert(
-                    result.log, invalid_center_payload, student_center
-                )
+                _append_invalid_center_alert(result.log, invalid_center_payload, student_center)
             phase_trace = [dict(entry) for entry in base_phase_trace]
             existing_phase_entries = result.log.get("phase_rule_trace")
             if isinstance(existing_phase_entries, list) and existing_phase_entries:
@@ -1862,16 +1816,12 @@ def allocate_batch(
                         "stage": "student_allocation",
                         "student_id": student_dict.get("student_id"),
                         "reason": ReasonCode.SCHOOL_STUDENT_PRIORITY.value,
-                        "message": _phase_reason_message(
-                            ReasonCode.SCHOOL_STUDENT_PRIORITY
-                        ),
+                        "message": _phase_reason_message(ReasonCode.SCHOOL_STUDENT_PRIORITY),
                     }
                 )
             else:
                 mentor_payload = (
-                    result.mentor_row.to_dict()
-                    if result.mentor_row is not None
-                    else None
+                    result.mentor_row.to_dict() if result.mentor_row is not None else None
                 )
                 phase_reason = rule_engine.evaluate_pair(student_dict, mentor_payload)
                 if phase_reason is not None:
@@ -1896,9 +1846,7 @@ def allocate_batch(
             for stage in result.trace:
                 trace_rows.append({"student_id": result.log["student_id"], **stage})
 
-            outcome = summarize_trace_outcome(
-                student_dict, result.trace, result.log, policy=policy
-            )
+            outcome = summarize_trace_outcome(student_dict, result.trace, result.log, policy=policy)
             trace_outcomes.append(outcome)
             result.log["trace_final_status"] = outcome.final_status
             result.log["trace_failure_stage"] = outcome.failure_stage
@@ -1924,8 +1872,8 @@ def allocate_batch(
                 pool_internal.loc[chosen_index, "allocations_new"] = state_entry["alloc_new"]
                 initial_value = max(int(state_entry.get("initial", 0)), 1)
                 pool_internal.loc[chosen_index, "occupancy_ratio"] = (
-                    (int(state_entry.get("initial", 0)) - state_entry["remaining"]) / initial_value
-                )
+                    int(state_entry.get("initial", 0)) - state_entry["remaining"]
+                ) / initial_value
                 pool_with_ids.loc[chosen_index, resolved_capacity_column] = state_entry["remaining"]
                 if (
                     resolved_capacity_column != "remaining_capacity"
@@ -1947,9 +1895,7 @@ def allocate_batch(
                         "student_id": student_dict.get("student_id", ""),
                         "student_national_code": student_national_code,
                         "mentor": result.mentor_row.get("پشتیبان", ""),
-                        "mentor_id": ""
-                        if mentor_id_display is None
-                        else str(mentor_id_display),
+                        "mentor_id": "" if mentor_id_display is None else str(mentor_id_display),
                         "mentor_alias_code": mentor_alias_code,
                     }
                 )
@@ -2004,9 +1950,7 @@ def allocate_batch(
                     trace_summary_df[column] = trace_summary_df["student_id"].map(
                         student_indexed[column]
                     )
-        trace_summary_df = attach_allocation_channel(
-            trace_summary_df, students_norm, policy=policy
-        )
+        trace_summary_df = attach_allocation_channel(trace_summary_df, students_norm, policy=policy)
         trace_df.attrs["summary_df"] = trace_summary_df
         trace_df.attrs["unallocated_summary"] = build_unallocated_summary(
             trace_summary_df, policy=policy
@@ -2100,6 +2044,3 @@ def build_selection_reason_rows(
         logs=logs,
         trace=trace,
     )
-
-
-
