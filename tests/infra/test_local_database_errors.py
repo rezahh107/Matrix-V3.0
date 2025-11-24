@@ -61,15 +61,16 @@ def test_generic_sqlite_error_wrapped(tmp_path, monkeypatch):
         db.upsert_schools(df)
 
 
-def test_upsert_mentor_pool_cache_rejects_duplicate_ids(tmp_path: Path) -> None:
+def test_upsert_mentor_pool_cache_rejects_duplicate_composite_key(tmp_path: Path) -> None:
     policy = load_policy()
     db = LocalDatabase(tmp_path / "duplicate.sqlite")
 
     duplicated_pool = pd.DataFrame(
         {
             "mentor_id": ["m1", "m1"],
-            "کد کارمندی پشتیبان": ["E1", "E2"],
+            "کد کارمندی پشتیبان": ["E1", "E1"],
             "کدرشته": [1201, 1201],
+            "گروه آزمایشی": ["A", "A"],
             "جنسیت": [1, 1],
             "دانش آموز فارغ": [0, 0],
             "مرکز گلستان صدرا": [1, 1],
@@ -84,33 +85,29 @@ def test_upsert_mentor_pool_cache_rejects_duplicate_ids(tmp_path: Path) -> None:
     message = str(excinfo.value)
     assert "mentor_pool_cache" in message
     assert "mentor_id" in message
-    assert "m1" in message
+    assert "کدرشته" in message
+    assert "3581" in message
 
 
-def test_upsert_mentor_pool_cache_rejects_duplicate_employee_code(tmp_path: Path) -> None:
+def test_upsert_mentor_pool_cache_allows_same_mentor_distinct_join_keys(tmp_path: Path) -> None:
     policy = load_policy()
     db = LocalDatabase(tmp_path / "duplicate_employee.sqlite")
 
-    duplicated_pool = pd.DataFrame(
+    valid_pool = pd.DataFrame(
         {
-            "mentor_id": ["m1", "m2"],
+            "mentor_id": ["m1", "m1"],
             "کد کارمندی پشتیبان": ["E1", "E1"],
             "کدرشته": [1201, 1202],
+            "گروه آزمایشی": ["A", "B"],
             "جنسیت": [1, 1],
             "دانش آموز فارغ": [0, 0],
-            "مرکز گلستان صدرا": [1, 1],
+            "مرکز گلستان صدرا": [1, 2],
             "مالی حکمت بنیاد": [0, 0],
             "کد مدرسه": [3581, 3582],
         }
     )
 
-    with pytest.raises(DatabaseOperationError) as excinfo:
-        db.upsert_mentor_pool_cache(duplicated_pool, join_keys=policy.join_keys)
-
-    message = str(excinfo.value)
-    assert "mentor_pool_cache" in message
-    assert "کد کارمندی پشتیبان" in message
-    assert "E1" in message
+    db.upsert_mentor_pool_cache(valid_pool, join_keys=policy.join_keys)
 
 
 def test_upsert_students_cache_rejects_duplicate_student_ids(tmp_path: Path) -> None:
@@ -229,12 +226,43 @@ def test_upsert_caches_create_unique_indexes(tmp_path: Path) -> None:
     with db.connect() as conn:
         mentor_indexes = conn.execute("PRAGMA index_list('mentor_pool_cache')").fetchall()
         mentor_unique = {row[1] for row in mentor_indexes if row[2]}
-        assert len(mentor_unique) >= 2
+        assert mentor_unique, "unique index for mentor pool should exist"
 
-        # تلاش برای وارد کردن شناسه تکراری باید به دلیل ایندکس UNIQUE شکست بخورد
+        composite_index_columns = {
+            tuple(info[2] for info in conn.execute(f"PRAGMA index_info('{idx}')").fetchall())
+            for idx in mentor_unique
+        }
+        assert (
+            (
+                "mentor_id",
+                "کدرشته",
+                "جنسیت",
+                "دانش آموز فارغ",
+                "مرکز گلستان صدرا",
+                "مالی حکمت بنیاد",
+                "کد مدرسه",
+            )
+            in composite_index_columns
+        )
+
         with pytest.raises(sqlite3.IntegrityError):
             conn.execute(
-                "INSERT INTO mentor_pool_cache(mentor_id) VALUES (?)", ("m1",)
+                """
+                INSERT INTO mentor_pool_cache(
+                    mentor_id,"کد کارمندی پشتیبان","کدرشته","گروه آزمایشی","جنسیت","دانش آموز فارغ","مرکز گلستان صدرا","مالی حکمت بنیاد","کد مدرسه"
+                ) VALUES (?,?,?,?,?,?,?,?,?)
+                """,
+                (
+                    "m1",
+                    "E1",
+                    1201,
+                    "A",
+                    1,
+                    0,
+                    1,
+                    0,
+                    3581,
+                ),
             )
 
         student_indexes = conn.execute("PRAGMA index_list('students_cache')").fetchall()

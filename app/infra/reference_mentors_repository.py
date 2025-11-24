@@ -322,10 +322,12 @@ _POOL_JOIN_KEY_QA_ATTR: Final[str] = "pool_join_key_derivation_issues"
 def _raise_on_duplicate_mentor_ids(
     pool: pd.DataFrame, *, policy: PolicyConfig, pool_source: str
 ) -> None:
-    """ولیدیت یکتایی ``mentor_id`` قبل/بعد از کش و تولید پیام عملیاتی.
+    """ولیدیت یکتایی کلید ترکیبی «mentor_id + ۶ کلید اتصال» با پیام خوانا.
 
-    این بررسی برای جلوگیری از ذخیره/مصرف کش معیوب انجام می‌شود تا خطای ۰٪
-    تخصیص جای خود را به هشدار خواناتر با نمونهٔ ردیف‌های مشکل‌دار بدهد.
+    این بررسی اجازه می‌دهد یک mentor_id در چند ترکیب کلید شش‌تایی تکرار شود،
+    اما در صورت وجود دو ردیف یکسان روی کلید ترکیبی، خطای دترمینیستیک
+    ``DatabaseOperationError`` با نمونهٔ ردیف‌های متضاد تولید می‌کند تا اپراتور
+    بتواند ورودی Inspactor یا کش را اصلاح کند.
 
     Args:
         pool: دیتافریم کاننیکال استخر منتورها.
@@ -333,8 +335,8 @@ def _raise_on_duplicate_mentor_ids(
         pool_source: منبع داده (inspactor/matrix/cache) جهت درج در پیام خطا.
 
     Raises:
-        DatabaseOperationError: در صورت وجود ``mentor_id`` تکراری (به‌جز مقادیر
-            تهی)، همراه با نمونه‌ای از ردیف‌های متضاد برای اقدام اپراتور.
+        DatabaseOperationError: در صورت وجود ردیف تکراری روی کلید ترکیبی
+            ``mentor_id`` به‌همراه ۶ کلید اتصال.
 
     مثال::
 
@@ -342,7 +344,7 @@ def _raise_on_duplicate_mentor_ids(
         >>> policy = load_policy()  # doctest: +SKIP
         >>> df = pd.DataFrame({
         ...     "mentor_id": ["m1", "m1"],
-        ...     "کد کارمندی پشتیبان": ["E1", "E2"],
+        ...     "کد کارمندی پشتیبان": ["E1", "E1"],
         ...     "کدرشته": [1201, 1201],
         ...     "جنسیت": [1, 1],
         ...     "دانش آموز فارغ": [0, 0],
@@ -353,34 +355,46 @@ def _raise_on_duplicate_mentor_ids(
         >>> _raise_on_duplicate_mentor_ids(df, policy=policy, pool_source="inspactor")
         Traceback (most recent call last):
             ...
-        DatabaseOperationError: استخر «inspactor» دارای mentor_id تکراری است؛ نمونه شناسه‌ها: ['m1']; نمونهٔ ردیف‌ها: [{'mentor_id': 'm1', 'کد کارمندی پشتیبان': 'E1', 'کدرشته': 1201, 'جنسیت': 1, 'دانش آموز فارغ': 0, 'مرکز گلستان صدرا': 1, 'مالی حکمت بنیاد': 0, 'کد مدرسه': 3581}, {'mentor_id': 'm1', 'کد کارمندی پشتیبان': 'E2', 'کدرشته': 1201, 'جنسیت': 1, 'دانش آموز فارغ': 0, 'مرکز گلستان صدرا': 1, 'مالی حکمت بنیاد': 0, 'کد مدرسه': 3581}]
+        DatabaseOperationError: استخر «inspactor» دارای ردیف تکراری بر اساس کلید ترکیبی mentor_id و کلیدهای اتصال است؛ نمونه‌ها: [{'mentor_id': 'm1', 'کدرشته': 1201, 'جنسیت': 1, 'دانش آموز فارغ': 0, 'مرکز گلستان صدرا': 1, 'مالی حکمت بنیاد': 0, 'کد مدرسه': 3581}]; نمونهٔ ردیف‌ها: [{'mentor_id': 'm1', 'کد کارمندی پشتیبان': 'E1', 'کدرشته': 1201, 'جنسیت': 1, 'دانش آموز فارغ': 0, 'مرکز گلستان صدرا': 1, 'مالی حکمت بنیاد': 0, 'کد مدرسه': 3581}]
     """
 
     if pool is None or "mentor_id" not in pool.columns:
         return
-    mentor_series = pool["mentor_id"].dropna()
-    if mentor_series.empty:
+    key_columns = ["mentor_id", *policy.join_keys]
+    if not all(col in pool.columns for col in key_columns):
         return
-    mentor_series = mentor_series.astype("string").str.strip()
-    duplicate_mask = mentor_series.duplicated(keep=False)
+
+    trimmed = pool.copy()
+    trimmed["mentor_id"] = trimmed["mentor_id"].astype("string").str.strip()
+    non_null_mask = ~trimmed[key_columns].isna().any(axis=1)
+    if not bool(non_null_mask.any()):
+        return
+
+    duplicate_mask = trimmed.loc[non_null_mask].duplicated(subset=key_columns, keep=False)
     if not bool(duplicate_mask.any()):
         return
 
-    duplicate_ids = mentor_series[duplicate_mask].drop_duplicates().head(5).tolist()
-    raw_employee_col = "کد کارمندی پشتیبان (خام)" if "کد کارمندی پشتیبان (خام)" in pool.columns else None
+    duplicate_rows = (
+        trimmed.loc[non_null_mask & duplicate_mask, key_columns]
+        .drop_duplicates()
+        .head(5)
+        .fillna("")
+        .to_dict(orient="records")
+    )
+    raw_employee_col = "کد کارمندی پشتیبان (خام)" if "کد کارمندی پشتیبان (خام)" in trimmed.columns else None
     employee_col = raw_employee_col or "کد کارمندی پشتیبان"
     sample_columns = ["mentor_id", employee_col, *policy.join_keys]
     sample_rows = (
-        pool.loc[mentor_series.index[duplicate_mask], sample_columns]
+        trimmed.loc[non_null_mask & duplicate_mask, sample_columns]
         .head(5)
         .fillna("")
         .to_dict(orient="records")
     )
 
     message = (
-        f"استخر «{pool_source}» دارای mentor_id تکراری است؛ نمونه شناسه‌ها: {duplicate_ids}; "
-        f"نمونهٔ ردیف‌ها: {sample_rows}"
-    )
+        "استخر «{source}» دارای ردیف تکراری بر اساس کلید ترکیبی mentor_id و "
+        "کلیدهای اتصال است؛ نمونه‌ها: {keys}; نمونهٔ ردیف‌ها: {rows}"
+    ).format(source=pool_source, keys=duplicate_rows, rows=sample_rows)
     raise DatabaseOperationError(message)
 
 

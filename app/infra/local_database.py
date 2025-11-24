@@ -1635,15 +1635,16 @@ class LocalDatabase:
             raise ValueError("DataFrame استخر منتورها تهی است؛ ورودی معتبر بدهید.")
         self.initialize()
         _validate_join_keys(df, join_keys)
-        _ensure_unique_columns(
+        _ensure_unique_composite_keys(
             df,
-            columns=("mentor_id", "کد کارمندی پشتیبان"),
+            columns=("mentor_id", *join_keys),
             table_name="mentor_pool_cache",
         )
         index_statements = _build_index_statements(
             table_name="mentor_pool_cache",
             df=df,
-            unique_candidates=("mentor_id", "کد کارمندی پشتیبان"),
+            unique_candidates=(),
+            composite_unique_candidates=[("mentor_id", *join_keys)],
             join_keys=join_keys,
         )
         try:
@@ -2075,13 +2076,16 @@ def _build_index_statements(
     table_name: str,
     df: pd.DataFrame,
     unique_candidates: Sequence[str] = (),
+    composite_unique_candidates: Sequence[Sequence[str]] = (),
     join_keys: Sequence[str] = (),
 ) -> list[str]:
     """تولید ایندکس‌های پایدار برای کلیدهای طبیعی و ۶ کلید اتصال Policy.
 
     این تابع در تمام کش‌های مرجع استفاده می‌شود تا یکتا بودن شناسه‌های
-    طبیعی (student_id, mentor_id, کد مدرسه) و ایندکس‌گذاری join_keys بر اساس
-    Policy/SSoT در یک مکان متمرکز باشد.
+    طبیعی (student_id) و ایندکس‌گذاری join_keys بر اساس Policy/SSoT در یک
+    مکان متمرکز باشد. برای جداولی مانند ``mentor_pool_cache`` که کلید طبیعی
+    آن ترکیبی از ``mentor_id`` و شش کلید اتصال است، می‌توان فهرست ایندکس‌های
+    یکتای ترکیبی را از طریق ``composite_unique_candidates`` ارسال کرد.
     """
 
     statements: list[str] = []
@@ -2094,6 +2098,21 @@ def _build_index_statements(
                     f'CREATE UNIQUE INDEX IF NOT EXISTS {idx} ON {table_name}("{column}")'
                 )
                 seen.add(idx)
+    for key_columns in composite_unique_candidates:
+        if not key_columns:
+            continue
+        if not all(col in df.columns for col in key_columns):
+            continue
+        composite_name = "_".join(key_columns)
+        idx = _normalize_index_name(
+            f"idx_{table_name}_{composite_name}_uniq"
+        )
+        if idx not in seen:
+            joined = ", ".join(f'"{col}"' for col in key_columns)
+            statements.append(
+                f"CREATE UNIQUE INDEX IF NOT EXISTS {idx} ON {table_name}({joined})"
+            )
+            seen.add(idx)
     for column in join_keys:
         if column in df.columns:
             idx = _normalize_index_name(f"idx_{table_name}_{column}")
@@ -2172,6 +2191,59 @@ def _ensure_unique_columns(
                 table_name=table_name, column=column, samples=samples
             )
         )
+
+
+def _ensure_unique_composite_keys(
+    df: pd.DataFrame, *, columns: Sequence[str], table_name: str
+) -> None:
+    """ولیدیت یکتایی کلید ترکیبی پیش از ایجاد ایندکس UNIQUE.
+
+    این تابع برای جدول‌هایی استفاده می‌شود که کلید طبیعی آن‌ها یک ترکیب
+    چندستونه است؛ مثال شاخص، ``mentor_pool_cache`` که باید روی ترکیب
+    ``mentor_id`` و ۶ کلید اتصال سیاست یکتا باشد. مقادیر دارای NULL در هر
+    ستون کلید نادیده گرفته می‌شوند تا با رفتار UNIQUE در SQLite (که NULL را
+    معادل نقض یکتایی نمی‌داند) هم‌خوان باشد.
+
+    مثال::
+
+        >>> df = pd.DataFrame({
+        ...     "mentor_id": ["m1", "m1"],
+        ...     "کدرشته": [1201, 1201],
+        ...     "جنسیت": [1, 1],
+        ...     "دانش آموز فارغ": [0, 0],
+        ...     "مرکز گلستان صدرا": [1, 1],
+        ...     "مالی حکمت بنیاد": [0, 0],
+        ...     "کد مدرسه": [3581, 3581],
+        ... })
+        >>> _ensure_unique_composite_keys(
+        ...     df, columns=("mentor_id", "کدرشته", "جنسیت", "دانش آموز فارغ", "مرکز گلستان صدرا", "مالی حکمت بنیاد", "کد مدرسه"),
+        ...     table_name="mentor_pool_cache",
+        ... )
+        Traceback (most recent call last):
+            ...
+        DatabaseOperationError: جدول mentor_pool_cache دارای ردیف تکراری برای کلید ترکیبی است؛ نمونه‌ها: [{'mentor_id': 'm1', 'کدرشته': 1201, 'جنسیت': 1, 'دانش آموز فارغ': 0, 'مرکز گلستان صدرا': 1, 'مالی حکمت بنیاد': 0, 'کد مدرسه': 3581}]
+    """
+
+    if not columns:
+        return
+    if not all(col in df.columns for col in columns):
+        return
+    mask = ~df[list(columns)].isna().any(axis=1)
+    if not bool(mask.any()):
+        return
+    duplicated_mask = df.loc[mask].duplicated(subset=list(columns), keep=False)
+    if not bool(duplicated_mask.any()):
+        return
+    samples = (
+        df.loc[mask & duplicated_mask, list(columns)]
+        .drop_duplicates()
+        .head(5)
+        .fillna("")
+        .to_dict(orient="records")
+    )
+    raise DatabaseOperationError(
+        f"جدول {table_name} دارای ردیف تکراری برای کلید ترکیبی است؛ نمونه‌ها: {samples}"
+    )
 
 
 def _format_duplicate_error(*, table_name: str, column: str, samples: Sequence[str]) -> str:
