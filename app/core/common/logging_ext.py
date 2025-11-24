@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
-from time import perf_counter
-from typing import Iterator
 from logging import Logger
+from time import perf_counter
 
 __all__ = ["log_step", "StepLogger"]
 

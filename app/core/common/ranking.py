@@ -2,18 +2,21 @@
 
 from __future__ import annotations
 
+import re
+from collections.abc import Mapping, Sequence
 from hashlib import blake2b
-from pathlib import Path
 from numbers import Number
-from typing import Any, Dict, Mapping, Sequence
+from pathlib import Path
+from typing import Any
 
 import pandas as pd
 
 from app.core.common.columns import canonicalize_headers, dedupe_columns
 from app.core.policy_loader import PolicyConfig, load_policy
-from .types import natural_key
+
 from .ids import ensure_ranking_columns
 from .reasons import ReasonCode, build_reason
+from .types import natural_key
 
 __all__ = [
     "natural_key",
@@ -31,7 +34,7 @@ def build_mentor_state(
     *,
     capacity_column: str = "remaining_capacity",
     policy: PolicyConfig | None = None,
-) -> Dict[Any, Dict[str, float | int]]:
+) -> dict[Any, dict[str, float | int]]:
     """ساخت وضعیت ظرفیت اولیهٔ پشتیبان‌ها برای تخصیص و Rule Engine."""
 
     if policy is None:
@@ -78,7 +81,7 @@ def build_mentor_state(
 
     grouped = canonical.groupby("mentor_id", dropna=True)[resolved_capacity]
     initial = pd.to_numeric(grouped.max(), errors="coerce").fillna(0).astype(int)
-    state: Dict[Any, Dict[str, float | int]] = {}
+    state: dict[Any, dict[str, float | int]] = {}
     for mentor_id, capacity in initial.items():
         value = int(max(capacity, 0))
         state[mentor_id] = {
@@ -180,11 +183,9 @@ def apply_ranking_policy(
 
     ranked = ranked.sort_values(by=sort_columns, ascending=ascending_flags, kind="stable")
     ranked = ranked.reset_index(drop=True)
-    tie_columns: Sequence[str]
-    if len(sort_columns) > 1:
-        tie_columns = tuple(sort_columns[:-1])
-    else:
-        tie_columns = tuple(sort_columns)
+    tie_columns: Sequence[str] = (
+        tuple(sort_columns[:-1]) if len(sort_columns) > 1 else tuple(sort_columns)
+    )
     ranked["__fair_origin__"] = ranked.index
     strategy = getattr(policy, "fairness_strategy", "none") or "none"
     ranked, fairness_applied = _apply_fairness_strategy(
@@ -217,7 +218,7 @@ def _coerce_capacity_value(value: Any) -> int:
 
 
 def consume_capacity(
-    state: Dict[Any, Dict[str, float | int]], mentor_id: Any
+    state: dict[Any, dict[str, float | int]], mentor_id: Any
 ) -> tuple[int, int, float]:
     """به‌روزرسانی ظرفیت پشتیبان پس از تخصیص و بازگشت ظرفیت قبل/بعد."""
 

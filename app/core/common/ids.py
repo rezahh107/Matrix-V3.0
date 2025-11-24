@@ -25,9 +25,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any, Dict, Mapping, Sequence
 import re
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
+from typing import Any
 
 import pandas as pd
 
@@ -105,7 +106,7 @@ def _normalize_code_raw(value: Any) -> str:
     return normalize_fa(value)
 
 
-def build_mentor_id_map(matrix_df: pd.DataFrame) -> Dict[str, str]:
+def build_mentor_id_map(matrix_df: pd.DataFrame) -> dict[str, str]:
     """ساخت نگاشت نام پشتیبان به کد کارمندی.
 
     Args:
@@ -130,7 +131,7 @@ def build_mentor_id_map(matrix_df: pd.DataFrame) -> Dict[str, str]:
     mentor_series = ensure_series(matrix_df[mentor_column]).map(_normalize_name)
     code_series = ensure_series(matrix_df["کد کارمندی پشتیبان"]).map(_normalize_code_raw)
 
-    mapping: Dict[str, str] = {}
+    mapping: dict[str, str] = {}
     for name, code in zip(mentor_series, code_series, strict=False):
         if not name or not code:
             continue
@@ -310,7 +311,7 @@ def build_mentor_alias_map(
     mentor_column: str = "کد کارمندی پشتیبان",
     alias_series: pd.Series | None = None,
     alias_columns: Sequence[str] | None = None,
-) -> tuple[Dict[str, str], MentorAliasStats]:
+) -> tuple[dict[str, str], MentorAliasStats]:
     """ساخت نگاشت alias→mentor بر مبنای دادهٔ Inspactor.
 
     Args:
@@ -330,7 +331,7 @@ def build_mentor_alias_map(
     )
     stats = MentorAliasStats()
     stats.total_alias_rows = int(alias_values.ne("").sum())
-    mapping: Dict[str, str] = {}
+    mapping: dict[str, str] = {}
     if mentor_column not in frame.columns:
         return mapping, stats
     mentor_values = ensure_series(frame[mentor_column]).astype("string").fillna("").str.strip()

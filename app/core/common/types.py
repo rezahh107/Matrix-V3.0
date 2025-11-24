@@ -20,18 +20,16 @@
 
 from __future__ import annotations
 
-from collections import OrderedDict
-from types import MappingProxyType
-from typing import Any, Iterator, KeysView, Mapping, MutableMapping
-from typing import Dict, Iterable, List, Literal, Optional, Tuple, TypedDict
-
 import re
-
+from collections import OrderedDict
+from collections.abc import Iterable, Iterator, KeysView, Mapping, MutableMapping
+from types import MappingProxyType
+from typing import Any, Literal, TypedDict
 
 _NUM = re.compile(r"(\d+)")
 
 
-def natural_key(s: str) -> Tuple[object, ...]:
+def natural_key(s: str) -> tuple[object, ...]:
     """کلید طبیعی برای sort پایدار شناسه‌ها (EMP-2 قبل از EMP-10).
 
     مثال::
@@ -123,13 +121,13 @@ class JoinKeyValues(Mapping[str, int]):
 
         return self._items
 
-    def as_dict(self) -> Dict[str, int]:
+    def as_dict(self) -> dict[str, int]:
         """کپی معمولی دیکشنری برای سازگاری با pandas/JSON."""
 
         return dict(self._items)
 
     @classmethod
-    def from_policy(cls, data: Mapping[str, int], join_keys: Iterable[str]) -> "JoinKeyValues":
+    def from_policy(cls, data: Mapping[str, int], join_keys: Iterable[str]) -> JoinKeyValues:
         """ساخت نمونه از روی Policy با اجبار ترتیب کلیدها.
 
         Args:
@@ -237,7 +235,7 @@ class AllocationAlertRecord(TypedDict, total=False):
     code: str
     stage: str
     message: str
-    context: Dict[str, Any]
+    context: dict[str, Any]
 
 
 class AllocationLogRecord(TypedDict, total=False):
@@ -246,29 +244,29 @@ class AllocationLogRecord(TypedDict, total=False):
     row_index: int
     student_id: str
     allocation_status: Literal["success", "failed"]
-    mentor_selected: Optional[str]
-    mentor_id: Optional[str]
-    occupancy_ratio: Optional[float]
+    mentor_selected: str | None
+    mentor_id: str | None
+    occupancy_ratio: float | None
     join_keys: JoinKeyValues
     candidate_count: int
-    selection_reason: Optional[str]
-    tie_breakers: Dict[str, Any]
-    error_type: Optional[AllocationErrorLiteral]
-    detailed_reason: Optional[str]
-    suggested_actions: List[str]
-    capacity_before: Optional[int]
-    capacity_after: Optional[int]
-    mentor_state_delta: Optional[MentorStateDelta]
-    stage_candidate_counts: Dict[str, int]
-    rule_reason_code: Optional[str]
-    rule_reason_text: Optional[str]
-    rule_reason_details: Optional[Mapping[str, Any]]
-    fairness_reason_code: Optional[str]
-    fairness_reason_text: Optional[str]
-    alerts: List[AllocationAlertRecord]
+    selection_reason: str | None
+    tie_breakers: dict[str, Any]
+    error_type: AllocationErrorLiteral | None
+    detailed_reason: str | None
+    suggested_actions: list[str]
+    capacity_before: int | None
+    capacity_after: int | None
+    mentor_state_delta: MentorStateDelta | None
+    stage_candidate_counts: dict[str, int]
+    rule_reason_code: str | None
+    rule_reason_text: str | None
+    rule_reason_details: Mapping[str, Any] | None
+    fairness_reason_code: str | None
+    fairness_reason_text: str | None
+    alerts: list[AllocationAlertRecord]
     alias_autofill: int
     alias_unmatched: int
-    phase_rule_trace: List[Mapping[str, Any]]
+    phase_rule_trace: list[Mapping[str, Any]]
 
 
 TraceStageLiteral = Literal[
