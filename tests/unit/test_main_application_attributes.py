@@ -105,11 +105,6 @@ class _Attr:
 
 
 def _install_qt_stubs(monkeypatch):
-    try:
-        return
-    except Exception:
-        pass
-
     qtcore = types.ModuleType("PySide6.QtCore")
     attributes = {
         "AA_EnableHighDpiScaling": _Attr("AA_EnableHighDpiScaling"),
@@ -145,6 +140,14 @@ def main_module(monkeypatch):
 @pytest.fixture()
 def qt(main_module):
     return main_module.Qt
+
+
+def test_main_import_uses_qt_stubs(monkeypatch) -> None:
+    _install_qt_stubs(monkeypatch)
+    module = importlib.reload(importlib.import_module("app.main"))
+
+    assert sys.modules["PySide6"].QtWidgets.QApplication is _StubApplication
+    assert module.QApplication is _StubApplication
 
 
 class _FakeApp:

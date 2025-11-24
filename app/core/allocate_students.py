@@ -40,6 +40,7 @@ from .common.trace import (
     summarize_trace_outcome,
 )
 from .common.types import (
+    CANONICAL_TRACE_ORDER,
     AllocationAlertRecord,
     AllocationLogRecord,
     JoinKeyValues,
@@ -447,6 +448,34 @@ def _coerce_int(value: object) -> int:
     return int(value)
 
 
+def _center_wildcard_value(policy: PolicyConfig) -> int | None:
+    """خواندن مقدار wildcard مرکز از Policy برای تطبیق join keys."""
+
+    wildcard = policy.center_map.get("*")
+    if wildcard is None:
+        return None
+    try:
+        return int(wildcard)
+    except (TypeError, ValueError):
+        return None
+
+
+def _canonical_stage_counts(stage_candidate_counts: Mapping[str, int]) -> dict[str, int]:
+    """بازگردانی شمارنده‌ها روی ترتیب ۸ مرحلهٔ استاندارد."""
+
+    return {stage: int(stage_candidate_counts.get(stage, 0)) for stage in CANONICAL_TRACE_ORDER}
+
+
+def _derive_error_type_from_stage_counts(stage_candidate_counts: Mapping[str, int]) -> str:
+    """طبقه‌بندی خطا براساس شمارندهٔ مراحل Trace."""
+
+    canonical = _canonical_stage_counts(stage_candidate_counts)
+    non_capacity = CANONICAL_TRACE_ORDER[:-1]
+    if any(canonical.get(stage, 0) == 0 for stage in non_capacity):
+        return "ELIGIBILITY_NO_MATCH"
+    return "CAPACITY_FULL"
+
+
 def _normalize_join_key_name(column: str) -> str:
     """نرمال‌سازی نام کلید join برای استفاده در join_map.
 
@@ -456,6 +485,48 @@ def _normalize_join_key_name(column: str) -> str:
     """
 
     return column.replace(" ", "_")
+
+
+def _matches_center_with_wildcard(
+    student_center: int, mentor_center: int, wildcard_center: int | None
+) -> bool:
+    """تطبیق مرکز با درنظرگرفتن wildcard از Policy."""
+
+    if wildcard_center is not None and student_center == wildcard_center:
+        return True
+    return mentor_center == student_center
+
+
+def _matches_school_with_wildcard(
+    student_school: int, mentor_school: int, empty_as_zero: bool
+) -> bool:
+    """تطبیق مدرسه با درنظرگرفتن صفر به‌عنوان wildcard در Policy."""
+
+    if empty_as_zero and (student_school == 0 or mentor_school == 0):
+        return True
+    return mentor_school == student_school
+
+
+def _center_mask_series(
+    mentor_series: pd.Series, student_center: int, wildcard_center: int | None
+) -> pd.Series:
+    """ماسک برداری برای تطبیق مرکز با پشتیبانی wildcard."""
+
+    if wildcard_center is not None and student_center == wildcard_center:
+        return pd.Series(True, index=mentor_series.index)
+    return mentor_series == student_center
+
+
+def _school_mask_series(
+    mentor_series: pd.Series, student_school: int, empty_as_zero: bool
+) -> pd.Series:
+    """ماسک برداری برای تطبیق مدرسه با درنظرگرفتن صفر به‌عنوان wildcard."""
+
+    if empty_as_zero and student_school == 0:
+        return pd.Series(True, index=mentor_series.index)
+    if empty_as_zero:
+        return (mentor_series == student_school) | (mentor_series == 0)
+    return mentor_series == student_school
 
 
 def _validate_policy_join_keys(
@@ -489,6 +560,7 @@ def _validate_policy_join_keys(
     """
 
     mismatches: list[dict[str, object]] = []
+    center_wildcard = _center_wildcard_value(policy)
     for column in policy.join_keys:
         normalized = _normalize_join_key_name(column)
         student_value = join_map.get(normalized)
@@ -498,7 +570,15 @@ def _validate_policy_join_keys(
             mentor_value = mentor_row.get(column)
         if student_value is None:
             continue
-        if mentor_value != student_value:
+        if column == policy.stage_column("center") and _matches_center_with_wildcard(
+            int(student_value), _coerce_int(mentor_value), center_wildcard
+        ):
+            continue
+        if column == policy.columns.school_code and _matches_school_with_wildcard(
+            int(student_value), _coerce_int(mentor_value), policy.school_code_empty_as_zero
+        ):
+            continue
+        if _coerce_int(mentor_value) != int(student_value):
             mismatches.append(
                 {
                     "column": column,
@@ -547,6 +627,7 @@ def _filter_candidates_by_join_map(
 
     mask = pd.Series(True, index=candidates.index)
     mismatches: list[dict[str, object]] = []
+    center_wildcard = _center_wildcard_value(policy)
 
     for column in policy.join_keys:
         normalized = _normalize_join_key_name(column)
@@ -578,7 +659,14 @@ def _filter_candidates_by_join_map(
         mentor_series = pd.to_numeric(ensure_series(candidates[column]), errors="coerce").astype(
             "Int64"
         )
-        col_mask = mentor_series == int(student_value)
+        if column == policy.stage_column("center"):
+            col_mask = _center_mask_series(mentor_series, int(student_value), center_wildcard)
+        elif column == policy.columns.school_code:
+            col_mask = _school_mask_series(
+                mentor_series, int(student_value), policy.school_code_empty_as_zero
+            )
+        else:
+            col_mask = mentor_series == int(student_value)
         mask &= col_mask.fillna(False)
         if not bool(col_mask.all()):
             mentor_sample = mentor_series.loc[~col_mask].dropna().unique().tolist()[:5]
@@ -683,8 +771,7 @@ def _collect_join_key_map(
                 school_code_resolved = resolve_student_school_code(student, policy)
             school_code = school_code_resolved
             if school_code.missing:
-                join_map[normalized] = -1
-                missing_columns.append(column)
+                join_map[normalized] = 0
             else:
                 join_map[normalized] = int(school_code.value or 0)
             continue
@@ -1286,7 +1373,7 @@ def allocate_student(
     join_map, missing_columns = _collect_join_key_map(student, policy)
 
     progress(5, "prefilter")
-    stage_candidate_counts: dict[str, int] = {}
+    stage_candidate_counts: dict[str, int] = {stage: 0 for stage in CANONICAL_TRACE_ORDER}
 
     def _record_stage(stage: str, count: int) -> None:
         stage_candidate_counts[stage] = int(count)
@@ -1301,8 +1388,7 @@ def allocate_student(
     eligible, join_mismatch_details = _filter_candidates_by_join_map(
         eligible, join_map=join_map, policy=policy
     )
-    stage_candidate_counts["join_keys"] = int(eligible.shape[0])
-    stage_candidate_counts.setdefault("capacity_gate", 0)
+    stage_candidate_counts = _canonical_stage_counts(stage_candidate_counts)
     trace = build_allocation_trace(
         student,
         candidate_pool,
@@ -1330,7 +1416,7 @@ def allocate_student(
             }
         )
         log["candidate_count"] = int(eligible.shape[0])
-        log["stage_candidate_counts"] = dict(stage_candidate_counts)
+        log["stage_candidate_counts"] = _canonical_stage_counts(stage_candidate_counts)
         missing_text = ", ".join(exc.missing_columns)
         log.update(
             {
@@ -1377,7 +1463,7 @@ def allocate_student(
         return AllocationResult(None, trace, log)
 
     log["candidate_count"] = int(eligible.shape[0])
-    log["stage_candidate_counts"] = dict(stage_candidate_counts)
+    log["stage_candidate_counts"] = _canonical_stage_counts(stage_candidate_counts)
     log["rule_reason_code"] = rule_reason_code
     log["rule_reason_text"] = rule_reason_text
     log["rule_reason_details"] = rule_details
@@ -1429,7 +1515,8 @@ def allocate_student(
     capacity_mask = capacity_numeric > 0
     capacity_filtered = eligible.loc[capacity_mask.values]
     stage_candidate_counts["capacity_gate"] = int(capacity_mask.sum())
-    log["stage_candidate_counts"] = dict(stage_candidate_counts)
+    stage_candidate_counts = _canonical_stage_counts(stage_candidate_counts)
+    log["stage_candidate_counts"] = stage_candidate_counts
 
     if capacity_filtered.empty:
         error_updates: dict[str, object] = {}
@@ -1437,11 +1524,7 @@ def allocate_student(
             error_updates["join_key_mismatches"] = join_mismatch_details
         return _fail_allocation(
             "No capacity among matched candidates",
-            error_type=(
-                "ELIGIBILITY_NO_MATCH"
-                if stage_candidate_counts.get("join_keys", 0) == 0
-                else "CAPACITY_FULL"
-            ),
+            error_type=_derive_error_type_from_stage_counts(stage_candidate_counts),
             suggested_actions=["بازبینی join keys", "افزایش ظرفیت", "بازنگری محدودیت‌ها"],
             extra_updates=error_updates if error_updates else None,
         )
@@ -1622,7 +1705,7 @@ def allocate_student(
             "tie_breakers": tie_breakers,
             "capacity_before": int(capacity_before),
             "capacity_after": int(capacity_after),
-            "stage_candidate_counts": dict(stage_candidate_counts),
+            "stage_candidate_counts": _canonical_stage_counts(stage_candidate_counts),
         }
     )
     return AllocationResult(capacity_filtered.loc[chosen_index], trace, log)
