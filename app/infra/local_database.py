@@ -1808,9 +1808,9 @@ class LocalDatabase:
             if _table_exists(conn, table_name):
                 conn.execute(f"ALTER TABLE {table_name} RENAME TO {backup_table}")
             conn.execute(f"ALTER TABLE {temp_table} RENAME TO {table_name}")
+            conn.execute(f"DROP TABLE IF EXISTS {backup_table}")
             for stmt in index_statements or []:
                 conn.execute(stmt)
-            conn.execute(f"DROP TABLE IF EXISTS {backup_table}")
             conn.commit()
         except sqlite3.Error as exc:
             try:
