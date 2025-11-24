@@ -40,7 +40,7 @@ from app.infra.sqlite_config import configure_connection
 from app.infra.sqlite_types import coerce_int_columns as _sqlite_coerce_int_columns
 from app.infra.sqlite_types import coerce_int_like as _sqlite_coerce_int_like
 
-_SCHEMA_VERSION = 9
+_SCHEMA_VERSION = 10
 _POLICY_VERSION = "1.0.3"
 _SSOT_VERSION = "1.0.2"
 _ISO_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
@@ -1229,6 +1229,10 @@ class LocalDatabase:
                 self._migrate_v8_to_v9(conn)
                 version = 9
                 continue
+            if version == 9:
+                self._migrate_v9_to_v10(conn)
+                version = 10
+                continue
             raise SchemaVersionMismatchError(
                 expected_version=_SCHEMA_VERSION,
                 actual_version=version,
@@ -1326,11 +1330,26 @@ class LocalDatabase:
     def _migrate_v8_to_v9(self, conn: sqlite3.Connection) -> None:
         """افزودن ستون QA extras برای snapshotها در نسخهٔ ۹."""
 
-        conn.execute(
-            "ALTER TABLE qa_snapshots ADD COLUMN qa_extras_json TEXT"
-        )
+        if _table_exists(conn, "qa_snapshots"):
+            columns = _get_table_columns(conn, "qa_snapshots")
+            if "qa_extras_json" not in columns:
+                conn.execute(
+                    "ALTER TABLE qa_snapshots ADD COLUMN qa_extras_json TEXT"
+                )
         conn.execute(
             "UPDATE schema_meta SET schema_version = ? WHERE id = 1", (9,),
+        )
+
+    def _migrate_v9_to_v10(self, conn: sqlite3.Connection) -> None:
+        """افزودن ستون ``student_id`` به جدول cache دانش‌آموزان در نسخهٔ ۱۰."""
+
+        if _table_exists(conn, "students_cache"):
+            columns = _get_table_columns(conn, "students_cache")
+            if "student_id" not in columns:
+                conn.execute("ALTER TABLE students_cache ADD COLUMN student_id TEXT")
+
+        conn.execute(
+            "UPDATE schema_meta SET schema_version = ? WHERE id = 1", (10,),
         )
 
     @staticmethod
@@ -1780,6 +1799,19 @@ def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
         "SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table,)
     )
     return cursor.fetchone() is not None
+
+
+def _get_table_columns(conn: sqlite3.Connection, table_name: str) -> set[str]:
+    """استخراج نام ستون‌های جدول داده‌شده.
+
+    - اگر جدول وجود نداشته باشد، مجموعهٔ خالی برگردانده می‌شود.
+    - مثال: ``_get_table_columns(conn, "students_cache")`` → ``{"student_id", "کدرشته"}``
+    """
+
+    if not table_name:
+        return set()
+    cursor = conn.execute(f"PRAGMA table_info({_quote_identifier(table_name)})")
+    return {str(row[1]) for row in cursor.fetchall()}
 
 
 def _quote_identifier(name: str) -> str:
