@@ -1,7 +1,7 @@
 from datetime import datetime
 from pathlib import Path
 
-from app.infra.local_database import LocalDatabase
+from app.infra.local_database import LocalDatabase, _SCHEMA_VERSION
 
 
 def _insert_dummy_run(db: LocalDatabase) -> None:
@@ -108,7 +108,7 @@ def test_reset_full_database_creates_backup_and_fresh_schema(tmp_path: Path) -> 
     assert backup is not None
     assert backup.exists()
     assert db_path.exists()
-    assert db.get_schema_version() == 9
+    assert db.get_schema_version() == _SCHEMA_VERSION
     # ستون student_id باید در Schema تازه وجود داشته باشد
     with db.connect() as conn:
         columns = {row[1] for row in conn.execute("PRAGMA table_info(students_cache)")}
