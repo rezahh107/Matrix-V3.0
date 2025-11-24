@@ -463,9 +463,7 @@ def _center_wildcard_value(policy: PolicyConfig) -> int | None:
 def _canonical_stage_counts(stage_candidate_counts: Mapping[str, int]) -> dict[str, int]:
     """بازگردانی شمارنده‌ها روی ترتیب ۸ مرحلهٔ استاندارد."""
 
-    return {
-        stage: int(stage_candidate_counts.get(stage, 0)) for stage in CANONICAL_TRACE_ORDER
-    }
+    return {stage: int(stage_candidate_counts.get(stage, 0)) for stage in CANONICAL_TRACE_ORDER}
 
 
 def _derive_error_type_from_stage_counts(stage_candidate_counts: Mapping[str, int]) -> str:
