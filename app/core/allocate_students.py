@@ -468,7 +468,69 @@ def _coerce_int(value: object) -> int:
     if isinstance(value, Number):
         if pd.isna(value):  # type: ignore[arg-type]
             raise ValueError("DATA_MISSING")
-        return int(value)
+    return int(value)
+
+
+def _normalize_join_key_name(column: str) -> str:
+    """نرمال‌سازی نام کلید join برای استفاده در join_map.
+
+    این نگاشت باید دقیقاً با خروجی ``_collect_join_key_map`` منطبق باشد. در صورت
+    تغییر لیست ``join_keys`` در Policy، این تابع نیز باید به‌روزرسانی شود تا از
+    هرگونه drift در نام‌گذاری جلوگیری شود.
+    """
+
+    return column.replace(" ", "_")
+
+
+def _validate_policy_join_keys(
+    mentor_row: Mapping[str, object],
+    join_map: Mapping[str, int],
+    policy: PolicyConfig,
+) -> tuple[bool, list[dict[str, object]]]:
+    """اعتبارسنجی برابری شش کلید join بین دانش‌آموز و پشتیبان انتخاب‌شده.
+
+    این تابع باید دقیقاً با همان نام‌گذاری‌ای کار کند که ``_collect_join_key_map``
+    برای کلیدهای join می‌سازد. هر تغییری در ``join_keys`` Policy مستلزم به‌روزرسانی
+    این تابع است (Policy-First).
+
+    مثال::
+
+        >>> valid, mismatches = _validate_policy_join_keys(
+        ...     {"کدرشته": 3, "جنسیت": 1}, {"کدرشته": 3, "جنسیت": 1}, policy
+        ... )
+        >>> valid
+        True
+
+    Args:
+        mentor_row: سطر انتخاب‌شدهٔ پشتیبان از استخر.
+        join_map: نگاشت کلیدهای join دانش‌آموز (int شده).
+        policy: پیکربندی Policy برای دسترسی به join_keys.
+
+    Returns:
+        (valid, mismatches):
+            * valid: اگر همهٔ کلیدها برابر باشند ``True``.
+            * mismatches: فهرست اختلاف‌ها برای گزارش در لاگ.
+    """
+
+    mismatches: list[dict[str, object]] = []
+    for column in policy.join_keys:
+        normalized = _normalize_join_key_name(column)
+        student_value = join_map.get(normalized)
+        try:
+            mentor_value = _coerce_int(mentor_row.get(column))
+        except Exception:
+            mentor_value = mentor_row.get(column)
+        if student_value is None:
+            continue
+        if mentor_value != student_value:
+            mismatches.append(
+                {
+                    "column": column,
+                    "student_value": student_value,
+                    "mentor_value": mentor_value,
+                }
+            )
+    return len(mismatches) == 0, mismatches
     text = to_numlike_str(value).strip()
     if not text:
         raise ValueError("DATA_MISSING")
@@ -563,7 +625,7 @@ def _collect_join_key_map(
     school_column = policy.columns.school_code
     school_code_resolved: StudentSchoolCode | None = None
     for column in policy.join_keys:
-        normalized = column.replace(" ", "_")
+        normalized = _normalize_join_key_name(column)
         allow_zero = policy.school_code_empty_as_zero and column == school_column
         if allow_zero:
             if school_code_resolved is None:
@@ -1410,6 +1472,18 @@ def allocate_student(
     capacity_before = int(snapshot_entry.get("remaining", 0))
     capacity_after = capacity_before
     occupancy_value = float(chosen_row.get("occupancy_ratio", 0.0))
+
+    selected_row = capacity_filtered.loc[chosen_index]
+    join_valid, join_mismatches = _validate_policy_join_keys(
+        selected_row, join_map, policy
+    )
+    if not join_valid:
+        return _fail_allocation(
+            "Selected mentor does not match student join keys",
+            error_type="ELIGIBILITY_NO_MATCH",
+            suggested_actions=["بازبینی join keys", "بازسازی استخر/دانش‌آموز"],
+            extra_updates={"join_key_mismatches": join_mismatches},
+        )
 
     try:
         capacity_before, capacity_after, occupancy_value = consume_capacity(
