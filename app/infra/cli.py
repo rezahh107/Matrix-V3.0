@@ -43,8 +43,6 @@ from app.core.canonical_frames import (
     canonicalize_pool_frame,
     canonicalize_students_frame,
 )
-
-# --- واردات اصلاح شده از app.core ---
 from app.core.common.columns import (
     CANON_EN_TO_FA,
     HeaderMode,
@@ -91,6 +89,10 @@ from app.infra.excel.import_to_sabt import (
     prepare_allocation_export_frame,
     write_import_to_sabt_excel,
 )
+from app.infra.excel.qa_export import (
+    build_join_key_audit_sheet,
+    build_join_key_summary_sheet,
+)
 from app.infra.excel_writer import write_selection_reasons_sheet
 from app.infra.exporter_archive_repository import (
     ExporterArchiveConfig,
@@ -118,8 +120,7 @@ from app.infra.reference_students_repository import (
     import_student_report_from_excel,
     load_students_from_cache,
 )
-
-# --- پایان واردات اصلاح شده ---
+from app.infra.validators.join_keys import validate_allocation_join_keys
 
 ProgressFn = Callable[[int, str], None]
 
@@ -130,6 +131,60 @@ _DEFAULT_ALLOC_PROFILE_PATH = DEFAULT_SABT_PROFILE_PATH
 _DEFAULT_LOCAL_DB_PATH = Path("smart_alloc.db")
 
 logger = logging.getLogger(__name__)
+
+
+def attach_student_id_column(
+    frame: pd.DataFrame,
+    student_ids: pd.Series,
+    *,
+    header_mode: HeaderMode,
+    ensure_existing: bool = False,
+) -> pd.DataFrame:
+    """الصاق یا تکمیل ستون ``student_id`` با پاک‌سازی مقادیر تهی/"nan".
+
+    پارامترها
+    ----------
+    frame:
+        دیتافریم اولیه (مانند allocations/logs/trace) که ممکن است ستون ``student_id``
+        ناقص داشته باشد.
+    student_ids:
+        سری شناسنامهٔ دانش‌آموزان (هم‌تراز با ایندکس frame) برای پر کردن مقادیر مفقود.
+    header_mode:
+        حالت هدر مقصد برای بازگرداندن دیتافریم (fa یا en بر اساس Policy).
+    ensure_existing:
+        اگر True باشد، مقادیر غیرتهی موجود حفظ و فقط تهی/"nan" جایگزین می‌شود.
+
+    بازگشت
+    -------
+    pd.DataFrame
+        دیتافریم با ستون student_id تمیز و کاننیکال.
+
+    مثال
+    ----
+    >>> df = pd.DataFrame({"student_id": [" ", "nan"], "x": [1, 2]})
+    >>> ids = pd.Series(["S1", "S2"])
+    >>> attach_student_id_column(df, ids, header_mode="en", ensure_existing=True)["student_id"].tolist()
+    ['S1', 'S2']
+    """
+
+    en_frame = canonicalize_headers(frame, header_mode="en")
+    aligned = student_ids.reindex(en_frame.index).astype("string").str.strip()
+
+    def _clean_mask(series: pd.Series) -> pd.Series:
+        series_str = series.astype("string")
+        stripped = series_str.str.strip()
+        return stripped.eq("") | stripped.str.lower().eq("nan") | series_str.isna()
+
+    if ensure_existing and "student_id" in en_frame.columns:
+        existing = en_frame["student_id"].astype("string")
+        mask = _clean_mask(existing)
+        filled = existing.copy()
+        filled.loc[mask] = aligned.reindex(en_frame.index)
+        en_frame["student_id"] = filled
+    else:
+        en_frame["student_id"] = aligned
+
+    return canonicalize_headers(en_frame, header_mode=header_mode)
 
 
 def _default_progress(pct: int, message: str) -> None:
@@ -1832,6 +1887,15 @@ def _allocate_and_write(
             policy=policy,
         )
 
+        join_key_audit = validate_allocation_join_keys(
+            allocations_df,
+            students_base,
+            pool_base,
+            policy=policy,
+        )
+        join_key_audit_sheet = build_join_key_audit_sheet(join_key_audit.audit_frame, policy=policy)
+        join_key_summary_sheet = build_join_key_summary_sheet(join_key_audit.audit_frame)
+
         _maybe_export_import_to_sabt(
             args=args,
             allocations_df=allocations_df,
@@ -1860,6 +1924,8 @@ def _allocate_and_write(
                 "ssot_version": "1.0.2",
                 "source_output": str(output),
             },
+            alloc_join_audit=join_key_audit_sheet,
+            alloc_join_summary=join_key_summary_sheet,
         )
         _export_qa_validation_workbook(
             report=qa_report,
@@ -1897,6 +1963,7 @@ def _allocate_and_write(
         sheets["logs"] = logs_df
         sheets["trace"] = trace_df
         sheets[sheet_name] = selection_reasons_df
+        sheets["allocation_vs_pool_audit"] = join_key_audit_sheet
 
         summary_df_attr = trace_df.attrs.get("summary_df")
         history_info_df = trace_df.attrs.get("history_info_df")
