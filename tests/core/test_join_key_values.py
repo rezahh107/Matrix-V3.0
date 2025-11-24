@@ -44,14 +44,16 @@ def test_join_key_values_enforces_six_numeric_entries() -> None:
         JoinKeyValues({"کدرشته": 1}, expected_keys=("کدرشته",))
 
     with pytest.raises(TypeError):
-        JoinKeyValues({
-            "کدرشته": "not-int",
-            "جنسیت": 1,
-            "دانش_آموز_فارغ": 0,
-            "مرکز_گلستان_صدرا": 2,
-            "مالی_حکمت_بنیاد": 0,
-            "کد_مدرسه": 401,
-        })
+        JoinKeyValues(
+            {
+                "کدرشته": "not-int",
+                "جنسیت": 1,
+                "دانش_آموز_فارغ": 0,
+                "مرکز_گلستان_صدرا": 2,
+                "مالی_حکمت_بنیاد": 0,
+                "کد_مدرسه": 401,
+            }
+        )
 
     with pytest.raises(ValueError):
         JoinKeyValues({**_sample_payload(), "اضافی": 7})
