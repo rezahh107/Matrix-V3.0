@@ -6,8 +6,8 @@ import math
 import warnings
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from numbers import Number
-from typing import Any, TypeVar
+from numbers import Number, Real
+from typing import Any, Literal, SupportsFloat, SupportsInt, TypeVar, cast
 
 import pandas as pd
 from pandas.api import types as pd_types
@@ -118,6 +118,7 @@ _STAGE_LABEL_FA: dict[str, str] = {
 }
 
 T = TypeVar("T")
+HeaderMode = Literal["fa", "en", "fa_en"]
 
 
 def safe_int(value: Any) -> int | None:
@@ -150,7 +151,9 @@ def safe_float(value: Any) -> float | None:
     if isinstance(value, bool):
         return float(value)
     if isinstance(value, Number):
-        return float(value)
+        if isinstance(value, complex):
+            return None
+        return float(cast(SupportsFloat, value))
     if isinstance(value, str):
         cleaned = value.strip()
         if not cleaned:
@@ -278,7 +281,7 @@ def _resolve_mentor_identifier(result: AllocationResult, *, policy: PolicyConfig
 
     mentor_row_en = canonicalize_headers(
         result.mentor_row.to_frame().T,
-        header_mode=policy.excel.header_mode_internal,
+        header_mode=cast(HeaderMode, policy.excel.header_mode_internal),
     ).iloc[0]
     mentor_identifier = _normalize_mentor_identifier(mentor_row_en.get("mentor_id"))
     if mentor_identifier is not None:
@@ -318,12 +321,12 @@ def _maybe_int_from_text(value: object) -> int | None:
         numeric = pd.to_numeric([value], errors="coerce")[0]
     except Exception:
         return None
-    if isinstance(numeric, Number):
+    if isinstance(numeric, Real):
         if isinstance(numeric, float):
             if float(numeric).is_integer():
                 return int(numeric)
             return None
-        return int(numeric)
+        return int(cast(SupportsInt, numeric))
     if pd.isna(numeric):
         return None
     return None
@@ -391,7 +394,9 @@ def _safe_state_int(value: object) -> int:
                 return 0
         except TypeError:
             pass
-        return int(value)
+        if isinstance(value, complex):
+            return 0
+        return int(cast(SupportsInt, value))
     text = str(value or "").strip()
     if not text:
         return 0
@@ -416,7 +421,9 @@ def _safe_state_float(value: object) -> float:
                 return 0.0
         except TypeError:
             pass
-        return float(value)
+        if isinstance(value, complex):
+            return 0.0
+        return float(cast(SupportsFloat, value))
     text = str(value or "").strip()
     if not text:
         return 0.0
@@ -464,8 +471,8 @@ def _build_state_delta(before: MentorStateSnapshot, after: MentorStateSnapshot) 
         "occupancy_ratio": after["occupancy_ratio"] - before["occupancy_ratio"],
     }
     return {
-        "before": dict(before),
-        "after": dict(after),
+        "before": before,
+        "after": after,
         "diff": diff,
     }
 
@@ -493,7 +500,9 @@ def _coerce_int(value: object) -> int:
         raise ValueError("DATA_MISSING")
     if isinstance(value, Number) and pd.isna(value):
         raise ValueError("DATA_MISSING")
-    return int(value)
+    if isinstance(value, complex):
+        raise ValueError("DATA_MISSING")
+    return int(cast(SupportsInt, value))
 
 
 def _center_wildcard_value(policy: PolicyConfig) -> int | None:
@@ -617,7 +626,8 @@ def _validate_policy_join_keys(
         normalized = _normalize_join_key_name(column)
         student_value = join_map.get(normalized)
         try:
-            mentor_value = _coerce_int(mentor_row.get(column))
+            mentor_raw = mentor_row.get(column)
+            mentor_value: object = _coerce_int(mentor_raw)
         except Exception:
             mentor_value = mentor_row.get(column)
         if student_value is None:
@@ -799,13 +809,10 @@ def _extract_and_validate_center(
             return fallback_center, False
     except Exception:
         return fallback_center, False
-    try:
-        return int(value), True
-    except (TypeError, ValueError):
-        numeric_value = _maybe_int_from_text(value)
-        if numeric_value is None:
-            return fallback_center, False
-        return numeric_value, True
+    numeric_value = _maybe_int_from_text(value)
+    if numeric_value is None:
+        return fallback_center, False
+    return numeric_value, True
 
 
 def _collect_join_key_map(
@@ -888,7 +895,7 @@ def _phase_guard_source(students: pd.DataFrame, policy: PolicyConfig) -> Sequenc
     for name in candidates:
         if name in students.columns:
             series = ensure_series(students[name])
-            return series.fillna(0)
+            return list(series.fillna(0))
     return [False] * len(students)
 
 
@@ -1277,7 +1284,7 @@ def _emit_alert_progress(
 ) -> None:
     """ارسال پیام هشدار به progress hook برای مشاهدهٔ لحظه‌ای."""
 
-    if not alerts or alert_progress in (None, _noop_progress):
+    if not alerts or alert_progress is None or alert_progress is _noop_progress:
         return
     for alert in alerts:
         stage = str(alert.get("stage") or "join")
@@ -1642,7 +1649,9 @@ def allocate_student(
 
     chosen_index = chosen_row["__candidate_index__"]
     ranked = ranked.drop(columns=["__candidate_index__"], errors="ignore")
-    ranked_en = canonicalize_headers(ranked, header_mode=policy.excel.header_mode_internal)
+    ranked_en = canonicalize_headers(
+        ranked, header_mode=cast(HeaderMode, policy.excel.header_mode_internal)
+    )
     if ranked_en.empty:
         return _fail_allocation(
             "Canonicalization returned empty ranked view",
@@ -1806,7 +1815,7 @@ def allocate_batch(
     resolved_capacity_column = _resolve_capacity_column(policy, capacity_column)
     capacity_internal = canonicalize_headers(
         pd.DataFrame(columns=[resolved_capacity_column]),
-        header_mode=policy.excel.header_mode_internal,
+        header_mode=cast(HeaderMode, policy.excel.header_mode_internal),
     ).columns[0]
 
     def _validate_pool(frame: pd.DataFrame) -> pd.DataFrame:
@@ -2182,7 +2191,8 @@ def build_selection_reason_rows(
                     students_enriched[column] = base.where(base.notna(), aligned)
             students_enriched = students_enriched.reset_index(drop=True)
         students_enriched = canonicalize_headers(
-            students_enriched, header_mode=policy.excel.header_mode_internal
+            students_enriched,
+            header_mode=cast(HeaderMode, policy.excel.header_mode_internal),
         )
 
     return _build_selection_reason_rows(
