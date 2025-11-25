@@ -64,20 +64,14 @@ class DatabaseManagerDialog(QDialog):
         layout = QVBoxLayout(self)
 
         self._path_label = QLabel(self)
-        self._path_label.setTextInteractionFlags(
-            Qt.TextInteractionFlag.TextSelectableByMouse
-        )
+        self._path_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         layout.addWidget(self._path_label)
 
         grid = QGridLayout()
         self._schema_label = QLabel(self)
         self._module_label = QLabel(self)
-        self._schema_label.setTextInteractionFlags(
-            Qt.TextInteractionFlag.TextSelectableByMouse
-        )
-        self._module_label.setTextInteractionFlags(
-            Qt.TextInteractionFlag.TextSelectableByMouse
-        )
+        self._schema_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self._module_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         grid.addWidget(QLabel("نسخهٔ Schema (انتظار/فعلی):", self), 0, 0)
         grid.addWidget(self._schema_label, 0, 1)
         grid.addWidget(QLabel("مسیر ماژول SQLite:", self), 1, 0)
@@ -153,9 +147,7 @@ class DatabaseManagerDialog(QDialog):
             self._counts_table.setItem(idx, 1, QTableWidgetItem(count))
             self._counts_table.setItem(idx, 2, QTableWidgetItem(missing))
 
-    def _populate_issues_table(
-        self, table_diags: Iterable[TableSchemaDiagnostics]
-    ) -> None:
+    def _populate_issues_table(self, table_diags: Iterable[TableSchemaDiagnostics]) -> None:
         issues = [
             (diag.name, ", ".join(diag.missing_required_columns))
             for diag in table_diags
