@@ -106,6 +106,8 @@ _RANKING_RULE_LIBRARY: Mapping[str, tuple[str, bool]] = {
     "min_mentor_id": ("mentor_sort_key", True),
 }
 
+RankingRuleRaw = Mapping[str, object] | str
+
 _VALID_FAIRNESS_STRATEGIES: tuple[str, ...] = (
     "none",
     "deterministic_jitter",
@@ -474,9 +476,11 @@ def _normalize_policy_payload(data: Mapping[str, object]) -> Mapping[str, object
     required_student_fields = _normalize_required_student_fields(
         data.get("required_student_fields"), join_keys
     )
-    ranking_rules = _normalize_ranking_rules(
-        data["ranking_rules"] if "ranking_rules" in data else data["ranking"]
-    )
+    ranking_raw_value = data["ranking_rules"] if "ranking_rules" in data else data["ranking"]
+    if not isinstance(ranking_raw_value, Sequence) or isinstance(ranking_raw_value, (str, bytes)):
+        raise TypeError("ranking must be a sequence of rules")
+    ranking_raw = cast(Sequence[RankingRuleRaw], ranking_raw_value)
+    ranking_rules = _normalize_ranking_rules(ranking_raw)
     trace_stages = _normalize_trace_stages(data.get("trace_stages"), join_keys)
     postal_valid_range = _normalize_postal_valid_range(data["postal_valid_range"])
     finance_variants = _normalize_finance_variants(data["finance_variants"])
@@ -1019,8 +1023,8 @@ def _normalize_required_student_fields(raw: object | None, join_keys: Sequence[s
     return normalized
 
 
-def _normalize_ranking_rules(raw: object) -> list[Mapping[str, object]]:
-    if not isinstance(raw, Sequence) or isinstance(raw, (str, bytes)):
+def _normalize_ranking_rules(raw: Sequence[RankingRuleRaw]) -> list[Mapping[str, object]]:
+    if isinstance(raw, (str, bytes)):
         raise TypeError("ranking must be a sequence of rules")
     ranking_items = list(raw)
     if not ranking_items:
@@ -1031,21 +1035,31 @@ def _normalize_ranking_rules(raw: object) -> list[Mapping[str, object]]:
         )
     normalized: list[Mapping[str, object]] = []
     ranking_names: list[str] = []
-    for item in ranking_items:
+    for index, item in enumerate(ranking_items):
         if isinstance(item, Mapping):
-            if "name" not in item or "column" not in item:
-                raise ValueError("Ranking rule must define 'name' and 'column'")
-            name = str(item["name"])
-            column = str(item["column"])
+            name_value = item.get("name")
+            column_value = item.get("column")
+            if not isinstance(name_value, (str, bytes)) or not isinstance(
+                column_value, (str, bytes)
+            ):
+                raise TypeError("Ranking rule 'name' and 'column' must be strings")
+            name = str(name_value).strip()
+            column = str(column_value).strip()
+            if not name or not column:
+                raise ValueError("Ranking rule 'name' and 'column' must be non-empty")
             ascending_value = item.get("ascending", True)
             if not isinstance(ascending_value, bool):
                 raise TypeError("ranking rule 'ascending' must be boolean")
-            ascending = bool(ascending_value)
-        else:
-            name = str(item)
+            ascending = ascending_value
+        elif isinstance(item, str):
+            name = item.strip()
+            if not name:
+                raise ValueError("ranking rule names must be non-empty")
             if name not in _RANKING_RULE_LIBRARY:
                 raise ValueError(f"Unknown ranking rule '{name}'")
             column, ascending = _RANKING_RULE_LIBRARY[name]
+        else:
+            raise TypeError(f"ranking rule at position {index} must be a mapping or string")
         ranking_names.append(name)
         normalized.append({"name": name, "column": column, "ascending": ascending})
     if len(set(ranking_names)) != len(ranking_names):

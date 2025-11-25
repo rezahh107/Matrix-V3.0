@@ -119,6 +119,26 @@ def test_ranking_constraints() -> None:
         parse_policy_dict(payload)
 
 
+def test_ranking_rules_reject_string_input() -> None:
+    payload = _valid_payload()
+    payload["ranking_rules"] = "min_occupancy_ratio"
+
+    with pytest.raises(TypeError, match="ranking must be a sequence of rules"):
+        parse_policy_dict(payload)
+
+
+def test_ranking_rule_requires_string_columns() -> None:
+    payload = _valid_payload()
+    payload["ranking_rules"][0] = {
+        "name": "min_occupancy_ratio",
+        "column": 123,
+        "ascending": True,
+    }
+
+    with pytest.raises(TypeError, match="Ranking rule 'name' and 'column' must be strings"):
+        parse_policy_dict(payload)
+
+
 def test_ranking_must_have_four_items() -> None:
     payload = _valid_payload()
     payload["ranking_rules"].pop()
