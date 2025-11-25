@@ -4,6 +4,8 @@
 نسخه بهبود یافته
 """
 
+from __future__ import annotations
+
 import atexit
 import getpass
 import importlib
@@ -16,8 +18,7 @@ from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 from types import ModuleType, TracebackType
-from typing import TYPE_CHECKING
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 from PySide6.QtCore import QSharedMemory, Qt, QTimer, qVersion
 from PySide6.QtWidgets import QApplication, QMessageBox
@@ -345,7 +346,7 @@ class SingleInstanceGuard:
         except Exception as e:
             logger.error(f"خطا در آزادسازی shared memory: {e}")
 
-    def __enter__(self) -> "SingleInstanceGuard":
+    def __enter__(self) -> SingleInstanceGuard:
         """پشتیبانی از context manager"""
 
         return self
