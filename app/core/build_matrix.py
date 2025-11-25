@@ -244,8 +244,6 @@ class Finance(IntEnum):
     HEKMAT = 3  # non-sequential on purpose
 
 
-
-
 def _duplicate_summary_payload(
     summary: Mapping[str, object] | None,
 ) -> tuple[int, list[Mapping[str, object]]]:

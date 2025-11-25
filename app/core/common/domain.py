@@ -363,9 +363,7 @@ class BuildConfig:
         )
         dedup_ratio = dedup_ratio_raw / 100.0 if dedup_ratio_raw > 1 else dedup_ratio_raw
         if dedup_ratio < 0 or dedup_ratio > 1:
-            raise ValueError(
-                "dedup_removed_ratio_threshold must be between 0 and 1 (inclusive)"
-            )
+            raise ValueError("dedup_removed_ratio_threshold must be between 0 and 1 (inclusive)")
         object.__setattr__(self, "dedup_removed_ratio_threshold", dedup_ratio)
 
         join_key_threshold = (
@@ -386,9 +384,7 @@ class BuildConfig:
             school_lookup_raw / 100.0 if school_lookup_raw > 1 else school_lookup_raw
         )
         if school_lookup_ratio < 0 or school_lookup_ratio > 1:
-            raise ValueError(
-                "school_lookup_mismatch_threshold must be between 0 and 1 (inclusive)"
-            )
+            raise ValueError("school_lookup_mismatch_threshold must be between 0 and 1 (inclusive)")
         object.__setattr__(self, "school_lookup_mismatch_threshold", school_lookup_ratio)
 
         object.__setattr__(
