@@ -22,32 +22,24 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, cast
 from uuid import uuid4
 
 import pandas as pd
 from pandas import testing as pd_testing
 from pandas.api import types as pd_types
 
+import app.core.allocation.mentor_pool as mentor_pool
+import app.core.build_matrix as build_matrix_module
+import app.core.common.columns as columns_module
+
 from app.core.allocate_students import allocate_batch, build_selection_reason_rows
 from app.core.allocation.engine import enrich_summary_with_history
 from app.core.allocation.history_metrics import METRIC_COLUMNS, compute_history_metrics
-from app.core.allocation.mentor_pool import (
-    MentorPoolGovernanceConfig,
-    apply_manager_mentor_governance,
-    apply_mentor_pool_governance,
-)
-from app.core.build_matrix import BuildConfig, build_matrix
 from app.core.canonical_frames import (
     canonicalize_allocation_frames,
     canonicalize_pool_frame,
     canonicalize_students_frame,
-)
-from app.core.common.columns import (
-    CANON_EN_TO_FA,
-    HeaderMode,
-    canonicalize_headers,
-    enrich_school_columns_en,
 )
 from app.core.counter import (
     assert_unique_student_ids,
@@ -122,6 +114,22 @@ from app.infra.reference_students_repository import (
 )
 from app.infra.validators.join_keys import validate_allocation_join_keys
 
+if TYPE_CHECKING:
+    from app.core.allocation.mentor_pool import MentorPoolGovernanceConfig
+    from app.core.build_matrix import BuildConfig
+    from app.core.common.columns import HeaderMode
+else:
+    MentorPoolGovernanceConfig = mentor_pool.MentorPoolGovernanceConfig
+    BuildConfig = build_matrix_module.BuildConfig
+    HeaderMode = columns_module.HeaderMode
+
+apply_manager_mentor_governance = mentor_pool.apply_manager_mentor_governance
+apply_mentor_pool_governance = mentor_pool.apply_mentor_pool_governance
+build_matrix = build_matrix_module.build_matrix
+CANON_EN_TO_FA = columns_module.CANON_EN_TO_FA
+canonicalize_headers = columns_module.canonicalize_headers
+enrich_school_columns_en = columns_module.enrich_school_columns_en
+
 ProgressFn = Callable[[int, str], None]
 
 _DEFAULT_POLICY_PATH = Path("config/policy.json")
@@ -131,6 +139,14 @@ _DEFAULT_ALLOC_PROFILE_PATH = DEFAULT_SABT_PROFILE_PATH
 _DEFAULT_LOCAL_DB_PATH = Path("smart_alloc.db")
 
 logger = logging.getLogger(__name__)
+
+
+def _coerce_header_mode(value: str) -> HeaderMode:
+    """Validate and narrow header mode strings to the HeaderMode literal type."""
+
+    if value not in {"fa", "en", "fa_en"}:
+        raise ValueError(f"Invalid header_mode: {value}")
+    return cast(HeaderMode, value)
 
 
 def attach_student_id_column(
@@ -250,7 +266,10 @@ def reset_local_database(db: LocalDatabase) -> Path | None:
     بکاپ بگیرد، سپس Schema جدید را مقداردهی کند.
     """
 
-    return db.reset_full_database()
+    result = db.reset_full_database()
+    if result is None or isinstance(result, Path):
+        return result
+    raise TypeError("reset_full_database must return a Path or None")
 
 
 def _format_db_prepare_error(exc: BaseException, *, db_path: Path) -> str:
@@ -300,10 +319,12 @@ def _prepare_local_db(db: LocalDatabase, progress: ProgressFn) -> None:
 def _resolve_forms_client(args: argparse.Namespace) -> WordPressFormsClient:
     """برگشت کلاینت WordPress تزریق‌شده یا خطای خوانا در صورت نبود."""
 
-    overrides = getattr(args, "_ui_overrides", {}) or {}
+    overrides: dict[str, Any] = getattr(args, "_ui_overrides", {}) or {}
     client = overrides.get("forms_client")
-    if client is not None:
+    if isinstance(client, WordPressFormsClient):
         return client
+    if client is not None:
+        raise TypeError("forms_client override must be a WordPressFormsClient instance")
     raise ReferenceDataMissingError(
         table="forms_entries",
         message=(
@@ -562,9 +583,9 @@ def _normalize_override_mapping(data: Mapping[object, object] | None) -> dict[st
     return normalized
 
 
-def _resolve_mentor_pool_overrides(args: argparse.Namespace) -> dict[str, bool]:
-    overrides: dict[str, bool] = {}
-    ui_overrides = getattr(args, "_ui_overrides", {}) or {}
+def _resolve_mentor_pool_overrides(args: argparse.Namespace) -> dict[str | int | float, bool]:
+    overrides: dict[str | int | float, bool] = {}
+    ui_overrides: dict[str, Any] = getattr(args, "_ui_overrides", {}) or {}
     ui_mapping = ui_overrides.get("mentor_pool_overrides")
     overrides.update(
         _normalize_override_mapping(ui_mapping if isinstance(ui_mapping, Mapping) else {})
@@ -579,9 +600,9 @@ def _resolve_mentor_pool_overrides(args: argparse.Namespace) -> dict[str, bool]:
     return overrides
 
 
-def _resolve_manager_overrides(args: argparse.Namespace) -> dict[str, bool]:
-    overrides: dict[str, bool] = {}
-    ui_overrides = getattr(args, "_ui_overrides", {}) or {}
+def _resolve_manager_overrides(args: argparse.Namespace) -> dict[str | int | float, bool]:
+    overrides: dict[str | int | float, bool] = {}
+    ui_overrides: dict[str, Any] = getattr(args, "_ui_overrides", {}) or {}
     ui_mapping = ui_overrides.get("mentor_pool_manager_overrides")
     overrides.update(
         _normalize_override_mapping(ui_mapping if isinstance(ui_mapping, Mapping) else {})
@@ -611,7 +632,9 @@ def _apply_mentor_pool_overrides(
     config: MentorPoolGovernanceConfig = getattr(
         policy, "mentor_pool_governance", _default_governance_config()
     )
-    return apply_mentor_pool_governance(pool, config, overrides=overrides)
+    return apply_mentor_pool_governance(
+        pool, config, overrides=cast(Mapping[int | str | float, bool], overrides)
+    )
 
 
 def _detect_reader(path: Path) -> Callable[[Path], pd.DataFrame]:
@@ -642,16 +665,17 @@ def _normalize_min_coverage_arg(value: float | None) -> float | None:
 
 
 # --- توابع کمکی برای پاک‌سازی خروجی (کاملاً ایمن و جامع) ---
-def _is_empty_arraylike(x) -> bool:
+def _is_empty_arraylike(x: object) -> bool:
     """بررسی می‌کند که آیا x یک آرایه خالی است یا خیر"""
     if isinstance(x, (pd.Series, pd.DataFrame, list, tuple)):
         return len(x) == 0
-    if hasattr(x, "size") and hasattr(x, "__len__"):
-        return x.size == 0
+    size = getattr(x, "size", None)
+    if size is not None and hasattr(x, "__len__"):
+        return bool(size == 0)
     return False
 
 
-def _safe_isna(x) -> bool:
+def _safe_isna(x: object) -> bool:
     """نسخه ایمن از pd.isna که با آرایه‌های خالی کار می‌کند"""
     try:
         if _is_empty_arraylike(x):
@@ -668,7 +692,7 @@ def _safe_isna(x) -> bool:
         return True
 
 
-def _safe_json_dumps(x) -> str:
+def _safe_json_dumps(x: object) -> str:
     """نسخه ایمن از json.dumps"""
     try:
         return json.dumps(x, ensure_ascii=False)
@@ -713,13 +737,13 @@ def _coalesce_duplicate_columns(df: pd.DataFrame) -> pd.DataFrame:
     return result_df
 
 
-def _is_complex_safe(x) -> bool:
+def _is_complex_safe(x: object) -> bool:
     """چک می‌کند آیا یک مقدار، یک شیء پیچیده است یا نه (ایمن در برابر ndarray خالی)."""
     if isinstance(x, (dict, list, tuple, set)):
         return True
 
     if isinstance(x, (pd.Series, pd.DataFrame)):
-        return x.size > 0
+        return bool(x.size > 0)
 
     return False
 
@@ -754,7 +778,7 @@ def _make_excel_safe(df: pd.DataFrame) -> pd.DataFrame:
         # برای ستون‌های از نوع object
         if pd_types.is_object_dtype(s.dtype):
             # تابع تبدیل ایمن برای هر مقدار
-            def _safe_convert(v):
+            def _safe_convert(v: object) -> str:
                 if _safe_isna(v):
                     return ""
                 if isinstance(v, (dict, list, tuple, set)):
@@ -1133,9 +1157,10 @@ def _build_duplicate_row_report(
                 national_id = ""
             else:
                 raw_national_id = row.get("national_id", "")
-                national_id = (
-                    "" if pd.isna(raw_national_id) else str(raw_national_id).strip()  # type: ignore[arg-type]
-                )
+                if pd.isna(raw_national_id):
+                    national_id = ""
+                else:
+                    national_id = str(raw_national_id).strip()
             rows.append(
                 {
                     "index": index_label,
@@ -1155,7 +1180,11 @@ def _format_duplicate_report(report: list[dict[str, object]]) -> str:
     for payload in report:
         student_id = payload.get("student_id")
         row_items: list[str] = []
-        for row in payload.get("rows", []):
+        rows_obj = payload.get("rows")
+        rows = rows_obj if isinstance(rows_obj, list) else []
+        for row in rows:
+            if not isinstance(row, Mapping):
+                continue
             name = row.get("name") or "-"
             national_id = row.get("national_id") or "-"
             position = row.get("position")
@@ -1204,7 +1233,7 @@ def _assign_new_counters_for_duplicates(
     female_value = int(gender_codes.female.value)
     male_mid3 = str(gender_codes.male.counter_code).zfill(3)
     female_mid3 = str(gender_codes.female.counter_code).zfill(3)
-    summary = {
+    summary: dict[str, int | str] = {
         "reused_count": 0,
         "new_male_count": 0,
         "new_female_count": 0,
@@ -1297,8 +1326,13 @@ def _apply_counter_duplicate_strategy(
     if normalized_strategy == "drop":
         drop_indexes: list[object] = []
         for payload in report:
-            rows = payload.get("rows", [])
-            drop_indexes.extend(row.get("index") for row in rows[1:])
+            rows_obj = payload.get("rows")
+            rows = rows_obj if isinstance(rows_obj, list) else []
+            drop_indexes.extend(
+                row.get("index")
+                for row in rows[1:]
+                if isinstance(row, Mapping)
+            )
         drop_indexes = [idx for idx in drop_indexes if idx in students_df.index]
         if not drop_indexes:
             return counters, False, tuple()
@@ -1353,18 +1387,25 @@ def _inject_student_ids(
         strategy_value = getattr(args, "counter_duplicate_strategy").strip()
     strategy_value = (strategy_value or "prompt").strip().lower()
 
-    academic_year = overrides.get("academic_year") or getattr(args, "academic_year", None)
-    if academic_year in ("", None):
-        academic_year = infer_year_strict(current_df)
-    if academic_year in ("", None):
+    academic_year_raw = overrides.get("academic_year") or getattr(args, "academic_year", None)
+    if academic_year_raw in ("", None):
+        academic_year_raw = infer_year_strict(current_df)
+    if academic_year_raw in ("", None):
         raise ValueError(
             "سال تحصیلی مشخص نشده یا در روستر جاری یکتا نیست؛ مقدار --academic-year الزامی است."
         )
 
+    if isinstance(academic_year_raw, str):
+        academic_year_value: int | str = academic_year_raw.strip() or academic_year_raw
+    elif isinstance(academic_year_raw, int):
+        academic_year_value = academic_year_raw
+    else:
+        raise ValueError(f"سال تحصیلی نامعتبر است: {academic_year_raw}")
+
     try:
-        year_value = int(academic_year)
+        year_value = int(academic_year_value)
     except (TypeError, ValueError) as exc:  # pragma: no cover - نگهبان مهاجرت
-        raise ValueError(f"سال تحصیلی نامعتبر است: {academic_year}") from exc
+        raise ValueError(f"سال تحصیلی نامعتبر است: {academic_year_raw}") from exc
 
     final_students_en: pd.DataFrame | None = None
 
@@ -1454,21 +1495,13 @@ def _run_build_matrix(args: argparse.Namespace, policy: PolicyConfig, progress: 
         )
 
     progress(0, f"policy {policy.version} loaded")
-    resolve_kwargs: dict[str, object] = {"args": args, "db": db}
-    try:
-        import inspect
-
-        if "progress" in inspect.signature(_resolve_reference_frames).parameters:
-            resolve_kwargs["progress"] = progress
-    except Exception:
-        resolve_kwargs["progress"] = progress
     (
         schools_df,
         crosswalk_groups_df,
         crosswalk_synonyms_df,
         ref_inputs,
         ref_inputs_mtime,
-    ) = _resolve_reference_frames(**resolve_kwargs)
+    ) = _resolve_reference_frames(args=args, db=db, progress=progress)
     insp_df, pool_inputs, pool_inputs_mtime = _resolve_mentor_pool_frame(
         args, policy, db=db, pool_arg="inspactor", pool_source="inspactor"
     )
@@ -1482,8 +1515,8 @@ def _run_build_matrix(args: argparse.Namespace, policy: PolicyConfig, progress: 
         insp_df = apply_manager_mentor_governance(
             insp_df,
             governance_cfg,
-            mentor_overrides=mentor_overrides,
-            manager_overrides=manager_overrides,
+            mentor_overrides=cast(Mapping[int | str | float, bool], mentor_overrides),
+            manager_overrides=cast(Mapping[int | str | float, bool], manager_overrides),
         )
 
     inputs = {**pool_inputs, **ref_inputs}
@@ -1624,7 +1657,7 @@ def _run_build_matrix(args: argparse.Namespace, policy: PolicyConfig, progress: 
                 group_coverage_df["status"].isin(["candidate_only", "blocked_candidate"])
             ]
         sheets["group_coverage_unseen"] = unseen_slice
-    header_internal = policy.excel.header_mode_internal
+    header_internal = _coerce_header_mode(policy.excel.header_mode_internal)
     prepared_sheets = {
         name: canonicalize_headers(df, header_mode=header_internal) for name, df in sheets.items()
     }
@@ -1634,7 +1667,7 @@ def _run_build_matrix(args: argparse.Namespace, policy: PolicyConfig, progress: 
         rtl=policy.excel.rtl,
         font_name=policy.excel.font_name,
         font_size=policy.excel.font_size,
-        header_mode=policy.excel.header_mode_write,
+        header_mode=_coerce_header_mode(policy.excel.header_mode_write),
     )
     progress(100, "done")
     return 0
@@ -1712,7 +1745,9 @@ def _load_matrix_candidate_pool(matrix_path: Path, policy: PolicyConfig) -> pd.D
     except Exception as exc:  # pragma: no cover - خطای خواندن پیش‌بینی‌نشده
         raise ValueError(f"خطا در خواندن ماتریس {matrix_path}: {exc}") from exc
 
-    return canonicalize_headers(frame, header_mode=policy.excel.header_mode_internal)
+    return canonicalize_headers(
+        frame, header_mode=_coerce_header_mode(policy.excel.header_mode_internal)
+    )
 
 
 def _prepare_allocation_frames(
@@ -1725,13 +1760,14 @@ def _prepare_allocation_frames(
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """نرمال‌سازی ستون‌های ورودی برای اجرای تخصیص."""
 
-    return canonicalize_allocation_frames(
+    students_clean, pool_clean = canonicalize_allocation_frames(
         students_df,
         pool_df,
         policy=policy,
         sanitize_pool=sanitize_pool,
         pool_source=pool_source,
     )
+    return students_clean, pool_clean
 
 
 def _sanitize_pool_for_allocation(pool_df: pd.DataFrame, *, policy: PolicyConfig) -> pd.DataFrame:
@@ -1798,7 +1834,7 @@ def _allocate_and_write(
     run_uuid = uuid4().hex
     started_at = datetime.now(UTC)
     cli_args_text = " ".join(getattr(args, "_raw_argv", [])).strip() or None
-    qa_report: object | None = None
+    qa_report: QaReport | None = None
     history_metrics_df: pd.DataFrame | None = None
     success = False
     status_message = "success"
@@ -1830,7 +1866,7 @@ def _allocate_and_write(
             strict_center_validation=strict_validation,
         )
 
-        header_internal: HeaderMode = policy.excel.header_mode_internal  # type: ignore[assignment]
+        header_internal: HeaderMode = _coerce_header_mode(policy.excel.header_mode_internal)
 
         def _attach_student_id(frame: pd.DataFrame, ensure_existing: bool = False) -> pd.DataFrame:
             en_frame = canonicalize_headers(frame, header_mode="en")
@@ -2010,7 +2046,7 @@ def _allocate_and_write(
             sheets[name] = _make_excel_safe(df)
             header_overrides[name] = None
 
-        header_internal = policy.excel.header_mode_internal
+        header_internal = _coerce_header_mode(policy.excel.header_mode_internal)
         prepared_sheets: dict[str, pd.DataFrame] = {}
         for name, df in sheets.items():
             if header_overrides.get(name) is None:
@@ -2023,7 +2059,7 @@ def _allocate_and_write(
             rtl=policy.excel.rtl,
             font_name=policy.excel.font_name,
             font_size=policy.excel.font_size,
-            header_mode=policy.excel.header_mode_write,
+            header_mode=_coerce_header_mode(policy.excel.header_mode_write),
             sheet_header_modes=header_overrides,
             sheet_prepare_modes=prepare_overrides,
         )
@@ -2043,7 +2079,7 @@ def _allocate_and_write(
                 strict_center_validation=strict_validation,
             )
 
-            header_internal = policy.excel.header_mode_internal
+            header_internal = _coerce_header_mode(policy.excel.header_mode_internal)
 
             def _canon(df: pd.DataFrame) -> pd.DataFrame:
                 return canonicalize_headers(df, header_mode=header_internal).reset_index(drop=True)
@@ -2642,7 +2678,7 @@ def main(
     build_runner: Callable[[argparse.Namespace, PolicyConfig, ProgressFn], int] | None = None,
     allocate_runner: Callable[[argparse.Namespace, PolicyConfig, ProgressFn], int] | None = None,
     rule_engine_runner: Callable[[argparse.Namespace, PolicyConfig, ProgressFn], int] | None = None,
-    ui_overrides: dict[str, object] | None = None,
+    ui_overrides: dict[str, Any] | None = None,
 ) -> int:
     """نقطهٔ ورود CLI؛ خروجی ۰ به معنای موفقیت است."""
     parser = _build_parser()
