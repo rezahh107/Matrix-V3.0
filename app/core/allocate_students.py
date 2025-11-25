@@ -310,7 +310,7 @@ def _resolve_mentor_state_entry(
 
 
 def _stringify_mentor_state(
-    mentor_state: Mapping[Any, Mapping[str, int]]
+    mentor_state: Mapping[Any, Mapping[str, int]],
 ) -> dict[str, Mapping[str, int]]:
     """Normalize mentor state keys to stable strings for lookups and logs."""
 
