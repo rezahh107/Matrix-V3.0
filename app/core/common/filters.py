@@ -36,7 +36,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from numbers import Number
+from typing import Protocol
 
 import numpy as np
 import pandas as pd
@@ -81,10 +81,12 @@ def _coerce_school_candidate(candidate: object) -> tuple[int | None, bool]:
 
     if candidate is None or candidate is pd.NA:
         return None, True
-    if isinstance(candidate, Number) and not isinstance(candidate, bool):
-        if pd.isna(candidate):  # type: ignore[arg-type]
+    if isinstance(candidate, (int, float, np.integer, np.floating)) and not isinstance(
+        candidate, bool
+    ):
+        if pd.isna(candidate):
             return None, True
-        return int(candidate), False
+        return int(float(candidate)), False
     if isinstance(candidate, (bytes, bytearray)):
         try:
             candidate = candidate.decode("utf-8", "ignore")
@@ -172,15 +174,16 @@ def resolve_student_school_code(
     return StudentSchoolCode(value=None, missing=True, wildcard=False)
 
 
-FilterFunc = Callable[
-    [
-        pd.DataFrame,
-        Mapping[str, object],
-        PolicyConfig,
-        Mapping[str, int] | None,
-    ],
-    pd.DataFrame,
-]
+class FilterFunc(Protocol):
+    def __call__(
+        self,
+        pool: pd.DataFrame,
+        student: Mapping[str, object],
+        policy: PolicyConfig,
+        *,
+        student_join_map: Mapping[str, int] | None = None,
+    ) -> pd.DataFrame:
+        ...
 FilterTracker = Callable[[str, int], None]
 
 __all__ = [
@@ -215,10 +218,12 @@ def _coerce_center_candidate(candidate: object) -> int | None:
 
     if candidate is None or candidate is pd.NA:
         return None
-    if isinstance(candidate, Number) and not isinstance(candidate, bool):
-        if pd.isna(candidate):  # type: ignore[arg-type]
+    if isinstance(candidate, (int, float, np.integer, np.floating)) and not isinstance(
+        candidate, bool
+    ):
+        if pd.isna(candidate):
             return None
-        return int(candidate)
+        return int(float(candidate))
     text = to_numlike_str(candidate)
     if text is None:
         return None
@@ -247,7 +252,7 @@ def _center_wildcard(policy: PolicyConfig) -> int | None:
     wildcard = policy.center_map.get("*")
     if wildcard is None:
         return None
-    return int(wildcard)
+    return _coerce_center_candidate(wildcard)
 
 
 def _is_center_wildcard(value: int | None, policy: PolicyConfig) -> bool:
@@ -277,6 +282,7 @@ def _filter_by_stage(
 ) -> pd.DataFrame:
     column = policy.stage_column(stage)
     normalized = column.replace(" ", "_")
+    value: object
     if student_join_map and normalized in student_join_map:
         value = student_join_map[normalized]
     else:

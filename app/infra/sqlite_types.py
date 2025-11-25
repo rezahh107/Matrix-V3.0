@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
+from typing import SupportsFloat, SupportsInt, SupportsIndex, cast
 
 import numpy as np
 import pandas as pd
@@ -35,11 +36,15 @@ def coerce_int_like(value: object) -> int | pd.NA:
             return int(float(stripped))
         except ValueError:
             return pd.NA
+    if isinstance(value, (int, float, np.integer, np.floating)):
+        return int(value)
     try:
-        return int(value)  # type: ignore[arg-type]
+        int_candidate = cast(SupportsInt | SupportsIndex, value)
+        return int(int_candidate)
     except (TypeError, ValueError):
         try:
-            return int(float(value))  # type: ignore[arg-type]
+            float_candidate = cast(SupportsFloat, value)
+            return int(float(float_candidate))
         except (TypeError, ValueError):
             return pd.NA
 
