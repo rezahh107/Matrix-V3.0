@@ -1291,7 +1291,7 @@ def ensure_template_workbook(template_path: str | Path, exporter_cfg: Mapping[st
             return [str(value) for value in sheet_cfg]
         return []
 
-    def _write_headers(ws: "Worksheet", columns: Sequence[str]) -> None:
+    def _write_headers(ws: Worksheet, columns: Sequence[str]) -> None:
         if not columns:
             return
         for col_idx, column_name in enumerate(columns, start=1):
@@ -1318,7 +1318,7 @@ def ensure_template_workbook(template_path: str | Path, exporter_cfg: Mapping[st
     return path
 
 
-def _write_dataframe_to_sheet(ws: "Worksheet", df: pd.DataFrame) -> None:
+def _write_dataframe_to_sheet(ws: Worksheet, df: pd.DataFrame) -> None:
     if df is None:
         return
     if ws.max_row > 1:
@@ -1344,7 +1344,7 @@ def _headers_equivalent(template: Sequence[str], expected: Sequence[str]) -> boo
     return normalized_template == normalized_expected
 
 
-def _rewrite_sheet_headers(ws: "Worksheet", expected: Sequence[str]) -> None:
+def _rewrite_sheet_headers(ws: Worksheet, expected: Sequence[str]) -> None:
     for col_idx, value in enumerate(expected, start=1):
         ws.cell(row=1, column=col_idx, value=value)
     max_col = ws.max_column
@@ -1354,7 +1354,7 @@ def _rewrite_sheet_headers(ws: "Worksheet", expected: Sequence[str]) -> None:
 
 
 def _verify_headers(
-    ws: "Worksheet",
+    ws: Worksheet,
     expected: Sequence[str],
     *,
     on_mismatch: Callable[[str, Sequence[str], Sequence[str]], None] | None = None,
