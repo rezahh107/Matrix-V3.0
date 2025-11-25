@@ -6,38 +6,50 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any, cast
 
-try:  # pragma: no cover - وابستگی Qt ممکن است در CI غایب باشد
-    from PySide6.QtCore import Qt
-    from PySide6.QtWidgets import (
-        QDialog,
-        QGridLayout,
-        QHBoxLayout,
-        QHeaderView,
-        QLabel,
-        QMessageBox,
-        QPushButton,
-        QTableWidget,
-        QTableWidgetItem,
-        QVBoxLayout,
-        QWidget,
-    )
-
-    _QT_AVAILABLE = True
-except Exception as exc:  # pragma: no cover - fallback
-    Qt = None
-    QDialog = object
-    QGridLayout = QHeaderView = QLabel = QMessageBox = QPushButton = QTableWidget = (
-        QTableWidgetItem
-    ) = QVBoxLayout = QWidget = cast(Any, None)
-    _QT_AVAILABLE = False
-    _QT_IMPORT_ERROR = exc
-
 from app.infra.local_database import (
     DatabaseSchemaDiagnostics,
     LocalDatabase,
     TableSchemaDiagnostics,
 )
 from app.infra.year_database_manager import YearDatabaseInfo
+
+Qt: Any
+QDialog: type[object]
+QGridLayout: type[object]
+QHBoxLayout: type[object]
+QHeaderView: type[object]
+QLabel: type[object]
+QMessageBox: type[object]
+QPushButton: type[object]
+QTableWidget: type[object]
+QTableWidgetItem: type[object]
+QVBoxLayout: type[object]
+QWidget: type[object]
+
+try:  # pragma: no cover - وابستگی Qt ممکن است در CI غایب باشد
+    import PySide6.QtCore as QtCore
+    import PySide6.QtWidgets as QtWidgets
+except Exception as exc:  # pragma: no cover - fallback
+    Qt = cast(Any, None)
+    QDialog = QGridLayout = QHBoxLayout = QHeaderView = QLabel = QMessageBox = QPushButton = (
+        QTableWidget
+    ) = QTableWidgetItem = QVBoxLayout = QWidget = cast(type[object], object)
+    _QT_AVAILABLE = False
+    _QT_IMPORT_ERROR = exc
+else:
+    Qt = QtCore.Qt
+    QDialog = QtWidgets.QDialog
+    QGridLayout = QtWidgets.QGridLayout
+    QHBoxLayout = QtWidgets.QHBoxLayout
+    QHeaderView = QtWidgets.QHeaderView
+    QLabel = QtWidgets.QLabel
+    QMessageBox = QtWidgets.QMessageBox
+    QPushButton = QtWidgets.QPushButton
+    QTableWidget = QtWidgets.QTableWidget
+    QTableWidgetItem = QtWidgets.QTableWidgetItem
+    QVBoxLayout = QtWidgets.QVBoxLayout
+    QWidget = QtWidgets.QWidget
+    _QT_AVAILABLE = True
 
 __all__ = ["DatabaseManagerDialog", "_QT_AVAILABLE"]
 
