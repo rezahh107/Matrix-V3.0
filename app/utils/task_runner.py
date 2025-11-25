@@ -7,7 +7,7 @@ import traceback
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Any, Callable as TypingCallable
+from typing import Any
 
 from PySide6.QtCore import QObject, QThread, Signal, SignalInstance
 
@@ -36,7 +36,7 @@ class TaskRunner(QObject):
     progress = Signal(int, str)  # (درصد، پیام)
     finished = Signal(object)
 
-    def __init__(self, task_func: TypingCallable[..., Any], *args: Any, **kwargs: Any):
+    def __init__(self, task_func: Callable[..., Any], *args: Any, **kwargs: Any):
         super().__init__()
         self.task_func = task_func
         self.args = args

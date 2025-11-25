@@ -97,7 +97,7 @@ def build_xlsxwriter_table(df: pd.DataFrame, table_name: str) -> dict[str, objec
     }
 
 
-def build_openpyxl_table(table_name: str, ref: str, headers: list[str]) -> "Table":
+def build_openpyxl_table(table_name: str, ref: str, headers: list[str]) -> Table:
     """ساخت نمونهٔ جدول openpyxl با استایل خنثی و هدر یکتا."""
 
     from openpyxl.worksheet.table import Table, TableColumn, TableStyleInfo

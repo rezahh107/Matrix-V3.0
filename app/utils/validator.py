@@ -5,11 +5,9 @@
 from collections.abc import Callable
 from functools import wraps
 from pathlib import Path
-
 from typing import ParamSpec, TypeVar
 
 import pandas as pd
-
 
 P = ParamSpec("P")
 R = TypeVar("R")
