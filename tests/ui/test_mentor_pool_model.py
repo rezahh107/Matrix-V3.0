@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-pytest.importorskip("PySide6")
+pytest.importorskip(
+    "PySide6.QtWidgets",
+    reason="PySide6 GUI stack requires libGL/libEGL.",
+    exc_type=ImportError,
+)
 
 from PySide6.QtCore import QModelIndex
 
