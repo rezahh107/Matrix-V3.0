@@ -108,6 +108,16 @@ _RANKING_RULE_LIBRARY: Mapping[str, tuple[str, bool]] = {
 
 RankingRuleRaw = Mapping[str, object] | str
 
+RawPolicy = Mapping[str, object]
+RawExcelOptions = Mapping[str, object]
+RawCoverageOptions = Mapping[str, object]
+RawSelectionReasonOptions = Mapping[str, object]
+RawEmissionOptions = Mapping[str, object]
+RawCenterManagement = Mapping[str, object]
+RawMentorPoolGovernance = Mapping[str, object]
+RawMentorSchoolBinding = Mapping[str, object]
+RawGenderConfig = Mapping[str, Mapping[str, object]]
+
 _VALID_FAIRNESS_STRATEGIES: tuple[str, ...] = (
     "none",
     "deterministic_jitter",
@@ -350,7 +360,7 @@ class PolicyConfig:
     ranking_rules: list[RankingRule]
     trace_stages: list[TraceStageDefinition]
     gender_codes: GenderCodes
-    postal_valid_range: tuple[int, int]
+    postal_valid_range: tuple[int, int] | None
     finance_variants: tuple[int, ...]
     center_map: Mapping[str, int]
     school_code_empty_as_zero: bool
@@ -445,7 +455,7 @@ class TraceStageDefinition:
     column: str
 
 
-def _normalize_policy_payload(data: Mapping[str, object]) -> Mapping[str, object]:
+def _normalize_policy_payload(data: RawPolicy) -> Mapping[str, object]:
     data = _apply_schema_defaults(dict(data))
     required = [
         "version",
@@ -576,14 +586,16 @@ def _ensure_int_sequence(name: str, value: object) -> list[int]:
 
 
 def _normalize_postal_valid_range(value: object) -> tuple[int, int]:
-    if not isinstance(value, Sequence) or isinstance(value, (str, bytes)) or len(value) != 2:
+    if not isinstance(value, (list, tuple)) or len(value) != 2:
         raise TypeError("postal_valid_range must be a sequence of two ints")
-    start, end = value
-    if not isinstance(start, int) or not isinstance(end, int):
-        raise TypeError("postal_valid_range items must be int")
+    try:
+        start = int(value[0])
+        end = int(value[1])
+    except (TypeError, ValueError) as exc:
+        raise TypeError("postal_valid_range items must be int") from exc
     if start > end:
         raise ValueError("postal_valid_range start must be <= end")
-    return int(start), int(end)
+    return start, end
 
 
 def _normalize_finance_variants(value: object) -> tuple[int, ...]:
@@ -1144,21 +1156,55 @@ def _version_gate(
         warnings.warn(message, RuntimeWarning, stacklevel=3)
 
 
-def _to_config(data: Mapping[str, object]) -> PolicyConfig:
+def _to_config(data: RawPolicy) -> PolicyConfig:
     allocation_channels_obj = cast(AllocationChannelConfig, data["allocation_channels"])
+
+    postal_range = _normalize_postal_valid_range(data["postal_valid_range"])
+
+    normal_statuses_raw = data["normal_statuses"]
+    school_statuses_raw = data["school_statuses"]
+    join_keys_raw = data["join_keys"]
+    required_student_fields_raw = data["required_student_fields"]
+    ranking_rules_raw = data["ranking_rules"]
+    trace_stages_raw = data["trace_stages"]
+    finance_variants_raw = data["finance_variants"]
+    center_map_raw = data["center_map"]
+
+    if not isinstance(normal_statuses_raw, Sequence) or isinstance(
+        normal_statuses_raw, (str, bytes)
+    ):
+        raise TypeError("normal_statuses must be a sequence")
+    if not isinstance(school_statuses_raw, Sequence) or isinstance(
+        school_statuses_raw, (str, bytes)
+    ):
+        raise TypeError("school_statuses must be a sequence")
+    if not isinstance(join_keys_raw, Sequence) or isinstance(join_keys_raw, (str, bytes)):
+        raise TypeError("join_keys must be a sequence")
+    if not isinstance(required_student_fields_raw, Sequence) or isinstance(
+        required_student_fields_raw, (str, bytes)
+    ):
+        raise TypeError("required_student_fields must be a sequence")
+    if not isinstance(ranking_rules_raw, Sequence):
+        raise TypeError("ranking_rules must be a sequence")
+    if not isinstance(trace_stages_raw, Sequence):
+        raise TypeError("trace_stages must be a sequence")
+    if not isinstance(finance_variants_raw, Sequence):
+        raise TypeError("finance_variants must be a sequence")
+    if not isinstance(center_map_raw, Mapping):
+        raise TypeError("center_map must be a mapping")
 
     return PolicyConfig(
         version=str(data["version"]),
-        normal_statuses=[int(item) for item in data["normal_statuses"]],  # type: ignore[index]
-        school_statuses=[int(item) for item in data["school_statuses"]],  # type: ignore[index]
-        join_keys=[str(item) for item in data["join_keys"]],  # type: ignore[index]
-        required_student_fields=[str(item) for item in data["required_student_fields"]],
-        ranking_rules=[_to_ranking_rule(item) for item in data["ranking_rules"]],
-        trace_stages=[_to_trace_stage(item) for item in data["trace_stages"]],
+        normal_statuses=[int(item) for item in normal_statuses_raw],
+        school_statuses=[int(item) for item in school_statuses_raw],
+        join_keys=[str(item) for item in join_keys_raw],
+        required_student_fields=[str(item) for item in required_student_fields_raw],
+        ranking_rules=[_to_ranking_rule(item) for item in ranking_rules_raw],
+        trace_stages=[_to_trace_stage(item) for item in trace_stages_raw],
         gender_codes=_to_gender_codes(data["gender_codes"]),
-        postal_valid_range=tuple(int(item) for item in data["postal_valid_range"]),
-        finance_variants=tuple(int(item) for item in data["finance_variants"]),
-        center_map={str(k): int(v) for k, v in data["center_map"].items()},
+        postal_valid_range=postal_range,
+        finance_variants=tuple(int(item) for item in finance_variants_raw),
+        center_map={str(k): int(v) for k, v in center_map_raw.items()},
         school_code_empty_as_zero=bool(data["school_code_empty_as_zero"]),
         prefer_major_code=bool(data["prefer_major_code"]),
         coverage_threshold=float(data["coverage_threshold"]),
@@ -1214,7 +1260,9 @@ def _to_trace_stage(item: Mapping[str, object]) -> TraceStageDefinition:
     return TraceStageDefinition(stage=str(item["stage"]), column=str(item["column"]))
 
 
-def _to_center_management_config(data: Mapping[str, object]) -> CenterManagementConfig:
+def _to_center_management_config(data: RawCenterManagement) -> CenterManagementConfig:
+    if not isinstance(data, Mapping):
+        raise TypeError("center_management must be a mapping")
     centers_payload = data.get("centers") or []
     centers: list[CenterConfig] = []
     for entry in centers_payload:
@@ -1243,7 +1291,10 @@ def _to_center_management_config(data: Mapping[str, object]) -> CenterManagement
     )
 
 
-def _to_mentor_school_binding(data: Mapping[str, object]) -> MentorSchoolBindingPolicy:
+def _to_mentor_school_binding(data: RawMentorSchoolBinding) -> MentorSchoolBindingPolicy:
+    if not isinstance(data, Mapping):
+        raise TypeError("mentor_school_binding must be a mapping")
+
     tokens = data.get(
         "empty_tokens", data.get("empty_placeholders", ("", "0", "-", "—", "_", "nan", "NaN"))
     )
@@ -1254,7 +1305,10 @@ def _to_mentor_school_binding(data: Mapping[str, object]) -> MentorSchoolBinding
     )
 
 
-def _to_mentor_pool_governance(data: Mapping[str, object]) -> MentorPoolGovernanceConfig:
+def _to_mentor_pool_governance(data: RawMentorPoolGovernance) -> MentorPoolGovernanceConfig:
+    if not isinstance(data, Mapping):
+        raise TypeError("mentor_pool_governance must be a mapping")
+
     allowed_raw = data.get("allowed_statuses") or (
         MentorStatus.ACTIVE.value,
         MentorStatus.INACTIVE.value,
@@ -1285,14 +1339,20 @@ def _to_mentor_pool_governance(data: Mapping[str, object]) -> MentorPoolGovernan
     )
 
 
-def _to_gender_codes(payload: Mapping[str, Mapping[str, object]]) -> GenderCodes:
+def _to_gender_codes(payload: RawGenderConfig) -> GenderCodes:
     """تبدیل ساختار gender_codes در policy به GenderCodes."""
+
+    if not isinstance(payload, Mapping):
+        raise TypeError("gender_codes must be a mapping")
 
     try:
         male_payload = payload["male"]
         female_payload = payload["female"]
     except KeyError as exc:  # pragma: no cover - نگهبان مهاجرت
         raise ValueError("Policy missing gender_codes.male/female definitions") from exc
+
+    if not isinstance(male_payload, Mapping) or not isinstance(female_payload, Mapping):
+        raise TypeError("gender_codes entries must be mappings")
 
     def _parse(entry: Mapping[str, object]) -> GenderCode:
         if "value" not in entry or "counter_code" not in entry:
@@ -1311,7 +1371,7 @@ def _to_gender_codes(payload: Mapping[str, Mapping[str, object]]) -> GenderCodes
 
 
 def parse_policy_dict(
-    data: Mapping[str, object],
+    data: RawPolicy,
     expected_version: str | None = DEFAULT_POLICY_VERSION,
     on_version_mismatch: VersionMismatchMode = "raise",
 ) -> PolicyConfig:
@@ -1391,8 +1451,13 @@ def _apply_schema_defaults(data: dict[str, object]) -> dict[str, object]:
     return data
 
 
-def _normalize_excel_options(payload: Mapping[str, object]) -> dict[str, object]:
+def _normalize_excel_options(payload: RawExcelOptions | None) -> dict[str, object]:
     """اعتبارسنجی و نرمال‌سازی گزینه‌های Excel."""
+
+    if payload is None:
+        payload = _DEFAULT_EXCEL_OPTIONS
+    elif not isinstance(payload, Mapping):
+        raise TypeError("excel options must be provided as a mapping")
 
     rtl = bool(payload.get("rtl", _DEFAULT_EXCEL_OPTIONS["rtl"]))
     font_name = str(payload.get("font_name", _DEFAULT_EXCEL_OPTIONS["font_name"]))
@@ -1416,10 +1481,12 @@ def _normalize_excel_options(payload: Mapping[str, object]) -> dict[str, object]
     }
 
 
-def _normalize_coverage_options(payload: Mapping[str, object]) -> dict[str, object]:
+def _normalize_coverage_options(payload: RawCoverageOptions | None) -> dict[str, object]:
     """اعتبارسنجی تنظیمات پوشش ماتریس."""
 
-    if not isinstance(payload, Mapping):
+    if payload is None:
+        payload = {}
+    elif not isinstance(payload, Mapping):
         raise TypeError("matrix.coverage must be a mapping")
     denominator_mode = str(payload.get("denominator_mode", "mentors"))
     allowed_modes = {
@@ -1446,7 +1513,7 @@ def _parse_status_value(value: object) -> str:
     return status.value
 
 
-def _normalize_mentor_pool_governance(raw: object | None) -> Mapping[str, object]:
+def _normalize_mentor_pool_governance(raw: RawMentorPoolGovernance | None) -> Mapping[str, object]:
     if raw is None:
         raw = {}
     if not isinstance(raw, Mapping):
@@ -1570,7 +1637,10 @@ def _normalize_label_tuple(value: object, fallback: object) -> tuple[str, ...]:
     return tuple(options) if options else ("",)
 
 
-def _to_selection_reason_options(data: Mapping[str, object]) -> SelectionReasonOptions:
+def _to_selection_reason_options(data: RawSelectionReasonOptions) -> SelectionReasonOptions:
+    if not isinstance(data, Mapping):
+        raise TypeError("selection_reasons must be a mapping")
+
     enabled = bool(data.get("enabled", True))
     sheet_name = str(data.get("sheet_name", _DEFAULT_SELECTION_REASON_OPTIONS["sheet_name"]))
     template = str(data.get("template", _DEFAULT_SELECTION_REASON_OPTIONS["template"]))
@@ -1591,7 +1661,7 @@ def _to_selection_reason_options(data: Mapping[str, object]) -> SelectionReasonO
     )
 
 
-def _to_emission_options(data: Mapping[str, object]) -> EmissionOptions:
+def _to_emission_options(data: RawEmissionOptions) -> EmissionOptions:
     if not isinstance(data, Mapping):
         data = {}
     selection = data.get("selection_reasons", {})
@@ -1601,7 +1671,7 @@ def _to_emission_options(data: Mapping[str, object]) -> EmissionOptions:
 
 
 def _prepare_policy_payload(
-    data: Mapping[str, object],
+    data: RawPolicy,
     expected_version: str | None,
     mode: VersionMismatchMode,
 ) -> Mapping[str, object]:

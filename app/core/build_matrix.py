@@ -588,7 +588,10 @@ def _validate_alias_contract(matrix: pd.DataFrame, *, cfg: BuildConfig) -> None:
     if not invalid_pattern.empty:
         raise AssertionError("Normal rows must use 4-digit postal alias")
 
-    min_postal, max_postal = cfg.postal_valid_range
+    postal_range = cfg.postal_valid_range
+    if postal_range is None:
+        raise ValueError("postal_valid_range is required for alias validation")
+    min_postal, max_postal = postal_range
     alias_numeric = alias_normal.map(lambda v: safe_int_value(v, default=0))
     invalid_range = alias_numeric[(alias_numeric < min_postal) | (alias_numeric > max_postal)]
     if not invalid_range.empty:
