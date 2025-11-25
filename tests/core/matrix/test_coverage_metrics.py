@@ -5,7 +5,6 @@ from app.core.build_matrix import (
     CAPACITY_CURRENT_COL,
     CAPACITY_SPECIAL_COL,
     BuildConfig,
-    _as_domain_config,
     _explode_rows,
     center_text,
 )
@@ -287,7 +286,6 @@ def test_coverage_metrics_regression_many_invalid_tokens_all_viable_groups_cover
 
 def test_coverage_metrics_normalizes_blank_gender_and_status_to_zero() -> None:
     cfg = BuildConfig()
-    domain_cfg = _as_domain_config(cfg)
 
     base_df = pd.DataFrame(
         [
@@ -330,7 +328,6 @@ def test_coverage_metrics_normalizes_blank_gender_and_status_to_zero() -> None:
         type_label="عادی",
         code_to_name_school={},
         cfg=cfg,
-        domain_cfg=domain_cfg,
         cap_current_col=cap_current_col,
         cap_special_col=cap_special_col,
         remaining_col=remaining_col,
@@ -367,7 +364,6 @@ def test_coverage_metrics_normalizes_blank_gender_and_status_to_zero() -> None:
 
 def test_coverage_metrics_normalizes_missing_join_keys_to_zero_int64() -> None:
     cfg = BuildConfig()
-    domain_cfg = _as_domain_config(cfg)
 
     base_df = pd.DataFrame(
         [
@@ -410,7 +406,6 @@ def test_coverage_metrics_normalizes_missing_join_keys_to_zero_int64() -> None:
         type_label="عادی",
         code_to_name_school={},
         cfg=cfg,
-        domain_cfg=domain_cfg,
         cap_current_col=cap_current_col,
         cap_special_col=cap_special_col,
         remaining_col=remaining_col,
