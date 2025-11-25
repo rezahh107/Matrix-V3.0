@@ -7,7 +7,6 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 # mypy: follow_imports = skip
-
 from app.core.policy_loader import PolicyConfig, load_policy
 
 from .types import TraceStageFlags, TraceStageName, ensure_trace_stage_name

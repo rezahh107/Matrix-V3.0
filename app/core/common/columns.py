@@ -1,15 +1,14 @@
 """ابزار استانداردسازی ستون‌ها و اعمال اجباری سیاست ستون‌ها."""
 
 from __future__ import annotations
-# mypy: follow_imports=skip
 
+# mypy: follow_imports=skip
 import re
 from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Literal
 
 # mypy: follow_imports = skip
-
 import pandas as pd
 
 from app.core.policy_loader import get_policy

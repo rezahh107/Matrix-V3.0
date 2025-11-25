@@ -33,7 +33,6 @@ from numbers import Number
 from typing import Any
 
 # mypy: follow_imports = skip
-
 import pandas as pd
 
 from ..policy_loader import PolicyConfig, load_policy

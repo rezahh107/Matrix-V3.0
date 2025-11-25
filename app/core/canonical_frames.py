@@ -8,7 +8,6 @@ from dataclasses import dataclass
 from typing import Any
 
 # mypy: follow_imports=skip
-
 import pandas as pd
 
 from .common.column_normalizer import normalize_input_columns
