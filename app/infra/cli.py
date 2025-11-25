@@ -1467,6 +1467,10 @@ def _inject_student_ids(
     }
     summary.update(counters.attrs.get("counter_summary", {}))
 
+    student_ids = counters.reindex(students_df.index).astype("string")
+    students_df = students_df.copy()
+    students_df["student_id"] = student_ids
+
     print(
         "[Counter] reused={reused_count} new_male={new_male_count} "
         "new_female={new_female_count} next_male_start={next_male_start} "
