@@ -182,8 +182,9 @@ class FilterFunc(Protocol):
         policy: PolicyConfig,
         *,
         student_join_map: Mapping[str, int] | None = None,
-    ) -> pd.DataFrame:
-        ...
+    ) -> pd.DataFrame: ...
+
+
 FilterTracker = Callable[[str, int], None]
 
 __all__ = [
