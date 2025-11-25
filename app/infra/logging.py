@@ -249,15 +249,21 @@ def install_exception_hook(logger: logging.Logger, context: LoggingContext) -> C
 
     def _log_exception(
         exc_type: type[BaseException],
-        exc_value: BaseException,
+        exc_value: BaseException | None,
         exc_tb: TracebackType | None,
         source: str,
     ) -> None:
         error_id = context.new_error_id()
-        traceback_text = "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
+        if exc_value is None:
+            traceback_parts = traceback.format_exception_only(exc_type)
+            message_value: str = exc_type.__name__
+        else:
+            traceback_parts = traceback.format_exception(exc_type, exc_value, exc_tb)
+            message_value = str(exc_value)
+        traceback_text = "".join(traceback_parts)
         report_path = context.write_error_report(
             error_id=error_id,
-            message=f"{source}: {exc_value}",
+            message=f"{source}: {message_value}",
             traceback_text=traceback_text,
         )
         logger.critical(
@@ -286,12 +292,12 @@ def install_exception_hook(logger: logging.Logger, context: LoggingContext) -> C
 
     sys.excepthook = handle_exception
     if has_thread_hook:
-        threading.excepthook = handle_thread_exception  # type: ignore[assignment]
+        threading.excepthook = handle_thread_exception
 
     def restore() -> None:
         sys.excepthook = previous_sys_hook
         if has_thread_hook and previous_thread_hook is not None:
-            threading.excepthook = previous_thread_hook  # type: ignore[assignment]
+            threading.excepthook = previous_thread_hook
 
     return restore
 
