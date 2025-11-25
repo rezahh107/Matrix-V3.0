@@ -129,7 +129,7 @@ class Theme:
         base = QColor(self.colors.primary)
         soft = QColor(base)
         soft.setAlphaF(0.1)
-        return soft.name(QColor.HexArgb)
+        return soft.name(QColor.NameFormat.HexArgb)
 
     # Backward-friendly names for legacy call sites
     @property
@@ -260,9 +260,9 @@ def apply_layout_direction(app: QApplication, language: Language | str) -> None:
 
     lang_enum = language if isinstance(language, Language) else Language.from_code(language)
     if lang_enum is Language.FA:
-        app.setLayoutDirection(Qt.RightToLeft)
+        app.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
     else:
-        app.setLayoutDirection(Qt.LeftToRight)
+        app.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
 
 
 def apply_card_shadow(widget: QWidget) -> None:
@@ -296,16 +296,16 @@ class _HoverAnimationFilter(QObject):
         super().__init__(parent)
         self._button = button
         self._animation = QPropertyAnimation(button, b"windowOpacity", self)
-        self._animation.setEasingCurve(QEasingCurve.InOutQuad)
+        self._animation.setEasingCurve(QEasingCurve.Type.InOutQuad)
         self._animation.setDuration(120)
 
     def eventFilter(self, obj: QObject, event) -> bool:  # type: ignore[override]  # noqa: N802 - امضای Qt
         from PySide6.QtCore import QEvent
 
         if obj is self._button:
-            if event.type() == QEvent.Enter:
+            if event.type() == QEvent.Type.Enter:
                 self._fade_to(0.94)
-            elif event.type() == QEvent.Leave:
+            elif event.type() == QEvent.Type.Leave:
                 self._fade_to(1.0)
         return super().eventFilter(obj, event)
 

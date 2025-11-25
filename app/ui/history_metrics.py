@@ -4,7 +4,15 @@ from __future__ import annotations
 
 import pandas as pd
 from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt
-from PySide6.QtWidgets import QDialog, QHBoxLayout, QLabel, QTableView, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QAbstractItemView,
+    QDialog,
+    QHBoxLayout,
+    QLabel,
+    QTableView,
+    QVBoxLayout,
+    QWidget,
+)
 
 from app.core.allocation.history_metrics import METRIC_COLUMNS
 
@@ -55,8 +63,10 @@ class HistoryMetricsModel(QAbstractTableModel):
             return 0
         return len(METRIC_COLUMNS)
 
-    def data(self, index: QModelIndex, role: int = Qt.DisplayRole):  # type: ignore[override]
-        if not index.isValid() or role not in {Qt.DisplayRole, Qt.EditRole}:
+    def data(
+        self, index: QModelIndex, role: int = Qt.ItemDataRole.DisplayRole
+    ) -> object | None:  # type: ignore[override]
+        if not index.isValid() or role not in {Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.EditRole}:
             return None
         value = self._metrics_df.iloc[index.row(), index.column()]
         if pd.isna(value):
@@ -69,11 +79,11 @@ class HistoryMetricsModel(QAbstractTableModel):
         return str(value)
 
     def headerData(  # noqa: N802 - امضای Qt
-        self, section: int, orientation: Qt.Orientation, role: int = Qt.DisplayRole
-    ):  # type: ignore[override]  # noqa: N802 - امضای Qt
-        if role != Qt.DisplayRole:
+        self, section: int, orientation: Qt.Orientation, role: int = Qt.ItemDataRole.DisplayRole
+    ) -> object | None:  # type: ignore[override]  # noqa: N802 - امضای Qt
+        if role != Qt.ItemDataRole.DisplayRole:
             return None
-        if orientation == Qt.Horizontal:
+        if orientation == Qt.Orientation.Horizontal:
             if 0 <= section < len(METRIC_COLUMNS):
                 return METRIC_COLUMNS[section]
         else:
@@ -89,13 +99,13 @@ class HistoryMetricsPanel(QWidget):
         self._model = HistoryMetricsModel()
         self._table = QTableView(self)
         self._table.setModel(self._model)
-        self._table.setSelectionMode(QTableView.NoSelection)
-        self._table.setEditTriggers(QTableView.NoEditTriggers)
+        self._table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
+        self._table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self._table.horizontalHeader().setStretchLastSection(True)
         self._table.verticalHeader().setVisible(False)
 
         self._empty_label = QLabel("No history metrics available", self)
-        self._empty_label.setAlignment(Qt.AlignCenter)
+        self._empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 12, 12, 12)

@@ -48,7 +48,7 @@ class LogPanel(QFrame):
             self._t("log.placeholder", "🗒️ هنوز گزارشی ثبت نشده است."),
             stack_host,
         )
-        self._placeholder.setAlignment(Qt.AlignCenter)
+        self._placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._placeholder.setObjectName("logPlaceholder")
         self._placeholder.setWordWrap(True)
         self._placeholder.setFont(get_app_font())
