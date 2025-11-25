@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QStackedLayout,
     QTextEdit,
     QVBoxLayout,
+    QWidget,
 )
 
 from app.ui.fonts import get_app_font
@@ -27,7 +28,7 @@ class LogPanel(QFrame):
     """ویجت ترکیبی برای نمایش و مدیریت لاگ."""
 
     def __init__(
-        self, translator: UiTranslator, theme: Theme, parent: QFrame | None = None
+        self, translator: UiTranslator, theme: Theme, parent: QWidget | None = None
     ) -> None:
         super().__init__(parent)
         self.setObjectName("logPanel")

@@ -308,6 +308,11 @@ class AppPreferences:
             raise ValueError("Language must be one of: " + ", ".join(sorted(SUPPORTED_LANGUAGES)))
         self._set_string("ui/language", normalized.code)
 
+    def set_language(self, value: Language | str) -> None:
+        """تنظیم زبان رابط کاربری با مسیر واضح‌تر برای mypy."""
+
+        self.language = value
+
     @property
     def theme(self) -> str:
         """نام تم انتخاب شده توسط کاربر (light/dark)."""

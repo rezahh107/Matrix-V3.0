@@ -12,6 +12,7 @@ from PySide6.QtCore import (
     QByteArray,
     QDateTime,
     QEasingCurve,
+    QEvent,
     QPropertyAnimation,
     QSettings,
     Qt,
@@ -25,8 +26,10 @@ from PySide6.QtGui import (
     QColor,
     QDesktopServices,
     QGuiApplication,
+    QEnterEvent,
     QKeySequence,
     QPalette,
+    QResizeEvent,
 )
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -188,8 +191,11 @@ class AccentSplitterHandle(QSplitterHandle):
         super().__init__(orientation, parent)
         self._theme = theme
         self._hover = False
-        self._grip = QLabel("⋮" if orientation == Qt.Vertical else "⋯", self)
-        self._grip.setAlignment(Qt.AlignCenter)
+        self._grip = QLabel(
+            "⋮" if orientation == Qt.Orientation.Vertical else "⋯",
+            self,
+        )
+        self._grip.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._grip.setMargin(0)
         self._grip.setContentsMargins(0, 0, 0, 0)
 
@@ -199,19 +205,19 @@ class AccentSplitterHandle(QSplitterHandle):
 
         self.setMouseTracking(True)
         self.setAutoFillBackground(True)
-        self.setAttribute(Qt.WA_StyledBackground, True)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self._apply_colors()
 
     def set_theme(self, theme: Theme) -> None:
         self._theme = theme
         self._apply_colors()
 
-    def enterEvent(self, event) -> None:  # type: ignore[override]  # noqa: N802 - امضای Qt
+    def enterEvent(self, event: QEnterEvent) -> None:  # noqa: N802 - امضای Qt
         self._hover = True
         super().enterEvent(event)
         self._apply_colors()
 
-    def leaveEvent(self, event) -> None:  # type: ignore[override]  # noqa: N802 - امضای Qt
+    def leaveEvent(self, event: QEvent) -> None:  # noqa: N802 - امضای Qt
         self._hover = False
         super().leaveEvent(event)
         self._apply_colors()
@@ -242,7 +248,7 @@ class AccentSplitter(QSplitter):
         self._theme = theme
         self.setHandleWidth(5)
 
-    def createHandle(self) -> QSplitterHandle:  # type: ignore[override]  # noqa: N802 - امضای Qt
+    def createHandle(self) -> QSplitterHandle:  # noqa: N802 - امضای Qt
         return AccentSplitterHandle(self.orientation(), self, self._theme)
 
     def set_theme(self, theme: Theme) -> None:
@@ -264,7 +270,7 @@ class MainWindow(QMainWindow):
             self._language = stored_language
         else:
             self._language = stored_language or Language.EN
-            self._prefs.language = self._language
+            self._prefs.set_language(self._language)
 
         self._translator = UiTranslator(self._language)
         self.setWindowTitle(self._translator.text("app.title", _EN_TEXT_DEFAULTS["app.title"]))
@@ -280,7 +286,7 @@ class MainWindow(QMainWindow):
         self._theme: Theme = self._load_theme(self._theme_name)
         self._theme_selector: QComboBox | None = None
         app = QApplication.instance()
-        if app is not None:
+        if app is not None and isinstance(app, QApplication):
             apply_layout_direction(app, self._language)
             apply_theme(app, self._theme)
 
@@ -314,22 +320,23 @@ class MainWindow(QMainWindow):
         self._mentor_pool_dialog_class = MentorPoolDialog
         self._toolbar_actions: dict[str, QAction] = {}
         self._toolbar_theme_label: QLabel | None = None
+        self._language_label: QLabel | None = None
         self._stage_badge: QLabel | None = None
         self._stage_detail: QLabel | None = None
         self._progress_caption: QLabel | None = None
+        self._progress_pulse: QPropertyAnimation | None = None
         self._last_run_badge: QLabel | None = None
         self._current_action: str = self._translator.text("status.ready", "آماده")
         self._status_bar: ThemedStatusBar | None = None
         self._database_status: DatabaseStatusWidget | None = None
         self._excel_loaders: set[ExcelLoader] = set()
-        self._local_db: LocalDatabase | None = LocalDatabase(Path("smart_alloc.db"))
         self._db_status_timer: QTimer | None = None
         policy_file = resource_path("config", "policy.json")
         self._default_policy_path = str(policy_file) if policy_file.exists() else ""
         exporter_config = resource_path("config", "SmartAlloc_Exporter_Config_v1.json")
         self._default_sabt_config_path = str(exporter_config) if exporter_config.exists() else ""
 
-        self._splitter = AccentSplitter(Qt.Vertical, self, self._theme)
+        self._splitter = AccentSplitter(Qt.Orientation.Vertical, self, self._theme)
         self._splitter.setChildrenCollapsible(False)
         self._splitter.splitterMoved.connect(lambda *_: self._update_overlay_geometry())
 
@@ -340,7 +347,7 @@ class MainWindow(QMainWindow):
 
         self._tabs = QTabWidget(self)
         self._tabs.setDocumentMode(True)
-        self._tabs.setTabPosition(QTabWidget.North)
+        self._tabs.setTabPosition(QTabWidget.TabPosition.North)
         self._tabs.addTab(
             self._wrap_page(self._build_build_page()), self._t("tabs.build", "ساخت ماتریس")
         )
@@ -395,7 +402,9 @@ class MainWindow(QMainWindow):
         self._progress.setObjectName("progressBar")
         self._progress.setProperty("busy", False)
         self._progress_caption = QLabel(f"0% | {self._t('status.ready', 'آماده')}")
-        self._progress_caption.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self._progress_caption.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
         self._progress_caption.setObjectName("progressCaption")
         caption_effect = SafeOpacityEffect(
             "progress_caption_opacity",
@@ -412,7 +421,7 @@ class MainWindow(QMainWindow):
         self._progress_pulse.setStartValue(0.6)
         self._progress_pulse.setEndValue(1.0)
         self._progress_pulse.setLoopCount(-1)
-        self._progress_pulse.setEasingCurve(QEasingCurve.InOutQuad)
+        self._progress_pulse.setEasingCurve(QEasingCurve.Type.InOutQuad)
         progress_column = QVBoxLayout()
         progress_column.setSpacing(4)
         progress_column.addWidget(self._progress)
@@ -459,7 +468,7 @@ class MainWindow(QMainWindow):
         self._busy_overlay.setObjectName("busyOverlay")
         overlay_layout = QVBoxLayout(self._busy_overlay)
         overlay_layout.setContentsMargins(0, 0, 0, 0)
-        overlay_layout.setAlignment(Qt.AlignCenter)
+        overlay_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._busy_label = QLabel(self._t("status.running", "در حال پردازش"), self._busy_overlay)
         self._busy_label.setObjectName("busyOverlayLabel")
         overlay_layout.addWidget(self._busy_label)
@@ -500,7 +509,7 @@ class MainWindow(QMainWindow):
 
         toolbar = QToolBar(self._t("ribbon.actions", "اکشن‌ها"), self)
         toolbar.setMovable(False)
-        toolbar.setToolButtonStyle(Qt.ToolButtonTextOnly)
+        toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
         toolbar.setContentsMargins(6, 6, 6, 6)
         toolbar.setObjectName("mainToolbar")
 
@@ -743,26 +752,26 @@ class MainWindow(QMainWindow):
 
         scroll = QScrollArea(self)
         scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setObjectName(f"scroll_{page.objectName() or id(page)}")
         scroll.setWidget(page)
         return scroll
 
-    def resizeEvent(self, event) -> None:  # type: ignore[override]  # noqa: N802 - امضای Qt
+    def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802 - امضای Qt
         super().resizeEvent(event)
         self._update_overlay_geometry()
 
     def _apply_language(self, language: Language) -> None:
         """اعمال زبان جدید و بازسازی متن‌های UI."""
 
-        self._prefs.language = language
+        self._prefs.set_language(language)
         self._translator = UiTranslator(language)
         self._language = language
         app = QApplication.instance()
-        if app is not None:
+        if app is not None and isinstance(app, QApplication):
             apply_layout_direction(app, language)
         self.setWindowTitle(self._t("app.title", "سامانه تخصیص دانشجو-منتور"))
-        if hasattr(self, "_language_label"):
+        if self._language_label is not None:
             self._language_label.setText(
                 f"{self._t('status.language', 'زبان فعال')}: {language.code.upper()}"
             )
@@ -774,18 +783,16 @@ class MainWindow(QMainWindow):
         if hasattr(self, "_busy_label"):
             self._busy_label.setText(self._t("status.running", "در حال پردازش"))
         if self._worker is None or not self._worker.isRunning():
-            if hasattr(self, "_status"):
-                self._status.setText(self._t("status.ready", "آماده"))
-            if hasattr(self, "_stage_badge"):
+            self._status.setText(self._t("status.ready", "آماده"))
+            if self._stage_badge is not None:
                 self._stage_badge.setText(self._t("status.ready", "آماده"))
-            if hasattr(self, "_stage_detail"):
+            if self._stage_detail is not None:
                 self._stage_detail.setText(
                     self._t("stage.pick_scenario", "برای شروع یکی از سناریوها را انتخاب کنید")
                 )
-            if hasattr(self, "_progress_caption"):
-                self._update_progress_caption(
-                    self._progress.value(), self._t("status.ready", "آماده")
-                )
+            self._update_progress_caption(
+                self._progress.value(), self._t("status.ready", "آماده")
+            )
             self._update_status_bar_state("ready")
 
     def _refresh_last_run_badge(self) -> None:
@@ -827,8 +834,8 @@ class MainWindow(QMainWindow):
 
         badge_label = QLabel(badge)
         badge_label.setObjectName("heroBadge")
-        badge_label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(badge_label, 0, Qt.AlignVCenter)
+        badge_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(badge_label, 0, Qt.AlignmentFlag.AlignVCenter)
 
         apply_card_shadow(frame)
 
@@ -841,7 +848,7 @@ class MainWindow(QMainWindow):
         self._theme_name = normalized
         self._prefs.theme = normalized
         app = QApplication.instance()
-        if app is not None:
+        if app is not None and isinstance(app, QApplication):
             self._theme = apply_theme_mode(app, normalized)
         else:
             self._theme = self._load_theme(normalized)
@@ -849,7 +856,7 @@ class MainWindow(QMainWindow):
 
     def _apply_theme(self) -> None:
         app = QApplication.instance()
-        if app is not None:
+        if app is not None and isinstance(app, QApplication):
             apply_theme(app, self._theme)
         self._apply_theme_styles()
 
@@ -915,8 +922,8 @@ class MainWindow(QMainWindow):
 
         inputs_group = QGroupBox(self._t("group.inputs", "ورودی‌ها"), page)
         inputs_layout = QFormLayout(inputs_group)
-        inputs_layout.setLabelAlignment(Qt.AlignRight)
-        inputs_layout.setFormAlignment(Qt.AlignTop | Qt.AlignRight)
+        inputs_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        inputs_layout.setFormAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
 
         self._picker_inspactor = FilePicker(
             page, placeholder=self._t("files.inspactor", "فایل Inspactor")
@@ -964,8 +971,8 @@ class MainWindow(QMainWindow):
 
         policy_group = QGroupBox(self._t("files.policy", "سیاست"), page)
         policy_layout = QFormLayout(policy_group)
-        policy_layout.setLabelAlignment(Qt.AlignRight)
-        policy_layout.setFormAlignment(Qt.AlignTop | Qt.AlignRight)
+        policy_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        policy_layout.setFormAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
 
         self._picker_policy_build = FilePicker(page, placeholder="پیش‌فرض: config/policy.json")
         self._picker_policy_build.setObjectName("editPolicy1")
@@ -977,8 +984,8 @@ class MainWindow(QMainWindow):
 
         output_group = QGroupBox("خروجی", page)
         output_layout = QFormLayout(output_group)
-        output_layout.setLabelAlignment(Qt.AlignRight)
-        output_layout.setFormAlignment(Qt.AlignTop | Qt.AlignRight)
+        output_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        output_layout.setFormAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
 
         self._picker_output_matrix = FilePicker(
             page, save=True, placeholder="فایل خروجی ماتریس (*.xlsx)"
@@ -1020,8 +1027,8 @@ class MainWindow(QMainWindow):
 
         inputs_group = QGroupBox("ورودی‌های تخصیص", page)
         inputs_layout = QFormLayout(inputs_group)
-        inputs_layout.setLabelAlignment(Qt.AlignRight)
-        inputs_layout.setFormAlignment(Qt.AlignTop | Qt.AlignRight)
+        inputs_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        inputs_layout.setFormAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
 
         self._picker_students = FilePicker(page, placeholder="دانش‌آموزان (*.xlsx یا *.csv)")
         self._picker_students.setObjectName("editStudents")
@@ -1033,9 +1040,7 @@ class MainWindow(QMainWindow):
         self._picker_pool.setObjectName("editPool")
         self._picker_pool.setToolTip("فهرست منتورها یا پشتیبان‌ها برای تخصیص")
         self._picker_pool.set_button_text(browse_text)
-        self._picker_pool.line_edit().textChanged.connect(
-            lambda *_: (self._refresh_all_manager_combos(), self._reset_mentor_pool_cache())
-        )
+        self._picker_pool.line_edit().textChanged.connect(self._on_pool_text_changed)
         self._set_picker_button_text(self._picker_pool)
 
         pool_row = QWidget(page)
@@ -1054,8 +1059,8 @@ class MainWindow(QMainWindow):
 
         advanced_group = QGroupBox("تنظیمات پیشرفته", page)
         advanced_layout = QFormLayout(advanced_group)
-        advanced_layout.setLabelAlignment(Qt.AlignRight)
-        advanced_layout.setFormAlignment(Qt.AlignTop | Qt.AlignRight)
+        advanced_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        advanced_layout.setFormAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
 
         self._picker_policy_allocate = FilePicker(page, placeholder="پیش‌فرض: config/policy.json")
         self._picker_policy_allocate.setObjectName("editPolicy2")
@@ -1086,14 +1091,16 @@ class MainWindow(QMainWindow):
         register_box = QGroupBox("شناسهٔ ثبت‌نام", page)
         register_box.setObjectName("registrationGroupBox")
         register_layout = QFormLayout(register_box)
-        register_layout.setLabelAlignment(Qt.AlignRight)
-        register_layout.setFormAlignment(Qt.AlignTop | Qt.AlignRight)
+        register_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        register_layout.setFormAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
 
         self._combo_academic_year = QComboBox(register_box)
         self._combo_academic_year.setEditable(True)
-        self._combo_academic_year.setInsertPolicy(QComboBox.NoInsert)
+        self._combo_academic_year.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
         self._combo_academic_year.setObjectName("academicYearInput")
-        self._combo_academic_year.lineEdit().setPlaceholderText("مثلاً 1404")
+        academic_line_edit = self._combo_academic_year.lineEdit()
+        if academic_line_edit is not None:
+            academic_line_edit.setPlaceholderText("مثلاً 1404")
         self._combo_academic_year.setToolTip(
             "سال تحصیلی شروع شمارنده‌ها را تعیین کنید تا کدها درست ادامه یابند"
         )
@@ -1128,15 +1135,15 @@ class MainWindow(QMainWindow):
 
         output_group = QGroupBox("خروجی", page)
         output_layout = QFormLayout(output_group)
-        output_layout.setLabelAlignment(Qt.AlignRight)
-        output_layout.setFormAlignment(Qt.AlignTop | Qt.AlignRight)
+        output_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        output_layout.setFormAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
         output_layout.addRow("خروجی تخصیص", self._picker_alloc_out)
         outer.addWidget(output_group)
 
         sabt_group = QGroupBox("خروجی Sabt (ImportToSabt)", page)
         sabt_layout = QFormLayout(sabt_group)
-        sabt_layout.setLabelAlignment(Qt.AlignRight)
-        sabt_layout.setFormAlignment(Qt.AlignTop | Qt.AlignRight)
+        sabt_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        sabt_layout.setFormAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
 
         self._picker_sabt_output_alloc = FilePicker(
             page,
@@ -1219,8 +1226,8 @@ class MainWindow(QMainWindow):
 
         inputs_group = QGroupBox("ورودی‌ها", page)
         inputs_layout = QFormLayout(inputs_group)
-        inputs_layout.setLabelAlignment(Qt.AlignRight)
-        inputs_layout.setFormAlignment(Qt.AlignTop | Qt.AlignRight)
+        inputs_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        inputs_layout.setFormAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
 
         self._picker_rule_matrix = FilePicker(page, placeholder="ماتریس اهلیت (*.xlsx)")
         self._picker_rule_matrix.setObjectName("editRuleMatrix")
@@ -1241,14 +1248,16 @@ class MainWindow(QMainWindow):
         register_box = QGroupBox("شناسهٔ ثبت‌نام", page)
         register_box.setObjectName("ruleRegistrationGroup")
         register_layout = QFormLayout(register_box)
-        register_layout.setLabelAlignment(Qt.AlignRight)
-        register_layout.setFormAlignment(Qt.AlignTop | Qt.AlignRight)
+        register_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        register_layout.setFormAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
 
         self._combo_rule_academic_year = QComboBox(register_box)
         self._combo_rule_academic_year.setEditable(True)
-        self._combo_rule_academic_year.setInsertPolicy(QComboBox.NoInsert)
+        self._combo_rule_academic_year.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
         self._combo_rule_academic_year.setObjectName("ruleAcademicYearInput")
-        self._combo_rule_academic_year.lineEdit().setPlaceholderText("مثلاً 1404")
+        rule_academic_line_edit = self._combo_rule_academic_year.lineEdit()
+        if rule_academic_line_edit is not None:
+            rule_academic_line_edit.setPlaceholderText("مثلاً 1404")
         self._combo_rule_academic_year.setToolTip(
             "سال تحصیلی مرجع شمارنده‌ها برای موتور قواعد را مشخص کنید"
         )
@@ -1281,8 +1290,8 @@ class MainWindow(QMainWindow):
 
         advanced_group = QGroupBox("تنظیمات پیشرفته", page)
         advanced_layout = QFormLayout(advanced_group)
-        advanced_layout.setLabelAlignment(Qt.AlignRight)
-        advanced_layout.setFormAlignment(Qt.AlignTop | Qt.AlignRight)
+        advanced_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        advanced_layout.setFormAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
 
         self._picker_policy_rule = FilePicker(page, placeholder="پیش‌فرض: config/policy.json")
         self._picker_policy_rule.setObjectName("editRulePolicy")
@@ -1301,8 +1310,8 @@ class MainWindow(QMainWindow):
 
         output_group = QGroupBox("خروجی", page)
         output_layout = QFormLayout(output_group)
-        output_layout.setLabelAlignment(Qt.AlignRight)
-        output_layout.setFormAlignment(Qt.AlignTop | Qt.AlignRight)
+        output_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        output_layout.setFormAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
         self._picker_rule_output = FilePicker(page, save=True, placeholder="خروجی تخصیص (*.xlsx)")
         self._picker_rule_output.setObjectName("editRuleOutput")
         self._picker_rule_output.setToolTip("فایل خروجی موتور قواعد برای ذخیره گزارش جدید")
@@ -1312,8 +1321,8 @@ class MainWindow(QMainWindow):
 
         sabt_group = QGroupBox("خروجی Sabt (ImportToSabt)", page)
         sabt_layout = QFormLayout(sabt_group)
-        sabt_layout.setLabelAlignment(Qt.AlignRight)
-        sabt_layout.setFormAlignment(Qt.AlignTop | Qt.AlignRight)
+        sabt_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        sabt_layout.setFormAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
 
         self._picker_sabt_output_rule = FilePicker(
             page,
@@ -1404,13 +1413,13 @@ class MainWindow(QMainWindow):
             "</ol>"
         )
         guide.setWordWrap(True)
-        guide.setTextFormat(Qt.RichText)
+        guide.setTextFormat(Qt.TextFormat.RichText)
         layout.addWidget(guide)
 
         self._btn_open_output_folder = QPushButton("بازکردن پوشه خروجی")
         self._btn_open_output_folder.setObjectName("btnOpenOutputFolder")
         self._btn_open_output_folder.clicked.connect(self._open_last_output_folder)
-        layout.addWidget(self._btn_open_output_folder, 0, Qt.AlignRight)
+        layout.addWidget(self._btn_open_output_folder, 0, Qt.AlignmentFlag.AlignRight)
         self._update_output_folder_button_state()
 
         self._btn_run_validate = QPushButton("اجرای کنترل (غیرفعال)")
@@ -1462,8 +1471,8 @@ class MainWindow(QMainWindow):
         table = QTableWidget(2, len(columns), page)
         table.setHorizontalHeaderLabels(columns)
         table.verticalHeader().setVisible(False)
-        table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        table.setSelectionMode(QAbstractItemView.NoSelection)
+        table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
         table.setMaximumHeight(160)
         sample_rows = [
             ("STU-125", "MENT-009", "R_CAPACITY", "ظرفیت منطقه", "0.82", "capacity_gate"),
@@ -1472,7 +1481,7 @@ class MainWindow(QMainWindow):
         for row, values in enumerate(sample_rows):
             for col, value in enumerate(values):
                 item = QTableWidgetItem(value)
-                item.setFlags(Qt.ItemIsEnabled)
+                item.setFlags(Qt.ItemFlag.ItemIsEnabled)
                 table.setItem(row, col, item)
         layout.addWidget(table)
         layout.addStretch(1)
@@ -1482,7 +1491,8 @@ class MainWindow(QMainWindow):
     def _register_interactive_controls(self) -> None:
         """ثبت کنترل‌هایی که هنگام اجرای تسک غیرفعال می‌شوند."""
 
-        self._interactive = [
+        self._interactive = []
+        optional_widgets = [
             self._btn_build,
             self._btn_allocate,
             self._btn_rule_engine,
@@ -1519,10 +1529,12 @@ class MainWindow(QMainWindow):
             self._btn_rule_autodetect,
             self._btn_mentor_pool,
             self._btn_matrix_mentor_pool,
+            self._btn_reset_managers,
         ]
+        for widget in optional_widgets:
+            if widget is not None:
+                self._interactive.append(widget)
         self._interactive.extend(self._center_manager_combos.values())
-        if self._btn_reset_managers is not None:
-            self._interactive.append(self._btn_reset_managers)
 
     # ------------------------------------------------------------------ Actions
     def _open_language_dialog(self) -> None:
@@ -1531,7 +1543,7 @@ class MainWindow(QMainWindow):
         dialog = LanguageDialog(self._prefs.language, self._translator, self)
         dialog.setModal(True)
         dialog.setWindowOpacity(0.98)
-        if dialog.exec() == QDialog.Accepted:
+        if dialog.exec() == QDialog.DialogCode.Accepted:
             chosen = dialog.selected_language()
             if chosen != self._prefs.language:
                 self._apply_language(chosen)
@@ -1919,7 +1931,7 @@ class MainWindow(QMainWindow):
 
         combo = QComboBox(parent)
         combo.setEditable(True)
-        combo.setInsertPolicy(QComboBox.NoInsert)
+        combo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
         combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
         combo.setMinimumContentsLength(1)
         combo.setToolTip("نام مدیر مرکز را انتخاب یا وارد کنید")
@@ -1991,6 +2003,12 @@ class MainWindow(QMainWindow):
         if not self._center_manager_combos:
             return
         self._load_manager_names_async()
+
+    def _on_pool_text_changed(self) -> None:
+        """واکنش به تغییر مسیر استخر منتورها."""
+
+        self._refresh_all_manager_combos()
+        self._reset_mentor_pool_cache()
 
     def _load_manager_names_async(self) -> None:
         """بارگذاری نام مدیران از استخر بدون مسدود کردن UI."""
@@ -2186,14 +2204,14 @@ class MainWindow(QMainWindow):
     def _handle_mentor_pool_finished(self, result: int, dialog: MentorPoolDialog) -> None:
         """ذخیرهٔ overrideها در صورت پذیرش دیالوگ."""
 
-        if result == QDialog.Accepted:
+        if result == QDialog.DialogCode.Accepted:
             overrides = dialog.get_overrides()
             self._mentor_pool_overrides = {str(k): bool(v) for k, v in overrides.items()}
 
     def _handle_matrix_mentor_pool_finished(self, result: int, dialog: MentorPoolDialog) -> None:
         """ذخیرهٔ overrideهای مدیر/منتور برای تب ساخت ماتریس."""
 
-        if result == QDialog.Accepted:
+        if result == QDialog.DialogCode.Accepted:
             overrides = dialog.get_overrides()
             manager_overrides = dialog.get_manager_overrides()
             self._matrix_mentor_pool_overrides = {str(k): bool(v) for k, v in overrides.items()}
@@ -2413,7 +2431,7 @@ class MainWindow(QMainWindow):
             self._busy_overlay.setVisible(disabled)
             if disabled:
                 self._busy_overlay.raise_()
-        if hasattr(self, "_progress_pulse"):
+        if self._progress_caption is not None and self._progress_pulse is not None:
             if disabled:
                 self._progress_caption.setProperty("busy", True)
                 self._progress_pulse.start()
@@ -2438,10 +2456,10 @@ class MainWindow(QMainWindow):
         """نمایش نشانگر مشغول هنگام اجرای عملیات طولانی."""
 
         app = QApplication.instance()
-        if app is None:
+        if app is None or not isinstance(app, QApplication):
             return
         if busy and not self._is_busy_cursor:
-            app.setOverrideCursor(Qt.BusyCursor)
+            app.setOverrideCursor(Qt.CursorShape.BusyCursor)
             self._is_busy_cursor = True
         elif not busy and self._is_busy_cursor:
             app.restoreOverrideCursor()
@@ -2509,6 +2527,8 @@ class MainWindow(QMainWindow):
         )
         if not filename:
             return
+        if self._log is None:
+            return
         path = Path(filename)
         suffix = path.suffix.lower()
         content = self._log.toPlainText() if suffix in {".txt", ".log", ""} else self._log.toHtml()
@@ -2522,6 +2542,8 @@ class MainWindow(QMainWindow):
     def _clear_log(self) -> None:
         """پاک کردن لاگ و بازگرداندن حالت خالی."""
 
+        if self._log is None:
+            return
         self._log.clear()
         self._log_line = 0
         self._sync_log_placeholder()
@@ -2539,7 +2561,7 @@ class MainWindow(QMainWindow):
         lowered = message.lower()
         background = None
         if message.strip().startswith("✅"):
-            background = self._theme.success_soft.name(QColor.HexArgb)
+            background = self._theme.success_soft.name(QColor.NameFormat.HexArgb)
         elif message.strip().startswith("❌"):
             background = QColor(self._theme.colors.error).lighter(150).name()
         elif message.strip().startswith("ℹ️") or message.strip().startswith("⚠️"):
