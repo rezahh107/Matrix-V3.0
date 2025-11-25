@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pandas as pd
-from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt
+from PySide6.QtCore import QAbstractTableModel, QModelIndex, QPersistentModelIndex, Qt
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QDialog,
@@ -53,19 +53,25 @@ class HistoryMetricsModel(QAbstractTableModel):
         self.endResetModel()
 
     # Qt model overrides -------------------------------------------------
-    def rowCount(self, parent: QModelIndex | None = None) -> int:  # type: ignore[override]  # noqa: N802 - امضای Qt
+    def rowCount(
+        self, parent: QModelIndex | QPersistentModelIndex = QModelIndex()
+    ) -> int:  # noqa: N802 - امضای Qt
         if parent and parent.isValid():
             return 0
         return len(self._metrics_df.index)
 
-    def columnCount(self, parent: QModelIndex | None = None) -> int:  # type: ignore[override]  # noqa: N802 - امضای Qt
+    def columnCount(
+        self, parent: QModelIndex | QPersistentModelIndex = QModelIndex()
+    ) -> int:  # noqa: N802 - امضای Qt
         if parent and parent.isValid():
             return 0
         return len(METRIC_COLUMNS)
 
     def data(
-        self, index: QModelIndex, role: int = Qt.ItemDataRole.DisplayRole
-    ) -> object | None:  # type: ignore[override]
+        self,
+        index: QModelIndex | QPersistentModelIndex,
+        role: int = Qt.ItemDataRole.DisplayRole,
+    ) -> object | None:
         if not index.isValid() or role not in {
             Qt.ItemDataRole.DisplayRole,
             Qt.ItemDataRole.EditRole,
@@ -83,7 +89,7 @@ class HistoryMetricsModel(QAbstractTableModel):
 
     def headerData(  # noqa: N802 - امضای Qt
         self, section: int, orientation: Qt.Orientation, role: int = Qt.ItemDataRole.DisplayRole
-    ) -> object | None:  # type: ignore[override]  # noqa: N802 - امضای Qt
+    ) -> object | None:  # noqa: N802 - امضای Qt
         if role != Qt.ItemDataRole.DisplayRole:
             return None
         if orientation == Qt.Orientation.Horizontal:
