@@ -260,7 +260,7 @@ def _normalize_alias_code(value: Any) -> str:
     if value is None:
         return ""
     try:
-        if pd.isna(value):  # type: ignore[arg-type]
+        if pd.isna(value):
             return ""
     except TypeError:
         pass

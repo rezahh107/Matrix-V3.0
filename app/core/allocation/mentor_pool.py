@@ -24,8 +24,8 @@ __all__ = [
 
 def _normalize_overrides(
     overrides: Mapping[int | str | float, bool] | None,
-) -> dict[int, bool]:
-    normalized: dict[int, bool] = {}
+) -> dict[int | str | float, bool]:
+    normalized: dict[int | str | float, bool] = {}
     if not overrides:
         return normalized
     for raw_id, enabled in overrides.items():
