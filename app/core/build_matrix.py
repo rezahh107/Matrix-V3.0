@@ -37,11 +37,11 @@ from app.core.common.column_normalizer import (
     normalize_input_columns,
 )
 from app.core.common.columns import (
+    Source as ColumnSource,
     coerce_semantics,
     ensure_required_columns,
     ensure_series,
     resolve_aliases,
-    Source as ColumnSource,
 )
 from app.core.common.domain import (
     BuildConfig,
