@@ -32,9 +32,93 @@ from collections.abc import (
     ValuesView,
 )
 from types import MappingProxyType
-from typing import Any, Literal, TypedDict
+from typing import Any, Literal, TypedDict, TypeGuard, cast
 
 _NUM = re.compile(r"(\d+)")
+
+HeaderMode = Literal["fa", "en", "fa_en"]
+TraceStageName = Literal[
+    "type",
+    "group",
+    "gender",
+    "graduation_status",
+    "center",
+    "finance",
+    "school",
+    "capacity_gate",
+]
+TraceStageLiteral = TraceStageName
+TraceStageFlags = dict[TraceStageName, bool]
+
+CANONICAL_TRACE_ORDER: tuple[TraceStageName, ...] = (
+    "type",
+    "group",
+    "gender",
+    "graduation_status",
+    "center",
+    "finance",
+    "school",
+    "capacity_gate",
+)
+
+TRACE_STAGE_NAME_SET: frozenset[TraceStageName] = frozenset(CANONICAL_TRACE_ORDER)
+
+JoinKeyValueMapping = TypedDict(
+    "JoinKeyValueMapping",
+    {
+        "کدرشته": int,
+        "جنسیت": int,
+        "دانش آموز فارغ": int,
+        "مرکز گلستان صدرا": int,
+        "مالی حکمت بنیاد": int,
+        "کد مدرسه": int,
+    },
+)
+
+CANONICAL_JOIN_KEYS: tuple[str, ...] = (
+    "کدرشته",
+    "جنسیت",
+    "دانش آموز فارغ",
+    "مرکز گلستان صدرا",
+    "مالی حکمت بنیاد",
+    "کد مدرسه",
+)
+
+PolicyGender = Literal["male", "female"]
+GraduationStatus = Literal["graduated", "not_graduated"]
+CenterStatus = Literal["registered", "not_registered"]
+
+
+def parse_header_mode(value: object) -> HeaderMode:
+    """Normalize and validate header mode values.
+
+    Args:
+        value: ورودی خام که باید یکی از ``"fa"``, ``"en"`` یا ``"fa_en"`` باشد.
+
+    Raises:
+        ValueError: اگر مقدار ورودی معتبر نباشد یا از نوع رشته نباشد.
+    """
+
+    if not isinstance(value, str):
+        raise ValueError("Header mode must be a string")
+    normalized = value.strip()
+    if normalized not in {"fa", "en", "fa_en"}:
+        raise ValueError(f"Unsupported header_mode '{value}'")
+    return cast(HeaderMode, normalized)
+
+
+def is_trace_stage_name(value: str) -> TypeGuard[TraceStageName]:
+    """Type guard to check canonical trace stage names."""
+
+    return value in TRACE_STAGE_NAME_SET
+
+
+def ensure_trace_stage_name(value: str) -> TraceStageName:
+    """Validate and cast a raw string to :data:`TraceStageName`."""
+
+    if not is_trace_stage_name(value):
+        raise ValueError(f"Invalid trace stage name: {value}")
+    return value
 
 
 def natural_key(s: str) -> tuple[object, ...]:
@@ -66,11 +150,17 @@ def natural_key(s: str) -> tuple[object, ...]:
     return tuple(parts)
 
 
+def _normalize_join_key(key: str) -> str:
+    normalized = key.replace("_", " ").strip()
+    normalized = re.sub(r"\s+", " ", normalized)
+    return normalized
+
+
 class JoinKeyValues(Mapping[str, int]):
     """نگهدارندهٔ فقط‌خواندنی برای ۶ کلید join به‌صورت اعداد صحیح.
 
     این کلاس ترتیب درج و نام‌های قراردادی «کدرشته»، «جنسیت»،
-    «دانش_آموز_فارغ»، «مرکز_گلستان_صدرا»، «مالی_حکمت_بنیاد» و «کد_مدرسه» را
+    «دانش آموز فارغ»، «مرکز گلستان صدرا»، «مالی حکمت بنیاد» و «کد مدرسه» را
     حفظ می‌کند و برای ساخت کلید ترکیبی (tuple یا dict) بدون نشتی ``Any``
     استفاده می‌شود.
 
@@ -79,10 +169,10 @@ class JoinKeyValues(Mapping[str, int]):
         >>> keys = JoinKeyValues({
         ...     "کدرشته": 1201,
         ...     "جنسیت": 1,
-        ...     "دانش_آموز_فارغ": 0,
-        ...     "مرکز_گلستان_صدرا": 1,
-        ...     "مالی_حکمت_بنیاد": 0,
-        ...     "کد_مدرسه": 10,
+        ...     "دانش آموز فارغ": 0,
+        ...     "مرکز گلستان صدرا": 1,
+        ...     "مالی حکمت بنیاد": 0,
+        ...     "کد مدرسه": 10,
         ... })
         >>> keys["کدرشته"]
         1201
@@ -97,11 +187,11 @@ class JoinKeyValues(Mapping[str, int]):
         self,
         data: Mapping[str, int] | MutableMapping[str, int],
         *,
-        expected_keys: Iterable[str] | None = None,
+        expected_keys: Iterable[str] | None = CANONICAL_JOIN_KEYS,
     ):
         ordered: OrderedDict[str, int] = OrderedDict()
         for key, value in data.items():
-            normalized_key = str(key)
+            normalized_key = _normalize_join_key(str(key))
             if not isinstance(value, int):
                 raise TypeError(f"Join key '{normalized_key}' must be int")
             ordered[normalized_key] = value
@@ -110,16 +200,12 @@ class JoinKeyValues(Mapping[str, int]):
             raise ValueError("JoinKeyValues must contain exactly six entries")
 
         if expected_keys is not None:
-            expected = tuple(str(key) for key in expected_keys)
+            expected = tuple(_normalize_join_key(str(key)) for key in expected_keys)
             missing = tuple(key for key in expected if key not in ordered)
             extra = tuple(key for key in ordered if key not in expected)
             if missing or extra:
                 raise ValueError("JoinKeyValues keys mismatch; " f"missing={missing} extra={extra}")
-            if tuple(ordered.keys()) != expected:
-                raise ValueError(
-                    "JoinKeyValues order mismatch; expected "
-                    f"{expected} got {tuple(ordered.keys())}"
-                )
+            ordered = OrderedDict((key, ordered[key]) for key in expected)
 
         object.__setattr__(self, "_items", tuple(ordered.items()))
         object.__setattr__(self, "_mapping", MappingProxyType(dict(ordered)))
@@ -213,9 +299,20 @@ JoinKeysDF = JoinKeyValues
 
 __all__ = [
     "natural_key",
+    "HeaderMode",
+    "TraceStageName",
+    "TraceStageFlags",
+    "TraceStageLiteral",
+    "ensure_trace_stage_name",
+    "parse_header_mode",
+    "PolicyGender",
+    "GraduationStatus",
+    "CenterStatus",
+    "CANONICAL_JOIN_KEYS",
     "JoinKeyValues",
     "JoinKeys",
     "JoinKeysDF",
+    "JoinKeyValueMapping",
     "StudentRow",
     "MentorRow",
     "AllocationErrorLiteral",
@@ -223,7 +320,6 @@ __all__ = [
     "MentorStateSnapshot",
     "MentorStateDelta",
     "AllocationLogRecord",
-    "TraceStageLiteral",
     "TraceStageRecord",
     "CANONICAL_TRACE_ORDER",
 ]
@@ -321,7 +417,7 @@ class AllocationLogRecord(TypedDict, total=False):
     capacity_before: int | None
     capacity_after: int | None
     mentor_state_delta: MentorStateDelta | None
-    stage_candidate_counts: dict[str, int]
+    stage_candidate_counts: dict[TraceStageName, int]
     rule_reason_code: str | None
     rule_reason_text: str | None
     rule_reason_details: Mapping[str, Any] | None
@@ -333,34 +429,10 @@ class AllocationLogRecord(TypedDict, total=False):
     phase_rule_trace: list[Mapping[str, Any]]
 
 
-TraceStageLiteral = Literal[
-    "type",
-    "group",
-    "gender",
-    "graduation_status",
-    "center",
-    "finance",
-    "school",
-    "capacity_gate",
-]
-
-
-CANONICAL_TRACE_ORDER: tuple[TraceStageLiteral, ...] = (
-    "type",
-    "group",
-    "gender",
-    "graduation_status",
-    "center",
-    "finance",
-    "school",
-    "capacity_gate",
-)
-
-
 class TraceStageRecord(TypedDict):
     """نتایج هر مرحلهٔ تریس تخصیص برای مقاصد Explainability."""
 
-    stage: TraceStageLiteral
+    stage: TraceStageName
     column: str
     expected_value: Any
     total_before: int

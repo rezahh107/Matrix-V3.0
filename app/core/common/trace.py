@@ -1,3 +1,5 @@
+# mypy: follow_imports=skip
+
 """ساخت زنجیرهٔ تریس ۸ مرحله‌ای برای تصمیمات تخصیص (Core-only).
 
 این ماژول هیچ I/O انجام نمی‌دهد و تنها شمارش کاندیدها پس از هر فیلتر را
@@ -30,6 +32,7 @@ from enum import Enum
 from numbers import Number
 from typing import Any
 
+# mypy: follow_imports = skip
 import pandas as pd
 
 from ..policy_loader import PolicyConfig, load_policy
@@ -40,8 +43,11 @@ from .rules import Rule, RuleContext, apply_rule, default_stage_rule_map
 from .types import (
     CANONICAL_TRACE_ORDER,
     StudentRow,
-    TraceStageLiteral,
+    TraceStageFlags,
+    TraceStageName,
     TraceStageRecord,
+    ensure_trace_stage_name,
+    is_trace_stage_name,
 )
 
 __all__ = [
@@ -72,7 +78,7 @@ class FinalStatus(str, Enum):
 class TraceStagePlan:
     """برنامهٔ فیلتر یک مرحله از تریس."""
 
-    stage: TraceStageLiteral
+    stage: TraceStageName
     column: str
 
 
@@ -82,9 +88,9 @@ class TraceOutcome:
 
     student_id: object
     final_status: str
-    failure_stage: TraceStageLiteral | None
+    failure_stage: TraceStageName | None
     final_reason: str
-    stage_flags: Mapping[TraceStageLiteral, bool]
+    stage_flags: Mapping[TraceStageName, bool]
     metadata: Mapping[str, object]
 
 
@@ -108,15 +114,17 @@ def build_trace_plan(
 ) -> list[TraceStagePlan]:
     """ساخت برنامهٔ پیش‌فرض مراحل تریس از روی Policy."""
 
-    if policy.trace_stage_names != CANONICAL_TRACE_ORDER:
+    policy_stage_names = tuple(ensure_trace_stage_name(stage) for stage in policy.trace_stage_names)
+    if policy_stage_names != CANONICAL_TRACE_ORDER:
         raise ValueError(
             "Policy trace stages must match the canonical 8-stage order",
         )
 
     plan: list[TraceStagePlan] = []
     for definition in policy.trace_stages:
-        column = capacity_column if definition.stage == "capacity_gate" else definition.column
-        plan.append(TraceStagePlan(stage=definition.stage, column=column))
+        stage = ensure_trace_stage_name(definition.stage)
+        column = capacity_column if stage == "capacity_gate" else definition.column
+        plan.append(TraceStagePlan(stage=stage, column=column))
     return plan
 
 
@@ -126,15 +134,17 @@ def _ensure_columns(pool: pd.DataFrame, columns: Iterable[str]) -> None:
         raise KeyError(f"Missing columns in candidate pool: {missing}")
 
 
-def build_stage_rule_map(_: PolicyConfig | None = None) -> Mapping[TraceStageLiteral, Rule]:
+def build_stage_rule_map(_: PolicyConfig | None = None) -> Mapping[TraceStageName, Rule]:
     """برگرداندن نگاشت مرحله→Rule پیش‌فرض."""
 
-    return default_stage_rule_map()
+    return {
+        ensure_trace_stage_name(stage): rule for stage, rule in default_stage_rule_map().items()
+    }
 
 
 def _apply_stage_rule(
     record: TraceStageRecord,
-    stage_rules: Mapping[TraceStageLiteral, Rule],
+    stage_rules: Mapping[TraceStageName, Rule],
     student: Mapping[str, object],
 ) -> None:
     rule = stage_rules.get(record["stage"])
@@ -230,10 +240,23 @@ def _coerce_optional_int(value: object) -> int | None:
     return int(numeric)
 
 
-def _initial_stage_flags() -> dict[TraceStageLiteral, bool]:
+def _initial_stage_flags() -> TraceStageFlags:
     """ساخت فلگ اولیه مراحل تریس بر اساس ترتیب استاندارد."""
 
     return {stage: False for stage in CANONICAL_TRACE_ORDER}
+
+
+def _coerce_stage_counts(stage_counts: Mapping[str, int] | None) -> dict[TraceStageName, int]:
+    """Filter and normalize stage candidate counts to canonical names."""
+
+    if not stage_counts:
+        return {}
+    normalized: dict[TraceStageName, int] = {}
+    for raw_key, value in stage_counts.items():
+        if not is_trace_stage_name(raw_key):
+            continue
+        normalized[ensure_trace_stage_name(raw_key)] = int(value)
+    return normalized
 
 
 def _extract_student_fields(student: Mapping[str, object]) -> dict[str, object]:
@@ -269,10 +292,10 @@ def _extract_student_fields(student: Mapping[str, object]) -> dict[str, object]:
 
 
 def _stage_flags_from_counts(
-    stage_counts: Mapping[str, int] | None,
+    stage_counts: Mapping[TraceStageName, int] | None,
     *,
     policy: PolicyConfig,
-) -> dict[TraceStageLiteral, bool]:
+) -> TraceStageFlags:
     """تولید فلگ عبور مرحله بر پایهٔ شمارندهٔ کاندیدها."""
 
     return build_stage_pass_flags(stage_counts, policy=policy)
@@ -347,7 +370,7 @@ def build_allocation_trace(
     policy: PolicyConfig | None = None,
     stage_plan: Sequence[TraceStagePlan] | None = None,
     capacity_column: str = "remaining_capacity",
-    stage_rules: Mapping[TraceStageLiteral, Rule] | None = None,
+    stage_rules: Mapping[TraceStageName, Rule] | None = None,
 ) -> list[TraceStageRecord]:
     """ایجاد تریس ۸ مرحله‌ای مطابق Policy."""
 
@@ -494,9 +517,9 @@ def summarize_trace_outcome(
     if policy is None:
         policy = load_policy()
 
-    stage_counts: Mapping[str, int] = log.get("stage_candidate_counts") or {}
+    stage_counts = _coerce_stage_counts(log.get("stage_candidate_counts") or {})
     flags = _stage_flags_from_counts(stage_counts, policy=policy)
-    failure_stage: TraceStageLiteral | None = None
+    failure_stage: TraceStageName | None = None
 
     for record in trace:
         stage = record.get("stage")
@@ -507,7 +530,7 @@ def summarize_trace_outcome(
         if not matched and failure_stage is None:
             failure_stage = stage  # اولین مرحلهٔ شکست
 
-    for stage_name in policy.trace_stage_names:
+    for stage_name in map(ensure_trace_stage_name, policy.trace_stage_names):
         try:
             if int(stage_counts.get(stage_name, 0)) == 0:
                 flags[stage_name] = False
@@ -515,12 +538,12 @@ def summarize_trace_outcome(
             continue
 
     if failure_stage is None:
-        for stage_name in policy.trace_stage_names:
+        for stage_name in map(ensure_trace_stage_name, policy.trace_stage_names):
             if not flags.get(stage_name, False):
                 failure_stage = stage_name
                 break
     if failure_stage is None and stage_counts:
-        for stage_name in policy.trace_stage_names:
+        for stage_name in map(ensure_trace_stage_name, policy.trace_stage_names):
             try:
                 if int(stage_counts.get(stage_name, 0)) == 0:
                     failure_stage = stage_name
