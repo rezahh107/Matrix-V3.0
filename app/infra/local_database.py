@@ -25,6 +25,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
+from typing import cast
 
 import pandas as pd
 from pandas.api.types import is_integer_dtype
@@ -525,7 +526,10 @@ class LocalDatabase:
                     ),
                 )
                 conn.commit()
-                return int(cursor.lastrowid)
+                row_id = cursor.lastrowid
+                if row_id is None:
+                    raise DatabaseOperationError("شناسهٔ اجرای جدید از SQLite بازگردانده نشد.")
+                return int(row_id)
         except sqlite3.Error as exc:
             raise DatabaseOperationError("ثبت اجرای جدید در SQLite ناکام ماند.") from exc
 
@@ -765,7 +769,10 @@ class LocalDatabase:
                     ),
                 )
                 conn.commit()
-                return int(cursor.lastrowid)
+                row_id = cursor.lastrowid
+                if row_id is None:
+                    raise DatabaseOperationError("شناسهٔ Snapshot خروجی برگردانده نشد.")
+                return int(row_id)
         except sqlite3.Error as exc:  # pragma: no cover - مسیر غیرمنتظره
             raise DatabaseOperationError("ثبت Snapshot خروجی Exporter ناکام ماند.") from exc
 
@@ -1934,9 +1941,13 @@ def _serialize_dataframe(df: pd.DataFrame | None) -> str | None:
     if df is None:
         return None
     normalized = df.copy()
-    return normalized.to_json(
-        orient="split", force_ascii=False, date_format="iso", double_precision=15
+    serialized = cast(
+        str,
+        normalized.to_json(
+            orient="split", force_ascii=False, date_format="iso", double_precision=15
+        ),
     )
+    return serialized
 
 
 def _serialize_dataframe_map(
@@ -1981,9 +1992,11 @@ def _safe_deserialize_dataframe_map(
     if payload in (None, b"", ""):
         return {}
     try:
-        if isinstance(payload, bytes):
-            payload = payload.decode("utf-8")
-        raw = json.loads(payload)
+        assert payload is not None
+        decoded_payload: str | bytes = (
+            payload.decode("utf-8") if isinstance(payload, bytes) else payload
+        )
+        raw = json.loads(decoded_payload)
         result: dict[str, pd.DataFrame] = {}
         for key, df_payload in raw.items():
             frame = _safe_deserialize_dataframe(df_payload, label=f"qa_extras.{key}")

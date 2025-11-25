@@ -46,14 +46,28 @@ class SchemaVersionMismatchError(InfraError):
         return f"{self.message} (expected={self.expected_version}, actual={self.actual_version})"
 
 
-@dataclass(eq=True)
 class DatabaseOperationError(InfraError):
     """خطای کلی عملیات SQLite با پیام خوانا."""
 
-    message: str
+    def __init__(
+        self,
+        message: str | None = None,
+        *,
+        reason: str | None = None,
+        hint: str | None = None,
+    ) -> None:
+        self.reason = reason
+        self.hint = hint
+        if message is None:
+            details = reason or "خطای نامشخص در عملیات پایگاه داده"
+            if hint:
+                details = f"{details}؛ {hint.strip()}"
+            self.message = details
+        else:
+            self.message = message
 
     def __str__(self) -> str:
-        return self.message
+        return self.message or ""
 
 
 @dataclass(eq=True)
