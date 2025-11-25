@@ -58,7 +58,7 @@ def _normalize_national_code(value: object) -> str:
     if value is None:
         return ""
     try:
-        if pd.isna(value):  # type: ignore[arg-type]
+        if pd.isna(value):
             return ""
     except TypeError:
         # برای مقادیری که isna پشتیبانی نمی‌کند

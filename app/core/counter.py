@@ -212,7 +212,7 @@ def _pick_counter_column(df: pd.DataFrame) -> str | None:
         "کدثبتنام",
         "کدرهنگامثبتنام",
     ]
-    lowered = {str(column).lower(): column for column in df.columns}
+    lowered: dict[str, str] = {str(column).lower(): str(column) for column in df.columns}
     for name in candidates:
         key = name.lower()
         if key in lowered:
@@ -220,13 +220,13 @@ def _pick_counter_column(df: pd.DataFrame) -> str | None:
     for column in df.columns:
         label = str(column).lower()
         if "counter" in label or "ثبت" in label:
-            return column
+            return str(column)
     return None
 
 
 def _pick_nat_id_column(df: pd.DataFrame) -> str | None:
     candidates = ["national_id", "کد ملی", "کدملی", "شماره ملی"]
-    lowered = {str(column).lower(): column for column in df.columns}
+    lowered: dict[str, str] = {str(column).lower(): str(column) for column in df.columns}
     for name in candidates:
         if name.lower() in lowered:
             return lowered[name.lower()]

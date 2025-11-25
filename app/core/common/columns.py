@@ -24,6 +24,8 @@ __all__ = [
     "CANON_EN_TO_FA",
     "CANON_FA_TO_EN",
     "CANON",
+    "HeaderMode",
+    "parse_header_mode",
     "dedupe_columns",
     "resolve_aliases",
     "ensure_required_columns",

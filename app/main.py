@@ -17,6 +17,7 @@ from datetime import datetime
 from pathlib import Path
 from types import ModuleType, TracebackType
 from typing import TYPE_CHECKING
+from typing import cast
 
 from PySide6.QtCore import QSharedMemory, Qt, QTimer, qVersion
 from PySide6.QtWidgets import QApplication, QMessageBox
@@ -409,9 +410,13 @@ def setup_application() -> QApplication:
         QApplication: نمونه برنامه
     """
     try:
-        app = QApplication.instance()
-        if app is None:
+        app_instance = QApplication.instance()
+        if app_instance is None:
             app = QApplication(sys.argv)
+        elif isinstance(app_instance, QApplication):
+            app = app_instance
+        else:
+            raise RuntimeError("Existing Qt application is not a QApplication instance")
 
         # فعال‌سازی High DPI با مدیریت deprecation در نسخه‌های جدید Qt
         _configure_high_dpi_attributes(app, qVersion())
@@ -442,7 +447,7 @@ def load_main_window() -> type[QWidget]:
     """
     try:
         module = _import_main_window_module()
-        MainWindow = getattr(module, "MainWindow")  # noqa: N806 - نام کلاس Qt
+        MainWindow = cast(type[QWidget], getattr(module, "MainWindow"))  # noqa: N806 - نام کلاس Qt
         logger.info("ماژول MainWindow با موفقیت بارگذاری شد")
         return MainWindow
 
@@ -610,7 +615,7 @@ def main() -> int:
         if _RESTORE_EXCEPTION_HOOK:
             _RESTORE_EXCEPTION_HOOK()
             _RESTORE_EXCEPTION_HOOK = None
-        if _RESTORE_GUI_EXCEPTION_HOOK:
+        if _RESTORE_GUI_EXCEPTION_HOOK is not None:
             _RESTORE_GUI_EXCEPTION_HOOK()
             _RESTORE_GUI_EXCEPTION_HOOK = None
 

@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-from PySide6.QtCore import QEasingCurve, QObject, QPropertyAnimation, Qt
+from PySide6.QtCore import QEasingCurve, QEvent, QObject, QPropertyAnimation, Qt
 from PySide6.QtGui import QColor, QPalette
 from PySide6.QtWidgets import QApplication, QPushButton, QWidget
 
@@ -299,9 +299,7 @@ class _HoverAnimationFilter(QObject):
         self._animation.setEasingCurve(QEasingCurve.Type.InOutQuad)
         self._animation.setDuration(120)
 
-    def eventFilter(self, obj: QObject, event) -> bool:  # type: ignore[override]  # noqa: N802 - امضای Qt
-        from PySide6.QtCore import QEvent
-
+    def eventFilter(self, obj: QObject, event: QEvent) -> bool:  # noqa: N802 - امضای Qt
         if obj is self._button:
             if event.type() == QEvent.Type.Enter:
                 self._fade_to(0.94)
