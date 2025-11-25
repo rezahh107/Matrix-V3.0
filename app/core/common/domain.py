@@ -168,7 +168,10 @@ def _postal_valid(num_str: str, *, cfg: BuildConfig) -> bool:
     """اعتبارسنجی بازهٔ کدپستی مطابق پیکربندی."""
 
     n = _num_to_int_safe(num_str)
-    min_val, max_val = cfg.postal_valid_range
+    postal_range = cfg.postal_valid_range
+    if postal_range is None:
+        raise ValueError("postal_valid_range is not configured")
+    min_val, max_val = postal_range
     return min_val <= n <= max_val
 
 
@@ -208,7 +211,10 @@ def _compute_normal_or_dual_alias(postal_code: Any, mentor_id: Any, cfg: BuildCo
     if len(postal_str) != 4:
         return ""
     value = int(postal_str)
-    min_val, max_val = cfg.postal_valid_range
+    postal_range = cfg.postal_valid_range
+    if postal_range is None:
+        return ""
+    min_val, max_val = postal_range
     if not (min_val <= value <= max_val):
         return ""
     return postal_str
@@ -299,14 +305,16 @@ class BuildConfig:
             object.__setattr__(self, "center_map", normalized_center_map)
         object.__setattr__(self, "_center_map_norm", {})
 
-        postal_range = (
-            tuple(self.policy.postal_valid_range)
-            if self.postal_valid_range is None
-            else (
+        if self.postal_valid_range is None:
+            policy_range = self.policy.postal_valid_range
+            if policy_range is None:
+                raise ValueError("policy configuration missing postal_valid_range")
+            postal_range = (int(policy_range[0]), int(policy_range[1]))
+        else:
+            postal_range = (
                 int(self.postal_valid_range[0]),
                 int(self.postal_valid_range[1]),
             )
-        )
         if len(postal_range) != 2 or postal_range[0] > postal_range[1]:
             raise ValueError(f"Invalid postal range: {postal_range}")
         object.__setattr__(self, "postal_valid_range", postal_range)
