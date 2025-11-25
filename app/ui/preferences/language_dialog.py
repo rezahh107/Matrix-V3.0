@@ -29,11 +29,18 @@ class LanguageDialog(QDialog):
             translator.text("dialog.language.label", "انتخاب زبان رابط کاربری"), self._combo
         )
 
-        buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel, self)
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel,
+            self,
+        )
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
-        buttons.button(QDialogButtonBox.Save).setText(translator.text("action.save", "ذخیره"))
-        buttons.button(QDialogButtonBox.Cancel).setText(translator.text("action.cancel", "انصراف"))
+        buttons.button(QDialogButtonBox.StandardButton.Save).setText(
+            translator.text("action.save", "ذخیره")
+        )
+        buttons.button(QDialogButtonBox.StandardButton.Cancel).setText(
+            translator.text("action.cancel", "انصراف")
+        )
         layout.addWidget(buttons)
 
         self.setLayout(layout)

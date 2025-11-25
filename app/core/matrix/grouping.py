@@ -16,7 +16,7 @@ def _safe_int(value: object) -> int:
     if value is None:
         return 0
     try:
-        if pd.isna(value):  # type: ignore[arg-type]
+        if pd.isna(value):
             return 0
     except Exception:
         pass  # pd.isna can fail on some types
@@ -35,7 +35,7 @@ def _safe_int(value: object) -> int:
         return 0
 
 
-def _ensure_iterable(values: object) -> list:
+def _ensure_iterable(values: object) -> list[object]:
     if values is None:
         return []
     if isinstance(values, list):
