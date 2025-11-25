@@ -139,23 +139,45 @@ def apply_ranking_policy(
     state_view: Mapping[Any, Mapping[str, object]]
     state_view = state if state is not None else build_mentor_state(state_source, policy=policy)
 
-    def _state_value(mentor: Any, key: str) -> int:
-        entry = state_view.get(mentor)
-        if not entry:
-            return 0
-        raw = entry.get(key, 0)
+    def _safe_int(value: int | float | str | None, *, default: int = 0) -> int:
+        if value is None:
+            return default
+        if isinstance(value, bool):
+            return int(value)
+        if isinstance(value, (int, float)):
+            if pd.isna(value):
+                return default
+            return int(value)
+
+        text = value.strip()
+        if not text:
+            return default
         try:
-            return int(raw)  # type: ignore[arg-type]
-        except (ValueError, TypeError):  # pragma: no cover - نگهبان ورودی پیش‌بینی‌نشده
-            return 0
+            return int(float(text))
+        except ValueError:
+            raise TypeError(f"Unsupported string value for state metric: {value!r}")
+
+    def _state_metric(mentor: Any, key: str, *, default: int = 0) -> int:
+        entry = state_view.get(mentor)
+        if entry is None:
+            return default
+        raw_value = entry.get(key)
+        if raw_value is None:
+            return default
+        if isinstance(raw_value, (int, float, str)):
+            try:
+                return _safe_int(raw_value, default=default)
+            except TypeError:  # pragma: no cover - نگهبان ورودی پیش‌بینی‌نشده
+                return default
+        return default
 
     def _series_as_int(series: pd.Series) -> pd.Series:
         numeric = pd.to_numeric(series, errors="coerce").fillna(0)
         return numeric.astype(int)
 
-    initial = mentor_ids.map(lambda mentor: _state_value(mentor, "initial"))
-    remaining = mentor_ids.map(lambda mentor: _state_value(mentor, "remaining"))
-    allocations = mentor_ids.map(lambda mentor: _state_value(mentor, "alloc_new"))
+    initial = mentor_ids.map(lambda mentor: _state_metric(mentor, "initial"))
+    remaining = mentor_ids.map(lambda mentor: _state_metric(mentor, "remaining"))
+    allocations = mentor_ids.map(lambda mentor: _state_metric(mentor, "alloc_new"))
 
     initial_int = _series_as_int(initial)
     remaining_int = _series_as_int(remaining)
