@@ -28,6 +28,7 @@ if TYPE_CHECKING:
         QVBoxLayout,
         QWidget,
     )
+
     _QT_AVAILABLE = True
     _QT_IMPORT_ERROR: Exception | None = None
 else:
@@ -73,7 +74,9 @@ else:
             def __init__(self, *_: Any, **__: Any) -> None:
                 super().__init__()
 
-            def setTextInteractionFlags(self, *_: Any, **__: Any) -> None:  # noqa: N802 - Qt API name
+            def setTextInteractionFlags(  # noqa: N802 - Qt API name
+                self, *_: Any, **__: Any
+            ) -> None:
                 return None
 
             def setWordWrap(self, *_: Any, **__: Any) -> None:  # noqa: N802 - Qt API name
@@ -117,10 +120,14 @@ else:
             def setColumnCount(self, *_: Any, **__: Any) -> None:  # noqa: N802 - Qt API name
                 return None
 
-            def setHorizontalHeaderLabels(self, *_: Any, **__: Any) -> None:  # noqa: N802 - Qt API name
+            def setHorizontalHeaderLabels(  # noqa: N802 - Qt API name
+                self, *_: Any, **__: Any
+            ) -> None:
                 return None
 
-            def horizontalHeader(self, *_: Any, **__: Any) -> QHeaderView:  # noqa: N802 - Qt API name
+            def horizontalHeader(  # noqa: N802 - Qt API name
+                self, *_: Any, **__: Any
+            ) -> QHeaderView:
                 return QHeaderView()
 
             def setRowCount(self, *_: Any, **__: Any) -> None:  # noqa: N802 - Qt API name
