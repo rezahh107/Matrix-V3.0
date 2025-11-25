@@ -66,7 +66,6 @@ from app.core.matrix.coverage import (
 from app.core.policy_loader import (
     MentorSchoolBindingPolicy,
     PolicyConfig,
-    load_policy,
 )
 from app.core.qa.coverage_validation import build_coverage_validation_fields
 
