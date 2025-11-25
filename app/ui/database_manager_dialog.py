@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from pathlib import Path
+from typing import Any, cast
 
 try:  # pragma: no cover - وابستگی Qt ممکن است در CI غایب باشد
     from PySide6.QtCore import Qt
@@ -23,9 +24,11 @@ try:  # pragma: no cover - وابستگی Qt ممکن است در CI غایب ب
 
     _QT_AVAILABLE = True
 except Exception as exc:  # pragma: no cover - fallback
-    Qt = None  # type: ignore
-    QDialog = object  # type: ignore
-    QGridLayout = QHeaderView = QLabel = QMessageBox = QPushButton = QTableWidget = QTableWidgetItem = QVBoxLayout = QWidget = None  # type: ignore
+    Qt = None
+    QDialog = object
+    QGridLayout = QHeaderView = QLabel = QMessageBox = QPushButton = QTableWidget = (
+        QTableWidgetItem
+    ) = QVBoxLayout = QWidget = cast(Any, None)
     _QT_AVAILABLE = False
     _QT_IMPORT_ERROR = exc
 
@@ -52,8 +55,8 @@ class DatabaseManagerDialog(QDialog):
         if not _QT_AVAILABLE:
             raise RuntimeError(f"Qt bindings unavailable: {_QT_IMPORT_ERROR}")
         super().__init__(parent)
-        self.db = db
-        self.year_info = year_info
+        self.db: LocalDatabase = db
+        self.year_info: YearDatabaseInfo = year_info
         self.diagnostics: DatabaseSchemaDiagnostics | None = None
         self.setWindowTitle("مدیریت پایگاه داده")
         self.resize(900, 600)
@@ -117,15 +120,16 @@ class DatabaseManagerDialog(QDialog):
 
     def _refresh(self) -> None:
         summary = self.db.get_database_health_summary()
-        self.diagnostics = self.db.get_schema_diagnostics()
+        diagnostics = self.db.get_schema_diagnostics()
+        self.diagnostics = diagnostics
         self._path_label.setText(
             f"سال فعال: {self.year_info.year_id}\nمسیر پایگاه‌داده: {self.year_info.path}"
         )
-        actual = self.diagnostics.actual_schema_version
-        self._schema_label.setText(f"{self.diagnostics.expected_schema_version} / {actual}")
-        self._module_label.setText(self.diagnostics.module_path)
-        self._populate_counts_table(summary.counts, self.diagnostics.tables)
-        self._populate_issues_table(self.diagnostics.tables)
+        actual = diagnostics.actual_schema_version
+        self._schema_label.setText(f"{diagnostics.expected_schema_version} / {actual}")
+        self._module_label.setText(diagnostics.module_path)
+        self._populate_counts_table(summary.counts, diagnostics.tables)
+        self._populate_issues_table(diagnostics.tables)
         status_prefix = {
             "ok": "✅",
             "degraded": "⚠️",
