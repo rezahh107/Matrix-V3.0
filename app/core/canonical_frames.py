@@ -7,13 +7,14 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
+# mypy: follow_imports=skip
+
 import pandas as pd
 
 from .common.column_normalizer import normalize_input_columns
 from .common.columns import (
     CANON_EN_TO_FA,
     CANON_FA_TO_EN,
-    HeaderMode,
     canonicalize_headers,
     coerce_semantics,
     enforce_join_key_types,
@@ -23,6 +24,7 @@ from .common.columns import (
 )
 from .common.ids import build_mentor_alias_map, extract_alias_code_series
 from .common.normalization import normalize_fa
+from .common.types import HeaderMode, parse_header_mode
 from .policy_loader import PolicyConfig
 
 __all__ = [
@@ -322,7 +324,8 @@ def sanitize_pool_for_allocation(
     """
 
     stats = PoolCanonicalizationStats()
-    frame = canonicalize_headers(df, header_mode=policy.excel.header_mode_internal).copy()
+    internal_header_mode = parse_header_mode(policy.excel.header_mode_internal)
+    frame = canonicalize_headers(df, header_mode=internal_header_mode).copy()
     if isinstance(frame.columns, pd.MultiIndex):
         frame.columns = ["__".join(map(str, tpl)).strip() for tpl in frame.columns.to_flat_index()]
     if frame.columns.duplicated().any():
@@ -375,7 +378,7 @@ def sanitize_pool_for_allocation(
                 series = series.astype(dtype)
             sanitized[column] = series
 
-    header_mode = output_header_mode or policy.excel.header_mode_internal
+    header_mode = output_header_mode or parse_header_mode(policy.excel.header_mode_internal)
     result = canonicalize_headers(sanitized, header_mode=header_mode)
     return _attach_pool_stats(result, stats)
 
@@ -561,7 +564,9 @@ def canonicalize_pool_frame(
         pool = sanitize_pool_for_allocation(pool, policy=policy)
         stats = pool.attrs.get(_POOL_STATS_ATTR, stats)
     else:
-        pool = canonicalize_headers(pool, header_mode=policy.excel.header_mode_internal)
+        pool = canonicalize_headers(
+            pool, header_mode=parse_header_mode(policy.excel.header_mode_internal)
+        )
     pool = resolve_aliases(pool, source)  # type: ignore[arg-type]
     pool = coerce_semantics(pool, source)  # type: ignore[arg-type]
     pool, _ = normalize_input_columns(

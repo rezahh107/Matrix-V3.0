@@ -1,17 +1,21 @@
 """ابزار استانداردسازی ستون‌ها و اعمال اجباری سیاست ستون‌ها."""
 
 from __future__ import annotations
+# mypy: follow_imports=skip
 
 import re
 from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Literal
 
+# mypy: follow_imports = skip
+
 import pandas as pd
 
 from app.core.policy_loader import get_policy
 
 from .normalization import normalize_fa, strip_school_code_separators, to_numlike_str
+from .types import HeaderMode, parse_header_mode
 
 __all__ = [
     "CANON_EN_TO_FA",
@@ -33,7 +37,6 @@ __all__ = [
 ]
 
 Source = Literal["report", "inspactor", "school", "matrix"]
-HeaderMode = Literal["fa", "en", "fa_en"]
 
 
 def ensure_series(values: pd.Series | pd.DataFrame) -> pd.Series:
@@ -745,9 +748,7 @@ def coerce_semantics(df: pd.DataFrame, source: Source) -> pd.DataFrame:
 
 def canonicalize_headers(df: pd.DataFrame, header_mode: HeaderMode) -> pd.DataFrame:
     """تبدیل نام ستون‌ها به فارسی، انگلیسی یا دوزبانه."""
-
-    if header_mode not in {"fa", "en", "fa_en"}:
-        raise ValueError(f"Unsupported header_mode '{header_mode}'")
+    mode = parse_header_mode(header_mode)
 
     rename: dict[str, str] = {}
     for column in df.columns:
@@ -765,9 +766,9 @@ def canonicalize_headers(df: pd.DataFrame, header_mode: HeaderMode) -> pd.DataFr
         if en_key is None:
             continue
         fa_name = CANON_EN_TO_FA[en_key]
-        if header_mode == "fa":
+        if mode == "fa":
             rename[column] = fa_name
-        elif header_mode == "en":
+        elif mode == "en":
             rename[column] = en_key
         else:
             rename[column] = f"{fa_name} | {en_key}"
