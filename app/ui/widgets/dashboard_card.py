@@ -39,9 +39,9 @@ class DashboardCard(QFrame):
         super().__init__(parent)
         self.setObjectName("dashboardCard")
         self._theme = theme or Theme()
-        policy = QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        policy = QSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         if max_height is not None:
-            policy = QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            policy = QSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
             self.setMaximumHeight(max_height)
         self.setSizePolicy(policy)
         self._layout = QVBoxLayout(self)
@@ -49,9 +49,9 @@ class DashboardCard(QFrame):
         self._layout.setSpacing(8)
         self._body_container = QScrollArea(self)
         self._body_container.setWidgetResizable(True)
-        self._body_container.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self._body_container.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        self._body_container.setFrameShape(QFrame.NoFrame)
+        self._body_container.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._body_container.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self._body_container.setFrameShape(QFrame.Shape.NoFrame)
         self._body_widget = QWidget(self._body_container)
         self._body = QVBoxLayout(self._body_widget)
         self._body.setContentsMargins(0, 0, 0, 0)
@@ -118,10 +118,10 @@ class DashboardCard(QFrame):
             f"#dashboardCardDescription, #dashboardChecklistItem{{color:{theme.colors.text_muted};font-size:{theme.typography.body_size}pt;}}"
         )
 
-    def _apply_shadow(self, spec) -> None:
+    def _apply_shadow(self, spec: object | None) -> None:
         apply_card_shadow(self)
 
-    def paintEvent(self, event: QPaintEvent) -> None:  # type: ignore[override]  # noqa: N802 - امضای Qt
+    def paintEvent(self, event: QPaintEvent) -> None:  # noqa: N802 - امضای Qt
         LOGGER.debug(
             "DashboardCard.paintEvent | widget=%s effect=%s rect=%s",
             self,
