@@ -64,8 +64,8 @@ def _format_xlsxwriter(
     font_name: str | None,
     font_size: int | None,
 ) -> None:
-    workbook = writer.book  # type: ignore[attr-defined]
-    worksheet_map = writer.sheets  # type: ignore[attr-defined]
+    workbook = writer.book
+    worksheet_map = writer.sheets
     font = build_font_config(font_name, font_size=font_size)
     body_fmt = ensure_xlsxwriter_format(workbook, font)
     right_body_fmt = ensure_xlsxwriter_format(workbook, font, align_right=True)
@@ -114,7 +114,7 @@ def _format_openpyxl(
     from openpyxl.styles import Alignment
     from openpyxl.utils import get_column_letter
 
-    workbook = writer.book  # type: ignore[attr-defined]
+    workbook = writer.book
     font = build_font_config(font_name, font_size=font_size)
     style_name = ensure_openpyxl_named_style(workbook, font)
     table_names = TableNameRegistry()

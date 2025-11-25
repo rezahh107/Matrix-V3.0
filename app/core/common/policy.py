@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import warnings
-from collections.abc import Mapping, MutableSequence, Sequence
+from collections.abc import Iterable, Mapping, MutableSequence, Sequence
 from dataclasses import dataclass
 
 from app.core.policy.loader import compute_schema_hash, validate_policy_columns
@@ -54,7 +54,10 @@ def _normalize_columns(raw: object) -> tuple[str, ...]:
 
     if not candidates:
         defaults = _DEFAULT_SELECTION_REASON_OPTIONS.get("columns", ())
-        candidates = [str(item) for item in defaults]
+        if isinstance(defaults, Iterable) and not isinstance(defaults, (str, bytes)):
+            candidates = [str(item) for item in defaults]
+        else:
+            candidates = []
 
     return validate_policy_columns(candidates)
 
@@ -94,7 +97,11 @@ def _extract_reason_labels(raw: object, locale: str) -> SelectionReasonLabels:
         candidate = None
     mapping = candidate if isinstance(candidate, Mapping) else {}
 
-    defaults = _DEFAULT_SELECTION_REASON_OPTIONS["labels"].get("reason", {})
+    labels_options = _DEFAULT_SELECTION_REASON_OPTIONS.get("labels", {})
+    reason_defaults = (
+        labels_options.get("reason") if isinstance(labels_options, Mapping) else {}
+    )
+    defaults = reason_defaults if isinstance(reason_defaults, Mapping) else {}
 
     def pick(key: str) -> str:
         options = mapping.get(key)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from typing import SupportsInt, cast
 
 from .center_manager import resolve_center_manager_config
 from .policy_loader import PolicyConfig
@@ -37,6 +38,8 @@ def _normalize_override_map(source: Mapping[object, object] | None) -> dict[int,
         return {}
     normalized: dict[int, list[str]] = {}
     for key, value in source.items():
+        if not isinstance(key, (str, int, SupportsInt)):
+            continue
         try:
             center_id = int(key)
         except (TypeError, ValueError):
@@ -55,8 +58,8 @@ def parse_center_manager_config(
 
     result, _ = resolve_center_manager_config(
         policy=policy,
-        ui_managers=_normalize_override_map(ui_overrides),
-        cli_managers=_normalize_override_map(cli_overrides),
+        ui_managers=cast(Mapping[int | str, object], _normalize_override_map(ui_overrides)),
+        cli_managers=cast(Mapping[int | str, object], _normalize_override_map(cli_overrides)),
     )
     return {center_id: tuple(names) for center_id, names in result.items()}
 
