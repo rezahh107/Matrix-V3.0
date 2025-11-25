@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Hashable, Mapping, Sequence
 from hashlib import blake2b
 from numbers import Number
 from pathlib import Path
-from typing import Any
+from typing import TypedDict
 
 import pandas as pd
 
@@ -29,12 +29,54 @@ __all__ = [
 _DEFAULT_POLICY_PATH = Path("config/policy.json")
 
 
+class MentorCapacityState(TypedDict):
+    """Normalized capacity state for a mentor."""
+
+    initial: int
+    remaining: int
+    alloc_new: int
+    occupancy_ratio: float
+    total_capacity: int
+    current_allocations: int
+    remaining_capacity: int
+
+
+CapacityScalar = int | float | str | None
+
+
+def _safe_capacity(value: CapacityScalar) -> int:
+    """Normalize capacity values to non-negative integers.
+
+    Non-numeric inputs raise ``TypeError``; NaN values are treated as zero.
+    """
+
+    if value is None:
+        return 0
+    if isinstance(value, bool):
+        numeric = int(value)
+    elif isinstance(value, Number):
+        if pd.isna(value):  # type: ignore[arg-type]
+            return 0
+        numeric = int(value)
+    elif isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return 0
+        try:
+            numeric = int(float(text))
+        except ValueError as exc:
+            raise TypeError(f"Unsupported string value for capacity: {value!r}") from exc
+    else:
+        raise TypeError(f"Unsupported capacity value: {value!r}")
+    return max(numeric, 0)
+
+
 def build_mentor_state(
     pool_df: pd.DataFrame,
     *,
     capacity_column: str = "remaining_capacity",
     policy: PolicyConfig | None = None,
-) -> dict[Any, dict[str, float | int]]:
+) -> dict[Hashable, MentorCapacityState]:
     """ساخت وضعیت ظرفیت اولیهٔ پشتیبان‌ها برای تخصیص و Rule Engine."""
 
     if policy is None:
@@ -81,9 +123,12 @@ def build_mentor_state(
 
     grouped = canonical.groupby("mentor_id", dropna=True)[resolved_capacity]
     initial = pd.to_numeric(grouped.max(), errors="coerce").fillna(0).astype(int)
-    state: dict[Any, dict[str, float | int]] = {}
+    state: dict[Hashable, MentorCapacityState] = {}
     for mentor_id, capacity in initial.items():
-        value = int(max(capacity, 0))
+        try:
+            value = _safe_capacity(capacity)
+        except TypeError:  # pragma: no cover - نگهبان ورودی غیرمنتظره
+            value = 0
         state[mentor_id] = {
             "initial": value,
             "remaining": value,
@@ -99,7 +144,7 @@ def build_mentor_state(
 def apply_ranking_policy(
     candidate_pool: pd.DataFrame,
     *,
-    state: Mapping[Any, Mapping[str, object]] | None = None,
+    state: Mapping[Hashable, Mapping[str, CapacityScalar]] | None = None,
     policy: PolicyConfig | None = None,
     policy_path: str | Path = _DEFAULT_POLICY_PATH,
 ) -> pd.DataFrame:
@@ -136,37 +181,19 @@ def apply_ranking_policy(
     if mentor_ids is None:
         raise KeyError("candidate pool must include 'mentor_id' column after canonicalization")
 
-    state_view: Mapping[Any, Mapping[str, object]]
+    state_view: Mapping[Hashable, Mapping[str, CapacityScalar]]
     state_view = state if state is not None else build_mentor_state(state_source, policy=policy)
 
-    def _safe_int(value: int | float | str | None, *, default: int = 0) -> int:
-        if value is None:
-            return default
-        if isinstance(value, bool):
-            return int(value)
-        if isinstance(value, (int, float)):
-            if pd.isna(value):
-                return default
-            return int(value)
-
-        text = value.strip()
-        if not text:
-            return default
-        try:
-            return int(float(text))
-        except ValueError:
-            raise TypeError(f"Unsupported string value for state metric: {value!r}")
-
-    def _state_metric(mentor: Any, key: str, *, default: int = 0) -> int:
+    def _state_metric(mentor: Hashable, key: str, *, default: int = 0) -> int:
         entry = state_view.get(mentor)
         if entry is None:
             return default
         raw_value = entry.get(key)
         if raw_value is None:
             return default
-        if isinstance(raw_value, (int, float, str)):
+        if isinstance(raw_value, (int, float, str, type(None))):
             try:
-                return _safe_int(raw_value, default=default)
+                return _safe_capacity(raw_value)
             except TypeError:  # pragma: no cover - نگهبان ورودی پیش‌بینی‌نشده
                 return default
         return default
@@ -220,25 +247,17 @@ def apply_ranking_policy(
     return ranked.reset_index(drop=True)
 
 
-def _coerce_capacity_value(value: Any) -> int:
+def _coerce_capacity_value(value: CapacityScalar) -> int:
     """تبدیل امن مقادیر ظرفیت به عدد صحیح غیرمنفی."""
 
-    if isinstance(value, Number):
-        if pd.isna(value):  # type: ignore[arg-type]
-            return 0
-        return int(value)
-
-    text = str(value).strip()
-    if not text:
-        return 0
     try:
-        return int(float(text))
-    except Exception:  # pragma: no cover - نگهبان ورودی غیرمنتظره
+        return _safe_capacity(value)
+    except TypeError:  # pragma: no cover - نگهبان ورودی غیرمنتظره
         return 0
 
 
 def consume_capacity(
-    state: dict[Any, dict[str, float | int]], mentor_id: Any
+    state: dict[Hashable, MentorCapacityState], mentor_id: Hashable
 ) -> tuple[int, int, float]:
     """به‌روزرسانی ظرفیت پشتیبان پس از تخصیص و بازگشت ظرفیت قبل/بعد."""
 
