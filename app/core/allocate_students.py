@@ -1899,8 +1899,8 @@ def allocate_batch(
         pool_norm = _validate_pool(_normalize_pool(candidate_pool, policy))
     final_manager_map, final_priority = resolve_center_manager_config(
         policy=policy,
-        ui_managers=cast(Mapping[object, object] | None, ui_center_manager_map),
-        cli_managers=cast(Mapping[object, object] | None, center_manager_map),
+        ui_managers=cast(Mapping[int | str, object] | None, ui_center_manager_map),
+        cli_managers=cast(Mapping[int | str, object] | None, center_manager_map),
         cli_priority=center_priority,
         cli_strict_validation=strict_center_validation,
     )

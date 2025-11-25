@@ -60,7 +60,7 @@ def build_font_config(
 
 def ensure_xlsxwriter_format(
     workbook: Any, font: FontConfig, *, header: bool = False, align_right: bool = False
-):
+) -> Any:
     """ساخت Format مشترک xlsxwriter فقط با تنظیمات فونت.
 
     مثال::
@@ -74,8 +74,8 @@ def ensure_xlsxwriter_format(
     """
 
     if not hasattr(workbook, "_em_format_cache"):
-        workbook._em_format_cache = {}  # type: ignore[attr-defined]
-    cache: dict[tuple[str | None, int | None, bool, bool], Any] = workbook._em_format_cache  # type: ignore[attr-defined]
+        workbook._em_format_cache = {}
+    cache: dict[tuple[str | None, int | None, bool, bool], Any] = workbook._em_format_cache
     key = (font.name, font.size, header, align_right)
     if key in cache:
         return cache[key]
@@ -93,7 +93,7 @@ def ensure_xlsxwriter_format(
     return fmt
 
 
-def ensure_openpyxl_named_style(workbook: Any, font: FontConfig):
+def ensure_openpyxl_named_style(workbook: Any, font: FontConfig) -> str:
     """ساخت NamedStyle واحد برای استفادهٔ مجدد در openpyxl.
 
     مثال::
@@ -106,8 +106,8 @@ def ensure_openpyxl_named_style(workbook: Any, font: FontConfig):
     from openpyxl.styles import Font, NamedStyle
 
     if not hasattr(workbook, "_em_named_styles"):
-        workbook._em_named_styles = {}  # type: ignore[attr-defined]
-    cache: dict[tuple[str | None, int | None], str] = workbook._em_named_styles  # type: ignore[attr-defined]
+        workbook._em_named_styles = {}
+    cache: dict[tuple[str | None, int | None], str] = workbook._em_named_styles
 
     key = (font.name, font.size)
     if key in cache:

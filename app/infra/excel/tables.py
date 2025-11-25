@@ -5,8 +5,12 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 import pandas as pd
+
+if TYPE_CHECKING:
+    from openpyxl.worksheet.table import Table
 
 __all__ = [
     "TableNameRegistry",
@@ -93,7 +97,7 @@ def build_xlsxwriter_table(df: pd.DataFrame, table_name: str) -> dict[str, objec
     }
 
 
-def build_openpyxl_table(table_name: str, ref: str, headers: list[str]):
+def build_openpyxl_table(table_name: str, ref: str, headers: list[str]) -> "Table":
     """ساخت نمونهٔ جدول openpyxl با استایل خنثی و هدر یکتا."""
 
     from openpyxl.worksheet.table import Table, TableColumn, TableStyleInfo

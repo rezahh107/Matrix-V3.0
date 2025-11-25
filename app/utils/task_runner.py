@@ -4,12 +4,12 @@
 """
 
 import traceback
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Callable as TypingCallable
 
-from PySide6.QtCore import QObject, QThread, Signal
+from PySide6.QtCore import QObject, QThread, Signal, SignalInstance
 
 
 @dataclass
@@ -36,7 +36,7 @@ class TaskRunner(QObject):
     progress = Signal(int, str)  # (درصد، پیام)
     finished = Signal(object)
 
-    def __init__(self, task_func: Callable, *args, **kwargs):
+    def __init__(self, task_func: TypingCallable[..., Any], *args: Any, **kwargs: Any):
         super().__init__()
         self.task_func = task_func
         self.args = args
@@ -81,7 +81,9 @@ class TaskRunner(QObject):
 
 
 @contextmanager
-def task_execution_context(progress_signal, start_msg: str, end_msg: str):
+def task_execution_context(
+    progress_signal: SignalInstance, start_msg: str, end_msg: str
+) -> Iterator[None]:
     """
     Context manager برای مدیریت خودکار پیشرفت
 
@@ -97,7 +99,9 @@ def task_execution_context(progress_signal, start_msg: str, end_msg: str):
 
 
 # ============= مثال استفاده =============
-def sample_heavy_task(progress_signal, check_cancel, file_path: str):
+def sample_heavy_task(
+    progress_signal: SignalInstance, check_cancel: Callable[[], None], file_path: str
+) -> dict[str, object]:
     """تسک نمونه که طول می‌کشد"""
 
     with task_execution_context(progress_signal, "شروع پردازش", "اتمام"):

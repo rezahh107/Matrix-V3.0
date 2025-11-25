@@ -7,7 +7,7 @@ fallback درون‌برنامه‌ای، متن مناسب زبان را باز
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from app.ui.i18n import Language
 from app.utils.path_utils import resource_path
@@ -29,6 +29,9 @@ class UiTranslator:
     """
 
     language: str | Language
+    _language_enum: Language = field(init=False, repr=False)
+    _lang: str = field(init=False, repr=False)
+    _messages: dict[str, str] = field(init=False, repr=False, default_factory=dict)
 
     def __post_init__(self) -> None:
         lang_enum = (
@@ -50,7 +53,8 @@ class UiTranslator:
             try:
                 loaded = json.loads(payload_path.read_text(encoding="utf-8"))
                 if isinstance(loaded, dict):
-                    return loaded.get(self._lang, default.get(self._lang, {}))
+                    messages = loaded.get(self._lang, default.get(self._lang, {}))
+                    return messages if isinstance(messages, dict) else default.get(self._lang, {})
             except (OSError, json.JSONDecodeError):
                 return default.get(self._lang, {})
         return default.get(self._lang, {})

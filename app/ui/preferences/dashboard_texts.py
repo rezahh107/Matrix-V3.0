@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from app.ui.texts import UiTranslator
 from app.utils.path_utils import resource_path
@@ -38,7 +39,7 @@ class DashboardTextBundle:
     checklist_items: list[ChecklistItem]
 
 
-_DEFAULT_DATA = {
+_DEFAULT_DATA: dict[str, Any] = {
     "cards": {
         "files": {"title": "فایل‌های کلیدی", "description": "آخرین مسیرهای ذخیره‌شده"},
         "checklist": {"title": "چک‌لیست", "description": "مرور سریع گام‌ها"},
@@ -51,18 +52,21 @@ _DEFAULT_DATA = {
 }
 
 
-def _load_json_payload(path: Path) -> dict:
+def _load_json_payload(path: Path) -> dict[str, Any]:
     """خواندن فایل JSON با fallback به دادهٔ پیش‌فرض."""
 
     if not path.exists():
         return _DEFAULT_DATA
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(payload, dict):
+            return payload
+        return _DEFAULT_DATA
     except (OSError, json.JSONDecodeError):
         return _DEFAULT_DATA
 
 
-def _normalize_items(items: Iterable[dict]) -> list[ChecklistItem]:
+def _normalize_items(items: Iterable[Mapping[str, object]]) -> list[ChecklistItem]:
     """تبدیل دادهٔ ورودی به لیست آیتم‌های معتبر."""
 
     normalized: list[ChecklistItem] = []
