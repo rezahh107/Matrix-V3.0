@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QPalette
+from PySide6.QtGui import QMouseEvent, QPalette
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QWidget
 
 from app.infra.local_database import DatabaseHealthStatus, DatabaseHealthSummary
@@ -33,8 +33,16 @@ class DatabaseStatusWidget(QWidget):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(4, 0, 4, 0)
         layout.setSpacing(6)
-        layout.addWidget(self._icon_label, 0, Qt.AlignRight | Qt.AlignVCenter)
-        layout.addWidget(self._text_label, 0, Qt.AlignRight | Qt.AlignVCenter)
+        layout.addWidget(
+            self._icon_label,
+            0,
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+        )
+        layout.addWidget(
+            self._text_label,
+            0,
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+        )
         layout.addStretch()
         self.setLayout(layout)
         self.setAccessibleName("database-status-widget")
@@ -76,6 +84,6 @@ class DatabaseStatusWidget(QWidget):
             return summary.message
         return " — ".join(parts)
 
-    def mousePressEvent(self, event):  # type: ignore[override]  # noqa: N802 - امضای Qt
+    def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802 - امضای Qt
         super().mousePressEvent(event)
         self.databaseManagerRequested.emit()
