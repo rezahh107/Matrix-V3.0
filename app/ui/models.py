@@ -61,6 +61,35 @@ def _string_value(value: object) -> str:
     return str(value).strip()
 
 
+def _center_field_value(value: object) -> str | int | None:
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return None
+    if isinstance(value, (str, int)):
+        return value
+    return str(value)
+
+
+def _school_field_value(value: object) -> str | None:
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return None
+    return _string_value(value)
+
+
+def _capacity_value(value: object) -> int | float | None:
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return None
+    if isinstance(value, (int, float)):
+        return value
+    text = _string_value(value)
+    if not text:
+        return None
+    try:
+        numeric = float(text)
+    except ValueError:
+        return None
+    return int(numeric) if numeric.is_integer() else numeric
+
+
 def build_mentor_entries_from_dataframe(
     df: pd.DataFrame, *, existing_overrides: Mapping[str, bool] | None = None
 ) -> list[MentorPoolEntry]:
@@ -125,7 +154,7 @@ def build_mentor_entries_from_dataframe(
             if isinstance(center_id_value, float) and pd.isna(center_id_value):
                 center_value = None
             else:
-                center_value = center_id_value
+                center_value = _center_field_value(center_id_value)
 
         school_name_value = _first_present(
             record,
@@ -145,7 +174,7 @@ def build_mentor_entries_from_dataframe(
             if isinstance(school_code_value, float) and pd.isna(school_code_value):
                 school_value = None
             else:
-                school_value = school_code_value if school_code_value is not None else None
+                school_value = _school_field_value(school_code_value)
 
         entries.append(
             MentorPoolEntry(
@@ -164,14 +193,16 @@ def build_mentor_entries_from_dataframe(
                 manager=manager_value,
                 center=center_value,
                 school=school_value,
-                capacity=_first_present(
-                    record,
-                    (
-                        "remaining_capacity",
-                        "capacity",
-                        "capacity_current",
-                        "capacity_special",
-                    ),
+                capacity=_capacity_value(
+                    _first_present(
+                        record,
+                        (
+                            "remaining_capacity",
+                            "capacity",
+                            "capacity_current",
+                            "capacity_special",
+                        ),
+                    )
                 ),
                 enabled=bool(enabled),
             )

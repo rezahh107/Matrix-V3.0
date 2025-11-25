@@ -148,9 +148,10 @@ def _coerce_finance(val: Any, *, cfg: BuildConfig) -> int:
     """بازگرداندن کد مالی معتبر مطابق تنظیمات."""
 
     v = _num_to_int_safe(val)
-    if v in cfg.finance_variants:
+    variants = cfg.finance_variants or ()
+    if v in variants:
         return v
-    return cfg.finance_variants[0] if cfg.finance_variants else 0
+    return variants[0] if variants else 0
 
 
 def _normalize_map_keys(m: Mapping[str, int]) -> dict[str, int]:
@@ -274,7 +275,7 @@ class BuildConfig:
     policy_version: str = field(init=False)
     _center_map_norm: dict[str, int] = field(init=False, repr=False, default_factory=dict)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate and hydrate configuration after initialization."""
 
         policy_version = str(getattr(self.policy, "version", "")).strip()
@@ -407,7 +408,8 @@ class BuildConfig:
         Cached after first call.
         """
         if not self._center_map_norm:
-            object.__setattr__(self, "_center_map_norm", _normalize_map_keys(self.center_map))
+            center_map: Mapping[str, int] = self.center_map or {}
+            object.__setattr__(self, "_center_map_norm", _normalize_map_keys(center_map))
         return self._center_map_norm
 
 
@@ -579,7 +581,7 @@ def school_code_norm(value: Any, *, cfg: BuildConfig) -> int:
 def finance_cross(values: Iterable[int] | None, *, cfg: BuildConfig) -> tuple[int, ...]:
     """تضمین می‌کند که تمامی مقادیر مالی سیاست در لیست ورودی حضور داشته باشند."""
 
-    base = tuple(cfg.finance_variants)
+    base: tuple[int, ...] = tuple(cfg.finance_variants or ())
     if values is None:
         return base
     seen: set[int] = set()
@@ -744,7 +746,7 @@ class Capacity:
     special_limit: int
     allocations_new: int = 0
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate capacity values after initialization."""
         if self.special_limit < 0:
             raise ValueError(f"special_limit must be non-negative, got {self.special_limit}")
@@ -787,7 +789,7 @@ class MatrixRow:
     # New field for output schema
     mentor_type_str: str = field(init=False)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Calculate mentor_type_str after initialization."""
         object.__setattr__(self, "mentor_type_str", compute_mentor_type_str(self.row_type))
 

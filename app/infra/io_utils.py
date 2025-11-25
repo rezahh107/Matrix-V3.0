@@ -41,7 +41,7 @@ __all__ = [
 
 
 if TYPE_CHECKING:
-    from app.core.common.columns import HeaderMode  # type: ignore[attr-defined]
+    from app.core.common.columns import HeaderMode
 else:
     HeaderMode = Literal["fa", "en", "fa_en"]
 

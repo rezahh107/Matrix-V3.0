@@ -46,7 +46,7 @@ class FilePicker(QWidget):
         self._icon_label = QLabel(self)
         self._icon_label.setObjectName("fileIconLabel")
         self._icon_label.setFixedWidth(20)
-        self._icon_label.setAlignment(Qt.AlignCenter)
+        self._icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)

@@ -72,17 +72,7 @@ JOIN_KEY_CENTER: Final[str] = CANON_EN_TO_FA["center"]
 JOIN_KEY_FINANCE: Final[str] = CANON_EN_TO_FA["finance"]
 JOIN_KEY_SCHOOL_CODE: Final[str] = CANON_EN_TO_FA["school_code"]
 
-JoinKeyValueMapping = TypedDict(
-    "JoinKeyValueMapping",
-    {
-        JOIN_KEY_GROUP: int,
-        JOIN_KEY_GENDER: int,
-        JOIN_KEY_GRADUATION: int,
-        JOIN_KEY_CENTER: int,
-        JOIN_KEY_FINANCE: int,
-        JOIN_KEY_SCHOOL_CODE: int,
-    },
-)
+JoinKeyValueMapping = Mapping[str, int]
 
 CANONICAL_JOIN_KEYS: tuple[str, ...] = (
     JOIN_KEY_GROUP,

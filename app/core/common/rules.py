@@ -509,7 +509,7 @@ class CenterPriorityRule:
         if isinstance(value, bool):
             return bool(value)
         try:
-            return int(value) != 0  # type: ignore[arg-type]
+            return int(value) != 0
         except Exception:
             return False
 

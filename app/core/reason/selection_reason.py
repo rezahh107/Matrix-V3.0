@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, SupportsFloat, SupportsIndex, SupportsInt
+from typing import Any, SupportsFloat, SupportsIndex
 
 import pandas as pd
 
@@ -424,25 +424,25 @@ def build_selection_reason_rows(
 
         gender_label = _resolve_gender_label(gender_value, policy)
         log_data = log_lookup.get(student_id, {})
-        occupancy_ratio = _format_ratio(log_data.get("occupancy_ratio"))
+        occupancy_ratio = _format_ratio(_safe_float_input(log_data.get("occupancy_ratio")))
         if not occupancy_ratio:
-            occupancy_ratio = _format_ratio(row.get("occupancy_ratio"))
-        allocations_new = _format_int(
-            log_data.get("allocations_new") if log_data.get("allocations_new") is not None else None
-        )
+            occupancy_ratio = _format_ratio(_safe_float_input(row.get("occupancy_ratio")))
+        allocations_new = _format_int(_safe_float_input(log_data.get("allocations_new")))
         if not allocations_new:
             before = log_data.get("capacity_before")
             after = log_data.get("capacity_after")
             if before is not None and after is not None:
-                before_value = _coerce_float(before)
-                after_value = _coerce_float(after)
+                before_value = _coerce_float(_safe_float_input(before))
+                after_value = _coerce_float(_safe_float_input(after))
                 if before_value is not None and after_value is not None:
                     allocations_new = _format_int(before_value - after_value)
         if not allocations_new:
-            allocations_new = _format_int(row.get("allocations_new"))
-        remaining_capacity = _format_int(log_data.get("capacity_after"))
+            allocations_new = _format_int(_safe_float_input(row.get("allocations_new")))
+        remaining_capacity = _format_int(_safe_float_input(log_data.get("capacity_after")))
         if not remaining_capacity:
-            remaining_capacity = _format_int(row.get(capacity_column) or row.get(capacity_alias))
+            remaining_capacity = _format_int(
+                _safe_float_input(row.get(capacity_column) or row.get(capacity_alias))
+            )
         capacity_raw = _format_capacity_text(occupancy_ratio, allocations_new, remaining_capacity)
         if not capacity_raw:
             capacity_raw = config.labels.capacity
@@ -552,7 +552,15 @@ def _resolve_gender_label(value: object, policy: PolicyConfig) -> str:
     return "نامشخص"
 
 
-FloatInput = SupportsFloat | SupportsInt | SupportsIndex | str | bytes | bytearray | None
+FloatInput = SupportsFloat | SupportsIndex | str | bytes | bytearray | None
+
+
+def _safe_float_input(value: object) -> FloatInput:
+    if value is None:
+        return None
+    if isinstance(value, (SupportsFloat, SupportsIndex, str, bytes, bytearray)):
+        return value
+    return None
 
 
 def _format_ratio(value: FloatInput) -> str:
@@ -571,6 +579,8 @@ def _format_int(value: FloatInput) -> str:
 
 
 def _coerce_float(value: FloatInput) -> float | None:
+    if value is None:
+        return None
     try:
         return float(value)
     except (TypeError, ValueError):
