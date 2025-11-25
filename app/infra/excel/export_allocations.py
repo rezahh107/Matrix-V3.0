@@ -232,8 +232,9 @@ def _resolve_fallback_student_column(
     normalized_candidates.add(_normalize_lookup_key(column.source_field or column.header))
     for candidate in normalized_candidates:
         for col in students.columns:
-            if _normalize_lookup_key(str(col)) == candidate:
-                return col
+            label = str(col)
+            if _normalize_lookup_key(label) == candidate:
+                return label
     if "student_educational_status" in students.columns:
         return "student_educational_status"
     return None

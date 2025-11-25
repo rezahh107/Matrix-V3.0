@@ -9,7 +9,7 @@ from collections import OrderedDict
 from collections.abc import Callable, Iterable, Mapping, MutableMapping, Sequence
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Final, NamedTuple
+from typing import TYPE_CHECKING, Any, Final, NamedTuple, TypedDict
 
 import pandas as pd
 
@@ -26,6 +26,9 @@ from app.core.pipeline import (
 )
 from app.infra.excel._writer import ensure_text_columns
 from app.infra.excel.common import attach_contact_columns
+
+if TYPE_CHECKING:
+    from openpyxl.worksheet.worksheet import Worksheet
 
 GF_FIELD_TO_COL: Mapping[str, Sequence[str]] = {
     # اطلاعات هویتی دانش‌آموز
@@ -168,7 +171,7 @@ def validate_export_identifiers(
     )
 
 
-def load_exporter_config(path: str | Path) -> dict:
+def load_exporter_config(path: str | Path) -> MutableMapping[str, Any]:
     """بارگذاری config با حفظ ترتیب ستون‌ها و اعتبارسنجی حداقلی."""
 
     cfg_path = Path(path)
@@ -176,7 +179,12 @@ def load_exporter_config(path: str | Path) -> dict:
         raise FileNotFoundError(f"Exporter config not found: {cfg_path}")
 
     with cfg_path.open("r", encoding="utf-8") as handle:
-        cfg = json.load(handle, object_pairs_hook=OrderedDict)
+        cfg_raw = json.load(handle, object_pairs_hook=OrderedDict)
+
+    if not isinstance(cfg_raw, MutableMapping):
+        raise ExporterConfigError("Exporter config root must be a mapping")
+
+    cfg: MutableMapping[str, Any] = cfg_raw
 
     sheets = cfg.get("sheets")
     if not isinstance(sheets, MutableMapping):
@@ -191,6 +199,13 @@ def load_exporter_config(path: str | Path) -> dict:
         raise ExporterConfigError("'Sheet2.columns' must be a non-empty dict")
 
     return cfg
+
+
+class DedupeLog(TypedDict):
+    """ساختار گزارش ستون‌های حذف‌شده هنگام dedupe."""
+
+    context: str
+    columns: list[str]
 
 
 def prepare_allocation_export_frame(
@@ -225,7 +240,7 @@ def prepare_allocation_export_frame(
     _capture_status("students_with_contacts", students)
     mentors = canonicalize_headers(mentors_df, header_mode="en").copy()
 
-    dedupe_logs: list[dict[str, list[str]]] = []
+    dedupe_logs: list[DedupeLog] = []
     dedupe_cache: dict[str, pd.DataFrame] = {}
 
     def _register_dedupe_log(context: str, frame: pd.DataFrame) -> None:
@@ -482,7 +497,7 @@ def _series_semantically_equal(left: pd.Series, right: pd.Series) -> bool:
 
     left_normalized = left_series.astype("string").fillna("").str.strip()
     right_normalized = right_series.astype("string").fillna("").str.strip()
-    return left_normalized.equals(right_normalized)
+    return bool(left_normalized.equals(right_normalized))
 
 
 def _is_missing_value(value: Any) -> bool:
@@ -490,7 +505,7 @@ def _is_missing_value(value: Any) -> bool:
 
     if isinstance(value, str):
         return value.strip() == ""
-    return pd.isna(value)
+    return bool(pd.isna(value))
 
 
 _MERGE_DUPLICATE_SAMPLE_LIMIT = 5
@@ -797,7 +812,10 @@ def _resolve_map(map_spec: Any, cfg: Mapping[str, Any]) -> Mapping[Any, Any] | N
     if isinstance(map_spec, str):
         maps = cfg.get("maps")
         if isinstance(maps, Mapping) and map_spec in maps:
-            return maps[map_spec]
+            candidate = maps[map_spec]
+            if isinstance(candidate, Mapping):
+                return candidate
+            raise TypeError(f"Mapping '{map_spec}' in exporter config must be a mapping")
     if isinstance(map_spec, Mapping):
         return map_spec
     return None
@@ -1273,7 +1291,7 @@ def ensure_template_workbook(template_path: str | Path, exporter_cfg: Mapping[st
             return [str(value) for value in sheet_cfg]
         return []
 
-    def _write_headers(ws, columns: Sequence[str]) -> None:
+    def _write_headers(ws: Worksheet, columns: Sequence[str]) -> None:
         if not columns:
             return
         for col_idx, column_name in enumerate(columns, start=1):
@@ -1300,7 +1318,7 @@ def ensure_template_workbook(template_path: str | Path, exporter_cfg: Mapping[st
     return path
 
 
-def _write_dataframe_to_sheet(ws, df: pd.DataFrame) -> None:
+def _write_dataframe_to_sheet(ws: Worksheet, df: pd.DataFrame) -> None:
     if df is None:
         return
     if ws.max_row > 1:
@@ -1326,7 +1344,7 @@ def _headers_equivalent(template: Sequence[str], expected: Sequence[str]) -> boo
     return normalized_template == normalized_expected
 
 
-def _rewrite_sheet_headers(ws, expected: Sequence[str]) -> None:
+def _rewrite_sheet_headers(ws: Worksheet, expected: Sequence[str]) -> None:
     for col_idx, value in enumerate(expected, start=1):
         ws.cell(row=1, column=col_idx, value=value)
     max_col = ws.max_column
@@ -1336,7 +1354,7 @@ def _rewrite_sheet_headers(ws, expected: Sequence[str]) -> None:
 
 
 def _verify_headers(
-    ws,
+    ws: Worksheet,
     expected: Sequence[str],
     *,
     on_mismatch: Callable[[str, Sequence[str], Sequence[str]], None] | None = None,

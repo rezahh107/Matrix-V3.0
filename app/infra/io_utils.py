@@ -16,17 +16,12 @@ import warnings
 from collections.abc import Iterator, Mapping, Sequence
 from os import PathLike
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal, cast
 
 import pandas as pd
 
 from app.core.build_matrix import REQUIRED_INSPACTOR_COLUMNS
-from app.core.common.columns import (
-    CANON_EN_TO_FA,
-    HeaderMode,
-    canonicalize_headers,
-    ensure_series,
-)
+from app.core.common.columns import CANON_EN_TO_FA, canonicalize_headers, ensure_series
 from app.core.common.contact_columns import (
     TEXT_SENSITIVE_COLUMN_NAMES,
     is_mobile_header,
@@ -43,6 +38,32 @@ __all__ = [
     "read_excel_first_sheet",
     "read_crosswalk_workbook",
 ]
+
+
+if TYPE_CHECKING:
+    from app.core.common.columns import HeaderMode  # type: ignore[attr-defined]
+else:
+    HeaderMode = Literal["fa", "en", "fa_en"]
+
+_HEADER_MODE_VALUES: tuple[HeaderMode, ...] = ("fa", "en", "fa_en")
+
+
+def _validate_header_mode(value: str) -> HeaderMode:
+    """Validate and normalize header mode values from policy or caller.
+
+    Args:
+        value: Raw header mode string.
+
+    Returns:
+        HeaderMode: Validated header mode literal.
+
+    Raises:
+        ValueError: If the value is not one of the supported header modes.
+    """
+
+    if value not in _HEADER_MODE_VALUES:
+        raise ValueError(f"Invalid header_mode: {value}. Must be one of {_HEADER_MODE_VALUES}")
+    return cast(HeaderMode, value)
 
 
 ALT_CODE_COLUMN = "کد جایگزین"
@@ -157,7 +178,7 @@ def _stringify_cell(value: object) -> str:
     if value is None:
         return ""
     try:
-        if pd.isna(value):  # type: ignore[arg-type]
+        if pd.isna(value):
             return ""
     except Exception:
         pass
@@ -194,7 +215,7 @@ def _stringify_text_sensitive_columns(df: pd.DataFrame) -> None:
         if value is None:
             return ""
         try:
-            if pd.isna(value):  # type: ignore[arg-type]
+            if pd.isna(value):
                 return ""
         except Exception:
             pass
@@ -324,7 +345,9 @@ def write_xlsx_atomic(
     if font_size is None:
         font_size = policy.excel.font_size
     if header_mode is None:
-        header_mode = policy.excel.header_mode_write
+        header_mode_raw = policy.excel.header_mode_write
+        if header_mode_raw is not None:
+            header_mode = _validate_header_mode(header_mode_raw)
 
     engine = _pick_engine()
     taken: set[str] = set()
