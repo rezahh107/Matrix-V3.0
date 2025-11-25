@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import math
 import warnings
 from collections.abc import Callable, Mapping, Sequence
@@ -65,6 +66,8 @@ __all__ = [
     "allocate_batch",
     "build_selection_reason_rows",
 ]
+
+_LOGGER = logging.getLogger(__name__)
 
 _STUDENT_NATIONAL_KEYS: tuple[str, ...] = (
     "student_national_code",
@@ -1386,6 +1389,35 @@ def _ensure_pool_canonical(
     return pool
 
 
+def _log_pool_consistency(
+    *,
+    student_id: object,
+    candidate_pool: pd.DataFrame,
+    pool_view: pd.DataFrame,
+    pool_state_view: pd.DataFrame | None,
+    stage: str,
+) -> bool:
+    """Log index consistency between filtered candidates and state view."""
+
+    state_view = pool_state_view if pool_state_view is not None else pool_view
+    candidate_index = pd.Index(candidate_pool.index)
+    missing_indexes = candidate_index.difference(state_view.index)
+    mismatch_detected = bool(missing_indexes.size)
+    _LOGGER.debug(
+        "pool consistency",
+        extra={
+            "student_id": student_id,
+            "stage": stage,
+            "candidate_pool_shape": candidate_pool.shape,
+            "pool_view_shape": pool_view.shape,
+            "pool_state_view_shape": state_view.shape,
+            "pool_mismatch_detected": mismatch_detected,
+            "missing_candidate_indexes": missing_indexes.tolist() if mismatch_detected else [],
+        },
+    )
+    return mismatch_detected
+
+
 def allocate_student(
     student: Mapping[str, object],
     candidate_pool: pd.DataFrame,
@@ -1488,6 +1520,14 @@ def allocate_student(
         _append_invalid_center_alert(log, center_alert_payload, center_fallback)
         return AllocationResult(None, trace, log)
 
+    pool_mismatch_detected = _log_pool_consistency(
+        student_id=log.get("student_id", student.get("student_id")),
+        candidate_pool=eligible,
+        pool_view=candidate_pool,
+        pool_state_view=pool_state_view,
+        stage="pre_capacity",
+    )
+
     def _fail_allocation(
         detailed_reason: str,
         *,
@@ -1572,6 +1612,15 @@ def allocate_student(
     stage_candidate_counts["capacity_gate"] = int(capacity_mask.sum())
     stage_candidate_counts = _canonical_stage_counts(stage_candidate_counts)
     log["stage_candidate_counts"] = stage_candidate_counts
+
+    pool_mismatch_detected = pool_mismatch_detected or _log_pool_consistency(
+        student_id=log.get("student_id", student.get("student_id")),
+        candidate_pool=capacity_filtered,
+        pool_view=candidate_pool,
+        pool_state_view=pool_state_view,
+        stage="pre_ranking",
+    )
+    log["pool_mismatch_detected"] = pool_mismatch_detected
 
     if capacity_filtered.empty:
         error_updates: dict[str, object] = {}
@@ -1772,6 +1821,7 @@ def allocate_student(
             "capacity_before": int(capacity_before),
             "capacity_after": int(capacity_after),
             "stage_candidate_counts": _canonical_stage_counts(stage_candidate_counts),
+            "pool_mismatch_detected": pool_mismatch_detected,
         }
     )
     return AllocationResult(capacity_filtered.loc[chosen_index], trace, log)
