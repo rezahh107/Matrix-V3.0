@@ -99,7 +99,7 @@ def strip_school_code_separators(text: str) -> str:
 
 
 # Minimal Arabic → Persian letter fixes
-_AR2FA_MAP: dict[str, str] = {
+_AR2FA_MAP: dict[str, str | int | None] = {
     "ي": "ی",
     "ى": "ی",
     "ك": "ک",
@@ -262,7 +262,10 @@ def _translate_digits_and_symbols_for_text(s: str) -> str:
     Thousand separators are handled by _RE_NONWORD, so not removed here.
     """
     try:
-        table = _DIGIT_TRANSLATION | {ord("\u2212"): ord("-"), ord("\u066b"): ord(".")}
+        table: dict[int, int] = {
+            **_DIGIT_TRANSLATION,
+            **{ord("\u2212"): ord("-"), ord("\u066b"): ord(".")},
+        }
         return s.translate(table)
     except Exception:
         return s
@@ -281,7 +284,11 @@ def _numlike_ascii_cleanup(s: str) -> str:
     try:
         if not s:
             return ""
-        s = s.translate(_DIGIT_TRANSLATION | _NUM_SYM_TRANSLATION)
+        translation_table: dict[int, int | None] = {
+            **_DIGIT_TRANSLATION,
+            **_NUM_SYM_TRANSLATION,
+        }
+        s = s.translate(translation_table)
         if not s:
             return ""
         keep: list[str] = []
@@ -427,7 +434,10 @@ def ensure_list(values: Iterable[Any]) -> list[str]:
     out: list[str] = []
     seen: set[str] = set()
     try:
-        values_iter = [values] if isinstance(values, (str, bytes, bytearray)) else values  # type: ignore[assignment]
+        if isinstance(values, (str, bytes, bytearray)):
+            values_iter: Iterable[Any] = [values]
+        else:
+            values_iter = values
         for item in values_iter:
             if _is_nan_like(item):
                 continue
@@ -547,7 +557,7 @@ def resolve_group_code(
     return None
 
 
-def safe_int_value(x, default: int = 0) -> int:
+def safe_int_value(x: Any, default: int = 0) -> int:
     """تبدیل امن مقدار به عدد صحیح بدون پذیرش اعشار ساختگی."""
 
     s = to_numlike_str(x).strip()
