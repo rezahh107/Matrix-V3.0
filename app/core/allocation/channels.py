@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import enum
 from collections.abc import Iterable
+from typing import SupportsInt, cast
 
 import pandas as pd
 
@@ -19,10 +20,21 @@ class AllocationChannel(str, enum.Enum):
 
 
 def _to_int_safe(value: object) -> int | None:
-    try:
-        return int(value)  # type: ignore[arg-type]
-    except (TypeError, ValueError):
+    if value is None:
         return None
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, (int, float, str, bytes, bytearray)):
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+    if hasattr(value, "__int__"):
+        try:
+            return int(cast(SupportsInt, value))
+        except (TypeError, ValueError):
+            return None
+    return None
 
 
 def _column_as_int(df: pd.DataFrame, column: str | None) -> pd.Series | None:

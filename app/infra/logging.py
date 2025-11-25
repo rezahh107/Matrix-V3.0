@@ -17,7 +17,7 @@ from pathlib import Path
 from types import TracebackType
 from typing import Any
 
-import yaml
+import yaml  # type: ignore[import-untyped]  # PyYAML stubs not available
 
 DEFAULT_LOGGING_CONFIG = Path("config/logging.yaml")
 
@@ -255,11 +255,16 @@ def install_exception_hook(logger: logging.Logger, context: LoggingContext) -> C
     ) -> None:
         error_id = context.new_error_id()
         if exc_value is None:
-            traceback_parts = traceback.format_exception_only(exc_type)
-            message_value: str = exc_type.__name__
+            try:
+                exc_value_for_log: BaseException = exc_type()
+            except BaseException:
+                exc_value_for_log = exc_type("")
+            traceback_parts = traceback.format_exception_only(exc_type, exc_value_for_log)
+            message_value = exc_value_for_log.__class__.__name__
         else:
-            traceback_parts = traceback.format_exception(exc_type, exc_value, exc_tb)
-            message_value = str(exc_value)
+            exc_value_for_log = exc_value
+            traceback_parts = traceback.format_exception(exc_type, exc_value_for_log, exc_tb)
+            message_value = str(exc_value_for_log)
         traceback_text = "".join(traceback_parts)
         report_path = context.write_error_report(
             error_id=error_id,
@@ -269,7 +274,7 @@ def install_exception_hook(logger: logging.Logger, context: LoggingContext) -> C
         logger.critical(
             "Unhandled exception from %s",
             source,
-            exc_info=(exc_type, exc_value, exc_tb),
+            exc_info=(exc_type, exc_value_for_log, exc_tb),
             extra={"error_id": error_id, "report_path": str(report_path)},
         )
 
