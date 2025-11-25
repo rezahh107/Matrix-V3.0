@@ -26,9 +26,9 @@ try:  # pragma: no cover - وابستگی Qt ممکن است در CI غایب ب
 except Exception as exc:  # pragma: no cover - fallback
     Qt = None
     QDialog = object
-    QGridLayout = QHeaderView = QLabel = QMessageBox = QPushButton = QTableWidget = QTableWidgetItem = QVBoxLayout = QWidget = cast(
-        Any, None
-    )
+    QGridLayout = QHeaderView = QLabel = QMessageBox = QPushButton = QTableWidget = (
+        QTableWidgetItem
+    ) = QVBoxLayout = QWidget = cast(Any, None)
     _QT_AVAILABLE = False
     _QT_IMPORT_ERROR = exc
 
