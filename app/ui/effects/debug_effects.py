@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 from PySide6.QtCore import QPoint, Qt
 from PySide6.QtGui import QPainter, QPixmap, QTransform
@@ -25,6 +25,11 @@ class _LoggingMixin:
     _effect_name: str | None = None
     _logged_inactive: bool = False
 
+    def _qt_effect(self) -> QGraphicsEffect:
+        """Return self as a Qt graphics effect for type checking purposes."""
+
+        return cast(QGraphicsEffect, self)
+
     def _init_effect_name(self, effect_name: str) -> None:
         """ثبت نام افکت با fallback به Qt property در صورت محدودیت __setattr__."""
 
@@ -32,17 +37,18 @@ class _LoggingMixin:
             self._effect_name = effect_name
         except TypeError:
             # برخی آبجکت‌های Qt اجازهٔ __setattr__ ندارند؛ از setProperty استفاده می‌کنیم.
-            self.setProperty("_effect_name", effect_name)
+            self._qt_effect().setProperty("_effect_name", effect_name)
         try:
             self._logged_inactive = False
         except TypeError:
-            self.setProperty("_logged_inactive", False)
+            self._qt_effect().setProperty("_logged_inactive", False)
 
     def _get_effect_name(self) -> str:
         name = getattr(self, "_effect_name", None)
         if isinstance(name, str):
             return name
-        prop_name = self.property("_effect_name") if hasattr(self, "property") else None
+        qt_effect = self._qt_effect()
+        prop_name = qt_effect.property("_effect_name") if hasattr(qt_effect, "property") else None
         if isinstance(prop_name, str):
             return prop_name
         return self.__class__.__name__
@@ -55,12 +61,17 @@ class _LoggingMixin:
         try:
             self._logged_inactive = True
         except TypeError:
-            self.setProperty("_logged_inactive", True)
+            self._qt_effect().setProperty("_logged_inactive", True)
 
     def _log(self, message: str, painter: QPainter) -> None:
         if not DEBUG_PAINT_EFFECTS:
             return
         device = painter.device() if painter.isActive() else None
+        effect = self._qt_effect()
+        source: object = "<none>"
+        if hasattr(effect, "source"):
+            source_attr = getattr(effect, "source")
+            source = source_attr() if callable(source_attr) else source_attr
         LOGGER.debug(
             "%s | %s | active=%s device=%s id=%s source=%s effect=%s",  # noqa: TRY003
             self._get_effect_name(),
@@ -68,7 +79,7 @@ class _LoggingMixin:
             painter.isActive(),
             device.__class__.__name__ if device else "<none>",
             hex(id(device)) if device else "<none>",
-            self.source() if isinstance(self, QGraphicsEffect) else "<none>",
+            source if isinstance(self, QGraphicsEffect) else "<none>",
             hex(id(self)),
         )
 
@@ -80,7 +91,7 @@ class _LoggingMixin:
         """Normalize PySide/PyQt sourcePixmap return shapes."""
 
         offset = QPoint()
-        source = self.sourcePixmap(coordinates, offset, pad_mode)
+        source = self._qt_effect().sourcePixmap(coordinates, offset, pad_mode)
         if isinstance(source, tuple):
             pixmap, returned_offset = source
             if isinstance(returned_offset, QPoint):
@@ -98,14 +109,16 @@ class SafeOpacityEffect(_LoggingMixin, QGraphicsOpacityEffect):
         super().__init__(parent)
         self._init_effect_name(effect_name)
 
-    def draw(self, painter: QPainter) -> None:  # type: ignore[override]
+    def draw(self, painter: QPainter) -> None:
         if not painter.isActive():
             self._mark_inactive_once()
             return
 
         offset = QPoint()
         pixmap = self.sourcePixmap(
-            Qt.LogicalCoordinates, offset, QGraphicsEffect.PadToEffectiveBoundingRect
+            Qt.CoordinateSystem.LogicalCoordinates,
+            offset,
+            QGraphicsEffect.PixmapPadMode.PadToEffectiveBoundingRect,
         )
         if pixmap.isNull():
             self._log("draw.skip(null_pixmap)", painter)
@@ -128,14 +141,16 @@ class SafeDropShadowEffect(_LoggingMixin, QGraphicsDropShadowEffect):
         super().__init__(parent)
         self._init_effect_name(effect_name)
 
-    def draw(self, painter: QPainter) -> None:  # type: ignore[override]
+    def draw(self, painter: QPainter) -> None:
         if not painter.isActive():
             self._mark_inactive_once()
             return
 
         offset = QPoint()
         pixmap = self.sourcePixmap(
-            Qt.LogicalCoordinates, offset, QGraphicsEffect.PadToEffectiveBoundingRect
+            Qt.CoordinateSystem.LogicalCoordinates,
+            offset,
+            QGraphicsEffect.PixmapPadMode.PadToEffectiveBoundingRect,
         )
         if pixmap.isNull():
             self._log("draw.skip(null_pixmap)", painter)

@@ -7,7 +7,7 @@ from collections.abc import Hashable, Mapping, Sequence
 from hashlib import blake2b
 from numbers import Number
 from pathlib import Path
-from typing import TypedDict
+from typing import TypedDict, cast
 
 import pandas as pd
 
@@ -55,7 +55,7 @@ def _safe_capacity(value: CapacityScalar) -> int:
     if isinstance(value, bool):
         numeric = int(value)
     elif isinstance(value, Number):
-        if pd.isna(value):  # type: ignore[arg-type]
+        if pd.isna(value):
             return 0
         numeric = int(value)
     elif isinstance(value, str):
@@ -182,7 +182,13 @@ def apply_ranking_policy(
         raise KeyError("candidate pool must include 'mentor_id' column after canonicalization")
 
     state_view: Mapping[Hashable, Mapping[str, CapacityScalar]]
-    state_view = state if state is not None else build_mentor_state(state_source, policy=policy)
+    if state is not None:
+        state_view = state
+    else:
+        state_view = cast(
+            Mapping[Hashable, Mapping[str, CapacityScalar]],
+            build_mentor_state(state_source, policy=policy),
+        )
 
     def _state_metric(mentor: Hashable, key: str, *, default: int = 0) -> int:
         entry = state_view.get(mentor)
