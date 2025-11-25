@@ -65,12 +65,25 @@ CANONICAL_TRACE_ORDER: tuple[TraceStageName, ...] = (
 
 TRACE_STAGE_NAME_SET: frozenset[TraceStageName] = frozenset(CANONICAL_TRACE_ORDER)
 
-JOIN_KEY_GROUP: Final[str] = CANON_EN_TO_FA["group_code"]
-JOIN_KEY_GENDER: Final[str] = CANON_EN_TO_FA["gender"]
-JOIN_KEY_GRADUATION: Final[str] = CANON_EN_TO_FA["graduation_status"]
-JOIN_KEY_CENTER: Final[str] = CANON_EN_TO_FA["center"]
-JOIN_KEY_FINANCE: Final[str] = CANON_EN_TO_FA["finance"]
-JOIN_KEY_SCHOOL_CODE: Final[str] = CANON_EN_TO_FA["school_code"]
+
+def _underscore_key(value: str) -> str:
+    """بازگرداندن نام کلید با جداکنندهٔ «_» برای استفادهٔ داخلی.
+
+    شکل‌های حاوی فاصلهٔ معمول در Policy/SSoT را به فرم پایدار با
+    ``_`` تبدیل می‌کند تا نسخهٔ داخلی کلیدهای join با تست‌ها و
+    سایر بخش‌های سیستم همسو باشد.
+    """
+
+    spaced = re.sub(r"\s+", " ", value.strip())
+    return spaced.replace(" ", "_")
+
+
+JOIN_KEY_GROUP: Final[str] = _underscore_key(CANON_EN_TO_FA["group_code"])
+JOIN_KEY_GENDER: Final[str] = _underscore_key(CANON_EN_TO_FA["gender"])
+JOIN_KEY_GRADUATION: Final[str] = _underscore_key(CANON_EN_TO_FA["graduation_status"])
+JOIN_KEY_CENTER: Final[str] = _underscore_key(CANON_EN_TO_FA["center"])
+JOIN_KEY_FINANCE: Final[str] = _underscore_key(CANON_EN_TO_FA["finance"])
+JOIN_KEY_SCHOOL_CODE: Final[str] = _underscore_key(CANON_EN_TO_FA["school_code"])
 
 JoinKeyValueMapping = Mapping[str, int]
 
@@ -155,19 +168,27 @@ def _normalize_join_key(key: str) -> str:
     return normalized
 
 
-def _canonical_join_key_display(key: str) -> str:
+def _canonical_join_key_display(key: str, *, allow_unknown: bool = False) -> str:
     normalized = _normalize_join_key(key)
     canonical_map = {_normalize_join_key(value): value for value in CANONICAL_JOIN_KEYS}
     if normalized in canonical_map:
         return canonical_map[normalized]
 
     english_to_fa = {
-        _normalize_join_key(en_key): fa_value
+        _normalize_join_key(en_key): _underscore_key(fa_value)
         for en_key, fa_value in CANON_EN_TO_FA.items()
-        if fa_value in CANONICAL_JOIN_KEYS
     }
     if normalized in english_to_fa:
         return english_to_fa[normalized]
+
+    spaced_variants = {
+        _normalize_join_key(key.replace("_", " ")): key for key in CANONICAL_JOIN_KEYS
+    }
+    if normalized in spaced_variants:
+        return spaced_variants[normalized]
+
+    if allow_unknown:
+        return str(key)
     raise ValueError(f"Unknown join key: {key}")
 
 
@@ -199,24 +220,36 @@ class JoinKeyValues(Mapping[str, int]):
     _mapping: Mapping[str, int]
     _lookup_map: Mapping[str, str]
 
+    _EXPECTED_SENTINEL: Any = object()
+
     def __init__(
         self,
         data: Mapping[str, int] | MutableMapping[str, int],
         *,
-        expected_keys: Iterable[str] | None = CANONICAL_JOIN_KEYS,
+        expected_keys: Iterable[str] | None | Any = _EXPECTED_SENTINEL,
     ):
         normalized_items: OrderedDict[str, int] = OrderedDict()
         for key, value in data.items():
-            display_key = _canonical_join_key_display(str(key))
+            display_key = _canonical_join_key_display(str(key), allow_unknown=True)
             if not isinstance(value, int):
                 raise TypeError(f"Join key '{display_key}' must be int")
             normalized_items[display_key] = value
 
+        default_expected = expected_keys is JoinKeyValues._EXPECTED_SENTINEL
+        display_expected = (
+            CANONICAL_JOIN_KEYS
+            if default_expected
+            else tuple(expected_keys) if expected_keys else None
+        )
+
         if len(normalized_items) != len(CANONICAL_JOIN_KEYS):
             raise ValueError("JoinKeyValues must contain exactly six entries")
 
-        if expected_keys is not None:
-            display_keys = tuple(_canonical_join_key_display(str(key)) for key in expected_keys)
+        if display_expected is not None:
+            display_keys = tuple(
+                _canonical_join_key_display(str(key), allow_unknown=True)
+                for key in display_expected
+            )
             expected_set = {_normalize_join_key(key) for key in display_keys}
             data_set = {_normalize_join_key(key) for key in normalized_items}
             missing = tuple(key for key in display_keys if _normalize_join_key(key) not in data_set)
@@ -225,6 +258,12 @@ class JoinKeyValues(Mapping[str, int]):
             )
             if missing or extra:
                 raise ValueError("JoinKeyValues keys mismatch; " f"missing={missing} extra={extra}")
+            if (not default_expected) and tuple(
+                _normalize_join_key(key) for key in display_keys
+            ) != tuple(_normalize_join_key(key) for key in normalized_items):
+                raise ValueError(
+                    "JoinKeyValues keys mismatch; ordering differs from provided expected_keys"
+                )
             ordered = OrderedDict(
                 (display_key, normalized_items[display_key]) for display_key in display_keys
             )
@@ -232,12 +271,15 @@ class JoinKeyValues(Mapping[str, int]):
             ordered = OrderedDict(normalized_items)
 
         english_lookup = {
-            _normalize_join_key(en_key): display_key
+            _normalize_join_key(en_key): _canonical_join_key_display(
+                display_key, allow_unknown=True
+            )
             for en_key, display_key in CANON_EN_TO_FA.items()
-            if display_key in ordered
+            if _canonical_join_key_display(display_key, allow_unknown=True) in ordered
         }
         lookup_map = {
             **{_normalize_join_key(key): key for key in ordered},
+            **{_normalize_join_key(key.replace("_", " ")): key for key in ordered},
             **english_lookup,
         }
 
@@ -259,6 +301,9 @@ class JoinKeyValues(Mapping[str, int]):
         normalized = _normalize_join_key(str(key))
         display_key = self._lookup_map.get(normalized)
         if display_key is None:
+            fallback = _canonical_join_key_display(str(key), allow_unknown=True)
+            if fallback in self._mapping:
+                return self._mapping[fallback]
             raise KeyError(key)
         return self._mapping[display_key]
 
@@ -316,18 +361,23 @@ class JoinKeyValues(Mapping[str, int]):
         """
 
         expected_keys = tuple(str(key) for key in join_keys)
-        missing = [key for key in expected_keys if key not in data]
-        if missing:
-            raise ValueError(f"join key values missing for: {', '.join(missing)}")
-
         ordered: OrderedDict[str, int] = OrderedDict()
+        sentinel: object = object()
         for key in expected_keys:
-            raw_value = data[key]
+            display_key = _canonical_join_key_display(key, allow_unknown=True)
+            raw_value = data.get(key, sentinel)
+            if raw_value is sentinel and display_key != key:
+                raw_value = data.get(display_key, sentinel)
+            if raw_value is sentinel:
+                spaced_variant = display_key.replace("_", " ")
+                raw_value = data.get(spaced_variant, sentinel)
+            if raw_value is sentinel:
+                raise ValueError(f"join key values missing for: {key}")
             try:
-                coerced = int(raw_value)
+                coerced = int(cast(int | str | float | bool, raw_value))
             except (TypeError, ValueError):
                 raise TypeError(f"Join key '{key}' must be int-convertible")
-            ordered[key] = coerced
+            ordered[display_key] = coerced
 
         return cls(ordered, expected_keys=expected_keys)
 

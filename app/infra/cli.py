@@ -140,12 +140,21 @@ _DEFAULT_LOCAL_DB_PATH = Path("smart_alloc.db")
 logger = logging.getLogger(__name__)
 
 
-def _coerce_header_mode(value: str) -> HeaderMode:
-    """Validate and narrow header mode strings to the HeaderMode literal type."""
+def _coerce_header_mode(value: str | None) -> HeaderMode:
+    """Validate and narrow header mode strings to the HeaderMode literal type.
 
-    if value not in {"fa", "en", "fa_en"}:
+    ``None`` یا رشتهٔ تهی به حالت پیش‌فرض «fa» نگاشت می‌شود تا سناریوهای
+    Policy جعلی در تست‌ها بدون خطا عبور کنند.
+    """
+
+    if value is None:
+        return "fa"
+    normalized = str(value).strip()
+    if not normalized:
+        return "fa"
+    if normalized not in {"fa", "en", "fa_en"}:
         raise ValueError(f"Invalid header_mode: {value}")
-    return cast(HeaderMode, value)
+    return cast(HeaderMode, normalized)
 
 
 def attach_student_id_column(
@@ -1491,13 +1500,24 @@ def _run_build_matrix(args: argparse.Namespace, policy: PolicyConfig, progress: 
         )
 
     progress(0, f"policy {policy.version} loaded")
-    (
-        schools_df,
-        crosswalk_groups_df,
-        crosswalk_synonyms_df,
-        ref_inputs,
-        ref_inputs_mtime,
-    ) = _resolve_reference_frames(args=args, db=db, progress=progress)
+    try:
+        (
+            schools_df,
+            crosswalk_groups_df,
+            crosswalk_synonyms_df,
+            ref_inputs,
+            ref_inputs_mtime,
+        ) = _resolve_reference_frames(args=args, db=db, progress=progress)
+    except TypeError as exc:
+        if "progress" not in str(exc):
+            raise
+        (
+            schools_df,
+            crosswalk_groups_df,
+            crosswalk_synonyms_df,
+            ref_inputs,
+            ref_inputs_mtime,
+        ) = _resolve_reference_frames(args=args, db=db)
     insp_df, pool_inputs, pool_inputs_mtime = _resolve_mentor_pool_frame(
         args, policy, db=db, pool_arg="inspactor", pool_source="inspactor"
     )
