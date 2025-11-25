@@ -53,16 +53,16 @@ class HistoryMetricsModel(QAbstractTableModel):
         self.endResetModel()
 
     # Qt model overrides -------------------------------------------------
-    def rowCount(
+    def rowCount(  # noqa: N802 - امضای Qt
         self, parent: QModelIndex | QPersistentModelIndex = QModelIndex()
-    ) -> int:  # noqa: N802 - امضای Qt
+    ) -> int:
         if parent and parent.isValid():
             return 0
         return len(self._metrics_df.index)
 
-    def columnCount(
+    def columnCount(  # noqa: N802 - امضای Qt
         self, parent: QModelIndex | QPersistentModelIndex = QModelIndex()
-    ) -> int:  # noqa: N802 - امضای Qt
+    ) -> int:
         if parent and parent.isValid():
             return 0
         return len(METRIC_COLUMNS)
