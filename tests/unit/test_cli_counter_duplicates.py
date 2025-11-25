@@ -58,3 +58,17 @@ def test_inject_student_ids_assign_new_strategy_keeps_all_rows():
     assert summary.get("duplicate_resolution_mode") == "assign-new"
     assert summary.get("duplicate_resolution_count") == 1
     assert len(updated_students) == 2
+
+
+def test_inject_student_ids_sets_student_id_column() -> None:
+    students = pd.DataFrame({"national_id": ["0001", "0002"], "gender": [1, 0]})
+    args = _build_args(counter_duplicate_strategy="prompt")
+    policy = _load_policy()
+
+    counters, _, updated_students = cli._inject_student_ids(students, args, policy)
+
+    assert "student_id" in updated_students.columns
+    assert (
+        updated_students["student_id"].astype("string").tolist()
+        == counters.astype("string").tolist()
+    )
