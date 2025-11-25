@@ -32,6 +32,7 @@ except Exception as exc:  # pragma: no cover - fallback
 from app.infra.local_database import (
     DatabaseSchemaDiagnostics,
     LocalDatabase,
+    TableSchemaDiagnostics,
 )
 from app.infra.year_database_manager import YearDatabaseInfo
 
@@ -63,14 +64,20 @@ class DatabaseManagerDialog(QDialog):
         layout = QVBoxLayout(self)
 
         self._path_label = QLabel(self)
-        self._path_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self._path_label.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
         layout.addWidget(self._path_label)
 
         grid = QGridLayout()
         self._schema_label = QLabel(self)
         self._module_label = QLabel(self)
-        self._schema_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        self._module_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self._schema_label.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+        self._module_label.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
         grid.addWidget(QLabel("نسخهٔ Schema (انتظار/فعلی):", self), 0, 0)
         grid.addWidget(self._schema_label, 0, 1)
         grid.addWidget(QLabel("مسیر ماژول SQLite:", self), 1, 0)
@@ -83,9 +90,9 @@ class DatabaseManagerDialog(QDialog):
         self._counts_table.setColumnCount(3)
         self._counts_table.setHorizontalHeaderLabels(["جدول", "تعداد ردیف", "ستون‌های مفقود"])
         header = self._counts_table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.Stretch)
-        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(2, QHeaderView.Stretch)
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         layout.addWidget(self._counts_table)
 
         issues_label = QLabel("مشکلات Schema", self)
@@ -94,8 +101,8 @@ class DatabaseManagerDialog(QDialog):
         self._issues_table.setColumnCount(2)
         self._issues_table.setHorizontalHeaderLabels(["جدول", "ستون‌های مفقود"])
         header2 = self._issues_table.horizontalHeader()
-        header2.setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        header2.setSectionResizeMode(1, QHeaderView.Stretch)
+        header2.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        header2.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         layout.addWidget(self._issues_table)
 
         btn_row = QHBoxLayout()
@@ -132,7 +139,9 @@ class DatabaseManagerDialog(QDialog):
         }.get(summary.status.value, "")
         self.setWindowTitle(f"مدیریت پایگاه داده {status_prefix}")
 
-    def _populate_counts_table(self, counts: dict[str, int], table_diags: Iterable[object]) -> None:
+    def _populate_counts_table(
+        self, counts: dict[str, int], table_diags: Iterable[TableSchemaDiagnostics]
+    ) -> None:
         rows: list[tuple[str, str, str]] = []
         for diag in table_diags:
             missing = ", ".join(diag.missing_required_columns)
@@ -144,7 +153,9 @@ class DatabaseManagerDialog(QDialog):
             self._counts_table.setItem(idx, 1, QTableWidgetItem(count))
             self._counts_table.setItem(idx, 2, QTableWidgetItem(missing))
 
-    def _populate_issues_table(self, table_diags: Iterable[object]) -> None:
+    def _populate_issues_table(
+        self, table_diags: Iterable[TableSchemaDiagnostics]
+    ) -> None:
         issues = [
             (diag.name, ", ".join(diag.missing_required_columns))
             for diag in table_diags
@@ -160,10 +171,10 @@ class DatabaseManagerDialog(QDialog):
             self,
             title,
             text,
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
         )
-        return result == QMessageBox.Yes
+        return bool(result == QMessageBox.StandardButton.Yes)
 
     def _full_reset(self) -> None:
         if not self._confirm(
