@@ -6,6 +6,13 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any, cast
 
+from app.infra.local_database import (
+    DatabaseSchemaDiagnostics,
+    LocalDatabase,
+    TableSchemaDiagnostics,
+)
+from app.infra.year_database_manager import YearDatabaseInfo
+
 Qt: Any
 QDialog: type[object]
 QGridLayout: type[object]
@@ -43,13 +50,6 @@ else:
     QVBoxLayout = QtWidgets.QVBoxLayout
     QWidget = QtWidgets.QWidget
     _QT_AVAILABLE = True
-
-from app.infra.local_database import (
-    DatabaseSchemaDiagnostics,
-    LocalDatabase,
-    TableSchemaDiagnostics,
-)
-from app.infra.year_database_manager import YearDatabaseInfo
 
 __all__ = ["DatabaseManagerDialog", "_QT_AVAILABLE"]
 
