@@ -98,9 +98,7 @@ def _extract_reason_labels(raw: object, locale: str) -> SelectionReasonLabels:
     mapping = candidate if isinstance(candidate, Mapping) else {}
 
     labels_options = _DEFAULT_SELECTION_REASON_OPTIONS.get("labels", {})
-    reason_defaults = (
-        labels_options.get("reason") if isinstance(labels_options, Mapping) else {}
-    )
+    reason_defaults = labels_options.get("reason") if isinstance(labels_options, Mapping) else {}
     defaults = reason_defaults if isinstance(reason_defaults, Mapping) else {}
 
     def pick(key: str) -> str:
