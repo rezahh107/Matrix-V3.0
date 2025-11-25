@@ -257,7 +257,7 @@ def install_exception_hook(logger: logging.Logger, context: LoggingContext) -> C
         if exc_value is None:
             try:
                 exc_value_for_log: BaseException = exc_type()
-            except Exception:
+            except BaseException:
                 exc_value_for_log = exc_type("")
             traceback_parts = traceback.format_exception_only(exc_type, exc_value_for_log)
             message_value = exc_value_for_log.__class__.__name__
