@@ -114,9 +114,9 @@ from app.infra.reference_students_repository import (
 from app.infra.validators.join_keys import validate_allocation_join_keys
 
 if TYPE_CHECKING:
-    from app.core.allocation.mentor_pool import MentorPoolGovernanceConfig
-    from app.core.build_matrix import BuildConfig
-    from app.core.common.columns import HeaderMode
+    from app.core.common.domain import BuildConfig
+    from app.core.common.types import HeaderMode
+    from app.core.policy_loader import MentorPoolGovernanceConfig
 else:
     MentorPoolGovernanceConfig = mentor_pool.MentorPoolGovernanceConfig
     BuildConfig = build_matrix_module.BuildConfig

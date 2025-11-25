@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Protocol
+from typing import Any, Protocol, runtime_checkable
 
 import pandas as pd
 
@@ -13,6 +13,7 @@ from app.infra.errors import ReferenceDataMissingError
 from app.infra.local_database import LocalDatabase
 
 
+@runtime_checkable
 class WordPressFormsClient(Protocol):
     """قرارداد کلاینت WordPress/Gravity Forms برای دریافت ورودی‌ها."""
 
