@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any, Mapping, Sequence, cast
+
 import pandas as pd
 from PySide6.QtWidgets import QDialog, QHBoxLayout, QListWidget, QWidget
 
@@ -10,7 +12,10 @@ from app.infra.local_database import LocalDatabase
 from app.ui.history_metrics import HistoryMetricsPanel
 
 
-def _metrics_rows_to_frame(rows: list[object]) -> pd.DataFrame:
+RowMapping = Mapping[str, Any]
+
+
+def _metrics_rows_to_frame(rows: Sequence[RowMapping]) -> pd.DataFrame:
     """تبدیل ردیف‌های run_metrics به دیتافریم استاندارد."""
 
     channels: dict[str, dict[str, float]] = {}
@@ -58,7 +63,8 @@ class HistoryMetricsDialog(QDialog):
         self._runs = self._db.fetch_runs()
         self._run_list.clear()
         for row in self._runs:
-            self._run_list.addItem(f"#{row['id']} | {row['run_uuid']}")
+            run_row = cast(RowMapping, row)
+            self._run_list.addItem(f"#{run_row['id']} | {run_row['run_uuid']}")
         if self._runs:
             self._run_list.setCurrentRow(len(self._runs) - 1)
         else:
@@ -68,8 +74,9 @@ class HistoryMetricsDialog(QDialog):
         if row < 0 or row >= len(self._runs):
             self._panel.set_metrics(pd.DataFrame(columns=METRIC_COLUMNS))
             return
-        run_id = int(self._runs[row]["id"])
-        metric_rows = self._db.fetch_metrics_for_run(run_id)
+        run_row = cast(RowMapping, self._runs[row])
+        run_id = int(run_row["id"])
+        metric_rows = cast(Sequence[RowMapping], self._db.fetch_metrics_for_run(run_id))
         metrics_df = _metrics_rows_to_frame(metric_rows)
         self._panel.set_metrics(metrics_df)
 
