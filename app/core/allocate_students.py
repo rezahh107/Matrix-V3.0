@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import math
 import warnings
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Hashable, Mapping, Sequence
 from dataclasses import dataclass
 from numbers import Number, Real
-from typing import Any, Hashable, Literal, SupportsFloat, SupportsInt, TypeVar, cast
+from typing import Any, Literal, SupportsFloat, SupportsInt, TypeVar, cast
 
 import pandas as pd
 from pandas.api import types as pd_types
