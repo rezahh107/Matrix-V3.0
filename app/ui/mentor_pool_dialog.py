@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QTreeView,
     QVBoxLayout,
+    QWidget,
 )
 
 from app.ui.mentor_pool_model import ManagerMentorFilterProxy, ManagerMentorModel
@@ -28,7 +29,7 @@ class MentorPoolDialog(QDialog):
         - فیلتر ساده بر اساس نام/شناسه.
     """
 
-    def __init__(self, entries: Iterable[MentorPoolEntry], parent=None) -> None:
+    def __init__(self, entries: Iterable[MentorPoolEntry], parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("حاکمیت استخر منتورها")
         self._model = ManagerMentorModel(entries, self)
@@ -51,7 +52,9 @@ class MentorPoolDialog(QDialog):
         hint = QLabel("منتورها را برای اجرای جاری فعال/غیرفعال کنید.", self)
         hint.setWordWrap(True)
 
-        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self)
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self
+        )
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
 

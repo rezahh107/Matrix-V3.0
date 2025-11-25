@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import pandas as pd
 
+from typing import Mapping, cast
+
 from app.core.common.ranking import apply_ranking_policy, build_mentor_state
 from app.core.policy_loader import PolicyConfig, load_policy
 
@@ -27,4 +29,5 @@ def rank_rule_engine_candidates(
     if policy is None:
         policy = load_policy()
     state = build_mentor_state(candidate_pool, policy=policy)
-    return apply_ranking_policy(candidate_pool, state=state, policy=policy)
+    mapped_state = cast(Mapping[object, Mapping[str, int | float | str | None]], state)
+    return apply_ranking_policy(candidate_pool, state=mapped_state, policy=policy)

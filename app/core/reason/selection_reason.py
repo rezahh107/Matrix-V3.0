@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, SupportsFloat, SupportsIndex, SupportsInt
 
 import pandas as pd
 
@@ -277,7 +277,7 @@ def build_selection_reason_rows(
             ]
         except Exception:
             alias = column
-        return alias
+        return str(alias)
 
     def _student_value(student_id: str, *columns: str) -> str:
         row = student_lookup.get(student_id)
@@ -434,10 +434,10 @@ def build_selection_reason_rows(
             before = log_data.get("capacity_before")
             after = log_data.get("capacity_after")
             if before is not None and after is not None:
-                try:
-                    allocations_new = _format_int(float(before) - float(after))
-                except (TypeError, ValueError):
-                    allocations_new = ""
+                before_value = _coerce_float(before)
+                after_value = _coerce_float(after)
+                if before_value is not None and after_value is not None:
+                    allocations_new = _format_int(before_value - after_value)
         if not allocations_new:
             allocations_new = _format_int(row.get("allocations_new"))
         remaining_capacity = _format_int(log_data.get("capacity_after"))
@@ -552,22 +552,26 @@ def _resolve_gender_label(value: object, policy: PolicyConfig) -> str:
     return "نامشخص"
 
 
-def _format_ratio(value: object) -> str:
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        return ""
-    if pd.isna(number):
+FloatInput = SupportsFloat | SupportsInt | SupportsIndex | str | bytes | bytearray | None
+
+
+def _format_ratio(value: FloatInput) -> str:
+    number = _coerce_float(value)
+    if number is None or pd.isna(number):
         return ""
     percent = number * 100
     return f"{percent:.1f}%"
 
 
-def _format_int(value: object) -> str:
+def _format_int(value: FloatInput) -> str:
+    number = _coerce_float(value)
+    if number is None or pd.isna(number):
+        return ""
+    return str(int(number))
+
+
+def _coerce_float(value: FloatInput) -> float | None:
     try:
-        number = int(float(value))
+        return float(value)
     except (TypeError, ValueError):
-        return ""
-    if pd.isna(number):
-        return ""
-    return str(number)
+        return None
