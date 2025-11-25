@@ -46,8 +46,8 @@ from .common.types import (
     JoinKeyValues,
     MentorStateDelta,
     MentorStateSnapshot,
-    TraceStageName,
     TraceStageLiteral,
+    TraceStageName,
     TraceStageRecord,
     ensure_trace_stage_name,
 )
