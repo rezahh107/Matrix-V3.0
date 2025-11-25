@@ -545,7 +545,9 @@ def safe_float(value: Any, default: float = 0.0) -> float:
     return default
 
 
-def safe_enum_convert(enum_type: type[EnumT], value: Any, default: EnumT | None = None) -> EnumT | None:
+def safe_enum_convert(
+    enum_type: type[EnumT], value: Any, default: EnumT | None = None
+) -> EnumT | None:
     """Safely convert value to an enum type, returning ``default`` on failure."""
 
     try:
