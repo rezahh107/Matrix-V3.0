@@ -26,13 +26,12 @@
 
 from __future__ import annotations
 
+import numbers
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import Enum
-from numbers import Number
-from typing import Any
+from typing import Any, cast
 
-# mypy: follow_imports = skip
 import pandas as pd
 
 from ..policy_loader import PolicyConfig, load_policy
@@ -178,9 +177,9 @@ def _candidate_join_value(frame: pd.DataFrame, column: str) -> object | None:
     cleaned = series.dropna()
     if cleaned.empty:
         return None
-    value = cleaned.iloc[0]
+    value: object = cleaned.iloc[0]
     try:
-        if value is pd.NA:  # type: ignore[comparison-overlap]
+        if value is pd.NA:
             return None
     except Exception:  # pragma: no cover - برای انواع غیرپشتیبان
         pass
@@ -226,9 +225,11 @@ def _coerce_optional_int(value: object) -> int | None:
         return None
     if isinstance(value, bool):
         return int(value)
-    if isinstance(value, (int, float)) and not pd.isna(value):
+    if isinstance(value, numbers.Integral):
+        return int(value)
+    if isinstance(value, numbers.Real) and not pd.isna(value):
         try:
-            return int(value)
+            return int(float(value))
         except Exception:
             return None
     try:
@@ -237,7 +238,35 @@ def _coerce_optional_int(value: object) -> int | None:
         return None
     if pd.isna(numeric):
         return None
-    return int(numeric)
+    try:
+        return int(float(cast(numbers.Real, numeric)))
+    except Exception:
+        return None
+
+
+def _mentor_value_extras(mentor_value: object) -> dict[str, object]:
+    """Build mentor value extras with safe int coercion."""
+
+    extras: dict[str, object] = {}
+    mentor_norm = _coerce_optional_int(mentor_value)
+    if mentor_norm is not None:
+        extras["mentor_value_norm"] = mentor_norm
+
+    if mentor_value is None or mentor_value is pd.NA:
+        return extras
+
+    mentor_raw: object | None
+    if isinstance(mentor_value, numbers.Real) and not isinstance(mentor_value, bool):
+        try:
+            mentor_raw = None if pd.isna(mentor_value) else int(float(mentor_value))
+        except Exception:
+            mentor_raw = None
+    else:
+        mentor_raw = mentor_value
+
+    if mentor_raw is not None:
+        extras["mentor_value_raw"] = mentor_raw
+    return extras
 
 
 def _initial_stage_flags() -> TraceStageFlags:
@@ -246,7 +275,9 @@ def _initial_stage_flags() -> TraceStageFlags:
     return {stage: False for stage in CANONICAL_TRACE_ORDER}
 
 
-def _coerce_stage_counts(stage_counts: Mapping[str, int] | None) -> dict[TraceStageName, int]:
+def _coerce_stage_counts(
+    stage_counts: Mapping[str, object] | None,
+) -> dict[TraceStageName, int]:
     """Filter and normalize stage candidate counts to canonical names."""
 
     if not stage_counts:
@@ -255,7 +286,10 @@ def _coerce_stage_counts(stage_counts: Mapping[str, int] | None) -> dict[TraceSt
     for raw_key, value in stage_counts.items():
         if not is_trace_stage_name(raw_key):
             continue
-        normalized[ensure_trace_stage_name(raw_key)] = int(value)
+        coerced = _coerce_optional_int(value)
+        if coerced is None:
+            continue
+        normalized[ensure_trace_stage_name(raw_key)] = coerced
     return normalized
 
 
@@ -412,21 +446,7 @@ def build_allocation_trace(
             stage_extras.setdefault("join_value_raw", school_extras.get("school_code_raw"))
             stage_extras.setdefault("join_value_norm", school_extras.get("school_code_norm"))
             if mentor_join_value is not None:
-                mentor_raw: object | None = mentor_join_value
-                if isinstance(mentor_join_value, Number) and not isinstance(
-                    mentor_join_value, bool
-                ):
-                    try:
-                        mentor_raw = (
-                            None if pd.isna(mentor_join_value) else int(mentor_join_value)  # type: ignore[arg-type]
-                        )
-                    except Exception:
-                        mentor_raw = None
-                if mentor_raw is not None:
-                    stage_extras["mentor_value_raw"] = mentor_raw
-                mentor_norm = _coerce_optional_int(mentor_join_value)
-                if mentor_norm is not None:
-                    stage_extras["mentor_value_norm"] = mentor_norm
+                stage_extras.update(_mentor_value_extras(mentor_join_value))
         else:
             value = _student_value(student, plan.column)
             filtered = _filter_stage(current, plan.column, value)
@@ -434,21 +454,7 @@ def build_allocation_trace(
             stage_extras["join_value_raw"] = value
             stage_extras["join_value_norm"] = _coerce_optional_int(value)
             if mentor_join_value is not None:
-                mentor_raw: object | None = mentor_join_value
-                if isinstance(mentor_join_value, Number) and not isinstance(
-                    mentor_join_value, bool
-                ):
-                    try:
-                        mentor_raw = (
-                            None if pd.isna(mentor_join_value) else int(mentor_join_value)  # type: ignore[arg-type]
-                        )
-                    except Exception:
-                        mentor_raw = None
-                if mentor_raw is not None:
-                    stage_extras["mentor_value_raw"] = mentor_raw
-                mentor_norm = _coerce_optional_int(mentor_join_value)
-                if mentor_norm is not None:
-                    stage_extras["mentor_value_norm"] = mentor_norm
+                stage_extras.update(_mentor_value_extras(mentor_join_value))
         stage_extras["expected_op"] = expected_op
         stage_extras["expected_threshold"] = expected_threshold
         trace.append(
@@ -517,7 +523,9 @@ def summarize_trace_outcome(
     if policy is None:
         policy = load_policy()
 
-    stage_counts = _coerce_stage_counts(log.get("stage_candidate_counts") or {})
+    raw_stage_counts = log.get("stage_candidate_counts")
+    stage_counts_input = raw_stage_counts if isinstance(raw_stage_counts, Mapping) else None
+    stage_counts = _coerce_stage_counts(stage_counts_input)
     flags = _stage_flags_from_counts(stage_counts, policy=policy)
     failure_stage: TraceStageName | None = None
 
@@ -553,9 +561,10 @@ def summarize_trace_outcome(
 
     status_raw = str(log.get("allocation_status") or "unallocated").strip().lower()
     allocated = status_raw == "success"
-    candidate_count = int(log.get("candidate_count") or 0)
+    candidate_count = _coerce_optional_int(log.get("candidate_count")) or 0
     error_code = str(log.get("error_type") or "").strip().upper()
-    rule_reason_code = log.get("rule_reason_code")
+    rule_reason_raw = log.get("rule_reason_code")
+    rule_reason_code = str(rule_reason_raw) if rule_reason_raw is not None else None
     data_ok = error_code not in {"DATA_MISSING", "INTERNAL_ERROR", "CAPACITY_UNDERFLOW"}
     final_status = classify_final_status(
         allocated=allocated,
