@@ -167,3 +167,9 @@ def test_load_main_window_reports_generic_import_error_without_name(monkeypatch,
     assert "کتابخانهٔ مفقود" not in message
     assert "libGL error: something something" in message
     assert exc.value.__cause__ is original_error
+
+
+def test_app_main_exposes_qwidget_stub_for_type_use(main_module) -> None:
+    assert hasattr(main_module, "QWidget")
+    assert main_module.QWidget is not None
+    assert main_module.QWidget.__module__ == "app.main"

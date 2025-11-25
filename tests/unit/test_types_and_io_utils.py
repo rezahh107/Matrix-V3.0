@@ -29,6 +29,26 @@ def test_join_key_values_from_policy_missing_key_raises():
         JoinKeyValues.from_policy(payload, CANONICAL_JOIN_KEYS)
 
 
+def test_join_key_values_normalizes_aliases_and_preserves_order() -> None:
+    alias_payload = {
+        "group_code": 11,
+        "gender": 22,
+        "graduation_status": 33,
+        "center": 44,
+        "finance": 55,
+        "school_code": 66,
+    }
+
+    expected_order = list(CANONICAL_JOIN_KEYS)
+    join_keys = JoinKeyValues(alias_payload, expected_keys=alias_payload.keys())
+
+    assert list(join_keys.keys()) == expected_order
+    assert tuple(join_keys.items()) == tuple(zip(expected_order, [11, 22, 33, 44, 55, 66]))
+    assert join_keys["کدرشته"] == 11
+    assert join_keys["gender"] == 22
+    assert all(isinstance(value, int) for value in join_keys.values())
+
+
 def test_natural_key_orders_strings_naturally():
     assert natural_key("EMP-2") < natural_key("EMP-10")
     assert natural_key(" ") == ("",)

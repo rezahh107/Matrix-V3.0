@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 import math
 import warnings
 from collections.abc import Callable, Hashable, Mapping, Sequence
@@ -73,8 +72,6 @@ __all__ = [
     "allocate_batch",
     "build_selection_reason_rows",
 ]
-
-_LOGGER = logging.getLogger(__name__)
 
 _STUDENT_NATIONAL_KEYS: tuple[str, ...] = (
     "student_national_code",
@@ -871,7 +868,7 @@ def _build_log_from_join_map(
         "mentor_selected": None,
         "mentor_id": None,
         "occupancy_ratio": None,
-        "join_keys": JoinKeyValues(join_map),
+        "join_keys": JoinKeyValues(join_map, expected_keys=join_map.keys()),
         "candidate_count": 0,
         "selection_reason": None,
         "tie_breakers": {},
@@ -1405,33 +1402,27 @@ def _ensure_pool_canonical(
     return pool
 
 
-def _log_pool_consistency(
+def _detect_pool_mismatch(
     *,
-    student_id: object,
     candidate_pool: pd.DataFrame,
     pool_view: pd.DataFrame,
     pool_state_view: pd.DataFrame | None,
-    stage: str,
 ) -> bool:
-    """Log index consistency between filtered candidates and state view."""
+    """بررسی ناسازگاری بین ایندکس استخر کاندید و ظرفیت.
+
+    Args:
+        candidate_pool: دیتافریم فیلترشدهٔ کاندیدها.
+        pool_view: نمای فعلی استخر برای انتخاب منتور.
+        pool_state_view: نمای ظرفیت/وضعیت منتور (در صورت وجود).
+
+    Returns:
+        bool: اگر ایندکس‌های دو نما ناسازگار باشند ``True`` برمی‌گرداند.
+    """
 
     state_view = pool_state_view if pool_state_view is not None else pool_view
     candidate_index = pd.Index(candidate_pool.index)
     missing_indexes = candidate_index.difference(state_view.index)
-    mismatch_detected = bool(missing_indexes.size)
-    _LOGGER.debug(
-        "pool consistency",
-        extra={
-            "student_id": student_id,
-            "stage": stage,
-            "candidate_pool_shape": candidate_pool.shape,
-            "pool_view_shape": pool_view.shape,
-            "pool_state_view_shape": state_view.shape,
-            "pool_mismatch_detected": mismatch_detected,
-            "missing_candidate_indexes": missing_indexes.tolist() if mismatch_detected else [],
-        },
-    )
-    return mismatch_detected
+    return bool(missing_indexes.size)
 
 
 def allocate_student(
@@ -1538,12 +1529,10 @@ def allocate_student(
         _append_invalid_center_alert(log, center_alert_payload, center_fallback)
         return AllocationResult(None, trace, log)
 
-    pool_mismatch_detected = _log_pool_consistency(
-        student_id=log.get("student_id", student.get("student_id")),
+    pool_mismatch_detected = _detect_pool_mismatch(
         candidate_pool=eligible,
         pool_view=candidate_pool,
         pool_state_view=pool_state_view,
-        stage="pre_capacity",
     )
 
     def _fail_allocation(
@@ -1631,12 +1620,10 @@ def allocate_student(
     stage_candidate_counts = _canonical_stage_counts(stage_candidate_counts)
     log["stage_candidate_counts"] = stage_candidate_counts
 
-    pool_mismatch_detected = pool_mismatch_detected or _log_pool_consistency(
-        student_id=log.get("student_id", student.get("student_id")),
+    pool_mismatch_detected = pool_mismatch_detected or _detect_pool_mismatch(
         candidate_pool=capacity_filtered,
         pool_view=candidate_pool,
         pool_state_view=pool_state_view,
-        stage="pre_ranking",
     )
     log["pool_mismatch_detected"] = pool_mismatch_detected
 
@@ -1791,6 +1778,7 @@ def allocate_student(
             "CAPACITY_FULL",
             "DATA_MISSING",
             "INTERNAL_ERROR",
+            "CAPACITY_UNDERFLOW",
         }
         error_type_value: AllocationErrorLiteral = (
             cast(AllocationErrorLiteral, error_code)
@@ -2027,18 +2015,18 @@ def allocate_batch(
                 if manager_index is not None and len(manager_index) > 0:
                     pool_view = pool_with_ids.loc[manager_index]
 
-                result = allocate_student(
-                    student_dict,
-                    pool_view,
-                    policy=policy,
-                    progress=_noop_progress,
-                    capacity_column=resolved_capacity_column,
-                    trace_plan=trace_plan,
-                    stage_rules=stage_rules,
-                    state=cast(Mapping[Hashable, MentorCapacityState], mentor_state),
-                    pool_state_view=pool_internal,
-                    alert_progress=progress,
-                )
+            result = allocate_student(
+                student_dict,
+                pool_view,
+                policy=policy,
+                progress=_noop_progress,
+                capacity_column=resolved_capacity_column,
+                trace_plan=trace_plan,
+                stage_rules=stage_rules,
+                state=cast(Mapping[Hashable, MentorCapacityState], mentor_state),
+                pool_state_view=pool_internal,
+                alert_progress=progress,
+            )
             if invalid_center_payload is not None:
                 _append_invalid_center_alert(result.log, invalid_center_payload, student_center)
             phase_trace: list[Mapping[str, Any]] = [dict(entry) for entry in base_phase_trace]
