@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from app.infra.local_database import (
     DatabaseSchemaDiagnostics,
@@ -13,29 +13,58 @@ from app.infra.local_database import (
 )
 from app.infra.year_database_manager import YearDatabaseInfo
 
-Qt: Any
-QDialog: type[object]
-QGridLayout: type[object]
-QHBoxLayout: type[object]
-QHeaderView: type[object]
-QLabel: type[object]
-QMessageBox: type[object]
-QPushButton: type[object]
-QTableWidget: type[object]
-QTableWidgetItem: type[object]
-QVBoxLayout: type[object]
-QWidget: type[object]
+if TYPE_CHECKING:
+    from PySide6.QtCore import Qt as QtNamespace
+    from PySide6.QtWidgets import (
+        QDialog as QtDialog,
+        QGridLayout as QtGridLayout,
+        QHBoxLayout as QtHBoxLayout,
+        QHeaderView as QtHeaderView,
+        QLabel as QtLabel,
+        QMessageBox as QtMessageBox,
+        QPushButton as QtPushButton,
+        QTableWidget as QtTableWidget,
+        QTableWidgetItem as QtTableWidgetItem,
+        QVBoxLayout as QtVBoxLayout,
+        QWidget as QtWidget,
+    )
+else:  # pragma: no cover - only used for type checking
+    QtNamespace = Any
+    QtDialog = QtGridLayout = QtHBoxLayout = QtHeaderView = QtLabel = QtMessageBox = QtPushButton = (
+        QtTableWidget
+    ) = QtTableWidgetItem = QtVBoxLayout = QtWidget = object
+
+Qt: QtNamespace | None
+QDialog: type[QtDialog]
+QGridLayout: type[QtGridLayout]
+QHBoxLayout: type[QtHBoxLayout]
+QHeaderView: type[QtHeaderView]
+QLabel: type[QtLabel]
+QMessageBox: type[QtMessageBox]
+QPushButton: type[QtPushButton]
+QTableWidget: type[QtTableWidget]
+QTableWidgetItem: type[QtTableWidgetItem]
+QVBoxLayout: type[QtVBoxLayout]
+QWidget: type[QtWidget]
 
 try:  # pragma: no cover - وابستگی Qt ممکن است در CI غایب باشد
     import PySide6.QtCore as QtCore
     import PySide6.QtWidgets as QtWidgets
 except Exception as exc:  # pragma: no cover - fallback
-    Qt = cast(Any, None)
-    QDialog = QGridLayout = QHBoxLayout = QHeaderView = QLabel = QMessageBox = QPushButton = (
-        QTableWidget
-    ) = QTableWidgetItem = QVBoxLayout = QWidget = cast(type[object], object)
+    Qt = cast(QtNamespace, None)
+    QDialog = cast(type[QtDialog], object)
+    QGridLayout = cast(type[QtGridLayout], object)
+    QHBoxLayout = cast(type[QtHBoxLayout], object)
+    QHeaderView = cast(type[QtHeaderView], object)
+    QLabel = cast(type[QtLabel], object)
+    QMessageBox = cast(type[QtMessageBox], object)
+    QPushButton = cast(type[QtPushButton], object)
+    QTableWidget = cast(type[QtTableWidget], object)
+    QTableWidgetItem = cast(type[QtTableWidgetItem], object)
+    QVBoxLayout = cast(type[QtVBoxLayout], object)
+    QWidget = cast(type[QtWidget], object)
     _QT_AVAILABLE = False
-    _QT_IMPORT_ERROR = exc
+    _QT_IMPORT_ERROR: Exception | None = exc
 else:
     Qt = QtCore.Qt
     QDialog = QtWidgets.QDialog
@@ -50,6 +79,7 @@ else:
     QVBoxLayout = QtWidgets.QVBoxLayout
     QWidget = QtWidgets.QWidget
     _QT_AVAILABLE = True
+    _QT_IMPORT_ERROR = None
 
 __all__ = ["DatabaseManagerDialog", "_QT_AVAILABLE"]
 
