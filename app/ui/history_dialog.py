@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
+from typing import Any, cast
+
 import pandas as pd
 from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt
 from PySide6.QtWidgets import (
@@ -16,6 +19,8 @@ from PySide6.QtWidgets import (
 )
 
 from app.infra.local_database import LocalDatabase
+
+Row = Mapping[str, Any]
 
 
 class DataFrameTableModel(QAbstractTableModel):
@@ -51,8 +56,11 @@ class DataFrameTableModel(QAbstractTableModel):
             return 0
         return len(self._df.columns)
 
-    def data(self, index: QModelIndex, role: int = Qt.DisplayRole):  # type: ignore[override]
-        if not index.isValid() or role not in {Qt.DisplayRole, Qt.EditRole}:
+    def data(self, index: QModelIndex, role: int = Qt.ItemDataRole.DisplayRole) -> Any:
+        if not index.isValid() or role not in {
+            Qt.ItemDataRole.DisplayRole,
+            Qt.ItemDataRole.EditRole,
+        }:
             return None
         value = self._df.iloc[index.row(), index.column()]
         if pd.isna(value):
@@ -60,11 +68,11 @@ class DataFrameTableModel(QAbstractTableModel):
         return str(value)
 
     def headerData(  # noqa: N802 - امضای Qt
-        self, section: int, orientation: Qt.Orientation, role: int = Qt.DisplayRole
-    ):  # type: ignore[override]  # noqa: N802 - امضای Qt
-        if role != Qt.DisplayRole:
+        self, section: int, orientation: Qt.Orientation, role: int = Qt.ItemDataRole.DisplayRole
+    ) -> Any:  # noqa: N802 - امضای Qt
+        if role != Qt.ItemDataRole.DisplayRole:
             return None
-        if orientation == Qt.Horizontal:
+        if orientation == Qt.Orientation.Horizontal:
             if 0 <= section < len(self._df.columns):
                 return str(self._df.columns[section])
         else:
@@ -78,7 +86,7 @@ class HistoryDialog(QDialog):
     def __init__(self, db: LocalDatabase, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._db = db
-        self._runs: list[object] = []
+        self._runs: Sequence[Row] = []
         self.setWindowTitle("History Snapshots")
 
         self._run_list = QListWidget(self)
@@ -87,11 +95,11 @@ class HistoryDialog(QDialog):
         self._trace_model = DataFrameTableModel()
         self._trace_view = QTableView(self)
         self._trace_view.setModel(self._trace_model)
-        self._trace_view.setEditTriggers(QTableView.NoEditTriggers)
+        self._trace_view.setEditTriggers(QTableView.EditTrigger.NoEditTriggers)
         self._trace_view.horizontalHeader().setStretchLastSection(True)
         self._trace_view.verticalHeader().setVisible(False)
         self._trace_empty = QLabel("No trace snapshot", self)
-        self._trace_empty.setAlignment(Qt.AlignCenter)
+        self._trace_empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self._qa_summary_model = DataFrameTableModel()
         self._qa_details_model = DataFrameTableModel()
@@ -100,13 +108,13 @@ class HistoryDialog(QDialog):
 
         self._qa_summary_view = QTableView(self)
         self._qa_summary_view.setModel(self._qa_summary_model)
-        self._qa_summary_view.setEditTriggers(QTableView.NoEditTriggers)
+        self._qa_summary_view.setEditTriggers(QTableView.EditTrigger.NoEditTriggers)
         self._qa_summary_view.horizontalHeader().setStretchLastSection(True)
         self._qa_summary_view.verticalHeader().setVisible(False)
 
         self._qa_details_view = QTableView(self)
         self._qa_details_view.setModel(self._qa_details_model)
-        self._qa_details_view.setEditTriggers(QTableView.NoEditTriggers)
+        self._qa_details_view.setEditTriggers(QTableView.EditTrigger.NoEditTriggers)
         self._qa_details_view.horizontalHeader().setStretchLastSection(True)
         self._qa_details_view.verticalHeader().setVisible(False)
 
@@ -114,20 +122,20 @@ class HistoryDialog(QDialog):
         self._qa_extras_list.currentRowChanged.connect(self._on_extra_selected)
         self._qa_extras_view = QTableView(self)
         self._qa_extras_view.setModel(self._qa_extras_model)
-        self._qa_extras_view.setEditTriggers(QTableView.NoEditTriggers)
+        self._qa_extras_view.setEditTriggers(QTableView.EditTrigger.NoEditTriggers)
         self._qa_extras_view.horizontalHeader().setStretchLastSection(True)
         self._qa_extras_view.verticalHeader().setVisible(False)
         self._qa_extras_empty = QLabel("No QA extras", self)
-        self._qa_extras_empty.setAlignment(Qt.AlignCenter)
+        self._qa_extras_empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self._metrics_model = DataFrameTableModel()
         self._metrics_view = QTableView(self)
         self._metrics_view.setModel(self._metrics_model)
-        self._metrics_view.setEditTriggers(QTableView.NoEditTriggers)
+        self._metrics_view.setEditTriggers(QTableView.EditTrigger.NoEditTriggers)
         self._metrics_view.horizontalHeader().setStretchLastSection(True)
         self._metrics_view.verticalHeader().setVisible(False)
         self._metrics_empty = QLabel("No metrics stored", self)
-        self._metrics_empty.setAlignment(Qt.AlignCenter)
+        self._metrics_empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         qa_tabs = QTabWidget(self)
         qa_tabs.addTab(self._wrap_widget(self._qa_summary_view), "QA Summary")
@@ -160,7 +168,7 @@ class HistoryDialog(QDialog):
         return container
 
     def _load_runs(self) -> None:
-        self._runs = self._db.fetch_runs()
+        self._runs = cast(Sequence[Row], self._db.fetch_runs())
         self._run_list.clear()
         for row in self._runs:
             started = row["started_at"]
@@ -238,10 +246,10 @@ class HistoryDialog(QDialog):
         self._update_empty_states()
 
     @staticmethod
-    def _rows_to_dataframe(rows: list[object]) -> pd.DataFrame:
+    def _rows_to_dataframe(rows: Sequence[Row]) -> pd.DataFrame:
         if not rows:
             return pd.DataFrame()
-        normalized = [dict(row) for row in rows]
+        normalized = [dict(cast(dict[str, Any], row)) for row in rows]
         return pd.DataFrame(normalized)
 
     # Exposed for tests -------------------------------------------------
