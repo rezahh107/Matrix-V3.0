@@ -62,9 +62,7 @@ def _validate_header_mode(value: str) -> HeaderMode:
     """
 
     if value not in _HEADER_MODE_VALUES:
-        raise ValueError(
-            f"Invalid header_mode: {value}. Must be one of {_HEADER_MODE_VALUES}"
-        )
+        raise ValueError(f"Invalid header_mode: {value}. Must be one of {_HEADER_MODE_VALUES}")
     return cast(HeaderMode, value)
 
 
