@@ -7,7 +7,7 @@ import warnings
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from numbers import Number, Real
-from typing import Any, Literal, SupportsFloat, SupportsInt, TypeVar, cast
+from typing import Any, Hashable, Literal, SupportsFloat, SupportsInt, TypeVar, cast
 
 import pandas as pd
 from pandas.api import types as pd_types
@@ -22,7 +22,12 @@ from .common.filters import (
     resolve_student_school_code,
 )
 from .common.ids import build_mentor_id_map, inject_mentor_id, natural_key
-from .common.ranking import apply_ranking_policy, build_mentor_state, consume_capacity
+from .common.ranking import (
+    MentorCapacityState,
+    apply_ranking_policy,
+    build_mentor_state,
+    consume_capacity,
+)
 from .common.reasons import ReasonCode, build_reason
 from .common.rules import (
     CenterPriorityRule,
@@ -43,10 +48,12 @@ from .common.trace import (
 from .common.types import (
     CANONICAL_TRACE_ORDER,
     AllocationAlertRecord,
+    AllocationErrorLiteral,
     AllocationLogRecord,
     JoinKeyValues,
     MentorStateDelta,
     MentorStateSnapshot,
+    StudentRow,
     TraceStageLiteral,
     TraceStageName,
     TraceStageRecord,
@@ -128,7 +135,9 @@ def safe_int(value: Any) -> int | None:
         return None
     if isinstance(value, bool):
         return int(value)
-    if isinstance(value, Number):
+    if isinstance(value, complex):
+        return None
+    if isinstance(value, Real):
         return int(float(value))
     if isinstance(value, str):
         cleaned = value.strip()
@@ -333,9 +342,9 @@ def _maybe_int_from_text(value: object) -> int | None:
 
 
 def _resolve_mentor_state_entry(
-    mentor_state: Mapping[str, Mapping[str, int]],
+    mentor_state: Mapping[str, MentorCapacityState],
     identifier: str | None,
-) -> tuple[str | None, Mapping[str, int] | None]:
+) -> tuple[str | None, MentorCapacityState | None]:
     """Resolve mentor state entry while tolerating minor formatting mismatches."""
 
     if identifier is None:
@@ -366,11 +375,11 @@ def _resolve_mentor_state_entry(
 
 
 def _stringify_mentor_state(
-    mentor_state: Mapping[Any, Mapping[str, int]],
-) -> dict[str, Mapping[str, int]]:
+    mentor_state: Mapping[Any, MentorCapacityState],
+) -> dict[str, MentorCapacityState]:
     """Normalize mentor state keys to stable strings for lookups and logs."""
 
-    normalized: dict[str, Mapping[str, int]] = {}
+    normalized: dict[str, MentorCapacityState] = {}
     for key, value in mentor_state.items():
         normalized_key = _normalize_mentor_identifier(key)
         if normalized_key is None:
@@ -527,7 +536,7 @@ def _canonical_stage_counts(
 
 def _derive_error_type_from_stage_counts(
     stage_candidate_counts: Mapping[TraceStageName, int],
-) -> str:
+) -> AllocationErrorLiteral:
     """طبقه‌بندی خطا براساس شمارندهٔ مراحل Trace."""
 
     canonical = _canonical_stage_counts(stage_candidate_counts)
@@ -1402,7 +1411,7 @@ def allocate_student(
     capacity_column: str | None = None,
     trace_plan: Sequence[TraceStagePlan] | None = None,
     stage_rules: Mapping[TraceStageLiteral, Rule] | None = None,
-    state: Mapping[str, Mapping[str, int]] | None = None,
+    state: Mapping[Hashable, MentorCapacityState] | None = None,
     pool_state_view: pd.DataFrame | None = None,
     alert_progress: ProgressFn | None = None,
 ) -> AllocationResult:
@@ -1416,6 +1425,8 @@ def allocate_student(
         stage_rules = default_stage_rule_map()
     if alert_progress is None:
         alert_progress = progress
+
+    student_row = cast(StudentRow, dict(student))
 
     center_info = _resolve_student_center_info(student, policy)
     center_fallback = None
@@ -1452,7 +1463,7 @@ def allocate_student(
     )
     stage_candidate_counts = _canonical_stage_counts(stage_candidate_counts)
     trace = build_allocation_trace(
-        student,
+        student_row,
         candidate_pool,
         policy=policy,
         stage_plan=trace_plan,
@@ -1498,11 +1509,11 @@ def allocate_student(
     def _fail_allocation(
         detailed_reason: str,
         *,
-        error_type: str = "INTERNAL_ERROR",
+        error_type: AllocationErrorLiteral = "INTERNAL_ERROR",
         suggested_actions: Sequence[str] | None = None,
-        extra_updates: Mapping[str, object] | None = None,
+        extra_updates: AllocationLogRecord | Mapping[str, object] | None = None,
     ) -> AllocationResult:
-        payload = {
+        payload: AllocationLogRecord = {
             "detailed_reason": detailed_reason,
             "error_type": error_type,
             "suggested_actions": list(suggested_actions or []),
@@ -1520,7 +1531,7 @@ def allocate_student(
                 log["alerts"] = list(alerts)
             _emit_alert_progress(alerts, alert_progress)
         if extra_updates:
-            payload.update(extra_updates)
+            payload.update(cast(AllocationLogRecord, dict(extra_updates)))
         log.update(payload)
         return AllocationResult(None, trace, log)
 
@@ -1602,12 +1613,17 @@ def allocate_student(
             build_mentor_state(state_view_en, capacity_column=capacity_column_name, policy=policy)
         )
     )
-    ranked = apply_ranking_policy(ranking_input, state=active_state, policy=policy)
+    ranking_state = cast(
+        Mapping[Hashable, Mapping[str, int | float | str | None]],
+        active_state,
+    )
+    ranked = apply_ranking_policy(ranking_input, state=ranking_state, policy=policy)
     fairness_reason = ranked.attrs.get("fairness_reason")
     if fairness_reason is not None:
         fairness_code = getattr(fairness_reason, "code", None)
         fairness_message = getattr(fairness_reason, "message_fa", None)
         log["fairness_reason_code"] = fairness_code
+        formatted: str | None
         if fairness_code and fairness_message:
             formatted = f"[{fairness_code}] {fairness_message}"
         else:
@@ -1702,7 +1718,7 @@ def allocate_student(
 
     try:
         capacity_before, capacity_after, occupancy_value = consume_capacity(
-            active_state, mentor_identifier
+            cast(dict[Hashable, MentorCapacityState], active_state), mentor_identifier
         )
     except KeyError as exc:
         log.update(
@@ -1721,6 +1737,17 @@ def allocate_student(
         return AllocationResult(None, trace, log)
     except ValueError as exc:
         error_code = str(exc) or "CAPACITY_UNDERFLOW"
+        known_errors: set[AllocationErrorLiteral] = {
+            "ELIGIBILITY_NO_MATCH",
+            "CAPACITY_FULL",
+            "DATA_MISSING",
+            "INTERNAL_ERROR",
+        }
+        error_type_value: AllocationErrorLiteral = (
+            cast(AllocationErrorLiteral, error_code)
+            if error_code in known_errors
+            else "INTERNAL_ERROR"
+        )
         student_label = str(log.get("student_id") or student.get("student_id", ""))
         snapshot_detail = (
             "mentor snapshot: "
@@ -1734,7 +1761,7 @@ def allocate_student(
                 "allocation_status": "failed",
                 "mentor_selected": None,
                 "mentor_id": None,
-                "error_type": error_code,
+                "error_type": error_type_value,
                 "detailed_reason": (
                     "Mentor capacity underflow detected; "
                     f"student={student_label or 'unknown'}; "
@@ -1834,8 +1861,8 @@ def allocate_batch(
         pool_norm = _validate_pool(_normalize_pool(candidate_pool, policy))
     final_manager_map, final_priority = resolve_center_manager_config(
         policy=policy,
-        ui_managers=ui_center_manager_map,
-        cli_managers=center_manager_map,
+        ui_managers=cast(Mapping[object, object] | None, ui_center_manager_map),
+        cli_managers=cast(Mapping[object, object] | None, center_manager_map),
         cli_priority=center_priority,
         cli_strict_validation=strict_center_validation,
     )
@@ -1950,21 +1977,21 @@ def allocate_batch(
                 if manager_index is not None and len(manager_index) > 0:
                     pool_view = pool_with_ids.loc[manager_index]
 
-            result = allocate_student(
-                student_dict,
-                pool_view,
-                policy=policy,
-                progress=_noop_progress,
-                capacity_column=resolved_capacity_column,
-                trace_plan=trace_plan,
-                stage_rules=stage_rules,
-                state=mentor_state,
-                pool_state_view=pool_internal,
-                alert_progress=progress,
-            )
+                result = allocate_student(
+                    student_dict,
+                    pool_view,
+                    policy=policy,
+                    progress=_noop_progress,
+                    capacity_column=resolved_capacity_column,
+                    trace_plan=trace_plan,
+                    stage_rules=stage_rules,
+                    state=cast(Mapping[Hashable, MentorCapacityState], mentor_state),
+                    pool_state_view=pool_internal,
+                    alert_progress=progress,
+                )
             if invalid_center_payload is not None:
                 _append_invalid_center_alert(result.log, invalid_center_payload, student_center)
-            phase_trace = [dict(entry) for entry in base_phase_trace]
+            phase_trace: list[Mapping[str, Any]] = [dict(entry) for entry in base_phase_trace]
             existing_phase_entries = result.log.get("phase_rule_trace")
             if isinstance(existing_phase_entries, list) and existing_phase_entries:
                 phase_trace.extend(existing_phase_entries)
