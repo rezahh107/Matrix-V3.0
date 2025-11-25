@@ -122,7 +122,7 @@ class QaReport:
         for violation in violations:
             detail_map = violation.details or {}
             detail_keys.update(detail_map.keys())
-            row = {
+            row: dict[str, object] = {
                 "rule_id": violation.rule_id,
                 "level": violation.level,
                 "message": violation.message,
