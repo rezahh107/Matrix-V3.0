@@ -30,9 +30,9 @@ if TYPE_CHECKING:
     )
 else:  # pragma: no cover - only used for type checking
     QtNamespace = Any
-    QtDialog = QtGridLayout = QtHBoxLayout = QtHeaderView = QtLabel = QtMessageBox = QtPushButton = (
-        QtTableWidget
-    ) = QtTableWidgetItem = QtVBoxLayout = QtWidget = object
+    QtDialog = QtGridLayout = QtHBoxLayout = QtHeaderView = QtLabel = QtMessageBox = (
+        QtPushButton
+    ) = QtTableWidget = QtTableWidgetItem = QtVBoxLayout = QtWidget = object
 
 Qt: QtNamespace | None
 QDialog: type[QtDialog]
