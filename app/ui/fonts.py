@@ -377,9 +377,9 @@ def collect_font_diagnostics() -> dict[str, object]:
     }
 
     try:
-        import importlib
+        from importlib import util
 
-        info["pyside_available"] = importlib.util.find_spec("PySide6") is not None
+        info["pyside_available"] = util.find_spec("PySide6") is not None
     except Exception:  # pragma: no cover - فقط برای گزارش
         info["pyside_available"] = False
 
