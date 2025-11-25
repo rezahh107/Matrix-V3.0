@@ -137,7 +137,9 @@ def _ensure_columns(pool: pd.DataFrame, columns: Iterable[str]) -> None:
 def build_stage_rule_map(_: PolicyConfig | None = None) -> Mapping[TraceStageName, Rule]:
     """برگرداندن نگاشت مرحله→Rule پیش‌فرض."""
 
-    return {ensure_trace_stage_name(stage): rule for stage, rule in default_stage_rule_map().items()}
+    return {
+        ensure_trace_stage_name(stage): rule for stage, rule in default_stage_rule_map().items()
+    }
 
 
 def _apply_stage_rule(
