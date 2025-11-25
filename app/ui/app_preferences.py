@@ -60,19 +60,20 @@ class AppPreferences:
         value = self._settings.value(key, default)
         if isinstance(value, bool):
             return value
+        if isinstance(value, (int, float)):
+            return bool(value)
         if isinstance(value, str):
             return value.strip().lower() in {"1", "true", "yes"}
-        try:
-            return bool(int(value))
-        except (TypeError, ValueError):
-            return default
+        return default
 
     def _get_float(self, key: str, default: float = 0.0) -> float:
         value = self._settings.value(key, default)
-        try:
-            return float(value)
-        except (TypeError, ValueError):
-            return default
+        if isinstance(value, (int, float, str)):
+            try:
+                return float(value)
+            except ValueError:
+                return default
+        return default
 
     def _get_default_manager(self, center_id: int) -> str:
         """دریافت مدیر پیش‌فرض یک مرکز از Policy."""
@@ -296,17 +297,17 @@ class AppPreferences:
         value = self._get_string("ui/language", DEFAULT_LANGUAGE)
         return Language.from_code(value)
 
-    def has_language_setting(self) -> bool:
-        """آیا کاربر زبانی را در تنظیمات ذخیره کرده است؟"""
-
-        return self._has_key("ui/language")
-
     @language.setter
     def language(self, value: Language | str) -> None:
         normalized = value if isinstance(value, Language) else Language.from_code(value)
         if normalized.code not in SUPPORTED_LANGUAGES:
             raise ValueError("Language must be one of: " + ", ".join(sorted(SUPPORTED_LANGUAGES)))
         self._set_string("ui/language", normalized.code)
+
+    def has_language_setting(self) -> bool:
+        """آیا کاربر زبانی را در تنظیمات ذخیره کرده است؟"""
+
+        return self._has_key("ui/language")
 
     def set_language(self, value: Language | str) -> None:
         """تنظیم زبان رابط کاربری با مسیر واضح‌تر برای mypy."""
@@ -334,7 +335,7 @@ class AppPreferences:
         if isinstance(value, (bytes, bytearray)):
             return bytes(value)
         if isinstance(value, QByteArray):
-            return bytes(value)
+            return bytes(value.data())
         return None
 
     @window_geometry.setter

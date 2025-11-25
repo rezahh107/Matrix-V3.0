@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
+from typing import SupportsInt
 
 from .policy_loader import PolicyConfig
 
@@ -13,7 +14,7 @@ __all__ = [
 
 
 def _normalize_manager_mapping(
-    managers: Mapping[object, object] | None,
+    managers: Mapping[int | str, object] | None,
 ) -> dict[int, list[str]]:
     """نرمال‌سازی نگاشت مدیران.
 
@@ -32,6 +33,8 @@ def _normalize_manager_mapping(
         return {}
     normalized: dict[int, list[str]] = {}
     for raw_center, raw_names in managers.items():
+        if not isinstance(raw_center, (str, int, SupportsInt)):
+            continue
         try:
             center_id = int(raw_center)
         except (TypeError, ValueError):
@@ -94,8 +97,8 @@ def _normalize_priority_sequence(
 def resolve_center_manager_config(
     *,
     policy: PolicyConfig,
-    ui_managers: Mapping[object, object] | None = None,
-    cli_managers: Mapping[object, object] | None = None,
+    ui_managers: Mapping[int | str, object] | None = None,
+    cli_managers: Mapping[int | str, object] | None = None,
     cli_priority: Sequence[int] | None = None,
     cli_strict_validation: bool = False,
 ) -> tuple[dict[int, list[str]], list[int]]:
