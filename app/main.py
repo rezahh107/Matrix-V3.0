@@ -15,10 +15,10 @@ import traceback
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
-from types import TracebackType
+from types import ModuleType, TracebackType
 
 from PySide6.QtCore import QSharedMemory, Qt, QTimer, qVersion
-from PySide6.QtWidgets import QApplication, QMessageBox
+from PySide6.QtWidgets import QApplication, QMessageBox, QWidget
 
 from app.infra.logging import LoggingContext, configure_logging, install_exception_hook
 from app.ui.fonts import apply_default_font
@@ -113,7 +113,7 @@ def _parse_qt_version(version: str | None) -> tuple[int, int, int] | None:
 
 
 def _is_deprecated_application_attribute(
-    attr: Qt.ApplicationAttribute, qt_version: tuple[int, int, int] | None
+    attr: Qt.ApplicationAttribute, qt_version: tuple[int, int, int] | None | str
 ) -> bool:
     """تشخیص منسوخ بودن ApplicationAttribute بر اساس جدول نسخهٔ مشخص.
 
@@ -130,6 +130,8 @@ def _is_deprecated_application_attribute(
     threshold = deprecated_since.get(attr)
     if threshold is None:
         return False
+    if isinstance(qt_version, str):
+        qt_version = _parse_qt_version(qt_version)
     if qt_version is None:
         return True
     return qt_version >= threshold
@@ -331,12 +333,19 @@ class SingleInstanceGuard:
         except Exception as e:
             logger.error(f"خطا در آزادسازی shared memory: {e}")
 
-    def __enter__(self):
+    def __enter__(self) -> "SingleInstanceGuard":
         """پشتیبانی از context manager"""
+
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
         """تمیزکاری خودکار هنگام خروج از context"""
+
         self.cleanup()
 
 
@@ -413,12 +422,12 @@ def setup_application() -> QApplication:
         raise
 
 
-def load_main_window():
+def load_main_window() -> type[QWidget]:
     """
     بارگذاری ماژول پنجره اصلی با مدیریت خطای دقیق
 
     Returns:
-        MainWindow: کلاس پنجره اصلی
+        type[QWidget]: کلاس پنجره اصلی
     """
     try:
         module = _import_main_window_module()
@@ -432,7 +441,7 @@ def load_main_window():
         raise ImportError(formatted) from e
 
 
-def _import_main_window_module():
+def _import_main_window_module() -> ModuleType:
     """بارگذاری ماژول پنجره اصلی با importlib برای سهولت تست و پایداری."""
 
     return importlib.import_module("app.ui.main_window")
