@@ -205,7 +205,7 @@ _STRING_COLUMNS: Mapping[str, Sequence[str]] = {
     "common": ("alias", "mentor_id", "postal_code"),
 }
 
-_INT_COLUMNS_BASE: Sequence[str] = (
+_INT_COLUMNS_BASE: tuple[str, ...] = (
     "group_code",
     "school_code",
     "school_code_1",
@@ -214,7 +214,7 @@ _INT_COLUMNS_BASE: Sequence[str] = (
     "school_code_4",
 )
 
-_INT_COLUMNS_INSPACTOR: Sequence[str] = _INT_COLUMNS_BASE + (
+_INT_COLUMNS_INSPACTOR: tuple[str, ...] = _INT_COLUMNS_BASE + (
     "graduation_status",
     "center",
     "finance",
@@ -476,7 +476,8 @@ def _normalized_header_tokens(value: object) -> tuple[str, ...]:
 
 def _policy_aliases(source: Source) -> Mapping[str, str]:
     policy = get_policy()
-    return policy.column_aliases.get(source, {})
+    empty_aliases: Mapping[str, str] = {}
+    return dict(policy.column_aliases.get(source, empty_aliases))
 
 
 def _build_alias_bundle(source: Source) -> _AliasBundle:

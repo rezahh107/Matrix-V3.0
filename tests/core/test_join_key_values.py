@@ -1,4 +1,5 @@
-from collections.abc import ItemsView, ValuesView
+from collections.abc import ItemsView, Mapping, ValuesView
+from typing import cast
 
 import pytest
 
@@ -42,16 +43,15 @@ def test_join_key_values_enforces_six_numeric_entries() -> None:
         JoinKeyValues({"کدرشته": 1}, expected_keys=("کدرشته",))
 
     with pytest.raises(TypeError):
-        JoinKeyValues(
-            {
-                "کدرشته": "not-int",
-                "جنسیت": 1,
-                "دانش آموز فارغ": 0,
-                "مرکز گلستان صدرا": 2,
-                "مالی حکمت بنیاد": 0,
-                "کد مدرسه": 401,
-            }
-        )
+        invalid_payload: dict[str, object] = {
+            "کدرشته": "not-int",
+            "جنسیت": 1,
+            "دانش آموز فارغ": 0,
+            "مرکز گلستان صدرا": 2,
+            "مالی حکمت بنیاد": 0,
+            "کد مدرسه": 401,
+        }
+        JoinKeyValues(cast(Mapping[str, int], invalid_payload))
 
     with pytest.raises(ValueError):
         JoinKeyValues({**_sample_payload(), "اضافی": 7})
@@ -86,17 +86,16 @@ def test_join_key_values_normalizes_legacy_keys() -> None:
     assert values["کد مدرسه"] == 100
 
 
-@pytest.mark.parametrize("header_mode", ["fa", "en", "fa_en"])
-def test_parse_header_mode_accepts_expected_literals(header_mode: str) -> None:
-    parsed = parse_header_mode(header_mode)
+def test_parse_header_mode_accepts_expected_literals() -> None:
+    for header_mode in ("fa", "en", "fa_en"):
+        parsed = parse_header_mode(header_mode)
+        assert parsed == header_mode
 
-    assert parsed == header_mode
 
-
-@pytest.mark.parametrize("invalid_mode", ["", "fa-en", None, 123])
-def test_parse_header_mode_rejects_invalid_values(invalid_mode: object) -> None:
-    with pytest.raises(ValueError):
-        parse_header_mode(invalid_mode)
+def test_parse_header_mode_rejects_invalid_values() -> None:
+    for invalid_mode in ("", "fa-en", None, 123):
+        with pytest.raises(ValueError):
+            parse_header_mode(invalid_mode)
 
 
 def test_trace_stage_aliases_match_canonical_order() -> None:
