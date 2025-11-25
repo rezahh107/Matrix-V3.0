@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
-from typing import SupportsFloat, SupportsInt, SupportsIndex, cast
+from typing import SupportsFloat, SupportsIndex, SupportsInt, cast
 
 import numpy as np
 import pandas as pd

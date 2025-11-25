@@ -1993,11 +1993,9 @@ def _safe_deserialize_dataframe_map(
         return {}
     try:
         assert payload is not None
-        decoded_payload: str | bytes
-        if isinstance(payload, bytes):
-            decoded_payload = payload.decode("utf-8")
-        else:
-            decoded_payload = payload
+        decoded_payload: str | bytes = (
+            payload.decode("utf-8") if isinstance(payload, bytes) else payload
+        )
         raw = json.loads(decoded_payload)
         result: dict[str, pd.DataFrame] = {}
         for key, df_payload in raw.items():
