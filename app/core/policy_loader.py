@@ -477,9 +477,7 @@ def _normalize_policy_payload(data: Mapping[str, object]) -> Mapping[str, object
         data.get("required_student_fields"), join_keys
     )
     ranking_raw_value = data["ranking_rules"] if "ranking_rules" in data else data["ranking"]
-    if not isinstance(ranking_raw_value, Sequence) or isinstance(
-        ranking_raw_value, (str, bytes)
-    ):
+    if not isinstance(ranking_raw_value, Sequence) or isinstance(ranking_raw_value, (str, bytes)):
         raise TypeError("ranking must be a sequence of rules")
     ranking_raw = cast(Sequence[RankingRuleRaw], ranking_raw_value)
     ranking_rules = _normalize_ranking_rules(ranking_raw)
@@ -1061,9 +1059,7 @@ def _normalize_ranking_rules(raw: Sequence[RankingRuleRaw]) -> list[Mapping[str,
                 raise ValueError(f"Unknown ranking rule '{name}'")
             column, ascending = _RANKING_RULE_LIBRARY[name]
         else:
-            raise TypeError(
-                f"ranking rule at position {index} must be a mapping or string"
-            )
+            raise TypeError(f"ranking rule at position {index} must be a mapping or string")
         ranking_names.append(name)
         normalized.append({"name": name, "column": column, "ascending": ascending})
     if len(set(ranking_names)) != len(ranking_names):
