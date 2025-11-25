@@ -45,12 +45,13 @@ class SettingsManager:
 
     def _serialize_value(self, value: Any) -> Any:
         """Serialize values safely for JSON (handles QByteArray/bytes)."""
+        qbytearray_cls: type[Any] | None
         try:
             from PySide6.QtCore import QByteArray as qbytearray_cls  # noqa: N813
         except Exception:
             qbytearray_cls = None
-        if qbytearray_cls and isinstance(value, qbytearray_cls):
-            value = bytes(value)
+        if qbytearray_cls is not None and isinstance(value, qbytearray_cls):
+            value = bytes(value.data())
         if isinstance(value, (bytes, bytearray)):
             return {
                 "__type__": "bytes",
@@ -61,6 +62,7 @@ class SettingsManager:
 
     def _deserialize_value(self, value: Any) -> Any:
         """Deserialize values serialized by _serialize_value."""
+        qbytearray_cls: type[Any] | None
         try:
             from PySide6.QtCore import QByteArray as qbytearray_cls  # noqa: N813
         except Exception:
@@ -74,7 +76,7 @@ class SettingsManager:
             return qbytearray_cls(raw) if qbytearray_cls else raw
         return value
 
-    def _load_cache(self):
+    def _load_cache(self) -> None:
         """بارگذاری تنظیمات در کش"""
         for key in self._settings.allKeys():
             self._cache[key] = self._settings.value(key)

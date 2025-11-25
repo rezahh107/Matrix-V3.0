@@ -5,8 +5,12 @@
 from collections.abc import Callable
 from functools import wraps
 from pathlib import Path
+from typing import ParamSpec, TypeVar
 
 import pandas as pd
+
+P = ParamSpec("P")
+R = TypeVar("R")
 
 
 class ValidationError(Exception):
@@ -15,7 +19,7 @@ class ValidationError(Exception):
     pass
 
 
-def validate_with_friendly_error(validator_func: Callable) -> Callable:
+def validate_with_friendly_error(validator_func: Callable[P, R]) -> Callable[P, R]:
     """
     دکوراتور برای تبدیل خطاهای فنی به پیام‌های کاربرپسند
 
@@ -26,7 +30,7 @@ def validate_with_friendly_error(validator_func: Callable) -> Callable:
     """
 
     @wraps(validator_func)
-    def wrapper(*args, **kwargs):
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
         try:
             return validator_func(*args, **kwargs)
         except ValidationError:
@@ -153,11 +157,11 @@ class InputValidator:
             # همه ورودی‌ها معتبر هستند
     """
 
-    def __init__(self):
-        self.checks = []
-        self.errors = []
+    def __init__(self) -> None:
+        self.checks: list[Callable[[], object]] = []
+        self.errors: list[str] = []
 
-    def add_check(self, check_func: Callable) -> "InputValidator":
+    def add_check(self, check_func: Callable[[], object]) -> "InputValidator":
         """افزودن یک بررسی"""
         self.checks.append(check_func)
         return self  # برای chain کردن
@@ -191,7 +195,7 @@ class InputValidator:
 # ============= مثال استفاده =============
 def validate_build_matrix_inputs(
     inspector_path: str, school_path: str, crosswalk_path: str
-) -> dict:
+) -> dict[str, Path]:
     """
     اعتبارسنجی کامل ورودی‌های ساخت ماتریس
 
@@ -203,7 +207,7 @@ def validate_build_matrix_inputs(
     """
     validator = InputValidator()
 
-    results = {}
+    results: dict[str, Path] = {}
 
     # بررسی‌ها را اضافه کن
     validator.add_check(

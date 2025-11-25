@@ -26,7 +26,7 @@ class ExcelLoader(QThread):
         super().__init__()
         self._path = Path(path)
 
-    def run(self) -> None:  # type: ignore[override]
+    def run(self) -> None:
         try:
             if not self._path.exists():
                 raise FileNotFoundError(str(self._path))
