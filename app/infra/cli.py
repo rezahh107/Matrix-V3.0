@@ -32,7 +32,6 @@ from pandas.api import types as pd_types
 import app.core.allocation.mentor_pool as mentor_pool
 import app.core.build_matrix as build_matrix_module
 import app.core.common.columns as columns_module
-
 from app.core.allocate_students import allocate_batch, build_selection_reason_rows
 from app.core.allocation.engine import enrich_summary_with_history
 from app.core.allocation.history_metrics import METRIC_COLUMNS, compute_history_metrics
@@ -1157,10 +1156,7 @@ def _build_duplicate_row_report(
                 national_id = ""
             else:
                 raw_national_id = row.get("national_id", "")
-                if pd.isna(raw_national_id):
-                    national_id = ""
-                else:
-                    national_id = str(raw_national_id).strip()
+                national_id = "" if pd.isna(raw_national_id) else str(raw_national_id).strip()
             rows.append(
                 {
                     "index": index_label,
