@@ -6,7 +6,7 @@ from __future__ import annotations
 import re
 from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 # mypy: follow_imports = skip
 import pandas as pd
@@ -14,7 +14,11 @@ import pandas as pd
 from app.core.policy_loader import get_policy
 
 from .normalization import normalize_fa, strip_school_code_separators, to_numlike_str
-from .types import HeaderMode, parse_header_mode
+
+if TYPE_CHECKING:
+    from .types import HeaderMode
+else:
+    HeaderMode = str
 
 __all__ = [
     "CANON_EN_TO_FA",
@@ -30,6 +34,7 @@ __all__ = [
     "ensure_series",
     "collect_aliases_for",
     "accepted_synonyms",
+    "parse_header_mode",
     "sanitize_digits",
     "to_int64",
     "normalize_bool_like",
@@ -38,6 +43,14 @@ __all__ = [
 ]
 
 Source = Literal["report", "inspactor", "school", "matrix"]
+
+
+def parse_header_mode(value: object) -> HeaderMode:
+    """Wrapper برای استفاده از :func:`parse_header_mode` بدون ایجاد چرخهٔ import."""
+
+    from .types import parse_header_mode as _parse_header_mode
+
+    return _parse_header_mode(value)
 
 
 def ensure_series(values: pd.Series | pd.DataFrame) -> pd.Series:
@@ -750,6 +763,8 @@ def coerce_semantics(df: pd.DataFrame, source: Source) -> pd.DataFrame:
 
 def canonicalize_headers(df: pd.DataFrame, header_mode: HeaderMode) -> pd.DataFrame:
     """تبدیل نام ستون‌ها به فارسی، انگلیسی یا دوزبانه."""
+    from .types import parse_header_mode
+
     mode = parse_header_mode(header_mode)
 
     rename: dict[str, str] = {}

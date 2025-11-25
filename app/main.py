@@ -16,10 +16,21 @@ from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 from types import ModuleType, TracebackType
+from typing import TYPE_CHECKING
 from typing import cast
 
 from PySide6.QtCore import QSharedMemory, Qt, QTimer, qVersion
-from PySide6.QtWidgets import QApplication, QMessageBox, QWidget
+from PySide6.QtWidgets import QApplication, QMessageBox
+
+if TYPE_CHECKING:
+    from PySide6.QtWidgets import QWidget
+else:
+
+    class QWidget:  # pragma: no cover - جایگزین ساده برای زمان نبود PySide6
+        """شبه‌کلاس برای استفاده در تایپ هینت بدون وابستگی PySide6."""
+
+        pass
+
 
 from app.infra.logging import LoggingContext, configure_logging, install_exception_hook
 from app.ui.fonts import apply_default_font

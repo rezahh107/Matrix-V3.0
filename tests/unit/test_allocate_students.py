@@ -26,7 +26,7 @@ from app.core.canonical_frames import (
 )
 from app.core.common import columns
 from app.core.common.reasons import ReasonCode
-from app.core.common.types import JoinKeyValues
+from app.core.common.types import CANONICAL_JOIN_KEYS, JoinKeyValues
 from app.core.policy_loader import PolicyConfig, load_policy, parse_policy_dict
 from app.infra.excel_writer import write_selection_reasons_sheet
 
@@ -1015,23 +1015,31 @@ def test_allocate_student_underflow_embeds_snapshot_details(
     assert delta["diff"]["alloc_new"] == 0
 
 
+def test_allocate_batch_handles_underflow_without_unboundlocal(
+    _base_pool: pd.DataFrame,
+) -> None:
+    students = _single_student()
+    pool = _base_pool.iloc[[0]].copy()
+    pool["remaining_capacity"] = [0]
+
+    _, _, logs, _ = allocate_batch(students, pool)
+
+    assert len(logs) == 1
+    first_log = logs.iloc[0]
+    assert first_log["error_type"] in {"CAPACITY_FULL", "CAPACITY_UNDERFLOW"}
+    assert first_log.get("mentor_id") is None
+
+
 def test_join_key_values_validates_length() -> None:
     with pytest.raises(ValueError):
         JoinKeyValues({"a": 1, "b": 2, "c": 3, "d": 4, "e": 5})
 
 
 def test_join_key_values_rejects_non_int() -> None:
+    payload = {key: index for index, key in enumerate(CANONICAL_JOIN_KEYS, start=1)}
+    payload[CANONICAL_JOIN_KEYS[2]] = "oops"
     with pytest.raises(TypeError):
-        JoinKeyValues(
-            {
-                "a": 1,
-                "b": 2,
-                "c": "oops",
-                "d": 4,
-                "e": 5,
-                "f": 6,
-            }
-        )
+        JoinKeyValues(payload)
 
 
 def test_allocate_batch_join_keys_are_typed(_base_pool: pd.DataFrame) -> None:
@@ -1041,14 +1049,7 @@ def test_allocate_batch_join_keys_are_typed(_base_pool: pd.DataFrame) -> None:
 
     join_values = logs.iloc[0]["join_keys"]
     assert isinstance(join_values, JoinKeyValues)
-    assert list(join_values.keys()) == [
-        "کدرشته",
-        "جنسیت",
-        "دانش_آموز_فارغ",
-        "مرکز_گلستان_صدرا",
-        "مالی_حکمت_بنیاد",
-        "کد_مدرسه",
-    ]
+    assert list(join_values.keys()) == list(CANONICAL_JOIN_KEYS)
 
 
 def test_allocate_batch_missing_school_code_defaults_to_zero(
