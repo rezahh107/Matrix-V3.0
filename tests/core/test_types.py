@@ -30,7 +30,7 @@ def test_join_key_values_requires_six_entries(sample_keys_data: dict[str, int]):
     keys = JoinKeyValues(sample_keys_data)
     assert keys["کد_مدرسه"] == 10
     assert tuple(keys.keys()) == tuple(sample_keys_data.keys())
-    assert keys.items() == tuple(sample_keys_data.items())
+    assert tuple(keys.items()) == tuple(sample_keys_data.items())
 
 
 def test_join_key_values_int_enforcement(sample_keys_data: dict[str, int]):

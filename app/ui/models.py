@@ -28,7 +28,7 @@ class MentorPoolEntry:
     mentor_name: str = ""
     manager: str | None = None
     center: str | int | None = None
-    school: str | None = None
+    school: str | int | None = None
     capacity: int | float | None = None
     enabled: bool = True
 
@@ -61,18 +61,31 @@ def _string_value(value: object) -> str:
     return str(value).strip()
 
 
+def _coerce_int_or_none(value: object) -> int | None:
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return None
+    if isinstance(value, int):
+        return value
+    try:
+        text = _string_value(value)
+        if not text:
+            return None
+        return int(float(text))
+    except (ValueError, TypeError):
+        return None
+
+
 def _center_field_value(value: object) -> str | int | None:
     if value is None or (isinstance(value, float) and pd.isna(value)):
         return None
-    if isinstance(value, (str, int)):
-        return value
-    return str(value)
-
-
-def _school_field_value(value: object) -> str | None:
-    if value is None or (isinstance(value, float) and pd.isna(value)):
-        return None
+    coerced = _coerce_int_or_none(value)
+    if coerced is not None:
+        return coerced
     return _string_value(value)
+
+
+def _school_field_value(value: object) -> int | None:
+    return _coerce_int_or_none(value)
 
 
 def _capacity_value(value: object) -> int | float | None:
@@ -160,7 +173,7 @@ def build_mentor_entries_from_dataframe(
             record,
             ("school_name",),
         )
-        school_value: str | None
+        school_value: str | int | None
         if _string_value(school_name_value):
             school_value = _string_value(school_name_value)
         else:

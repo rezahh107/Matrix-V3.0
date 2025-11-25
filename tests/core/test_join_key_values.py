@@ -17,10 +17,10 @@ def _sample_payload() -> dict[str, int]:
     return {
         "کدرشته": 11,
         "جنسیت": 1,
-        "دانش آموز فارغ": 0,
-        "مرکز گلستان صدرا": 2,
-        "مالی حکمت بنیاد": 0,
-        "کد مدرسه": 401,
+        "دانش_آموز_فارغ": 0,
+        "مرکز_گلستان_صدرا": 2,
+        "مالی_حکمت_بنیاد": 0,
+        "کد_مدرسه": 401,
     }
 
 
@@ -65,7 +65,7 @@ def test_join_key_values_behaves_like_mapping() -> None:
     assert list(iter(values)) == list(CANONICAL_JOIN_KEYS)
     assert "کدرشته" in values
     assert "ناموجود" not in values
-    assert values["کد مدرسه"] == payload["کد مدرسه"]
+    assert values["کد مدرسه"] == payload["کد_مدرسه"]
     assert list(values.keys()) == list(CANONICAL_JOIN_KEYS)
 
 
