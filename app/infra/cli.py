@@ -1324,11 +1324,7 @@ def _apply_counter_duplicate_strategy(
         for payload in report:
             rows_obj = payload.get("rows")
             rows = rows_obj if isinstance(rows_obj, list) else []
-            drop_indexes.extend(
-                row.get("index")
-                for row in rows[1:]
-                if isinstance(row, Mapping)
-            )
+            drop_indexes.extend(row.get("index") for row in rows[1:] if isinstance(row, Mapping))
         drop_indexes = [idx for idx in drop_indexes if idx in students_df.index]
         if not drop_indexes:
             return counters, False, tuple()
