@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Mapping, Sequence, cast
+from collections.abc import Mapping, Sequence
+from typing import Any, cast
 
 import pandas as pd
 from PySide6.QtWidgets import QDialog, QHBoxLayout, QListWidget, QWidget
@@ -10,7 +11,6 @@ from PySide6.QtWidgets import QDialog, QHBoxLayout, QListWidget, QWidget
 from app.core.allocation.history_metrics import METRIC_COLUMNS
 from app.infra.local_database import LocalDatabase
 from app.ui.history_metrics import HistoryMetricsPanel
-
 
 RowMapping = Mapping[str, Any]
 
