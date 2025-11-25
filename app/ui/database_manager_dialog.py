@@ -14,72 +14,163 @@ from app.infra.local_database import (
 from app.infra.year_database_manager import YearDatabaseInfo
 
 if TYPE_CHECKING:
-    from PySide6.QtCore import Qt as QtNamespace
+    from PySide6.QtCore import Qt
     from PySide6.QtWidgets import (
-        QDialog as QtDialog,
-        QGridLayout as QtGridLayout,
-        QHBoxLayout as QtHBoxLayout,
-        QHeaderView as QtHeaderView,
-        QLabel as QtLabel,
-        QMessageBox as QtMessageBox,
-        QPushButton as QtPushButton,
-        QTableWidget as QtTableWidget,
-        QTableWidgetItem as QtTableWidgetItem,
-        QVBoxLayout as QtVBoxLayout,
-        QWidget as QtWidget,
+        QDialog,
+        QGridLayout,
+        QHBoxLayout,
+        QHeaderView,
+        QLabel,
+        QMessageBox,
+        QPushButton,
+        QTableWidget,
+        QTableWidgetItem,
+        QVBoxLayout,
+        QWidget,
     )
-else:  # pragma: no cover - only used for type checking
-    QtNamespace = Any
-    QtDialog = QtGridLayout = QtHBoxLayout = QtHeaderView = QtLabel = QtMessageBox = (
-        QtPushButton
-    ) = QtTableWidget = QtTableWidgetItem = QtVBoxLayout = QtWidget = object
 
-Qt: QtNamespace | None
-QDialog: type[QtDialog]
-QGridLayout: type[QtGridLayout]
-QHBoxLayout: type[QtHBoxLayout]
-QHeaderView: type[QtHeaderView]
-QLabel: type[QtLabel]
-QMessageBox: type[QtMessageBox]
-QPushButton: type[QtPushButton]
-QTableWidget: type[QtTableWidget]
-QTableWidgetItem: type[QtTableWidgetItem]
-QVBoxLayout: type[QtVBoxLayout]
-QWidget: type[QtWidget]
-
-try:  # pragma: no cover - وابستگی Qt ممکن است در CI غایب باشد
-    import PySide6.QtCore as QtCore
-    import PySide6.QtWidgets as QtWidgets
-except Exception as exc:  # pragma: no cover - fallback
-    Qt = cast(QtNamespace, None)
-    QDialog = cast(type[QtDialog], object)
-    QGridLayout = cast(type[QtGridLayout], object)
-    QHBoxLayout = cast(type[QtHBoxLayout], object)
-    QHeaderView = cast(type[QtHeaderView], object)
-    QLabel = cast(type[QtLabel], object)
-    QMessageBox = cast(type[QtMessageBox], object)
-    QPushButton = cast(type[QtPushButton], object)
-    QTableWidget = cast(type[QtTableWidget], object)
-    QTableWidgetItem = cast(type[QtTableWidgetItem], object)
-    QVBoxLayout = cast(type[QtVBoxLayout], object)
-    QWidget = cast(type[QtWidget], object)
-    _QT_AVAILABLE = False
-    _QT_IMPORT_ERROR: Exception | None = exc
-else:
-    Qt = QtCore.Qt
-    QDialog = QtWidgets.QDialog
-    QGridLayout = QtWidgets.QGridLayout
-    QHBoxLayout = QtWidgets.QHBoxLayout
-    QHeaderView = QtWidgets.QHeaderView
-    QLabel = QtWidgets.QLabel
-    QMessageBox = QtWidgets.QMessageBox
-    QPushButton = QtWidgets.QPushButton
-    QTableWidget = QtWidgets.QTableWidget
-    QTableWidgetItem = QtWidgets.QTableWidgetItem
-    QVBoxLayout = QtWidgets.QVBoxLayout
-    QWidget = QtWidgets.QWidget
     _QT_AVAILABLE = True
-    _QT_IMPORT_ERROR = None
+    _QT_IMPORT_ERROR: Exception | None = None
+else:
+    try:  # pragma: no cover - وابستگی Qt ممکن است در CI غایب باشد
+        import PySide6.QtCore as QtCore
+        import PySide6.QtWidgets as QtWidgets
+    except Exception as exc:  # pragma: no cover - fallback
+        Qt = cast("Qt", None)
+
+        class QDialog:  # pragma: no cover - fallback stub
+            def __init__(self, *_: Any, **__: Any) -> None:
+                super().__init__()
+
+        class QGridLayout:  # pragma: no cover - fallback stub
+            def __init__(self, *_: Any, **__: Any) -> None:
+                super().__init__()
+
+            def addWidget(self, *_: Any, **__: Any) -> None:  # noqa: N802 - Qt API name
+                return None
+
+        class QHBoxLayout:  # pragma: no cover - fallback stub
+            def __init__(self, *_: Any, **__: Any) -> None:
+                super().__init__()
+
+            def addWidget(self, *_: Any, **__: Any) -> None:  # noqa: N802 - Qt API name
+                return None
+
+            def addStretch(self, *_: Any, **__: Any) -> None:  # noqa: N802 - Qt API name
+                return None
+
+        class QHeaderView:  # pragma: no cover - fallback stub
+            class ResizeMode:  # pragma: no cover - placeholder enum
+                Stretch = 0
+                ResizeToContents = 1
+
+            def __init__(self, *_: Any, **__: Any) -> None:
+                super().__init__()
+
+            def setSectionResizeMode(self, *_: Any, **__: Any) -> None:  # noqa: N802 - Qt API name
+                return None
+
+        class QLabel:  # pragma: no cover - fallback stub
+            def __init__(self, *_: Any, **__: Any) -> None:
+                super().__init__()
+
+            def setTextInteractionFlags(  # noqa: N802 - Qt API name
+                self, *_: Any, **__: Any
+            ) -> None:
+                return None
+
+            def setWordWrap(self, *_: Any, **__: Any) -> None:  # noqa: N802 - Qt API name
+                return None
+
+            def setText(self, *_: Any, **__: Any) -> None:  # noqa: N802 - Qt API name
+                return None
+
+        class QMessageBox:  # pragma: no cover - fallback stub
+            class StandardButton:  # pragma: no cover - placeholder enum
+                Yes = 1
+                No = 0
+
+            @staticmethod
+            def question(*_: Any, **__: Any) -> int:
+                return QMessageBox.StandardButton.No
+
+            @staticmethod
+            def critical(*_: Any, **__: Any) -> None:
+                return None
+
+            @staticmethod
+            def information(*_: Any, **__: Any) -> None:
+                return None
+
+        class QPushButton:  # pragma: no cover - fallback stub
+            def __init__(self, *_: Any, **__: Any) -> None:
+                super().__init__()
+
+            @property
+            def clicked(self) -> QPushButton:
+                return self
+
+            def connect(self, *_: Any, **__: Any) -> None:  # pragma: no cover - shim
+                return None
+
+        class QTableWidget:  # pragma: no cover - fallback stub
+            def __init__(self, *_: Any, **__: Any) -> None:
+                super().__init__()
+
+            def setColumnCount(self, *_: Any, **__: Any) -> None:  # noqa: N802 - Qt API name
+                return None
+
+            def setHorizontalHeaderLabels(  # noqa: N802 - Qt API name
+                self, *_: Any, **__: Any
+            ) -> None:
+                return None
+
+            def horizontalHeader(  # noqa: N802 - Qt API name
+                self, *_: Any, **__: Any
+            ) -> QHeaderView:
+                return QHeaderView()
+
+            def setRowCount(self, *_: Any, **__: Any) -> None:  # noqa: N802 - Qt API name
+                return None
+
+            def setItem(self, *_: Any, **__: Any) -> None:  # noqa: N802 - Qt API name
+                return None
+
+        class QTableWidgetItem:  # pragma: no cover - fallback stub
+            def __init__(self, *_: Any, **__: Any) -> None:
+                super().__init__()
+
+        class QVBoxLayout:  # pragma: no cover - fallback stub
+            def __init__(self, *_: Any, **__: Any) -> None:
+                super().__init__()
+
+            def addWidget(self, *_: Any, **__: Any) -> None:  # noqa: N802 - Qt API name
+                return None
+
+            def addLayout(self, *_: Any, **__: Any) -> None:  # noqa: N802 - Qt API name
+                return None
+
+        class QWidget:  # pragma: no cover - fallback stub
+            def __init__(self, *_: Any, **__: Any) -> None:
+                super().__init__()
+
+        _QT_AVAILABLE = False
+        _QT_IMPORT_ERROR: Exception | None = exc
+    else:
+        Qt = QtCore.Qt
+        QDialog = QtWidgets.QDialog
+        QGridLayout = QtWidgets.QGridLayout
+        QHBoxLayout = QtWidgets.QHBoxLayout
+        QHeaderView = QtWidgets.QHeaderView
+        QLabel = QtWidgets.QLabel
+        QMessageBox = QtWidgets.QMessageBox
+        QPushButton = QtWidgets.QPushButton
+        QTableWidget = QtWidgets.QTableWidget
+        QTableWidgetItem = QtWidgets.QTableWidgetItem
+        QVBoxLayout = QtWidgets.QVBoxLayout
+        QWidget = QtWidgets.QWidget
+        _QT_AVAILABLE = True
+        _QT_IMPORT_ERROR = None
 
 __all__ = ["DatabaseManagerDialog", "_QT_AVAILABLE"]
 
