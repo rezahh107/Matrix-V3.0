@@ -26,13 +26,12 @@
 
 from __future__ import annotations
 
+import numbers
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import Enum
-import numbers
 from typing import Any, cast
 
-# mypy: follow_imports = skip
 import pandas as pd
 
 from ..policy_loader import PolicyConfig, load_policy
