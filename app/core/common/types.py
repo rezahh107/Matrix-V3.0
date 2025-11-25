@@ -207,8 +207,10 @@ class JoinKeyValues(Mapping[str, int]):
                 raise ValueError("JoinKeyValues keys mismatch; " f"missing={missing} extra={extra}")
             ordered = OrderedDict((key, ordered[key]) for key in expected)
 
-        object.__setattr__(self, "_items", tuple(ordered.items()))
-        object.__setattr__(self, "_mapping", MappingProxyType(dict(ordered)))
+        stored = OrderedDict((key.replace(" ", "_"), value) for key, value in ordered.items())
+
+        object.__setattr__(self, "_items", tuple(stored.items()))
+        object.__setattr__(self, "_mapping", MappingProxyType(dict(stored)))
 
     def __setattr__(
         self, name: str, value: object
@@ -221,7 +223,8 @@ class JoinKeyValues(Mapping[str, int]):
     def __getitem__(self, key: str) -> int:  # pragma: no cover - Mapping API
         """دسترسی مستقیم به مقدار هر کلید join (همیشه ``int``)."""
 
-        return self._mapping[key]
+        normalized = _normalize_join_key(str(key)).replace(" ", "_")
+        return self._mapping[normalized]
 
     def __iter__(self) -> Iterator[str]:  # pragma: no cover - Mapping API
         """تکرار کلیدها با حفظ ترتیب قراردادی."""
@@ -236,7 +239,7 @@ class JoinKeyValues(Mapping[str, int]):
     def __contains__(self, key: object) -> bool:  # pragma: no cover - Mapping API
         """بررسی وجود کلید با احترام به نوع ``str`` و ترتیب اصلی."""
 
-        return isinstance(key, str) and key in self._mapping
+        return isinstance(key, str) and _normalize_join_key(key).replace(" ", "_") in self._mapping
 
     def __repr__(self) -> str:  # pragma: no cover - debug helper
         return f"JoinKeyValues({dict(self._items)!r})"
@@ -418,12 +421,18 @@ class AllocationLogRecord(TypedDict, total=False):
     capacity_after: int | None
     mentor_state_delta: MentorStateDelta | None
     stage_candidate_counts: dict[TraceStageName, int]
+    trace_final_status: str | None
+    trace_final_reason: str | None
+    trace_failure_stage: TraceStageName | None
+    trace_stage_flags: TraceStageFlags | None
     rule_reason_code: str | None
     rule_reason_text: str | None
     rule_reason_details: Mapping[str, Any] | None
     fairness_reason_code: str | None
     fairness_reason_text: str | None
     alerts: list[AllocationAlertRecord]
+    invalid_center_alerts: list[Mapping[str, object | None]]
+    join_key_mismatches: list[Mapping[str, object]]
     alias_autofill: int
     alias_unmatched: int
     phase_rule_trace: list[Mapping[str, Any]]

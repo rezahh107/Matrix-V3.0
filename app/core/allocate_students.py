@@ -46,8 +46,10 @@ from .common.types import (
     JoinKeyValues,
     MentorStateDelta,
     MentorStateSnapshot,
+    TraceStageName,
     TraceStageLiteral,
     TraceStageRecord,
+    ensure_trace_stage_name,
 )
 from .counter import normalize_digits, strip_hidden_chars
 from .policy_loader import PolicyConfig, load_policy
@@ -167,7 +169,7 @@ def _extract_mentor_alias_code(mentor_row: Mapping[str, object] | pd.Series) -> 
     return ""
 
 
-def _normalize_mentor_identifier(value: object) -> object | None:
+def _normalize_mentor_identifier(value: object) -> str | None:
     """تبدیل امن شناسهٔ پشتیبان به مقدار قابل جست‌وجو در state.
 
     مثال::
@@ -196,10 +198,10 @@ def _normalize_mentor_identifier(value: object) -> object | None:
     if isinstance(value, str):
         normalized = value.strip()
         return normalized or None
-    return value
+    return str(value).strip() or None
 
 
-def _resolve_mentor_identifier(result: AllocationResult, *, policy: PolicyConfig) -> object:
+def _resolve_mentor_identifier(result: AllocationResult, *, policy: PolicyConfig) -> str:
     """بازیابی شناسهٔ پشتیبان با اولویت: log → سطر فارسی → سطر canonical.
 
     مثال::
@@ -275,57 +277,50 @@ def _maybe_int_from_text(value: object) -> int | None:
 
 
 def _resolve_mentor_state_entry(
-    mentor_state: Mapping[Any, Mapping[str, int]],
-    identifier: object,
-) -> tuple[Any | None, Mapping[str, int] | None]:
-    """Resolve mentor state entry while tolerating dtype mismatches."""
+    mentor_state: Mapping[str, Mapping[str, int]],
+    identifier: str | None,
+) -> tuple[str | None, Mapping[str, int] | None]:
+    """Resolve mentor state entry while tolerating minor formatting mismatches."""
 
-    if isinstance(identifier, pd.Series):
-        identifier = None if identifier.empty else identifier.iloc[0]
     if identifier is None:
         return None, None
-    try:
-        if pd.isna(identifier):  # type: ignore[arg-type]
-            return None, None
-    except TypeError:
-        pass
 
-    candidates: list[Any] = []
+    candidates: list[str] = []
     seen: set[str] = set()
 
-    def _push(value: object) -> None:
+    def _push(value: str | None) -> None:
         if value is None:
             return
-        try:
-            if pd.isna(value):  # type: ignore[arg-type]
-                return
-        except TypeError:
-            pass
-        marker = repr(value)
-        if marker in seen:
+        marker = value.strip()
+        if not marker or marker in seen:
             return
         seen.add(marker)
-        candidates.append(value)
+        candidates.append(marker)
 
     _push(identifier)
-    if isinstance(identifier, str):
-        stripped = identifier.strip()
-        if stripped and stripped != identifier:
-            _push(stripped)
-        numeric_candidate = _maybe_int_from_text(stripped)
-        if numeric_candidate is not None:
-            _push(numeric_candidate)
-    else:
-        numeric_candidate = _maybe_int_from_text(identifier)
-        if numeric_candidate is not None:
-            _push(numeric_candidate)
-        _push(str(identifier))
+    numeric_candidate = _maybe_int_from_text(identifier)
+    if numeric_candidate is not None:
+        _push(str(numeric_candidate))
 
     for candidate in candidates:
         entry = mentor_state.get(candidate)
         if entry is not None:
             return candidate, entry
     return None, None
+
+
+def _stringify_mentor_state(
+    mentor_state: Mapping[Any, Mapping[str, int]]
+) -> dict[str, Mapping[str, int]]:
+    """Normalize mentor state keys to stable strings for lookups and logs."""
+
+    normalized: dict[str, Mapping[str, int]] = {}
+    for key, value in mentor_state.items():
+        normalized_key = _normalize_mentor_identifier(key)
+        if normalized_key is None:
+            continue
+        normalized[normalized_key] = value
+    return normalized
 
 
 def _safe_state_int(value: object) -> int:
@@ -460,13 +455,17 @@ def _center_wildcard_value(policy: PolicyConfig) -> int | None:
         return None
 
 
-def _canonical_stage_counts(stage_candidate_counts: Mapping[str, int]) -> dict[str, int]:
+def _canonical_stage_counts(
+    stage_candidate_counts: Mapping[str, int] | Mapping[TraceStageName, int],
+) -> dict[TraceStageName, int]:
     """بازگردانی شمارنده‌ها روی ترتیب ۸ مرحلهٔ استاندارد."""
 
     return {stage: int(stage_candidate_counts.get(stage, 0)) for stage in CANONICAL_TRACE_ORDER}
 
 
-def _derive_error_type_from_stage_counts(stage_candidate_counts: Mapping[str, int]) -> str:
+def _derive_error_type_from_stage_counts(
+    stage_candidate_counts: Mapping[TraceStageName, int],
+) -> str:
     """طبقه‌بندی خطا براساس شمارندهٔ مراحل Trace."""
 
     canonical = _canonical_stage_counts(stage_candidate_counts)
@@ -1102,7 +1101,7 @@ def _format_alert_message(stage: str, record: TraceStageRecord | None) -> str:
 
 
 def _derive_failure_alerts(
-    stage_candidate_counts: Mapping[str, int],
+    stage_candidate_counts: Mapping[TraceStageName, int],
     trace: Sequence[TraceStageRecord],
     *,
     error_type: str,
@@ -1112,7 +1111,7 @@ def _derive_failure_alerts(
     if not stage_candidate_counts:
         return []
     if error_type == "ELIGIBILITY_NO_MATCH":
-        stage_sequence: tuple[str, ...] = _JOIN_STAGE_FAILURE_ORDER
+        stage_sequence: tuple[TraceStageName, ...] = _JOIN_STAGE_FAILURE_ORDER
     elif error_type == "CAPACITY_FULL":
         stage_sequence = ("capacity_gate",)
     else:
@@ -1343,7 +1342,7 @@ def allocate_student(
     capacity_column: str | None = None,
     trace_plan: Sequence[TraceStagePlan] | None = None,
     stage_rules: Mapping[TraceStageLiteral, Rule] | None = None,
-    state: dict[object, dict[str, int]] | None = None,
+    state: Mapping[str, Mapping[str, int]] | None = None,
     pool_state_view: pd.DataFrame | None = None,
     alert_progress: ProgressFn | None = None,
 ) -> AllocationResult:
@@ -1373,10 +1372,13 @@ def allocate_student(
     join_map, missing_columns = _collect_join_key_map(student, policy)
 
     progress(5, "prefilter")
-    stage_candidate_counts: dict[str, int] = {stage: 0 for stage in CANONICAL_TRACE_ORDER}
+    stage_candidate_counts: dict[TraceStageName, int] = {
+        stage: 0 for stage in CANONICAL_TRACE_ORDER
+    }
 
     def _record_stage(stage: str, count: int) -> None:
-        stage_candidate_counts[stage] = int(count)
+        stage_name = ensure_trace_stage_name(stage)
+        stage_candidate_counts[stage_name] = int(count)
 
     eligible = apply_join_filters(
         candidate_pool,
@@ -1534,9 +1536,11 @@ def allocate_student(
     ranking_input["__candidate_index__"] = capacity_filtered.index
 
     active_state = (
-        state
+        _stringify_mentor_state(state)
         if state is not None
-        else build_mentor_state(state_view_en, capacity_column=capacity_column_name, policy=policy)
+        else _stringify_mentor_state(
+            build_mentor_state(state_view_en, capacity_column=capacity_column_name, policy=policy)
+        )
     )
     ranked = apply_ranking_policy(ranking_input, state=active_state, policy=policy)
     fairness_reason = ranked.attrs.get("fairness_reason")
@@ -1605,7 +1609,9 @@ def allocate_student(
             ],
         )
 
-    mentor_identifier = chosen_row.get("mentor_id_en", chosen_en.get("mentor_id"))
+    mentor_identifier = _normalize_mentor_identifier(
+        chosen_row.get("mentor_id_en", chosen_en.get("mentor_id"))
+    )
     snapshot_entry = _snapshot_state_entry(
         active_state.get(mentor_identifier)
         if active_state and mentor_identifier is not None
@@ -1623,6 +1629,13 @@ def allocate_student(
             error_type="ELIGIBILITY_NO_MATCH",
             suggested_actions=["بازبینی join keys", "بازسازی استخر/دانش‌آموز"],
             extra_updates={"join_key_mismatches": join_mismatches},
+        )
+
+    if mentor_identifier is None:
+        return _fail_allocation(
+            "Mentor identifier missing after normalization",
+            error_type="DATA_MISSING",
+            suggested_actions=["بازبینی شناسه‌های پشتیبان", "بازسازی دادهٔ استخر"],
         )
 
     try:
@@ -1818,8 +1831,8 @@ def allocate_batch(
     if "mentor_id" not in pool_internal.columns:
         raise KeyError("Pool must contain 'mentor_id' column after canonicalization")
 
-    mentor_state = build_mentor_state(
-        pool_internal, capacity_column=capacity_internal, policy=policy
+    mentor_state = _stringify_mentor_state(
+        build_mentor_state(pool_internal, capacity_column=capacity_internal, policy=policy)
     )
 
     center_manager_index, _ = _build_center_manager_index(
