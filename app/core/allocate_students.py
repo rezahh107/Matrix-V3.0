@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import math
 import warnings
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from numbers import Number
-from typing import Any
+from typing import Any, TypeVar
 
 import pandas as pd
 from pandas.api import types as pd_types
@@ -116,6 +117,58 @@ _STAGE_LABEL_FA: dict[str, str] = {
     "capacity_gate": "capacity",
 }
 
+T = TypeVar("T")
+
+
+def safe_int(value: Any) -> int | None:
+    """Safely convert various types to int, handling pandas NaN and None."""
+
+    if value is None or (isinstance(value, float) and math.isnan(value)):
+        return None
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, Number):
+        return int(float(value))
+    if isinstance(value, str):
+        cleaned = value.strip()
+        if not cleaned:
+            return None
+        try:
+            return int(float(cleaned))
+        except ValueError:
+            return None
+    if isinstance(value, pd.Timestamp):
+        return int(value.timestamp())
+    return None
+
+
+def safe_float(value: Any) -> float | None:
+    """Safely convert various types to float."""
+
+    if value is None or (isinstance(value, float) and math.isnan(value)):
+        return None
+    if isinstance(value, bool):
+        return float(value)
+    if isinstance(value, Number):
+        return float(value)
+    if isinstance(value, str):
+        cleaned = value.strip()
+        if not cleaned:
+            return None
+        try:
+            return float(cleaned)
+        except ValueError:
+            return None
+    return None
+
+
+def safe_str(value: Any) -> str | None:
+    """Safely convert to string, handling None and NaN."""
+
+    if value is None or (isinstance(value, float) and math.isnan(value)):
+        return None
+    return str(value).strip() or None
+
 
 def _normalize_digit_code(
     value: object, *, length: int | None = None, pad: bool = False, allow_shorter: bool = False
@@ -125,7 +178,7 @@ def _normalize_digit_code(
     if value is None:
         return ""
     try:
-        if pd.isna(value):  # type: ignore[arg-type]
+        if pd.isna(value):
             return ""
     except TypeError:
         pass
@@ -191,7 +244,7 @@ def _normalize_mentor_identifier(value: object) -> str | None:
     if isinstance(value, (list, tuple, set, dict)):
         return None
     try:
-        if pd.isna(value):  # type: ignore[arg-type]
+        if pd.isna(value):
             return None
     except TypeError:
         pass
@@ -271,7 +324,7 @@ def _maybe_int_from_text(value: object) -> int | None:
                 return int(numeric)
             return None
         return int(numeric)
-    if pd.isna(numeric):  # type: ignore[arg-type]
+    if pd.isna(numeric):
         return None
     return None
 
@@ -334,7 +387,7 @@ def _safe_state_int(value: object) -> int:
 
     if isinstance(value, Number):
         try:
-            if pd.isna(value):  # type: ignore[arg-type]
+            if pd.isna(value):
                 return 0
         except TypeError:
             pass
@@ -359,7 +412,7 @@ def _safe_state_float(value: object) -> float:
 
     if isinstance(value, Number):
         try:
-            if pd.isna(value):  # type: ignore[arg-type]
+            if pd.isna(value):
                 return 0.0
         except TypeError:
             pass
@@ -438,7 +491,7 @@ def _resolve_capacity_column(policy: PolicyConfig, override: str | None) -> str:
 def _coerce_int(value: object) -> int:
     if value is None:
         raise ValueError("DATA_MISSING")
-    if isinstance(value, Number) and pd.isna(value):  # type: ignore[arg-type]
+    if isinstance(value, Number) and pd.isna(value):
         raise ValueError("DATA_MISSING")
     return int(value)
 
@@ -742,7 +795,7 @@ def _extract_and_validate_center(
             if not text_value:
                 return fallback_center, False
             value = text_value
-        if pd.isna(value):  # type: ignore[arg-type]
+        if pd.isna(value):
             return fallback_center, False
     except Exception:
         return fallback_center, False
@@ -1079,7 +1132,7 @@ def _display_expected_value(value: object) -> str:
     if value is None:
         return "نامشخص"
     try:
-        if pd.isna(value):  # type: ignore[arg-type]
+        if pd.isna(value):
             return "نامشخص"
     except Exception:
         pass
@@ -1232,7 +1285,7 @@ def _emit_alert_progress(
         context = alert.get("context") or {}
         expected = context.get("expected_value")
         try:
-            if expected is not None and pd.isna(expected):  # type: ignore[arg-type]
+            if expected is not None and pd.isna(expected):
                 expected = None
         except Exception:
             pass
