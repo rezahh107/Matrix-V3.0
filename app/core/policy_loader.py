@@ -1170,9 +1170,13 @@ def _to_config(data: RawPolicy) -> PolicyConfig:
     finance_variants_raw = data["finance_variants"]
     center_map_raw = data["center_map"]
 
-    if not isinstance(normal_statuses_raw, Sequence) or isinstance(normal_statuses_raw, (str, bytes)):
+    if not isinstance(normal_statuses_raw, Sequence) or isinstance(
+        normal_statuses_raw, (str, bytes)
+    ):
         raise TypeError("normal_statuses must be a sequence")
-    if not isinstance(school_statuses_raw, Sequence) or isinstance(school_statuses_raw, (str, bytes)):
+    if not isinstance(school_statuses_raw, Sequence) or isinstance(
+        school_statuses_raw, (str, bytes)
+    ):
         raise TypeError("school_statuses must be a sequence")
     if not isinstance(join_keys_raw, Sequence) or isinstance(join_keys_raw, (str, bytes)):
         raise TypeError("join_keys must be a sequence")
