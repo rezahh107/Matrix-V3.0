@@ -8,14 +8,15 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import dataclass
 
-from PySide6.QtCore import QSortFilterProxyModel, Qt
+from PySide6.QtCore import QModelIndex, QPersistentModelIndex, QObject, QSortFilterProxyModel, Qt
 from PySide6.QtGui import QStandardItem, QStandardItemModel
 
 from app.ui.models import MentorPoolEntry
 
-_ROLE_KIND = Qt.UserRole + 1
-_ROLE_ID = Qt.UserRole + 2
-_ROLE_SEARCH = Qt.UserRole + 3
+_BASE_ROLE = int(Qt.ItemDataRole.UserRole)
+_ROLE_KIND = _BASE_ROLE + 1
+_ROLE_ID = _BASE_ROLE + 2
+_ROLE_SEARCH = _BASE_ROLE + 3
 
 
 @dataclass
@@ -35,7 +36,9 @@ class ManagerMentorFilterProxy(QSortFilterProxyModel):
         self._query = (text or "").strip().lower()
         self.invalidateFilter()
 
-    def filterAcceptsRow(self, source_row: int, source_parent):  # type: ignore[override]  # noqa: N802 - امضای Qt
+    def filterAcceptsRow(
+        self, source_row: int, source_parent: QModelIndex | QPersistentModelIndex
+    ) -> bool:  # noqa: N802 - امضای Qt
         if not self._query:
             return True
         model = self.sourceModel()
@@ -61,9 +64,9 @@ class ManagerMentorModel(QStandardItemModel):
 
     HEADERS = ["فعال", "نام", "شناسه", "مدیر", "مرکز", "مدرسه", "ظرفیت"]
 
-    def __init__(self, entries: Iterable[MentorPoolEntry], parent=None) -> None:
+    def __init__(self, entries: Iterable[MentorPoolEntry], parent: QObject | None = None) -> None:
         super().__init__(parent)
-        self._suppress = False
+        self._suppress: bool = False
         self.setHorizontalHeaderLabels(self.HEADERS)
         self._populate(entries)
         self.itemChanged.connect(self._handle_item_changed)
@@ -84,7 +87,7 @@ class ManagerMentorModel(QStandardItemModel):
         for group in self._group_entries(entries):
             manager_item = QStandardItem(group.name)
             manager_item.setCheckable(True)
-            manager_item.setCheckState(Qt.Checked)
+            manager_item.setCheckState(Qt.CheckState.Checked)
             manager_item.setData("manager", _ROLE_KIND)
             manager_item.setData(group.name, _ROLE_ID)
             manager_item.setData(group.name, _ROLE_SEARCH)
@@ -110,7 +113,7 @@ class ManagerMentorModel(QStandardItemModel):
             )
 
             for mentor in group.mentors:
-                child_enabled = Qt.Checked if mentor.enabled else Qt.Unchecked
+                child_enabled = Qt.CheckState.Checked if mentor.enabled else Qt.CheckState.Unchecked
                 child_active = QStandardItem()
                 child_active.setCheckable(True)
                 child_active.setCheckState(child_enabled)
@@ -172,15 +175,15 @@ class ManagerMentorModel(QStandardItemModel):
 
     def _refresh_manager_state(self, manager_item: QStandardItem) -> None:
         if manager_item.rowCount() == 0:
-            manager_item.setCheckState(Qt.Unchecked)
+            manager_item.setCheckState(Qt.CheckState.Unchecked)
             return
         states = {manager_item.child(row, 0).checkState() for row in range(manager_item.rowCount())}
-        if states == {Qt.Checked}:
-            manager_item.setCheckState(Qt.Checked)
-        elif states == {Qt.Unchecked}:
-            manager_item.setCheckState(Qt.Unchecked)
+        if states == {Qt.CheckState.Checked}:
+            manager_item.setCheckState(Qt.CheckState.Checked)
+        elif states == {Qt.CheckState.Unchecked}:
+            manager_item.setCheckState(Qt.CheckState.Unchecked)
         else:
-            manager_item.setCheckState(Qt.PartiallyChecked)
+            manager_item.setCheckState(Qt.CheckState.PartiallyChecked)
 
     def set_entries(self, entries: Iterable[MentorPoolEntry]) -> None:
         self._suppress = True
@@ -196,7 +199,7 @@ class ManagerMentorModel(QStandardItemModel):
             for c in range(manager_item.rowCount()):
                 mentor_item = manager_item.child(c, 0)
                 mentor_id = str(mentor_item.data(_ROLE_ID))
-                result[mentor_id] = mentor_item.checkState() == Qt.Checked
+                result[mentor_id] = mentor_item.checkState() == Qt.CheckState.Checked
         return result
 
     def manager_overrides(self) -> dict[str, bool]:
@@ -204,11 +207,11 @@ class ManagerMentorModel(QStandardItemModel):
         for r in range(self.rowCount()):
             manager_item = self.item(r, 0)
             manager_id = str(manager_item.data(_ROLE_ID))
-            result[manager_id] = manager_item.checkState() == Qt.Checked
+            result[manager_id] = manager_item.checkState() == Qt.CheckState.Checked
         return result
 
     def set_all(self, enabled: bool) -> None:
-        state = Qt.Checked if enabled else Qt.Unchecked
+        state = Qt.CheckState.Checked if enabled else Qt.CheckState.Unchecked
         self._suppress = True
         try:
             for r in range(self.rowCount()):
