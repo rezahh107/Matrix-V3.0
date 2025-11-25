@@ -790,9 +790,7 @@ class MainWindow(QMainWindow):
                 self._stage_detail.setText(
                     self._t("stage.pick_scenario", "برای شروع یکی از سناریوها را انتخاب کنید")
                 )
-            self._update_progress_caption(
-                self._progress.value(), self._t("status.ready", "آماده")
-            )
+            self._update_progress_caption(self._progress.value(), self._t("status.ready", "آماده"))
             self._update_status_bar_state("ready")
 
     def _refresh_last_run_badge(self) -> None:
