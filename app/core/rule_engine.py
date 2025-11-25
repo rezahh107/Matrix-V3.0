@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-import pandas as pd
+from collections.abc import Mapping
+from typing import cast
 
-from typing import Mapping, cast
+import pandas as pd
 
 from app.core.common.ranking import apply_ranking_policy, build_mentor_state
 from app.core.policy_loader import PolicyConfig, load_policy
