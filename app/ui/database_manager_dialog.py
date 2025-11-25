@@ -31,9 +31,9 @@ try:  # pragma: no cover - وابستگی Qt ممکن است در CI غایب ب
     import PySide6.QtWidgets as QtWidgets
 except Exception as exc:  # pragma: no cover - fallback
     Qt = cast(Any, None)
-    QDialog = QGridLayout = QHBoxLayout = QHeaderView = QLabel = QMessageBox = (
-        QPushButton
-    ) = QTableWidget = QTableWidgetItem = QVBoxLayout = QWidget = cast(type[object], object)
+    QDialog = QGridLayout = QHBoxLayout = QHeaderView = QLabel = QMessageBox = QPushButton = (
+        QTableWidget
+    ) = QTableWidgetItem = QVBoxLayout = QWidget = cast(type[object], object)
     _QT_AVAILABLE = False
     _QT_IMPORT_ERROR = exc
 else:
