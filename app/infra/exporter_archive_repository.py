@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 
 import pandas as pd
 
 from app.infra.local_database import LocalDatabase
+
+RecordTuple = tuple[object, ...]
+NaturalKey = tuple[int | str, ...]
 
 
 @dataclass(frozen=True)
@@ -73,18 +76,22 @@ class ExporterArchiveRepository:
             is_truncated = True
         else:
             rows_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
-        return self.db.insert_exporter_snapshot(
-            exporter_name=self.exporter_name,
-            exporter_version=exporter_version,
-            run_uuid=run_uuid,
-            run_id=run_id,
-            rows_df=normalized,
-            metadata_json=metadata_json,
-            row_hash=row_hash,
-            columns_json=json.dumps(payload["columns"], ensure_ascii=False, separators=(",", ":")),
-            rows_json=rows_json,
-            row_limit=row_limit,
-            is_truncated=is_truncated,
+        return int(
+            self.db.insert_exporter_snapshot(
+                exporter_name=self.exporter_name,
+                exporter_version=exporter_version,
+                run_uuid=run_uuid,
+                run_id=run_id,
+                rows_df=normalized,
+                metadata_json=metadata_json,
+                row_hash=row_hash,
+                columns_json=json.dumps(
+                    payload["columns"], ensure_ascii=False, separators=(",", ":")
+                ),
+                rows_json=rows_json,
+                row_limit=row_limit,
+                is_truncated=is_truncated,
+            )
         )
 
     def list_snapshots(self) -> list[dict[str, object]]:
@@ -150,12 +157,14 @@ class ExporterArchiveRepository:
         return added, removed
 
     @staticmethod
-    def _rows_to_tuples(df: pd.DataFrame) -> set[tuple[object, ...]]:
-        records: Iterable[Sequence[object]] = df.itertuples(index=False, name=None)
-        return {tuple(record) for record in records}
+    def _rows_to_tuples(df: pd.DataFrame) -> set[RecordTuple]:
+        records: Iterable[RecordTuple] = (
+            tuple(record) for record in df.itertuples(index=False, name=None)
+        )
+        return set(records)
 
 
-def _natural_key(value: str) -> tuple[int | str, ...]:
+def _natural_key(value: str) -> NaturalKey:
     tokens: list[int | str] = []
     num = ""
     for ch in value:
