@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtWidgets import QComboBox, QDialog, QDialogButtonBox, QFormLayout
+from PySide6.QtWidgets import QComboBox, QDialog, QDialogButtonBox, QFormLayout, QWidget
 
 from app.ui.i18n import Language
 from app.ui.texts import DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES, UiTranslator
@@ -14,7 +14,7 @@ class LanguageDialog(QDialog):
     """دیالوگ انتخاب زبان که مقدار انتخابی را در اختیار فراخوان می‌گذارد."""
 
     def __init__(
-        self, language: Language, translator: UiTranslator, parent: QDialog | None = None
+        self, language: Language, translator: UiTranslator, parent: QWidget | None = None
     ) -> None:
         super().__init__(parent)
         self._translator = translator
