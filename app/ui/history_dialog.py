@@ -6,7 +6,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any, cast
 
 import pandas as pd
-from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt
+from PySide6.QtCore import QAbstractTableModel, QModelIndex, QPersistentModelIndex, Qt
 from PySide6.QtWidgets import (
     QDialog,
     QHBoxLayout,
@@ -56,7 +56,11 @@ class DataFrameTableModel(QAbstractTableModel):
             return 0
         return len(self._df.columns)
 
-    def data(self, index: QModelIndex, role: int = Qt.ItemDataRole.DisplayRole) -> Any:
+    def data(
+        self,
+        index: QModelIndex | QPersistentModelIndex,
+        role: int = Qt.ItemDataRole.DisplayRole,
+    ) -> Any:
         if not index.isValid() or role not in {
             Qt.ItemDataRole.DisplayRole,
             Qt.ItemDataRole.EditRole,
@@ -194,7 +198,9 @@ class HistoryDialog(QDialog):
             return
         run_row = self._runs[row]
         run_id = int(run_row["id"])
-        metrics_df = self._rows_to_dataframe(self._db.fetch_metrics_for_run(run_id))
+        metrics_df = self._rows_to_dataframe(
+            cast(Sequence[Row], self._db.fetch_metrics_for_run(run_id))
+        )
         trace_df, qa_summary_df, qa_details_df, qa_extras = self._load_snapshots(run_id)
         self._metrics_model.update(metrics_df)
         self._trace_model.update(trace_df)

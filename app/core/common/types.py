@@ -436,6 +436,7 @@ class AllocationLogRecord(TypedDict, total=False):
     alias_autofill: int
     alias_unmatched: int
     phase_rule_trace: list[Mapping[str, Any]]
+    pool_mismatch_detected: bool
 
 
 class TraceStageRecord(TypedDict):
