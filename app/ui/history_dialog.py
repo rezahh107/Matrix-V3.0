@@ -57,7 +57,10 @@ class DataFrameTableModel(QAbstractTableModel):
         return len(self._df.columns)
 
     def data(self, index: QModelIndex, role: int = Qt.ItemDataRole.DisplayRole) -> Any:
-        if not index.isValid() or role not in {Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.EditRole}:
+        if not index.isValid() or role not in {
+            Qt.ItemDataRole.DisplayRole,
+            Qt.ItemDataRole.EditRole,
+        }:
             return None
         value = self._df.iloc[index.row(), index.column()]
         if pd.isna(value):
