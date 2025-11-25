@@ -17,7 +17,7 @@ import math
 import re
 import unicodedata
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import IntEnum, auto
 from functools import lru_cache
 from itertools import product
@@ -43,7 +43,7 @@ from app.core.common.columns import (
     resolve_aliases,
 )
 from app.core.common.domain import (
-    BuildConfig as DomainBuildConfig,
+    BuildConfig,
     MentorType,
     center_from_manager as domain_center_from_manager,
     classify_mentor_mode,
@@ -245,169 +245,6 @@ class Finance(IntEnum):
     HEKMAT = 3  # non-sequential on purpose
 
 
-# =============================================================================
-# CONFIGURATION
-# =============================================================================
-@dataclass(slots=True)
-class BuildConfig:
-    version: str = __version__
-    policy: PolicyConfig = field(default_factory=load_policy)
-    expected_policy_version: str | None = None
-    finance_variants: tuple[int, ...] | None = None
-    default_status: int = Status.STUDENT
-    enable_capacity_gate: bool = True
-    center_manager_map: dict[str, int] | None = None
-    can_allocate_truthy: tuple[str, ...] = ("بلی", "بله", "Yes", "yes", "1", "true", "True")
-    postal_valid_range: tuple[int, int] | None = None
-    school_code_empty_as_zero: bool | None = None
-    alias_rule_normal: str | None = None
-    alias_rule_school: str | None = None
-    postal_code_column: str | None = None
-    school_count_column: str | None = None
-    school_code_column: str | None = None
-    capacity_current_column: str | None = None
-    capacity_special_column: str | None = None
-    remaining_capacity_column: str | None = None
-    prefer_major_code: bool | None = None
-    min_coverage_ratio: float | None = None
-    dedup_removed_ratio_threshold: float | None = None
-    join_key_duplicate_threshold: int | None = None
-    school_lookup_mismatch_threshold: float | None = None
-    fail_on_school_lookup_threshold: bool = False
-    policy_version: str = field(init=False, repr=False, default="")
-
-    def __post_init__(self) -> None:
-        policy = self.policy
-        columns = policy.columns
-
-        resolved_policy_version = str(getattr(policy, "version", ""))
-        if not resolved_policy_version:
-            raise ValueError("policy configuration missing version identifier")
-        self.policy_version = resolved_policy_version
-
-        if self.expected_policy_version is not None:
-            cleaned = str(self.expected_policy_version).strip()
-            self.expected_policy_version = cleaned or None
-
-        if self.finance_variants is None:
-            self.finance_variants = tuple(policy.finance_variants)
-        else:
-            unique: list[int] = []
-            seen: set[int] = set()
-            for item in self.finance_variants:
-                iv = int(item)
-                if iv not in seen:
-                    unique.append(iv)
-                    seen.add(iv)
-            self.finance_variants = tuple(unique)
-
-        if self.center_manager_map is None:
-            self.center_manager_map = dict(policy.center_map)
-        else:
-            self.center_manager_map = {str(k): int(v) for k, v in self.center_manager_map.items()}
-
-        if self.postal_valid_range is None:
-            self.postal_valid_range = tuple(policy.postal_valid_range)
-        else:
-            start, end = (int(self.postal_valid_range[0]), int(self.postal_valid_range[1]))
-            if start > end:
-                raise ValueError("postal_valid_range start must be <= end")
-            self.postal_valid_range = (start, end)
-
-        if self.school_code_empty_as_zero is None:
-            self.school_code_empty_as_zero = bool(policy.school_code_empty_as_zero)
-        else:
-            self.school_code_empty_as_zero = bool(self.school_code_empty_as_zero)
-
-        if self.alias_rule_normal is None:
-            self.alias_rule_normal = policy.alias_rule.normal
-        if self.alias_rule_school is None:
-            self.alias_rule_school = policy.alias_rule.school
-
-        if self.postal_code_column is None:
-            self.postal_code_column = columns.postal_code
-        if self.school_count_column is None:
-            self.school_count_column = columns.school_count
-        if self.school_code_column is None:
-            self.school_code_column = columns.school_code
-        if self.capacity_current_column is None:
-            self.capacity_current_column = columns.capacity_current
-        if self.capacity_special_column is None:
-            self.capacity_special_column = columns.capacity_special
-        if self.remaining_capacity_column is None:
-            self.remaining_capacity_column = columns.remaining_capacity
-
-        if self.prefer_major_code is None:
-            self.prefer_major_code = bool(getattr(policy, "prefer_major_code", True))
-        else:
-            self.prefer_major_code = bool(self.prefer_major_code)
-
-        if self.min_coverage_ratio is None:
-            self.min_coverage_ratio = float(getattr(policy, "coverage_threshold", 0.95))
-        else:
-            ratio = float(self.min_coverage_ratio)
-            if ratio > 1:
-                ratio /= 100.0
-            if ratio < 0 or ratio > 1:
-                raise ValueError("min_coverage_ratio must be between 0 and 1 (inclusive)")
-            self.min_coverage_ratio = ratio
-
-        if self.dedup_removed_ratio_threshold is None:
-            self.dedup_removed_ratio_threshold = float(
-                getattr(policy, "dedup_removed_ratio_threshold", 0.0)
-            )
-        else:
-            ratio = float(self.dedup_removed_ratio_threshold)
-            if ratio > 1:
-                ratio /= 100.0
-            if ratio < 0 or ratio > 1:
-                raise ValueError(
-                    "dedup_removed_ratio_threshold must be between 0 and 1 (inclusive)"
-                )
-            self.dedup_removed_ratio_threshold = ratio
-
-        if self.join_key_duplicate_threshold is None:
-            self.join_key_duplicate_threshold = int(
-                getattr(policy, "join_key_duplicate_threshold", 0)
-            )
-        else:
-            threshold = int(self.join_key_duplicate_threshold)
-            if threshold < 0:
-                raise ValueError("join_key_duplicate_threshold must be >= 0")
-            self.join_key_duplicate_threshold = threshold
-
-        if self.school_lookup_mismatch_threshold is None:
-            self.school_lookup_mismatch_threshold = float(
-                getattr(policy, "school_lookup_mismatch_threshold", 0.0)
-            )
-        else:
-            ratio = float(self.school_lookup_mismatch_threshold)
-            if ratio > 1:
-                ratio /= 100.0
-            if ratio < 0 or ratio > 1:
-                raise ValueError(
-                    "school_lookup_mismatch_threshold must be between 0 and 1 (inclusive)"
-                )
-            self.school_lookup_mismatch_threshold = ratio
-
-        self.fail_on_school_lookup_threshold = bool(self.fail_on_school_lookup_threshold)
-
-
-def _as_domain_config(cfg: BuildConfig) -> DomainBuildConfig:
-    """Create :class:`DomainBuildConfig` from :class:`BuildConfig`."""
-
-    return DomainBuildConfig(
-        version=cfg.policy_version,
-        postal_valid_range=tuple(cfg.postal_valid_range or (1000, 9999)),
-        finance_variants=tuple(
-            cfg.finance_variants or (Finance.NORMAL, Finance.BONYAD, Finance.HEKMAT)
-        ),
-        center_map=dict(cfg.center_manager_map or {}),
-        school_code_empty_as_zero=bool(cfg.school_code_empty_as_zero),
-        alias_rule_normal=cfg.alias_rule_normal or "postal_or_fallback_mentor_id",
-        alias_rule_school=cfg.alias_rule_school or "mentor_id",
-        prefer_major_code=bool(cfg.prefer_major_code),
-    )
 
 
 def _duplicate_summary_payload(
@@ -1127,7 +964,7 @@ def collect_school_codes_from_row(
     name_to_code: dict[str, str],
     school_cols: list[str],
     *,
-    domain_cfg: DomainBuildConfig,
+    cfg: BuildConfig,
     binding_policy: MentorSchoolBindingPolicy,
 ) -> MentorSchoolBindingInfo:
     """استخراج کدهای مدرسه و تعیین mode (global/restricted)."""
@@ -1143,7 +980,7 @@ def collect_school_codes_from_row(
         candidate = to_int_str_or_none(raw)
         if candidate is None:
             candidate = name_to_code.get(normalize_fa(raw), None)
-        normalized = school_code_norm(candidate, cfg=domain_cfg)
+        normalized = school_code_norm(candidate, cfg=cfg)
         if normalized > 0 and normalized not in seen:
             normalized_codes.append(normalized)
             seen.add(normalized)
@@ -1313,7 +1150,6 @@ def _prepare_base_rows(
     insp: pd.DataFrame,
     *,
     cfg: BuildConfig,
-    domain_cfg: DomainBuildConfig,
     name_to_code: dict[str, int],
     code_to_name: dict[int, str],
     buckets: dict[str, list[tuple[str, int]]],
@@ -1329,7 +1165,7 @@ def _prepare_base_rows(
     unseen_groups: list[dict[str, Any]] = []
     unmatched_schools: list[dict[str, Any]] = []
 
-    finance_variants = list(finance_cross(cfg.finance_variants, cfg=domain_cfg))
+    finance_variants = list(finance_cross(cfg.finance_variants, cfg=cfg))
     normal_statuses = [int(s) for s in cfg.policy.normal_statuses]
     school_statuses = [int(s) for s in cfg.policy.school_statuses]
     postal_col = cfg.postal_code_column or COL_POSTAL
@@ -1356,7 +1192,7 @@ def _prepare_base_rows(
             pd.Series(row),
             school_name_to_code,
             school_cols,
-            domain_cfg=domain_cfg,
+            cfg=cfg,
             binding_policy=binding_policy,
         )
         school_codes = school_binding.codes
@@ -1420,16 +1256,16 @@ def _prepare_base_rows(
         mentor_mode = classify_mentor_mode(
             postal_code=postal_raw,
             school_codes=school_codes,
-            cfg=domain_cfg,
+            cfg=cfg,
             has_school_constraint=has_school_constraint,
         )
 
-        alias_normal_raw = compute_alias(MentorType.NORMAL, postal_raw, mentor_id, cfg=domain_cfg)
-        alias_school_raw = compute_alias(MentorType.SCHOOL, postal_raw, mentor_id, cfg=domain_cfg)
+        alias_normal_raw = compute_alias(MentorType.NORMAL, postal_raw, mentor_id, cfg=cfg)
+        alias_school_raw = compute_alias(MentorType.SCHOOL, postal_raw, mentor_id, cfg=cfg)
         alias_normal = alias_normal_raw or None
         alias_school = alias_school_raw or None
 
-        center = domain_center_from_manager(manager_name, cfg=domain_cfg)
+        center = domain_center_from_manager(manager_name, cfg=cfg)
         has_school_codes = any(code > 0 for code in school_codes)
 
         base = {
@@ -1671,7 +1507,6 @@ def _explode_rows(
     type_label: str,
     code_to_name_school: dict[str, str],
     cfg: BuildConfig,
-    domain_cfg: DomainBuildConfig,
     cap_current_col: str,
     cap_special_col: str,
     remaining_col: str,
@@ -2038,7 +1873,6 @@ def build_matrix(
         )
 
     insp = insp_df.copy()
-    domain_cfg = _as_domain_config(cfg)
 
     if cfg.enable_capacity_gate:
         insp, removed_mentors, capacity_metrics, r0_skipped = capacity_gate(
@@ -2124,7 +1958,6 @@ def build_matrix(
     base_df, unseen_groups, unmatched_schools = _prepare_base_rows(
         insp_valid,
         cfg=cfg,
-        domain_cfg=domain_cfg,
         name_to_code=name_to_code,
         code_to_name=code_to_name,
         buckets=buckets,
@@ -2161,7 +1994,6 @@ def build_matrix(
         type_label="عادی",
         code_to_name_school=code_to_name_school,
         cfg=cfg,
-        domain_cfg=domain_cfg,
         cap_current_col=cap_current_col,
         cap_special_col=cap_special_col,
         remaining_col=remaining_col,
@@ -2175,7 +2007,6 @@ def build_matrix(
         type_label="مدرسه‌ای",
         code_to_name_school=code_to_name_school,
         cfg=cfg,
-        domain_cfg=domain_cfg,
         cap_current_col=cap_current_col,
         cap_special_col=cap_special_col,
         remaining_col=remaining_col,
@@ -2579,7 +2410,6 @@ def validate_with_students(
     cfg: BuildConfig | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, int]]:
     cfg = cfg or BuildConfig()
-    domain_cfg = _as_domain_config(cfg)
     school_code_col = cfg.school_code_column or COL_SCHOOL_CODE
     center_col = cfg.policy.stage_column("center")
 
@@ -2690,7 +2520,7 @@ def validate_with_students(
         return (sub2, None if not sub2.empty else "status mismatch")
 
     def _check_center(row: pd.Series, sub: pd.DataFrame) -> tuple[pd.DataFrame, str | None]:
-        expected = domain_center_from_manager(row["manager"], cfg=domain_cfg)
+        expected = domain_center_from_manager(row["manager"], cfg=cfg)
         sub2 = sub[sub[center_col] == expected]
         return (sub2, None if not sub2.empty else "center mismatch (manager-based)")
 

@@ -24,7 +24,6 @@ from app.core.build_matrix import (
     COL_STATUS_A,
     COL_STATUS_B,
     BuildConfig,
-    _as_domain_config,
     build_school_maps,
     collect_school_codes_from_row,
     domain_center_from_manager,
@@ -136,7 +135,6 @@ def _derive_pool_join_keys(
         return pool_df, []
 
     cfg = BuildConfig(policy=policy)
-    domain_cfg = _as_domain_config(cfg)
 
     pool = canonicalize_headers(pool_df, header_mode="fa").copy()
     if all(join_key in pool.columns for join_key in policy.join_keys):
@@ -178,7 +176,7 @@ def _derive_pool_join_keys(
     }
     qa_issues: list[dict[str, Any]] = []
 
-    center_map_norm = domain_cfg.center_map_norm()
+    center_map_norm = cfg.center_map_norm()
     wildcard_center = center_map_norm.get("*")
 
     for idx, row in pool.iterrows():
@@ -227,7 +225,7 @@ def _derive_pool_join_keys(
             row,
             school_name_to_code,
             school_cols,
-            domain_cfg=domain_cfg,
+            cfg=cfg,
             binding_policy=policy.mentor_school_binding,
         )
         school_code = int(school_binding.codes[0]) if school_binding.codes else 0
@@ -242,7 +240,7 @@ def _derive_pool_join_keys(
             )
 
         try:
-            center_value = domain_center_from_manager(manager_name, cfg=domain_cfg)
+            center_value = domain_center_from_manager(manager_name, cfg=cfg)
         except InvalidCenterMappingError:
             center_value = 0
             _append_issue(

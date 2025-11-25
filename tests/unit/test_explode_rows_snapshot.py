@@ -9,7 +9,6 @@ from app.core.build_matrix import (
     CAPACITY_CURRENT_COL,
     CAPACITY_SPECIAL_COL,
     BuildConfig,
-    _as_domain_config,
     _explode_rows,
     _prepare_base_rows,
     build_school_maps,
@@ -66,13 +65,11 @@ def _build_fixture_base() -> tuple[
     insp_df.loc[0, "کدپستی"] = "1234"
 
     cfg = BuildConfig()
-    domain_cfg = _as_domain_config(cfg)
     name_to_code, code_to_name, buckets, synonyms = prepare_crosswalk_mappings(crosswalk_df)
     code_to_name_school, school_name_to_code = build_school_maps(schools_df)
     base_df, _, _ = _prepare_base_rows(
         insp_df,
         cfg=cfg,
-        domain_cfg=domain_cfg,
         name_to_code=name_to_code,
         code_to_name=code_to_name,
         buckets=buckets,
@@ -159,8 +156,6 @@ def _generate_canonical_rows() -> tuple[
 ]:
     base_df, code_to_name_school, cfg, cols = _build_fixture_base()
     cap_current_col, cap_special_col, remaining_col, school_code_col = cols
-    domain_cfg = _as_domain_config(cfg)
-
     normal_df = _explode_rows(
         base_df.loc[base_df["can_normal"]],
         alias_col="alias_normal",
@@ -169,7 +164,6 @@ def _generate_canonical_rows() -> tuple[
         type_label="عادی",
         code_to_name_school=code_to_name_school,
         cfg=cfg,
-        domain_cfg=domain_cfg,
         cap_current_col=cap_current_col,
         cap_special_col=cap_special_col,
         remaining_col=remaining_col,
@@ -183,7 +177,6 @@ def _generate_canonical_rows() -> tuple[
         type_label="مدرسه‌ای",
         code_to_name_school=code_to_name_school,
         cfg=cfg,
-        domain_cfg=domain_cfg,
         cap_current_col=cap_current_col,
         cap_special_col=cap_special_col,
         remaining_col=remaining_col,

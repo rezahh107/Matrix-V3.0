@@ -12,6 +12,8 @@ from dataclasses import dataclass, field
 from enum import Enum, IntEnum
 from typing import Any, Literal, TypedDict, TypeGuard, final
 
+from app.core.policy_loader import PolicyConfig, load_policy
+
 from .errors import DataMissingError, InvalidCenterMappingError, InvalidGenderValueError
 from .normalization import normalize_fa, to_numlike_str
 
@@ -218,13 +220,14 @@ def _compute_normal_or_dual_alias(postal_code: Any, mentor_id: Any, cfg: BuildCo
 
 
 @final
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True)
 class BuildConfig:
     """
     Build-time configuration for the allocation system.
 
     Attributes:
-        version: Version string
+        policy: Active policy reference for defaults and validation
+        expected_policy_version: Optional policy version guard
         postal_valid_range: Min/max for valid postal codes
         finance_variants: Valid finance codes
         center_map: Manager name → center ID mapping
@@ -232,25 +235,167 @@ class BuildConfig:
         alias_rule_normal: Alias rule for NORMAL mentors
         alias_rule_school: Alias rule for SCHOOL mentors
         prefer_major_code: Whether StudentReport «کد رشته» overrides group name mapping
+        min_coverage_ratio: Coverage threshold for validation sheets
+        dedup_removed_ratio_threshold: Allowed duplicate-removal ratio
+        join_key_duplicate_threshold: Maximum tolerated join-key collisions
+        school_lookup_mismatch_threshold: Allowed ratio of unmatched school lookups
     """
 
-    version: str = "1.0.3"
-    postal_valid_range: tuple[int, int] = (1000, 9999)
-    finance_variants: tuple[int, ...] = (0, 1, 3)
-    center_map: dict[str, int] = field(default_factory=lambda: {"*": 0})
-    school_code_empty_as_zero: bool = True
-    alias_rule_normal: str = "postal_or_fallback_mentor_id"
-    alias_rule_school: str = "mentor_id"
-    prefer_major_code: bool = True
+    version: str = "1.0.4"
+    policy: PolicyConfig = field(default_factory=load_policy)
+    expected_policy_version: str | None = None
+    finance_variants: tuple[int, ...] | None = None
+    default_status: int = Status.STUDENT
+    enable_capacity_gate: bool = True
+    center_map: dict[str, int] | None = None
+    can_allocate_truthy: tuple[str, ...] = ("بلی", "بله", "Yes", "yes", "1", "true", "True")
+    postal_valid_range: tuple[int, int] | None = None
+    school_code_empty_as_zero: bool | None = None
+    alias_rule_normal: str | None = None
+    alias_rule_school: str | None = None
+    postal_code_column: str | None = None
+    school_count_column: str | None = None
+    school_code_column: str | None = None
+    capacity_current_column: str | None = None
+    capacity_special_column: str | None = None
+    remaining_capacity_column: str | None = None
+    prefer_major_code: bool | None = None
+    min_coverage_ratio: float | None = None
+    dedup_removed_ratio_threshold: float | None = None
+    join_key_duplicate_threshold: int | None = None
+    school_lookup_mismatch_threshold: float | None = None
+    fail_on_school_lookup_threshold: bool = False
+    policy_version: str = field(init=False)
     _center_map_norm: dict[str, int] = field(init=False, repr=False, default_factory=dict)
 
     def __post_init__(self):
-        """Validate configuration after initialization."""
-        if (
-            len(self.postal_valid_range) != 2
-            or self.postal_valid_range[0] > self.postal_valid_range[1]
-        ):
-            raise ValueError(f"Invalid postal range: {self.postal_valid_range}")
+        """Validate and hydrate configuration after initialization."""
+
+        policy_version = str(getattr(self.policy, "version", "")).strip()
+        if not policy_version:
+            raise ValueError("policy configuration missing version identifier")
+        object.__setattr__(self, "policy_version", policy_version)
+
+        if self.expected_policy_version is not None:
+            cleaned = str(self.expected_policy_version).strip()
+            object.__setattr__(self, "expected_policy_version", cleaned or None)
+
+        if self.finance_variants is None:
+            object.__setattr__(self, "finance_variants", tuple(self.policy.finance_variants))
+        else:
+            unique: list[int] = []
+            seen: set[int] = set()
+            for item in self.finance_variants:
+                iv = int(item)
+                if iv not in seen:
+                    unique.append(iv)
+                    seen.add(iv)
+            object.__setattr__(self, "finance_variants", tuple(unique))
+
+        if self.center_map is None:
+            object.__setattr__(self, "center_map", dict(self.policy.center_map))
+        else:
+            normalized_center_map = {str(k): int(v) for k, v in self.center_map.items()}
+            object.__setattr__(self, "center_map", normalized_center_map)
+        object.__setattr__(self, "_center_map_norm", {})
+
+        postal_range = (
+            tuple(self.policy.postal_valid_range)
+            if self.postal_valid_range is None
+            else (
+                int(self.postal_valid_range[0]),
+                int(self.postal_valid_range[1]),
+            )
+        )
+        if len(postal_range) != 2 or postal_range[0] > postal_range[1]:
+            raise ValueError(f"Invalid postal range: {postal_range}")
+        object.__setattr__(self, "postal_valid_range", postal_range)
+
+        school_code_empty_as_zero = (
+            bool(self.policy.school_code_empty_as_zero)
+            if self.school_code_empty_as_zero is None
+            else bool(self.school_code_empty_as_zero)
+        )
+        object.__setattr__(self, "school_code_empty_as_zero", school_code_empty_as_zero)
+
+        if self.alias_rule_normal is None:
+            object.__setattr__(self, "alias_rule_normal", self.policy.alias_rule.normal)
+        if self.alias_rule_school is None:
+            object.__setattr__(self, "alias_rule_school", self.policy.alias_rule.school)
+
+        columns = self.policy.columns
+        if self.postal_code_column is None:
+            object.__setattr__(self, "postal_code_column", columns.postal_code)
+        if self.school_count_column is None:
+            object.__setattr__(self, "school_count_column", columns.school_count)
+        if self.school_code_column is None:
+            object.__setattr__(self, "school_code_column", columns.school_code)
+        if self.capacity_current_column is None:
+            object.__setattr__(self, "capacity_current_column", columns.capacity_current)
+        if self.capacity_special_column is None:
+            object.__setattr__(self, "capacity_special_column", columns.capacity_special)
+        if self.remaining_capacity_column is None:
+            object.__setattr__(self, "remaining_capacity_column", columns.remaining_capacity)
+
+        prefer_major_code = (
+            bool(getattr(self.policy, "prefer_major_code", True))
+            if self.prefer_major_code is None
+            else bool(self.prefer_major_code)
+        )
+        object.__setattr__(self, "prefer_major_code", prefer_major_code)
+
+        coverage_ratio_raw = (
+            float(getattr(self.policy, "coverage_threshold", 0.95))
+            if self.min_coverage_ratio is None
+            else float(self.min_coverage_ratio)
+        )
+        min_coverage_ratio = (
+            coverage_ratio_raw / 100.0 if coverage_ratio_raw > 1 else coverage_ratio_raw
+        )
+        if min_coverage_ratio < 0 or min_coverage_ratio > 1:
+            raise ValueError("min_coverage_ratio must be between 0 and 1 (inclusive)")
+        object.__setattr__(self, "min_coverage_ratio", min_coverage_ratio)
+
+        dedup_ratio_raw = (
+            float(getattr(self.policy, "dedup_removed_ratio_threshold", 0.0))
+            if self.dedup_removed_ratio_threshold is None
+            else float(self.dedup_removed_ratio_threshold)
+        )
+        dedup_ratio = dedup_ratio_raw / 100.0 if dedup_ratio_raw > 1 else dedup_ratio_raw
+        if dedup_ratio < 0 or dedup_ratio > 1:
+            raise ValueError(
+                "dedup_removed_ratio_threshold must be between 0 and 1 (inclusive)"
+            )
+        object.__setattr__(self, "dedup_removed_ratio_threshold", dedup_ratio)
+
+        join_key_threshold = (
+            int(getattr(self.policy, "join_key_duplicate_threshold", 0))
+            if self.join_key_duplicate_threshold is None
+            else int(self.join_key_duplicate_threshold)
+        )
+        if join_key_threshold < 0:
+            raise ValueError("join_key_duplicate_threshold must be >= 0")
+        object.__setattr__(self, "join_key_duplicate_threshold", join_key_threshold)
+
+        school_lookup_raw = (
+            float(getattr(self.policy, "school_lookup_mismatch_threshold", 0.0))
+            if self.school_lookup_mismatch_threshold is None
+            else float(self.school_lookup_mismatch_threshold)
+        )
+        school_lookup_ratio = (
+            school_lookup_raw / 100.0 if school_lookup_raw > 1 else school_lookup_raw
+        )
+        if school_lookup_ratio < 0 or school_lookup_ratio > 1:
+            raise ValueError(
+                "school_lookup_mismatch_threshold must be between 0 and 1 (inclusive)"
+            )
+        object.__setattr__(self, "school_lookup_mismatch_threshold", school_lookup_ratio)
+
+        object.__setattr__(
+            self,
+            "fail_on_school_lookup_threshold",
+            bool(self.fail_on_school_lookup_threshold),
+        )
 
     def center_map_norm(self) -> dict[str, int]:
         """

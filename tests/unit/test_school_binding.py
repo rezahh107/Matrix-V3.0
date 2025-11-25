@@ -1,19 +1,18 @@
 import pandas as pd
 
-from app.core.build_matrix import BuildConfig, _as_domain_config, collect_school_codes_from_row
+from app.core.build_matrix import BuildConfig, collect_school_codes_from_row
 from app.core.common.filters import filter_by_school
 from app.core.policy_loader import load_policy
 
 
 def test_collect_school_codes_marks_global_when_all_columns_empty() -> None:
     cfg = BuildConfig()
-    domain_cfg = _as_domain_config(cfg)
     row = pd.Series({"نام مدرسه 1": "", "نام مدرسه 2": None})
     binding = collect_school_codes_from_row(
         row,
         {},
         ["نام مدرسه 1", "نام مدرسه 2"],
-        domain_cfg=domain_cfg,
+        cfg=cfg,
         binding_policy=cfg.policy.mentor_school_binding,
     )
     assert binding.codes == []
@@ -23,14 +22,13 @@ def test_collect_school_codes_marks_global_when_all_columns_empty() -> None:
 
 def test_collect_school_codes_marks_restricted_when_value_present() -> None:
     cfg = BuildConfig()
-    domain_cfg = _as_domain_config(cfg)
     row = pd.Series({"نام مدرسه 1": "مدرسه نمونه"})
     mapping = {"مدرسه نمونه": "5001"}
     binding = collect_school_codes_from_row(
         row,
         mapping,
         ["نام مدرسه 1"],
-        domain_cfg=domain_cfg,
+        cfg=cfg,
         binding_policy=cfg.policy.mentor_school_binding,
     )
     assert binding.codes == [5001]
@@ -40,13 +38,12 @@ def test_collect_school_codes_marks_restricted_when_value_present() -> None:
 
 def test_collect_school_codes_marks_restricted_even_without_mapping() -> None:
     cfg = BuildConfig()
-    domain_cfg = _as_domain_config(cfg)
     row = pd.Series({"نام مدرسه 1": "نام ناشناس"})
     binding = collect_school_codes_from_row(
         row,
         {},
         ["نام مدرسه 1"],
-        domain_cfg=domain_cfg,
+        cfg=cfg,
         binding_policy=cfg.policy.mentor_school_binding,
     )
     assert binding.codes == []

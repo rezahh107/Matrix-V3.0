@@ -9,7 +9,6 @@ from app.core.build_matrix import (
     COL_MENTOR_ID,
     COL_MENTOR_NAME,
     BuildConfig,
-    _as_domain_config,
     _prepare_base_rows,
     expand_group_token,
     prepare_crosswalk_mappings,
@@ -40,7 +39,6 @@ def test_prepare_base_rows_accepts_numeric_group_code() -> None:
 
     name_to_code, code_to_name, buckets, synonyms = _sample_crosswalk()
     cfg = BuildConfig()
-    domain_cfg = _as_domain_config(cfg)
     insp = pd.DataFrame(
         {
             COL_MENTOR_ID: ["EMP-1"],
@@ -53,7 +51,6 @@ def test_prepare_base_rows_accepts_numeric_group_code() -> None:
     base_df, unseen_groups, unmatched_schools = _prepare_base_rows(
         insp,
         cfg=cfg,
-        domain_cfg=domain_cfg,
         name_to_code=name_to_code,
         code_to_name=code_to_name,
         buckets=buckets,
@@ -76,7 +73,6 @@ def test_prepare_base_rows_ignores_invalid_when_valid_present() -> None:
 
     name_to_code, code_to_name, buckets, synonyms = _sample_crosswalk()
     cfg = BuildConfig()
-    domain_cfg = _as_domain_config(cfg)
     insp = pd.DataFrame(
         {
             COL_MENTOR_ID: ["EMP-1"],
@@ -89,7 +85,6 @@ def test_prepare_base_rows_ignores_invalid_when_valid_present() -> None:
     base_df, unseen_groups, unmatched_schools = _prepare_base_rows(
         insp,
         cfg=cfg,
-        domain_cfg=domain_cfg,
         name_to_code=name_to_code,
         code_to_name=code_to_name,
         buckets=buckets,
@@ -112,7 +107,6 @@ def test_prepare_base_rows_reports_unseen_when_no_valid_group() -> None:
 
     name_to_code, code_to_name, buckets, synonyms = _sample_crosswalk()
     cfg = BuildConfig()
-    domain_cfg = _as_domain_config(cfg)
     insp = pd.DataFrame(
         {
             COL_MENTOR_ID: ["EMP-2"],
@@ -125,7 +119,6 @@ def test_prepare_base_rows_reports_unseen_when_no_valid_group() -> None:
     base_df, unseen_groups, unmatched_schools = _prepare_base_rows(
         insp,
         cfg=cfg,
-        domain_cfg=domain_cfg,
         name_to_code=name_to_code,
         code_to_name=code_to_name,
         buckets=buckets,

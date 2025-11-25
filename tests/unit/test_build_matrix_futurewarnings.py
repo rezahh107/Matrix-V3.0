@@ -6,14 +6,12 @@ from app.core.build_matrix import (
     CAPACITY_CURRENT_COL,
     CAPACITY_SPECIAL_COL,
     BuildConfig,
-    _as_domain_config,
     _explode_rows,
 )
 
 
 def test_explode_rows_school_code_fillna_futurewarning_free() -> None:
     cfg = BuildConfig()
-    domain_cfg = _as_domain_config(cfg)
     base_df = pd.DataFrame(
         {
             "alias_school": ["A"],
@@ -44,7 +42,6 @@ def test_explode_rows_school_code_fillna_futurewarning_free() -> None:
             type_label="مدرسه‌ای",
             code_to_name_school={0: "", 4002: "مدرسه"},
             cfg=cfg,
-            domain_cfg=domain_cfg,
             cap_current_col=CAPACITY_CURRENT_COL,
             cap_special_col=CAPACITY_SPECIAL_COL,
             remaining_col="remaining_capacity",
