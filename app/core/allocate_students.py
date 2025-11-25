@@ -7,7 +7,7 @@ import warnings
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from numbers import Number
-from typing import Any, Literal, TypeVar, cast
+from typing import Any, TypeVar
 
 import pandas as pd
 from pandas.api import types as pd_types
