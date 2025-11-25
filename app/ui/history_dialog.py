@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Mapping, Sequence, cast
+from collections.abc import Mapping, Sequence
+from typing import Any, cast
 
 import pandas as pd
 from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt
@@ -245,7 +246,7 @@ class HistoryDialog(QDialog):
     def _rows_to_dataframe(rows: Sequence[Row]) -> pd.DataFrame:
         if not rows:
             return pd.DataFrame()
-        normalized = [dict(cast(Dict[str, Any], row)) for row in rows]
+        normalized = [dict(cast(dict[str, Any], row)) for row in rows]
         return pd.DataFrame(normalized)
 
     # Exposed for tests -------------------------------------------------
