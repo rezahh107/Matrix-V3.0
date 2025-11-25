@@ -529,14 +529,36 @@ def _normalize_policy_payload(data: RawPolicy) -> Mapping[str, object]:
         raise TypeError("gender_codes must be a mapping")
     columns = _normalize_columns(data["columns"])
     column_aliases = _normalize_column_aliases(data.get("column_aliases", {}))
-    excel = _normalize_excel_options(data.get("excel"))
+    excel_raw = data.get("excel")
+    if excel_raw is not None and not isinstance(excel_raw, Mapping):
+        raise TypeError("excel options must be provided as a mapping")
+    excel = _normalize_excel_options(cast(RawExcelOptions | None, excel_raw))
     virtual_alias_ranges = _normalize_virtual_alias_ranges(data["virtual_alias_ranges"])
     virtual_name_patterns = _normalize_virtual_name_patterns(data["virtual_name_patterns"])
     fairness_strategy = _normalize_fairness_strategy(
         data.get("fairness_strategy") or data.get("fairness")
     )
-    coverage_options = _normalize_coverage_options((data.get("matrix") or {}).get("coverage", {}))
-    mentor_pool_governance = _normalize_mentor_pool_governance(data.get("mentor_pool_governance"))
+    matrix_section = data.get("matrix")
+    if matrix_section is None:
+        coverage_source: Mapping[str, object] = {}
+    elif isinstance(matrix_section, Mapping):
+        coverage_candidate = matrix_section.get("coverage", {})
+        if not isinstance(coverage_candidate, Mapping):
+            raise TypeError("matrix.coverage must be a mapping")
+        coverage_source = coverage_candidate
+    else:
+        raise TypeError("matrix section must be a mapping")
+
+    coverage_options = _normalize_coverage_options(coverage_source)
+
+    mentor_pool_governance_raw = data.get("mentor_pool_governance")
+    if mentor_pool_governance_raw is not None and not isinstance(
+        mentor_pool_governance_raw, Mapping
+    ):
+        raise TypeError("mentor_pool_governance must be a mapping")
+    mentor_pool_governance = _normalize_mentor_pool_governance(
+        cast(RawMentorPoolGovernance | None, mentor_pool_governance_raw)
+    )
     allocation_channels = _normalize_allocation_channels(
         data.get("allocation_channels"), normal_statuses=normal_statuses
     )
@@ -630,8 +652,10 @@ def _normalize_coverage_threshold(value: object) -> float:
 
 
 def _normalize_join_key_duplicate_threshold(value: object) -> int:
+    if not isinstance(value, (int, float, str, bytes, bytearray)):
+        raise TypeError("join_key_duplicate_threshold must be an integer")
     try:
-        threshold = int(value)  # type: ignore[arg-type]
+        threshold = int(value)
     except (TypeError, ValueError) as exc:
         raise TypeError("join_key_duplicate_threshold must be an integer") from exc
     if threshold < 0:
@@ -698,8 +722,11 @@ def _normalize_center_management(
             raise TypeError("center definition must be a mapping")
         if "id" not in entry:
             raise ValueError("center definition missing 'id'")
+        raw_id = entry["id"]
+        if not isinstance(raw_id, (int, float, str, bytes, bytearray)):
+            raise TypeError("center id must be an integer")
         try:
-            center_id = int(entry["id"])
+            center_id = int(raw_id)
         except (TypeError, ValueError) as exc:
             raise TypeError("center id must be an integer") from exc
         if center_id in seen_ids:
@@ -756,7 +783,12 @@ def _normalize_center_management(
 
     priority_payload = value.get("priority_order")
     if priority_payload is None:
-        priority = [center["id"] for center in centers]
+        priority = []
+        for center in centers:
+            center_id_raw = center.get("id")
+            if not isinstance(center_id_raw, (int, float, str, bytes, bytearray)):
+                raise TypeError("center id must be an integer")
+            priority.append(int(center_id_raw))
     elif not isinstance(priority_payload, Sequence):
         raise TypeError("center_management.priority_order must be a list")
     else:
@@ -772,9 +804,13 @@ def _normalize_center_management(
             priority.append(center_id)
             seen_priority.add(center_id)
         for center in centers:
-            if center["id"] not in seen_priority:
-                priority.append(center["id"])
-                seen_priority.add(center["id"])
+            center_id_raw = center.get("id")
+            if not isinstance(center_id_raw, (int, float, str, bytes, bytearray)):
+                raise TypeError("center id must be an integer")
+            center_id_value = int(center_id_raw)
+            if center_id_value not in seen_priority:
+                priority.append(center_id_value)
+                seen_priority.add(center_id_value)
 
     school_student_column = str(value.get("school_student_column", "is_school_student"))
 
@@ -1082,6 +1118,7 @@ def _normalize_ranking_rules(raw: Sequence[RankingRuleRaw]) -> list[Mapping[str,
 def _normalize_trace_stages(
     raw: object | None, join_keys: Sequence[str]
 ) -> list[Mapping[str, str]]:
+    stages: list[Mapping[str, str]]
     if raw is None:
         stages = [
             {"stage": stage, "column": _LEGACY_TRACE_DEFAULTS[stage]}
@@ -1169,6 +1206,18 @@ def _to_config(data: RawPolicy) -> PolicyConfig:
     trace_stages_raw = data["trace_stages"]
     finance_variants_raw = data["finance_variants"]
     center_map_raw = data["center_map"]
+    gender_codes_raw = data["gender_codes"]
+    alias_rule_raw = data["alias_rule"]
+    columns_raw = data["columns"]
+    column_aliases_raw = data["column_aliases"]
+    excel_raw = data["excel"]
+    virtual_alias_ranges_raw = data["virtual_alias_ranges"]
+    virtual_name_patterns_raw = data["virtual_name_patterns"]
+    coverage_options_raw = data["coverage_options"]
+    center_management_raw = data["center_management"]
+    mentor_pool_governance_raw = data.get("mentor_pool_governance", {})
+    mentor_school_binding_raw = data.get("mentor_school_binding", {})
+    emission_raw = data.get("emission", {})
 
     if not isinstance(normal_statuses_raw, Sequence) or isinstance(
         normal_statuses_raw, (str, bytes)
@@ -1192,6 +1241,32 @@ def _to_config(data: RawPolicy) -> PolicyConfig:
         raise TypeError("finance_variants must be a sequence")
     if not isinstance(center_map_raw, Mapping):
         raise TypeError("center_map must be a mapping")
+    if not isinstance(gender_codes_raw, Mapping):
+        raise TypeError("gender_codes must be a mapping")
+    if not isinstance(alias_rule_raw, Mapping):
+        raise TypeError("alias_rule must be a mapping")
+    if not isinstance(columns_raw, Mapping):
+        raise TypeError("columns must be a mapping")
+    if not isinstance(column_aliases_raw, Mapping):
+        raise TypeError("column_aliases must be a mapping")
+    if not isinstance(excel_raw, Mapping):
+        raise TypeError("excel must be a mapping")
+    if not isinstance(virtual_alias_ranges_raw, Sequence):
+        raise TypeError("virtual_alias_ranges must be a sequence")
+    if not isinstance(virtual_name_patterns_raw, Sequence):
+        raise TypeError("virtual_name_patterns must be a sequence")
+    if not isinstance(coverage_options_raw, Mapping):
+        raise TypeError("coverage_options must be a mapping")
+    if not isinstance(center_management_raw, Mapping):
+        raise TypeError("center_management must be a mapping")
+    if not isinstance(mentor_pool_governance_raw, Mapping):
+        raise TypeError("mentor_pool_governance must be a mapping")
+    if not isinstance(mentor_school_binding_raw, Mapping):
+        raise TypeError("mentor_school_binding must be a mapping")
+    if not isinstance(emission_raw, Mapping):
+        raise TypeError("emission must be a mapping")
+
+    excel_options = _normalize_excel_options(excel_raw)
 
     return PolicyConfig(
         version=str(data["version"]),
@@ -1201,49 +1276,61 @@ def _to_config(data: RawPolicy) -> PolicyConfig:
         required_student_fields=[str(item) for item in required_student_fields_raw],
         ranking_rules=[_to_ranking_rule(item) for item in ranking_rules_raw],
         trace_stages=[_to_trace_stage(item) for item in trace_stages_raw],
-        gender_codes=_to_gender_codes(data["gender_codes"]),
+        gender_codes=_to_gender_codes(gender_codes_raw),
         postal_valid_range=postal_range,
         finance_variants=tuple(int(item) for item in finance_variants_raw),
         center_map={str(k): int(v) for k, v in center_map_raw.items()},
         school_code_empty_as_zero=bool(data["school_code_empty_as_zero"]),
         prefer_major_code=bool(data["prefer_major_code"]),
-        coverage_threshold=float(data["coverage_threshold"]),
-        dedup_removed_ratio_threshold=float(data["dedup_removed_ratio_threshold"]),
-        school_lookup_mismatch_threshold=float(data["school_lookup_mismatch_threshold"]),
-        join_key_duplicate_threshold=int(data["join_key_duplicate_threshold"]),
+        coverage_threshold=float(cast(float | int, data["coverage_threshold"])),
+        dedup_removed_ratio_threshold=float(
+            cast(float | int, data["dedup_removed_ratio_threshold"])
+        ),
+        school_lookup_mismatch_threshold=float(
+            cast(float | int, data["school_lookup_mismatch_threshold"])
+        ),
+        join_key_duplicate_threshold=int(
+            cast(int | float | str, data["join_key_duplicate_threshold"])
+        ),
         alias_rule=PolicyAliasRule(
-            normal=str(data["alias_rule"]["normal"]),
-            school=str(data["alias_rule"]["school"]),
+            normal=str(alias_rule_raw["normal"]),
+            school=str(alias_rule_raw["school"]),
         ),
         columns=PolicyColumns(
-            postal_code=str(data["columns"]["postal_code"]),
-            school_count=str(data["columns"]["school_count"]),
-            school_code=str(data["columns"]["school_code"]),
-            capacity_current=str(data["columns"]["capacity_current"]),
-            capacity_special=str(data["columns"]["capacity_special"]),
-            remaining_capacity=str(data["columns"]["remaining_capacity"]),
+            postal_code=str(columns_raw["postal_code"]),
+            school_count=str(columns_raw["school_count"]),
+            school_code=str(columns_raw["school_code"]),
+            capacity_current=str(columns_raw["capacity_current"]),
+            capacity_special=str(columns_raw["capacity_special"]),
+            remaining_capacity=str(columns_raw["remaining_capacity"]),
         ),
         column_aliases={
             str(source): {str(k): str(v) for k, v in aliases.items()}
-            for source, aliases in data["column_aliases"].items()
+            for source, aliases in column_aliases_raw.items()
         },
-        excel=ExcelOptions(**_normalize_excel_options(data["excel"])),
-        virtual_alias_ranges=tuple(
-            (int(start), int(end)) for start, end in data["virtual_alias_ranges"]
+        excel=ExcelOptions(
+            rtl=bool(excel_options["rtl"]),
+            font_name=str(excel_options["font_name"]),
+            font_size=int(cast(int | float | str, excel_options["font_size"])),
+            header_mode_internal=str(excel_options["header_mode_internal"]),
+            header_mode_write=str(excel_options["header_mode_write"]),
         ),
-        virtual_name_patterns=tuple(str(item) for item in data["virtual_name_patterns"]),
-        emission=_to_emission_options(data.get("emission", {})),
+        virtual_alias_ranges=tuple(
+            (int(start), int(end)) for start, end in virtual_alias_ranges_raw
+        ),
+        virtual_name_patterns=tuple(str(item) for item in virtual_name_patterns_raw),
+        emission=_to_emission_options(emission_raw),
         fairness_strategy=str(data.get("fairness_strategy", "none")),
-        center_management=_to_center_management_config(data["center_management"]),
+        center_management=_to_center_management_config(center_management_raw),
         coverage_options=MatrixCoverageOptions(
-            denominator_mode=str(data["coverage_options"]["denominator_mode"]),
-            require_student_presence=bool(data["coverage_options"]["require_student_presence"]),
+            denominator_mode=str(coverage_options_raw["denominator_mode"]),
+            require_student_presence=bool(coverage_options_raw["require_student_presence"]),
             include_blocked_candidates_in_denominator=bool(
-                data["coverage_options"]["include_blocked_candidates_in_denominator"]
+                coverage_options_raw["include_blocked_candidates_in_denominator"]
             ),
         ),
-        mentor_pool_governance=_to_mentor_pool_governance(data.get("mentor_pool_governance", {})),
-        mentor_school_binding=_to_mentor_school_binding(data.get("mentor_school_binding", {})),
+        mentor_pool_governance=_to_mentor_pool_governance(mentor_pool_governance_raw),
+        mentor_school_binding=_to_mentor_school_binding(mentor_school_binding_raw),
         allocation_channels=allocation_channels_obj,
     )
 
@@ -1264,6 +1351,8 @@ def _to_center_management_config(data: RawCenterManagement) -> CenterManagementC
     if not isinstance(data, Mapping):
         raise TypeError("center_management must be a mapping")
     centers_payload = data.get("centers") or []
+    if not isinstance(centers_payload, Sequence):
+        raise TypeError("center_management.centers must be a sequence")
     centers: list[CenterConfig] = []
     for entry in centers_payload:
         centers.append(
@@ -1278,9 +1367,17 @@ def _to_center_management_config(data: RawCenterManagement) -> CenterManagementC
                 description=str(entry.get("description", "")),
             )
         )
-    priority_order = tuple(int(item) for item in data.get("priority_order", []))
+    priority_raw = data.get("priority_order", [])
+    if not isinstance(priority_raw, Sequence):
+        raise TypeError("center_management.priority_order must be a sequence")
+    priority_order = tuple(int(item) for item in priority_raw)
     default_invalid = data.get("default_center_for_invalid")
-    fallback = None if default_invalid is None else int(default_invalid)
+    if default_invalid is None:
+        fallback = None
+    elif isinstance(default_invalid, (int, float, str, bytes, bytearray)):
+        fallback = int(default_invalid)
+    else:
+        raise TypeError("default_center_for_invalid must be an integer or null")
     return CenterManagementConfig(
         enabled=bool(data.get("enabled", True)),
         centers=tuple(centers),
@@ -1298,6 +1395,8 @@ def _to_mentor_school_binding(data: RawMentorSchoolBinding) -> MentorSchoolBindi
     tokens = data.get(
         "empty_tokens", data.get("empty_placeholders", ("", "0", "-", "—", "_", "nan", "NaN"))
     )
+    if not isinstance(tokens, Sequence) or isinstance(tokens, (str, bytes)):
+        raise TypeError("empty_tokens must be a sequence")
     return MentorSchoolBindingPolicy(
         global_mode=str(data.get("global_mode", "global")),
         restricted_mode=str(data.get("restricted_mode", "restricted")),
@@ -1313,6 +1412,8 @@ def _to_mentor_pool_governance(data: RawMentorPoolGovernance) -> MentorPoolGover
         MentorStatus.ACTIVE.value,
         MentorStatus.INACTIVE.value,
     )
+    if not isinstance(allowed_raw, Sequence):
+        raise TypeError("allowed_statuses must be a sequence")
     allowed = tuple(MentorStatus.from_value(item) for item in allowed_raw)
     default_status = MentorStatus.from_value(data.get("default_status", MentorStatus.ACTIVE.value))
     if default_status not in allowed:
@@ -1357,7 +1458,10 @@ def _to_gender_codes(payload: RawGenderConfig) -> GenderCodes:
     def _parse(entry: Mapping[str, object]) -> GenderCode:
         if "value" not in entry or "counter_code" not in entry:
             raise ValueError("Gender code entry must include 'value' and 'counter_code'")
-        value = int(entry["value"])
+        value_raw = entry["value"]
+        if not isinstance(value_raw, (int, float, str, bytes, bytearray)):
+            raise TypeError("Gender code value must be numeric")
+        value = int(value_raw)
         counter_code = str(entry["counter_code"]).strip()
         if not counter_code:
             raise ValueError("Gender counter_code must be non-empty")
@@ -1462,6 +1566,8 @@ def _normalize_excel_options(payload: RawExcelOptions | None) -> dict[str, objec
     rtl = bool(payload.get("rtl", _DEFAULT_EXCEL_OPTIONS["rtl"]))
     font_name = str(payload.get("font_name", _DEFAULT_EXCEL_OPTIONS["font_name"]))
     font_size_raw = payload.get("font_size", _DEFAULT_EXCEL_OPTIONS["font_size"])
+    if not isinstance(font_size_raw, (int, float, str, bytes, bytearray)):
+        raise TypeError("excel.font_size must be an integer")
     try:
         font_size = int(font_size_raw)
     except (ValueError, TypeError) as exc:  # pragma: no cover - defensive branch
@@ -1588,7 +1694,10 @@ def _finalize_reason_trace_labels(values: Sequence[object]) -> tuple[str, ...]:
 
 
 def _normalize_reason_labels(value: object) -> Mapping[str, tuple[str, ...]]:
-    default_reason = _DEFAULT_SELECTION_REASON_OPTIONS["labels"].get("reason", {})
+    labels_option = cast(
+        Mapping[str, Mapping[str, tuple[str, ...]]], _DEFAULT_SELECTION_REASON_OPTIONS["labels"]
+    )
+    default_reason = labels_option.get("reason", {})
     resolved: dict[str, tuple[str, ...]] = {}
     source: Mapping[str, object] | None = None
     if isinstance(value, Mapping):
@@ -1613,7 +1722,7 @@ def _normalize_reason_columns(value: object) -> tuple[str, ...]:
             candidates = [cleaned]
 
     if not candidates:
-        defaults = _DEFAULT_SELECTION_REASON_OPTIONS.get("columns", ())
+        defaults = cast(Sequence[object], _DEFAULT_SELECTION_REASON_OPTIONS.get("columns", ()))
         candidates = [str(item) for item in defaults]
 
     return validate_policy_columns(candidates)
@@ -1720,7 +1829,13 @@ def _prepare_policy_payload(
         ]
 
     if "ranking_rules" not in migrated:
-        ranking_names = migrated.get("ranking") or [rule for rule in _RANKING_RULE_LIBRARY]
+        ranking_raw = migrated.get("ranking")
+        if ranking_raw is None:
+            ranking_names = [rule for rule in _RANKING_RULE_LIBRARY]
+        elif isinstance(ranking_raw, Sequence) and not isinstance(ranking_raw, (str, bytes)):
+            ranking_names = list(ranking_raw)
+        else:
+            raise TypeError("ranking must be a sequence when provided in legacy policy")
         ranking_rules = []
         for name in ranking_names:
             if name not in _RANKING_RULE_LIBRARY:
