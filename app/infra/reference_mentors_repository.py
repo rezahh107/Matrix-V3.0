@@ -12,7 +12,7 @@ from typing import Any, Final
 
 import pandas as pd
 
-from app.core.build_matrix import (
+from app.core.build_matrix import (  # type: ignore[attr-defined]
     COL_GENDER,
     COL_GROUP,
     COL_MANAGER_NAME,
@@ -32,7 +32,10 @@ from app.core.build_matrix import (
     norm_status,
     prepare_crosswalk_mappings,
 )
-from app.core.canonical_frames import canonicalize_headers, canonicalize_pool_frame
+from app.core.canonical_frames import (  # type: ignore[attr-defined]
+    canonicalize_headers,
+    canonicalize_pool_frame,
+)
 from app.core.common.domain import _coerce_finance, _num_to_int_safe
 from app.core.common.errors import InvalidCenterMappingError
 from app.core.common.normalization import normalize_fa
@@ -286,10 +289,8 @@ def _derive_pool_join_keys(
             )
         else:
             finance_raw_int = _num_to_int_safe(finance_value)
-            if (
-                finance_value not in (None, "", 0, "0")
-                and finance_raw_int not in cfg.finance_variants
-            ):
+            finance_variants = cfg.finance_variants or ()
+            if finance_value not in (None, "", 0, "0") and finance_raw_int not in finance_variants:
                 _append_issue(
                     qa_issues,
                     reason="FINANCE_UNKNOWN",
