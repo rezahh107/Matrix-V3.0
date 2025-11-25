@@ -8,7 +8,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import dataclass
 
-from PySide6.QtCore import QModelIndex, QPersistentModelIndex, QObject, QSortFilterProxyModel, Qt
+from PySide6.QtCore import QModelIndex, QObject, QPersistentModelIndex, QSortFilterProxyModel, Qt
 from PySide6.QtGui import QStandardItem, QStandardItemModel
 
 from app.ui.models import MentorPoolEntry
@@ -36,9 +36,23 @@ class ManagerMentorFilterProxy(QSortFilterProxyModel):
         self._query = (text or "").strip().lower()
         self.invalidateFilter()
 
-    def filterAcceptsRow(
+    def filterAcceptsRow(  # noqa: N802 - نام متد باید با قرارداد Qt یکسان بماند
         self, source_row: int, source_parent: QModelIndex | QPersistentModelIndex
-    ) -> bool:  # noqa: N802 - امضای Qt
+    ) -> bool:
+        """فیلتر کردن ردیف‌های استخر منتور/مدیر برای نمایش در جدول.
+
+        Args:
+            source_row: شمارهٔ ردیف در مدل مبدأ.
+            source_parent: والد درختی برای ردیف مبدأ.
+
+        Returns:
+            ``True`` اگر ردیف یا فرزندانش مطابق پرس‌وجو باشند.
+
+        مثال:
+            اگر کاربر عبارت "مدرسه" را جستجو کند، این متد بررسی می‌کند که متن
+            قابل جستجوی ردیف شامل عبارت باشد یا یکی از فرزندان مدیر مطابق
+            پرس‌وجو باشد.
+        """
         if not self._query:
             return True
         model = self.sourceModel()
