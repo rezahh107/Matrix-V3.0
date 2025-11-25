@@ -150,13 +150,13 @@ class ExporterArchiveRepository:
         return added, removed
 
     @staticmethod
-    def _rows_to_tuples(df: pd.DataFrame) -> set[tuple]:
+    def _rows_to_tuples(df: pd.DataFrame) -> set[tuple[object, ...]]:
         records: Iterable[Sequence[object]] = df.itertuples(index=False, name=None)
         return {tuple(record) for record in records}
 
 
-def _natural_key(value: str) -> tuple:
-    tokens = []
+def _natural_key(value: str) -> tuple[int | str, ...]:
+    tokens: list[int | str] = []
     num = ""
     for ch in value:
         if ch.isdigit():
@@ -176,7 +176,7 @@ def _normalize_scalar(value: object) -> object:
         return None
     if isinstance(value, float) and pd.isna(value):
         return None
-    if pd.isna(value):  # type: ignore[arg-type]
+    if pd.isna(value):
         return None
     if isinstance(value, (pd.Timestamp, pd.Timedelta)):
         return value.isoformat()
