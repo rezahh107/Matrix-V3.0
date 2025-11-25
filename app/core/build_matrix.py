@@ -41,6 +41,7 @@ from app.core.common.columns import (
     ensure_required_columns,
     ensure_series,
     resolve_aliases,
+    Source as ColumnSource,
 )
 from app.core.common.domain import (
     BuildConfig,
@@ -169,7 +170,7 @@ def assert_inspactor_schema(df: pd.DataFrame, policy: PolicyConfig) -> pd.DataFr
         KeyError: اگر هر یک از ستون‌های اجباری مفقود باشند.
     """
 
-    context = "inspactor"
+    context: ColumnSource = "inspactor"
     normalized = resolve_aliases(df, context)
     coerced = coerce_semantics(normalized, context)
     default_cfg = InspactorDefaultConfig(
@@ -249,10 +250,7 @@ def _duplicate_summary_payload(
 ) -> tuple[int, list[Mapping[str, object]]]:
     if not isinstance(summary, Mapping):
         return 0, []
-    try:
-        total = int(summary.get("total", 0))
-    except Exception:  # pragma: no cover - نگهبان مقاومتی
-        total = 0
+    total = safe_int_value(summary.get("total", 0), default=0)
     sample_raw = summary.get("sample")
     rows: list[Mapping[str, object]] = []
     if isinstance(sample_raw, Sequence) and not isinstance(sample_raw, (str, bytes)):
@@ -513,9 +511,13 @@ def norm_gender(value: Any) -> int | None:
 
 
 def gender_text(code: int | None) -> str:
-    return (
-        {Gender.FEMALE: "دختر", Gender.MALE: "پسر"}.get(int(code), "") if code is not None else ""
-    )
+    gender_map: dict[int, str] = {
+        int(Gender.FEMALE): "دختر",
+        int(Gender.MALE): "پسر",
+    }
+    if code is None:
+        return ""
+    return gender_map.get(int(code), "")
 
 
 def norm_status(value: Any) -> int | None:
@@ -530,19 +532,22 @@ def norm_status(value: Any) -> int | None:
 
 
 def status_text(code: int | None) -> str:
-    return (
-        {Status.STUDENT: "دانش‌آموز", Status.GRADUATE: "فارغ‌التحصیل"}.get(int(code), "")
-        if code is not None
-        else ""
-    )
+    status_map: dict[int, str] = {
+        int(Status.STUDENT): "دانش‌آموز",
+        int(Status.GRADUATE): "فارغ‌التحصیل",
+    }
+    if code is None:
+        return ""
+    return status_map.get(int(code), "")
 
 
 def center_text(code: int) -> str:
-    return {
-        Center.MARKAZ: "مرکز",
-        Center.GOLESTAN: "گلستان",
-        Center.SADRA: "صدرا",
-    }.get(int(code), "")
+    center_map: dict[int, str] = {
+        int(Center.MARKAZ): "مرکز",
+        int(Center.GOLESTAN): "گلستان",
+        int(Center.SADRA): "صدرا",
+    }
+    return center_map.get(int(code), "")
 
 
 # =============================================================================
@@ -553,7 +558,8 @@ def _validate_finance_invariants(
 ) -> None:
     if finance_col not in matrix.columns:
         return
-    required = {int(code) for code in cfg.finance_variants}
+    finance_variants = cfg.finance_variants or ()
+    required = {int(code) for code in finance_variants}
     join_cols = [col for col in cfg.policy.join_keys if col in matrix.columns]
     base_cols = [col for col in join_cols if col != finance_col]
     if not base_cols:
@@ -994,15 +1000,17 @@ def collect_school_codes_from_row(
 # =============================================================================
 # PROGRESS (optional)
 # =============================================================================
+T = TypeVar("T")
+
 try:
-    from tqdm import tqdm  # type: ignore
+    from tqdm import tqdm
 
     HAS_TQDM = True
 except ImportError:
     HAS_TQDM = False
 
 
-def progress(it, total: int | None = None):
+def progress(it: Iterable[T], total: int | None = None) -> Iterable[T]:
     return tqdm(it, total=total) if HAS_TQDM else it
 
 
@@ -1077,15 +1085,15 @@ def parse_group_code_spec(
 # ROW GENERATION
 # =============================================================================
 def generate_row_variants(
-    base: dict,
+    base: dict[str, Any],
     group_pairs: list[tuple[str, int]],
     genders: list[Any],
     statuses: list[Any],
     schools_raw: list[Any],
     finance_variants: Iterable[int],
     code_to_name_school: dict[str, str],
-) -> list[dict]:
-    rows: list[dict] = []
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
 
     def _school_lookup(sc_val: Any) -> tuple[str, str, int]:
         """returns (school_code, school_name, is_school_flag)
@@ -1160,7 +1168,7 @@ def _prepare_base_rows(
     school_cols: list[str],
     gender_col: str | None,
     included_col: str | None,
-) -> tuple[pd.DataFrame, list[dict], list[dict]]:
+) -> tuple[pd.DataFrame, list[dict[str, Any]], list[dict[str, Any]]]:
     records: list[dict[str, Any]] = []
     unseen_groups: list[dict[str, Any]] = []
     unmatched_schools: list[dict[str, Any]] = []
@@ -1212,7 +1220,10 @@ def _prepare_base_rows(
                 gender_codes.append("")
                 continue
             normalized = norm_gender(token_str)
-            gender_codes.append(int(normalized))
+            if normalized is None:
+                gender_codes.append("")
+            else:
+                gender_codes.append(int(normalized))
 
         raw_groups = ensure_list([row[c] for c in group_cols]) if group_cols else []
         group_pairs: list[tuple[str, int]] = []
@@ -2061,7 +2072,7 @@ def build_matrix(
     dedup_removed_ratio = 0.0
     dedup_threshold_exceeded = False
     group_coverage_df = pd.DataFrame()
-    group_coverage_summary: dict[str, int] = {}
+    group_coverage_summary: dict[str, int | float] = {}
 
     if not matrix.empty:
         matrix = matrix.copy()
@@ -2137,7 +2148,7 @@ def build_matrix(
         require_student_presence=cfg.policy.coverage_options.require_student_presence,
         include_blocked_candidates_in_denominator=cfg.policy.coverage_options.include_blocked_candidates_in_denominator,
     )
-    coverage_metrics, group_coverage_df, group_coverage_summary = compute_coverage_metrics(
+    coverage_metrics, group_coverage_df, group_coverage_summary_raw = compute_coverage_metrics(
         matrix_df=matrix,
         base_df=base_df,
         students_df=None,
@@ -2149,6 +2160,7 @@ def build_matrix(
         finance_column=finance_col,
         school_code_column=school_code_col,
     )
+    group_coverage_summary = dict(group_coverage_summary_raw)
     group_coverage_summary = {
         **group_coverage_summary,
         "coverage_total_groups": coverage_metrics.total_groups,
