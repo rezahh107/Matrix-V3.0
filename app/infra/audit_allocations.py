@@ -11,7 +11,12 @@ from typing import Any
 
 import pandas as pd
 
-from app.core.common.columns import canonicalize_headers, ensure_series
+from app.core.common.columns import (
+    HeaderMode,
+    canonicalize_headers,
+    ensure_series,
+    parse_header_mode,
+)
 from app.core.policy_loader import PolicyConfig, get_policy
 
 __all__ = ["audit_allocations", "audit_allocations_cli", "summarize_report"]
@@ -68,13 +73,15 @@ def _load_sheet(
     workbook: pd.ExcelFile,
     sheet_name: str,
     *,
-    header_mode_internal: str,
+    header_mode_internal: HeaderMode | None,
 ) -> pd.DataFrame:
     """خواندن شیت و کاننیکال‌سازی ستون‌ها مطابق حالت داخلی."""
 
     if sheet_name not in workbook.sheet_names:
         return pd.DataFrame()
     frame = workbook.parse(sheet_name)
+    if header_mode_internal is None:
+        return frame
     return canonicalize_headers(frame, header_mode=header_mode_internal)
 
 
@@ -192,23 +199,24 @@ def audit_allocations(path: str | Path) -> dict[str, dict[str, Any]]:
         raise FileNotFoundError(f"Allocation output not found: {target}")
 
     policy = get_policy()
+    header_mode_internal = parse_header_mode(policy.excel.header_mode_internal)
     regex = _compile_virtual_pattern(policy)
 
     with pd.ExcelFile(target) as workbook:
         allocations = _load_sheet(
             workbook,
             "allocations",
-            header_mode_internal=policy.excel.header_mode_internal,
+            header_mode_internal=header_mode_internal,
         )
         logs = _load_sheet(
             workbook,
             "logs",
-            header_mode_internal=policy.excel.header_mode_internal,
+            header_mode_internal=header_mode_internal,
         )
         trace = _load_sheet(
             workbook,
             "trace",
-            header_mode_internal=policy.excel.header_mode_internal,
+            header_mode_internal=header_mode_internal,
         )
 
     virtual_count, virtual_samples = _virtual_hits(allocations, policy, regex)
