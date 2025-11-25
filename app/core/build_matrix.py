@@ -18,11 +18,11 @@ import re
 import unicodedata
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from enum import IntEnum, auto
+from enum import Enum, IntEnum, auto
 from functools import lru_cache
 from itertools import product
 from logging import getLogger
-from typing import Any, TypeVar
+from typing import Any, Literal, TypeVar
 
 import numpy as np
 import pandas as pd
@@ -143,6 +143,9 @@ BUILTIN_SYNONYMS = {
 # PROGRESS API
 # =============================================================================
 ProgressFn = Callable[[int, str], None]
+
+MatrixMode = Literal["report", "inspactor", "school", "matrix"]
+MATRIX_MODE: MatrixMode = "matrix"
 
 
 def noop_progress(_: int, __: str) -> None:
@@ -497,9 +500,70 @@ def ensure_list(values: Iterable[Any]) -> list[str]:
 
 
 # =============================================================================
+# SAFE CONVERSION HELPERS
+# =============================================================================
+EnumT = TypeVar("EnumT", bound=Enum)
+
+
+def safe_int(value: Any, default: int = 0) -> int:
+    """Safely convert inputs to ``int`` while handling ``None`` and NaN."""
+
+    if value is None or (isinstance(value, float) and math.isnan(value)):
+        return default
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, (int, float)):
+        return int(value)
+    if isinstance(value, str):
+        cleaned = value.strip()
+        if not cleaned:
+            return default
+        try:
+            return int(float(cleaned))
+        except ValueError:
+            return default
+    return default
+
+
+def safe_float(value: Any, default: float = 0.0) -> float:
+    """Safely convert inputs to ``float`` while handling ``None`` and NaN."""
+
+    if value is None or (isinstance(value, float) and math.isnan(value)):
+        return default
+    if isinstance(value, bool):
+        return float(value)
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        cleaned = value.strip()
+        if not cleaned:
+            return default
+        try:
+            return float(cleaned)
+        except ValueError:
+            return default
+    return default
+
+
+def safe_enum_convert(
+    enum_type: type[EnumT], value: Any, default: EnumT | None = None
+) -> EnumT | None:
+    """Safely convert value to an enum type, returning ``default`` on failure."""
+
+    try:
+        if isinstance(value, enum_type):
+            return value
+        if isinstance(value, (int, str)):
+            return enum_type(value)
+        return default
+    except (ValueError, TypeError):
+        return default
+
+
+# =============================================================================
 # DOMAIN HELPERS
 # =============================================================================
-def norm_gender(value: Any) -> int | None:
+def norm_gender(value: Any) -> Gender | None:
     s = normalize_fa(value)
     match s:
         case "1" | "پسر" | "male" | "boy" | "پسرانه":
@@ -510,17 +574,18 @@ def norm_gender(value: Any) -> int | None:
             return None
 
 
-def gender_text(code: int | None) -> str:
-    gender_map: dict[int, str] = {
-        int(Gender.FEMALE): "دختر",
-        int(Gender.MALE): "پسر",
+def gender_text(code: Gender | int | None) -> str:
+    gender_map: dict[Gender, str] = {
+        Gender.FEMALE: "دختر",
+        Gender.MALE: "پسر",
     }
-    if code is None:
+    gender_enum = safe_enum_convert(Gender, code)
+    if gender_enum is None:
         return ""
-    return gender_map.get(int(code), "")
+    return gender_map.get(gender_enum, "")
 
 
-def norm_status(value: Any) -> int | None:
+def norm_status(value: Any) -> Status | None:
     s = normalize_fa(value)
     match s:
         case "1" | "دانش آموز" | "دانش‌آموز" | "student":
@@ -531,23 +596,27 @@ def norm_status(value: Any) -> int | None:
             return None
 
 
-def status_text(code: int | None) -> str:
-    status_map: dict[int, str] = {
-        int(Status.STUDENT): "دانش‌آموز",
-        int(Status.GRADUATE): "فارغ‌التحصیل",
+def status_text(code: Status | int | None) -> str:
+    status_map: dict[Status, str] = {
+        Status.STUDENT: "دانش‌آموز",
+        Status.GRADUATE: "فارغ‌التحصیل",
     }
-    if code is None:
+    status_enum = safe_enum_convert(Status, code)
+    if status_enum is None:
         return ""
-    return status_map.get(int(code), "")
+    return status_map.get(status_enum, "")
 
 
-def center_text(code: int) -> str:
-    center_map: dict[int, str] = {
-        int(Center.MARKAZ): "مرکز",
-        int(Center.GOLESTAN): "گلستان",
-        int(Center.SADRA): "صدرا",
+def center_text(code: Center | int | None) -> str:
+    center_map: dict[Center, str] = {
+        Center.MARKAZ: "مرکز",
+        Center.GOLESTAN: "گلستان",
+        Center.SADRA: "صدرا",
     }
-    return center_map.get(int(code), "")
+    center_enum = safe_enum_convert(Center, code)
+    if center_enum is None:
+        return ""
+    return center_map.get(center_enum, "")
 
 
 # =============================================================================
@@ -1141,9 +1210,9 @@ def generate_row_variants(
                 "جنسیت2": gender_text(gcode),
                 "دانش آموز فارغ2": status_text(stcode),
                 "مرکز گلستان صدرا3": base["center_text"],
-                CAPACITY_CURRENT_COL: int(base.get("capacity_current", 0)),
-                CAPACITY_SPECIAL_COL: int(base.get("capacity_special", 0)),
-                "remaining_capacity": int(base.get("capacity_remaining", 0)),
+                CAPACITY_CURRENT_COL: safe_int(base.get("capacity_current", 0)),
+                CAPACITY_SPECIAL_COL: safe_int(base.get("capacity_special", 0)),
+                "remaining_capacity": safe_int(base.get("capacity_remaining", 0)),
             }
         )
     return rows
@@ -2290,7 +2359,7 @@ def build_matrix(
             "dedup_removed_ratio": dedup_removed_ratio,
             "dedup_removed_threshold": dedup_threshold,
             "status": "error" if dedup_threshold_exceeded else "ok",
-            "dataset": "matrix",
+            "dataset": MATRIX_MODE,
         }
     )
 
