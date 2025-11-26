@@ -1333,17 +1333,20 @@ def _prepare_base_rows(
                 )
             continue
 
+        alias_normal_raw = compute_alias(MentorType.NORMAL, postal_raw, mentor_id, cfg=cfg)
+        alias_school_raw = compute_alias(MentorType.SCHOOL, postal_raw, mentor_id, cfg=cfg)
+        alias_normal = alias_normal_raw or None
+        alias_school = alias_school_raw or None
+
         mentor_mode = classify_mentor_mode(
             postal_code=postal_raw,
             school_codes=school_codes,
             cfg=cfg,
             has_school_constraint=has_school_constraint,
+            school_count=school_count,
+            binding_policy=binding_policy,
+            aliases=(alias_normal_raw, alias_school_raw),
         )
-
-        alias_normal_raw = compute_alias(MentorType.NORMAL, postal_raw, mentor_id, cfg=cfg)
-        alias_school_raw = compute_alias(MentorType.SCHOOL, postal_raw, mentor_id, cfg=cfg)
-        alias_normal = alias_normal_raw or None
-        alias_school = alias_school_raw or None
 
         center = domain_center_from_manager(manager_name, cfg=cfg)
         has_school_codes = any(code > 0 for code in school_codes)
