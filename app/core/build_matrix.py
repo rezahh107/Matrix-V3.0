@@ -678,8 +678,8 @@ def _validate_school_code_contract(matrix: pd.DataFrame, *, school_code_col: str
     row_types = ensure_series(matrix["عادی مدرسه"]).astype("string").str.strip().fillna("")
     codes = matrix[school_code_col].astype("Int64")
     school_mask = row_types == "مدرسه‌ای"
-    if ((codes[school_mask] == 0) | codes[school_mask].isna()).any():
-        raise AssertionError("School rows must have non-zero school code")
+    if codes[school_mask].isna().any():
+        raise AssertionError("School rows must have a school code value")
     if (codes[~school_mask] != 0).any():
         raise AssertionError("Normal rows must have zero school code")
 

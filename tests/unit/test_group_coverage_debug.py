@@ -50,9 +50,9 @@ def _base_row(
 def test_compute_group_coverage_flags_candidate_and_matrix_states() -> None:
     base_df = pd.DataFrame(
         [
-            _base_row(group_code=101, mentor_id="m1", alias_normal="a101"),
+            _base_row(group_code=101, mentor_id="m1", alias_normal="1101"),
             _base_row(group_code=102, mentor_id="m2", alias_normal=None, can_normal=False),
-            _base_row(group_code=104, mentor_id="m3", alias_normal="a104"),
+            _base_row(group_code=104, mentor_id="m3", alias_normal="1104"),
         ]
     )
     matrix_df = pd.DataFrame(
