@@ -1631,7 +1631,7 @@ def _run_build_matrix(args: argparse.Namespace, policy: PolicyConfig, progress: 
         extras={"pool_join_conflicts": pd.DataFrame()},
     )
     pool_join_key_duplicates = join_key_duplicates.copy()
-    merged_extras = dict(qa_report.extras or {})
+    merged_extras = dict(getattr(qa_report, "extras", None) or {})
     merged_extras["pool_join_key_duplicates"] = pool_join_key_duplicates
     qa_report.extras = merged_extras
     qa_context = QaValidationContext(
