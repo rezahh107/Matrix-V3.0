@@ -1335,7 +1335,9 @@ def _prepare_base_rows(
 
         alias_normal_raw = compute_alias(MentorType.NORMAL, postal_raw, mentor_id, cfg=cfg)
         alias_school_raw = compute_alias(MentorType.SCHOOL, postal_raw, mentor_id, cfg=cfg)
-        alias_normal = alias_normal_raw or None
+        alias_normal_num = _num_to_int_safe(alias_normal_raw)
+        alias_normal_valid = alias_normal_num is None or alias_normal_num >= 1000
+        alias_normal = alias_normal_raw if alias_normal_valid else None
         alias_school = alias_school_raw or None
 
         mentor_mode = classify_mentor_mode(
@@ -1369,16 +1371,10 @@ def _prepare_base_rows(
             "alias_school": alias_school,
             "mentor_school_binding_mode": school_binding.binding_mode,
             "has_school_constraint": has_school_constraint,
-            "can_normal": (
-                not has_school_constraint
-                and mentor_mode in (MentorType.NORMAL, MentorType.DUAL)
-                and bool(alias_normal)
-            ),
-            "can_school": (
-                has_school_constraint
-                and mentor_mode in (MentorType.SCHOOL, MentorType.DUAL)
-                and has_school_codes
-            ),
+            "can_normal": mentor_mode in (MentorType.NORMAL, MentorType.DUAL)
+            and bool(alias_normal),
+            "can_school": mentor_mode in (MentorType.SCHOOL, MentorType.DUAL)
+            and bool(alias_school),
             "capacity_current": covered_now,
             "capacity_special": special_limit,
             "capacity_remaining": remaining_capacity,

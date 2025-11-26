@@ -92,7 +92,12 @@ def build_candidate_group_keys(
 
         alias_normal = row.get("alias_normal")
         alias_school = row.get("alias_school")
-        alias_normal_present = not pd.isna(alias_normal) and str(alias_normal).strip() != ""
+        alias_normal_present = False
+        if not pd.isna(alias_normal):
+            alias_text = str(alias_normal).strip()
+            if alias_text:
+                alias_num = _safe_int(alias_text)
+                alias_normal_present = alias_num >= 1000
         alias_school_present = not pd.isna(alias_school) and str(alias_school).strip() != ""
         can_normal = bool(row.get("can_normal", False)) and alias_normal_present
         can_school = bool(row.get("can_school", False)) and alias_school_present
