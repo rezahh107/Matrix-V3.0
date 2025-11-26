@@ -42,7 +42,7 @@ def _base_row(
         "finance": [0],
         "school_codes": [0],
         "schools_normal": [0],
-        "alias_normal": "a",
+        "alias_normal": "1234",
         "alias_school": None,
         "can_normal": can_generate,
         "can_school": False,
