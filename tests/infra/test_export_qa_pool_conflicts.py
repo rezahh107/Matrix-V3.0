@@ -46,13 +46,7 @@ def test_export_qa_pool_conflicts_detects_conflict(tmp_path: Path) -> None:
     policy = load_policy()
     join_keys = policy.join_keys
     conflict_row = _build_pool_row(5, join_keys, seed=30)
-    conflict_row[join_keys[0]] = 999
-    pool = pd.DataFrame(
-        [
-            _build_pool_row(5, join_keys, seed=10),
-            conflict_row,
-        ]
-    )
+    pool = pd.DataFrame([conflict_row, conflict_row])
 
     report = run_all_invariants(policy=policy, pool=pool)
     pool_conflicts = report.extras.get("pool_join_conflicts") if report.extras else None

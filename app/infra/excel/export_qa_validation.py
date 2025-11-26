@@ -20,7 +20,7 @@ _RULE_DESCRIPTIONS: dict[str, str] = {
     "QA_RULE_JOIN_01": "سلامت ستون‌های join ماتریس",
     "QA_RULE_SCHOOL_01": "تفکیک منتورهای آزاد و مقید به مدرسه",
     "QA_RULE_ALLOC_01": "کنترل ظرفیت و نسبت اشغال منتورها",
-    "QA_RULE_POOL_JOIN_01": "تعارض join keys برای mentor_id در استخر",
+    "QA_RULE_POOL_JOIN_01": "ردیف تکراری روی کلید ترکیبی mentor_id و کلیدهای اتصال",
 }
 
 
@@ -171,15 +171,33 @@ def _pool_join_conflicts_sheet(context: QaValidationContext, report: QaReport) -
         return pd.DataFrame(
             columns=[
                 "mentor_id",
-                "row_count",
-                "conflict_keys",
+                "duplicate_group_size",
             ]
         )
-    ordered: list[str] = ["mentor_id", "row_count", "conflict_keys"]
+    mentor_columns = ["mentor_id", "کد کارمندی پشتیبان"]
+    join_key_columns = [
+        col
+        for col in conflict_frame.columns
+        if col
+        not in {
+            "duplicate_group_size",
+            "pool_row_index",
+            "pool_source",
+            "mentor_id",
+            "کد کارمندی پشتیبان",
+        }
+    ]
+    ordered: list[str] = [col for col in join_key_columns if col in conflict_frame.columns]
+    ordered += [col for col in mentor_columns if col in conflict_frame.columns]
+    ordered += [
+        col
+        for col in ("duplicate_group_size", "pool_row_index", "pool_source")
+        if col in conflict_frame.columns
+    ]
     remaining = [col for col in conflict_frame.columns if col not in ordered]
     frame = conflict_frame.loc[:, ordered + remaining]
-    if not frame.empty:
-        frame = frame.sort_values(by=["mentor_id", "row_count"], kind="stable")
+    if not frame.empty and ordered:
+        frame = frame.sort_values(by=ordered, kind="stable")
     return frame.reset_index(drop=True)
 
 
