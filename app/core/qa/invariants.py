@@ -9,6 +9,7 @@ import pandas as pd
 from pandas.api import types as ptypes
 
 from app.core.allocation.mentor_pool import compute_effective_status
+from app.core.canonical_frames import POOL_JOIN_KEY_DUPLICATES_ATTR
 from app.core.policy_loader import MentorStatus, PolicyConfig
 
 RuleId = str
@@ -371,63 +372,63 @@ def _sorted_int_values(series: pd.Series) -> tuple[int, ...]:
     return tuple(sorted(numeric.unique().tolist()))
 
 
-def _build_pool_join_conflicts(pool: pd.DataFrame, policy: PolicyConfig) -> pd.DataFrame:
+def _build_pool_join_duplicates(pool: pd.DataFrame, policy: PolicyConfig) -> pd.DataFrame:
     mentor_col = _resolve_mentor_column(pool)
     if mentor_col is None:
-        return pd.DataFrame(columns=["mentor_id", "row_count", "conflict_keys", *policy.join_keys])
+        return pd.DataFrame(columns=[*policy.join_keys, "duplicate_group_size", "mentor_id"])
+
+    existing_report = pool.attrs.get(POOL_JOIN_KEY_DUPLICATES_ATTR)
+    if isinstance(existing_report, pd.DataFrame):
+        expected_columns = set(policy.join_keys) | {mentor_col, "duplicate_group_size"}
+        if expected_columns.issubset(set(existing_report.columns)):
+            return existing_report.copy()
 
     required_columns = [mentor_col] + [col for col in policy.join_keys if col in pool.columns]
     normalized = pool.loc[:, required_columns].copy()
-    normalized[mentor_col] = pd.to_numeric(normalized[mentor_col], errors="coerce").astype("Int64")
-    normalized = normalized.dropna(subset=[mentor_col])
+    normalized[mentor_col] = normalized[mentor_col].astype("string").str.strip()
+    normalized = normalized[normalized[mentor_col].ne("")]
     for column in policy.join_keys:
         if column in normalized.columns:
             normalized[column] = pd.to_numeric(normalized[column], errors="coerce").astype("Int64")
 
-    rows: list[dict[str, object]] = []
-    for mentor_id, group in normalized.groupby(mentor_col, sort=True):
-        conflicts: list[str] = []
-        row: dict[str, object] = {
-            "mentor_id": int(mentor_id),
-            "row_count": int(len(group)),
-        }
-        for column in policy.join_keys:
-            values = _sorted_int_values(group[column]) if column in group.columns else tuple()
-            row[column] = values
-            if len(values) > 1:
-                conflicts.append(column)
-        row["conflict_keys"] = tuple(conflicts)
-        if conflicts:
-            rows.append(row)
+    duplicate_mask = normalized.duplicated(subset=[mentor_col, *policy.join_keys], keep=False)
+    if not bool(duplicate_mask.any()):
+        return pd.DataFrame(columns=[*policy.join_keys, "duplicate_group_size", mentor_col])
 
-    if not rows:
-        return pd.DataFrame(columns=["mentor_id", "row_count", "conflict_keys", *policy.join_keys])
-
-    frame = pd.DataFrame(rows)
-    sort_columns = ["mentor_id", "row_count"]
-    return frame.sort_values(by=sort_columns, kind="stable").reset_index(drop=True)
+    duplicate_rows = normalized.loc[duplicate_mask, [*policy.join_keys, mentor_col]].copy()
+    duplicate_rows["duplicate_group_size"] = (
+        duplicate_rows.groupby([mentor_col, *policy.join_keys], sort=False)[mentor_col]
+        .transform("size")
+        .astype("Int64")
+    )
+    return duplicate_rows.sort_values([mentor_col, *policy.join_keys], kind="stable").reset_index(
+        drop=True
+    )
 
 
 def check_POOL_JOIN_01(  # noqa: N802
     *, pool: pd.DataFrame | None, policy: PolicyConfig
 ) -> tuple[QaRuleResult, pd.DataFrame]:
-    """QA_RULE_POOL_JOIN_01 — تعارض join keys برای یک mentor_id."""
+    """QA_RULE_POOL_JOIN_01 — ردیف تکراری روی کلید ترکیبی mentor_id و کلیدهای اتصال."""
 
     if pool is None:
-        empty = pd.DataFrame(columns=["mentor_id", "row_count", "conflict_keys", *policy.join_keys])
+        empty = pd.DataFrame(columns=[*policy.join_keys, "duplicate_group_size", "mentor_id"])
         return QaRuleResult("QA_RULE_POOL_JOIN_01", True, []), empty
 
-    conflicts = _build_pool_join_conflicts(pool, policy)
+    conflicts = _build_pool_join_duplicates(pool, policy)
     violations: list[QaViolation] = []
     if not conflicts.empty:
+        mentor_col = _resolve_mentor_column(conflicts) or "mentor_id"
+        join_key_columns = [col for col in policy.join_keys if col in conflicts.columns]
+        grouping_columns = [mentor_col, *join_key_columns]
         violations.append(
             QaViolation(
                 rule_id="QA_RULE_POOL_JOIN_01",
                 level="error",
-                message="تعارض join keys برای mentor_id واحد در استخر",
+                message="ردیف تکراری روی کلید ترکیبی mentor_id و کلیدهای اتصال در استخر",
                 details={
-                    "conflict_mentors": int(conflicts["mentor_id"].nunique()),
-                    "conflict_rows": int(conflicts["row_count"].sum()),
+                    "duplicate_groups": int(conflicts[grouping_columns].drop_duplicates().shape[0]),
+                    "duplicate_rows": int(len(conflicts)),
                 },
             )
         )
