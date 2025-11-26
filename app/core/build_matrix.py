@@ -46,6 +46,7 @@ from app.core.common.columns import (
 from app.core.common.domain import (
     BuildConfig,
     MentorType,
+    _num_to_int_safe,
     center_from_manager as domain_center_from_manager,
     classify_mentor_mode,
     compute_alias,
@@ -1351,7 +1352,6 @@ def _prepare_base_rows(
         )
 
         center = domain_center_from_manager(manager_name, cfg=cfg)
-        has_school_codes = any(code > 0 for code in school_codes)
 
         base = {
             "supporter": mentor_name,
