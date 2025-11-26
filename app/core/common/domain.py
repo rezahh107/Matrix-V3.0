@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from enum import Enum, IntEnum
 from typing import Any, Literal, TypedDict, TypeGuard, final
 
-from app.core.policy_loader import PolicyConfig, load_policy
+from app.core.policy_loader import MentorSchoolBindingPolicy, PolicyConfig, load_policy
 
 from .errors import DataMissingError, InvalidCenterMappingError, InvalidGenderValueError
 from .normalization import normalize_fa, to_numlike_str
@@ -38,6 +38,15 @@ class MentorType(Enum):
     NORMAL = "normal"
     SCHOOL = "school"
     DUAL = "dual"
+
+
+@final
+class StudentBindingKind(Enum):
+    """Binding classification for students based on postal code presence."""
+
+    NORMAL = "normal"
+    SCHOOL = "school"
+    MENTOR_BASED = "mentor_based"
 
 
 @final
@@ -515,8 +524,34 @@ def center_from_manager(name: Any, *, cfg: BuildConfig) -> int:
     raise InvalidCenterMappingError(func="center_from_manager", value=name)
 
 
-def mentor_type(postal_code: Any, school_count: int | None, *, cfg: BuildConfig) -> MentorType:
-    """تعیین نوع پشتیبان بر اساس کدپستی و تعداد مدارس.
+def _has_school_reference(
+    school_count: int | None,
+    school_codes: Sequence[Any],
+    *,
+    binding_policy: MentorSchoolBindingPolicy,
+) -> bool:
+    """Determine whether a mentor row references any school entries.
+
+    The check uses both the explicit ``school_count`` and the raw school columns
+    (without coupling to successful code normalization) to stay aligned with the
+    SSoT distinction between school-bound and normal mentors.
+    """
+
+    if (school_count or 0) > 0:
+        return True
+
+    return any(not binding_policy.is_empty_value(code) for code in school_codes)
+
+
+def mentor_type(
+    postal_code: Any,
+    school_count: int | None,
+    *,
+    cfg: BuildConfig,
+    school_codes: Sequence[Any] | None = None,
+    binding_policy: MentorSchoolBindingPolicy | None = None,
+) -> MentorType:
+    """تعیین نوع پشتیبان بر اساس کدپستی و مرجع مدرسه‌ای.
 
     مثال::
 
@@ -526,7 +561,8 @@ def mentor_type(postal_code: Any, school_count: int | None, *, cfg: BuildConfig)
     """
 
     has_postal = _postal_valid(to_numlike_str(postal_code), cfg=cfg)
-    has_school = (school_count or 0) > 0
+    policy = binding_policy or cfg.policy.mentor_school_binding
+    has_school = _has_school_reference(school_count, school_codes or (), binding_policy=policy)
 
     if has_postal and has_school:
         return MentorType.DUAL
@@ -541,14 +577,26 @@ def classify_mentor_mode(
     *,
     cfg: BuildConfig,
     has_school_constraint: bool | None = None,
+    school_count: int | None = None,
+    binding_policy: MentorSchoolBindingPolicy | None = None,
+    aliases: Sequence[Any] | None = None,
 ) -> MentorType:
     """طبقه‌بندی نوع پشتیبان بر اساس کدپستی، کد مدرسه و پرچم الزام مدرسه."""
 
     normalized_codes = [school_code_norm(code, cfg=cfg) for code in school_codes]
-    school_count = sum(1 for code in normalized_codes if code > 0)
-    if has_school_constraint is True and school_count == 0:
-        school_count = 1
-    return mentor_type(postal_code, school_count, cfg=cfg)
+    effective_school_count = school_count
+    if effective_school_count is None:
+        effective_school_count = sum(1 for code in normalized_codes if code > 0)
+    if has_school_constraint is True and effective_school_count == 0:
+        effective_school_count = 1
+    mentor_kind = mentor_type(
+        postal_code,
+        effective_school_count,
+        cfg=cfg,
+        school_codes=school_codes,
+        binding_policy=binding_policy,
+    )
+    return enforce_alias_school_invariant(mentor_kind, aliases or ())
 
 
 def compute_alias(
@@ -568,6 +616,16 @@ def compute_alias(
     return _compute_normal_or_dual_alias(postal_code, mentor_id, cfg)
 
 
+def enforce_alias_school_invariant(row_type: MentorType, aliases: Sequence[Any]) -> MentorType:
+    """Ensure alias codes below 1000 are treated as school-based mentors."""
+
+    for alias in aliases:
+        alias_num = _num_to_int_safe(alias)
+        if 0 < alias_num < 1000:
+            return MentorType.SCHOOL if row_type is MentorType.NORMAL else row_type
+    return row_type
+
+
 def school_code_norm(value: Any, *, cfg: BuildConfig) -> int:
     """نرمال‌سازی کد مدرسه به عدد صحیح غیرمنفی."""
 
@@ -576,6 +634,25 @@ def school_code_norm(value: Any, *, cfg: BuildConfig) -> int:
         return 0 if cfg.school_code_empty_as_zero else 0
     code = _num_to_int_safe(text)
     return max(code, 0)
+
+
+def classify_student_binding_from_postal(
+    postal_code: Any, *, cfg: BuildConfig
+) -> StudentBindingKind:
+    """Classify student binding based on postal code presence and range."""
+
+    postal_str = to_numlike_str(postal_code)
+    if not postal_str.isdigit():
+        return StudentBindingKind.MENTOR_BASED
+
+    postal_num = _num_to_int_safe(postal_str)
+    if postal_num <= 0:
+        return StudentBindingKind.MENTOR_BASED
+    if postal_num < 1000:
+        return StudentBindingKind.SCHOOL
+    if _postal_valid(postal_str, cfg=cfg):
+        return StudentBindingKind.NORMAL
+    return StudentBindingKind.MENTOR_BASED
 
 
 def finance_cross(values: Iterable[int] | None, *, cfg: BuildConfig) -> tuple[int, ...]:
@@ -877,6 +954,7 @@ __all__ = [
     "COL_MENTOR_ROWID",
     "COL_MENTOR_TYPE",
     "MentorType",
+    "StudentBindingKind",
     "Status",
     "Gender",
     "FinanceCode",
@@ -891,8 +969,10 @@ __all__ = [
     "center_from_manager",
     "mentor_type",
     "compute_alias",
+    "enforce_alias_school_invariant",
     "compute_mentor_type_str",
     "classify_mentor_mode",
+    "classify_student_binding_from_postal",
     "school_code_norm",
     "finance_cross",
     "DecisionReason",
