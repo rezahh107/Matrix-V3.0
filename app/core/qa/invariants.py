@@ -21,6 +21,7 @@ __all__ = [
     "check_STU_01",
     "check_STU_02",
     "check_JOIN_01",
+    "check_POOL_JOIN_01",
     "check_SCHOOL_01",
     "check_GOV_01",
     "check_ALLOC_01",
@@ -151,6 +152,8 @@ def run_all_invariants(
     invalid_mentors: pd.DataFrame | None = None,
     allocation_summary: pd.DataFrame | None = None,
     governance_overrides: Mapping[int | str | float, bool] | None = None,
+    pool: pd.DataFrame | None = None,
+    extras: Mapping[str, pd.DataFrame] | None = None,
 ) -> QaReport:
     """اجرای همهٔ قوانین QA و تولید گزارش تجمیعی.
 
@@ -188,7 +191,12 @@ def run_all_invariants(
             policy=policy,
         ),
     ]
-    return QaReport(results=checks)
+    pool_result, pool_conflicts = check_POOL_JOIN_01(pool=pool, policy=policy)
+    checks.append(pool_result)
+
+    extra_frames: dict[str, pd.DataFrame] = dict(extras or {})
+    extra_frames.setdefault("pool_join_conflicts", pool_conflicts)
+    return QaReport(results=checks, extras=extra_frames if extra_frames else None)
 
 
 def _resolve_student_count(frame: pd.DataFrame | None) -> int | None:
@@ -356,6 +364,78 @@ def check_JOIN_01(  # noqa: N802
         passed=not violations,
         violations=violations,
     )
+
+
+def _sorted_int_values(series: pd.Series) -> tuple[int, ...]:
+    numeric = pd.to_numeric(series, errors="coerce").dropna().astype(int)
+    return tuple(sorted(numeric.unique().tolist()))
+
+
+def _build_pool_join_conflicts(pool: pd.DataFrame, policy: PolicyConfig) -> pd.DataFrame:
+    mentor_col = _resolve_mentor_column(pool)
+    if mentor_col is None:
+        return pd.DataFrame(columns=["mentor_id", "row_count", "conflict_keys", *policy.join_keys])
+
+    required_columns = [mentor_col] + [col for col in policy.join_keys if col in pool.columns]
+    normalized = pool.loc[:, required_columns].copy()
+    normalized[mentor_col] = pd.to_numeric(normalized[mentor_col], errors="coerce").astype("Int64")
+    normalized = normalized.dropna(subset=[mentor_col])
+    for column in policy.join_keys:
+        if column in normalized.columns:
+            normalized[column] = pd.to_numeric(normalized[column], errors="coerce").astype("Int64")
+
+    rows: list[dict[str, object]] = []
+    for mentor_id, group in normalized.groupby(mentor_col, sort=True):
+        conflicts: list[str] = []
+        row: dict[str, object] = {
+            "mentor_id": int(mentor_id),
+            "row_count": int(len(group)),
+        }
+        for column in policy.join_keys:
+            values = _sorted_int_values(group[column]) if column in group.columns else tuple()
+            row[column] = values
+            if len(values) > 1:
+                conflicts.append(column)
+        row["conflict_keys"] = tuple(conflicts)
+        if conflicts:
+            rows.append(row)
+
+    if not rows:
+        return pd.DataFrame(columns=["mentor_id", "row_count", "conflict_keys", *policy.join_keys])
+
+    frame = pd.DataFrame(rows)
+    sort_columns = ["mentor_id", "row_count"]
+    return frame.sort_values(by=sort_columns, kind="stable").reset_index(drop=True)
+
+
+def check_POOL_JOIN_01(  # noqa: N802
+    *, pool: pd.DataFrame | None, policy: PolicyConfig
+) -> tuple[QaRuleResult, pd.DataFrame]:
+    """QA_RULE_POOL_JOIN_01 — تعارض join keys برای یک mentor_id."""
+
+    if pool is None:
+        empty = pd.DataFrame(columns=["mentor_id", "row_count", "conflict_keys", *policy.join_keys])
+        return QaRuleResult("QA_RULE_POOL_JOIN_01", True, []), empty
+
+    conflicts = _build_pool_join_conflicts(pool, policy)
+    violations: list[QaViolation] = []
+    if not conflicts.empty:
+        violations.append(
+            QaViolation(
+                rule_id="QA_RULE_POOL_JOIN_01",
+                level="error",
+                message="تعارض join keys برای mentor_id واحد در استخر",
+                details={
+                    "conflict_mentors": int(conflicts["mentor_id"].nunique()),
+                    "conflict_rows": int(conflicts["row_count"].sum()),
+                },
+            )
+        )
+
+    result = QaRuleResult(
+        rule_id="QA_RULE_POOL_JOIN_01", passed=not violations, violations=violations
+    )
+    return result, conflicts
 
 
 def check_SCHOOL_01(  # noqa: N802

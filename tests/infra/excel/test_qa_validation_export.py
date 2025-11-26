@@ -56,6 +56,7 @@ def _sample_report() -> QaReport:
             QaRuleResult("QA_RULE_JOIN_01", True, []),
             QaRuleResult("QA_RULE_SCHOOL_01", False, [violations[3]]),
             QaRuleResult("QA_RULE_ALLOC_01", False, [violations[4]]),
+            QaRuleResult("QA_RULE_POOL_JOIN_01", True, []),
         ]
     )
 
@@ -80,6 +81,8 @@ def test_export_qa_validation_builds_expected_sheets(tmp_path: Path) -> None:
         "join_keys",
         "student_counts",
         "meta",
+        "pool_join_key_duplicates",
+        "pool_join_conflicts",
     }
     assert expected_sheets.issubset(set(sheet_names))
 
