@@ -22,6 +22,12 @@ from .common.filters import (
     resolve_student_school_code,
 )
 from .common.ids import build_mentor_id_map, inject_mentor_id, natural_key
+from .common.join_keys import (
+    center_wildcard_value,
+    coerce_join_int,
+    normalize_join_key_name as _normalize_join_key_name,
+    validate_selected_mentor_join_keys,
+)
 from .common.ranking import (
     MentorCapacityState,
     apply_ranking_policy,
@@ -504,28 +510,6 @@ def _resolve_capacity_column(policy: PolicyConfig, override: str | None) -> str:
         return policy.columns.remaining_capacity
 
 
-def _coerce_int(value: object) -> int:
-    if value is None:
-        raise ValueError("DATA_MISSING")
-    if isinstance(value, Number) and pd.isna(value):
-        raise ValueError("DATA_MISSING")
-    if isinstance(value, complex):
-        raise ValueError("DATA_MISSING")
-    return int(cast(SupportsInt, value))
-
-
-def _center_wildcard_value(policy: PolicyConfig) -> int | None:
-    """خواندن مقدار wildcard مرکز از Policy برای تطبیق join keys."""
-
-    wildcard = policy.center_map.get("*")
-    if wildcard is None:
-        return None
-    try:
-        return int(wildcard)
-    except (TypeError, ValueError):
-        return None
-
-
 def _canonical_stage_counts(
     stage_candidate_counts: Mapping[str, int] | Mapping[TraceStageName, int],
 ) -> dict[TraceStageName, int]:
@@ -544,37 +528,6 @@ def _derive_error_type_from_stage_counts(
     if any(canonical.get(stage, 0) == 0 for stage in non_capacity):
         return "ELIGIBILITY_NO_MATCH"
     return "CAPACITY_FULL"
-
-
-def _normalize_join_key_name(column: str) -> str:
-    """نرمال‌سازی نام کلید join برای استفاده در join_map.
-
-    این نگاشت باید دقیقاً با خروجی ``_collect_join_key_map`` منطبق باشد. در صورت
-    تغییر لیست ``join_keys`` در Policy، این تابع نیز باید به‌روزرسانی شود تا از
-    هرگونه drift در نام‌گذاری جلوگیری شود.
-    """
-
-    return column.replace(" ", "_")
-
-
-def _matches_center_with_wildcard(
-    student_center: int, mentor_center: int, wildcard_center: int | None
-) -> bool:
-    """تطبیق مرکز با درنظرگرفتن wildcard از Policy."""
-
-    if wildcard_center is not None and student_center == wildcard_center:
-        return True
-    return mentor_center == student_center
-
-
-def _matches_school_with_wildcard(
-    student_school: int, mentor_school: int, empty_as_zero: bool
-) -> bool:
-    """تطبیق مدرسه با درنظرگرفتن صفر به‌عنوان wildcard در Policy."""
-
-    if empty_as_zero and (student_school == 0 or mentor_school == 0):
-        return True
-    return mentor_school == student_school
 
 
 def _center_mask_series(
@@ -597,67 +550,6 @@ def _school_mask_series(
     if empty_as_zero:
         return (mentor_series == student_school) | (mentor_series == 0)
     return mentor_series == student_school
-
-
-def _validate_policy_join_keys(
-    mentor_row: Mapping[str, object],
-    join_map: Mapping[str, int],
-    policy: PolicyConfig,
-) -> tuple[bool, list[dict[str, object]]]:
-    """اعتبارسنجی برابری شش کلید join بین دانش‌آموز و پشتیبان انتخاب‌شده.
-
-    این تابع باید دقیقاً با همان نام‌گذاری‌ای کار کند که ``_collect_join_key_map``
-    برای کلیدهای join می‌سازد. هر تغییری در ``join_keys`` Policy مستلزم به‌روزرسانی
-    این تابع است (Policy-First).
-
-    مثال::
-
-        >>> valid, mismatches = _validate_policy_join_keys(
-        ...     {"کدرشته": 3, "جنسیت": 1}, {"کدرشته": 3, "جنسیت": 1}, policy
-        ... )
-        >>> valid
-        True
-
-    Args:
-        mentor_row: سطر انتخاب‌شدهٔ پشتیبان از استخر.
-        join_map: نگاشت کلیدهای join دانش‌آموز (int شده).
-        policy: پیکربندی Policy برای دسترسی به join_keys.
-
-    Returns:
-        (valid, mismatches):
-            * valid: اگر همهٔ کلیدها برابر باشند ``True``.
-            * mismatches: فهرست اختلاف‌ها برای گزارش در لاگ.
-    """
-
-    mismatches: list[dict[str, object]] = []
-    center_wildcard = _center_wildcard_value(policy)
-    for column in policy.join_keys:
-        normalized = _normalize_join_key_name(column)
-        student_value = join_map.get(normalized)
-        try:
-            mentor_raw = mentor_row.get(column)
-            mentor_value: object = _coerce_int(mentor_raw)
-        except Exception:
-            mentor_value = mentor_row.get(column)
-        if student_value is None:
-            continue
-        if column == policy.stage_column("center") and _matches_center_with_wildcard(
-            int(student_value), _coerce_int(mentor_value), center_wildcard
-        ):
-            continue
-        if column == policy.columns.school_code and _matches_school_with_wildcard(
-            int(student_value), _coerce_int(mentor_value), policy.school_code_empty_as_zero
-        ):
-            continue
-        if _coerce_int(mentor_value) != int(student_value):
-            mismatches.append(
-                {
-                    "column": column,
-                    "student_value": student_value,
-                    "mentor_value": mentor_value,
-                }
-            )
-    return len(mismatches) == 0, mismatches
 
 
 def _filter_candidates_by_join_map(
@@ -698,7 +590,7 @@ def _filter_candidates_by_join_map(
 
     mask = pd.Series(True, index=candidates.index)
     mismatches: list[dict[str, object]] = []
-    center_wildcard = _center_wildcard_value(policy)
+    center_wildcard = center_wildcard_value(policy)
 
     for column in policy.join_keys:
         normalized = _normalize_join_key_name(column)
@@ -851,7 +743,7 @@ def _collect_join_key_map(
             continue
 
         try:
-            join_map[normalized] = _coerce_int(value)
+            join_map[normalized] = coerce_join_int(value)
         except ValueError:
             join_map[normalized] = -1
             missing_columns.append(column)
@@ -1736,13 +1628,29 @@ def allocate_student(
     occupancy_value = float(chosen_row.get("occupancy_ratio", 0.0))
 
     selected_row = capacity_filtered.loc[chosen_index]
-    join_valid, join_mismatches = _validate_policy_join_keys(selected_row, join_map, policy)
+    join_valid, join_mismatches = validate_selected_mentor_join_keys(
+        selected_row, student_join_map=join_map, policy=policy
+    )
     if not join_valid:
+        corruption_updates: dict[str, object] = {
+            "join_key_mismatches": list(join_mismatches),
+            "validation_stage": "pre_consume",
+            "data_corruption_detected": True,
+            "chosen_index": int(chosen_index),
+        }
+        if mentor_identifier is not None:
+            corruption_updates["mentor_id"] = mentor_identifier
+        mentor_alias_value = selected_row.get("جایگزین | alias") or selected_row.get("alias")
+        if mentor_alias_value is not None:
+            corruption_updates["mentor_alias"] = mentor_alias_value
         return _fail_allocation(
-            "Selected mentor does not match student join keys",
-            error_type="ELIGIBILITY_NO_MATCH",
-            suggested_actions=["بازبینی join keys", "بازسازی استخر/دانش‌آموز"],
-            extra_updates={"join_key_mismatches": join_mismatches},
+            "Selected mentor violates join-key constraints (pool conflict)",
+            error_type="INTERNAL_ERROR",
+            suggested_actions=[
+                "بازسازی استخر پشتیبان",
+                "بررسی تعارض join keys برای mentor_id",
+            ],
+            extra_updates=corruption_updates,
         )
 
     if mentor_identifier is None:

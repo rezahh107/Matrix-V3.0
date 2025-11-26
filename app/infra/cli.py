@@ -1628,9 +1628,12 @@ def _run_build_matrix(args: argparse.Namespace, policy: PolicyConfig, progress: 
         matrix=matrix,
         inspactor=insp_df,
         invalid_mentors=invalid_mentors,
+        extras={"pool_join_conflicts": pd.DataFrame()},
     )
     pool_join_key_duplicates = join_key_duplicates.copy()
-    qa_report.extras = {"pool_join_key_duplicates": pool_join_key_duplicates}
+    merged_extras = dict(getattr(qa_report, "extras", None) or {})
+    merged_extras["pool_join_key_duplicates"] = pool_join_key_duplicates
+    qa_report.extras = merged_extras
     qa_context = QaValidationContext(
         matrix=matrix,
         inspactor=insp_df,
@@ -1967,7 +1970,9 @@ def _allocate_and_write(
             allocation=allocations_df,
             allocation_summary=updated_pool_df,
             student_report=None,
+            pool=pool_base,
         )
+        merged_extras = dict(qa_report.extras or {})
         qa_context = QaValidationContext(
             allocation=allocations_df,
             allocation_summary=updated_pool_df,
@@ -1978,7 +1983,10 @@ def _allocate_and_write(
             },
             alloc_join_audit=join_key_audit_sheet,
             alloc_join_summary=join_key_summary_sheet,
+            pool_join_conflicts=merged_extras.get("pool_join_conflicts"),
         )
+        merged_extras["pool_join_conflicts"] = qa_context.pool_join_conflicts
+        qa_report.extras = merged_extras
         _export_qa_validation_workbook(
             report=qa_report,
             base_output=output,

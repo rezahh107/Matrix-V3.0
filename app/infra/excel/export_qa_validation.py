@@ -20,6 +20,7 @@ _RULE_DESCRIPTIONS: dict[str, str] = {
     "QA_RULE_JOIN_01": "سلامت ستون‌های join ماتریس",
     "QA_RULE_SCHOOL_01": "تفکیک منتورهای آزاد و مقید به مدرسه",
     "QA_RULE_ALLOC_01": "کنترل ظرفیت و نسبت اشغال منتورها",
+    "QA_RULE_POOL_JOIN_01": "تعارض join keys برای mentor_id در استخر",
 }
 
 
@@ -36,6 +37,7 @@ class QaValidationContext:
     pool_join_key_duplicates: pd.DataFrame | None = None
     alloc_join_audit: pd.DataFrame | None = None
     alloc_join_summary: pd.DataFrame | None = None
+    pool_join_conflicts: pd.DataFrame | None = None
 
 
 def _summary_sheet(report: QaReport) -> pd.DataFrame:
@@ -161,6 +163,26 @@ def _join_key_duplicates_sheet(context: QaValidationContext) -> pd.DataFrame:
     return result
 
 
+def _pool_join_conflicts_sheet(context: QaValidationContext, report: QaReport) -> pd.DataFrame:
+    conflict_frame = context.pool_join_conflicts
+    if conflict_frame is None and report.extras is not None:
+        conflict_frame = report.extras.get("pool_join_conflicts")
+    if conflict_frame is None:
+        return pd.DataFrame(
+            columns=[
+                "mentor_id",
+                "row_count",
+                "conflict_keys",
+            ]
+        )
+    ordered: list[str] = ["mentor_id", "row_count", "conflict_keys"]
+    remaining = [col for col in conflict_frame.columns if col not in ordered]
+    frame = conflict_frame.loc[:, ordered + remaining]
+    if not frame.empty:
+        frame = frame.sort_values(by=["mentor_id", "row_count"], kind="stable")
+    return frame.reset_index(drop=True)
+
+
 def _stu_count_sheet(report: QaReport) -> pd.DataFrame:
     details = report.to_details_frame("QA_RULE_STU_01")
     if details.empty:
@@ -201,6 +223,7 @@ def export_qa_validation(
         "student_counts": _stu_count_sheet(report),
         "meta": _meta_sheet(ctx, report),
         "pool_join_key_duplicates": _join_key_duplicates_sheet(ctx),
+        "pool_join_conflicts": _pool_join_conflicts_sheet(ctx, report),
     }
     if ctx.alloc_join_summary is not None:
         sheets["alloc_join_summary"] = ctx.alloc_join_summary
