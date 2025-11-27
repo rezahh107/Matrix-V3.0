@@ -150,11 +150,19 @@ def validate_policy_join_keys(
 
     mismatches: list[JoinKeyMismatchDetail] = []
     wildcard_center = center_wildcard_value(policy)
+    finance_variants = set(policy.finance_variants)
     for column in policy.join_keys:
         normalized = normalize_join_key_name(column)
         student_value = join_map.get(normalized)
         mentor_raw = mentor_row.get(column)
-        mentor_value = _coerce_optional_int(mentor_raw)
+        mentor_value: int | None
+        if column == policy.stage_column("gender"):
+            try:
+                mentor_value = canonicalize_join_key_value(column, mentor_raw, policy=policy)
+            except JoinKeyCanonicalizationError:
+                mentor_value = None
+        else:
+            mentor_value = _coerce_optional_int(mentor_raw)
         if student_value is None:
             mismatches.append(
                 {
@@ -175,19 +183,26 @@ def validate_policy_join_keys(
                 }
             )
             continue
+        student_int = int(student_value)
         if column == policy.stage_column("center") and matches_center_with_wildcard(
-            int(student_value), mentor_value, wildcard_center
+            student_int, mentor_value, wildcard_center
+        ):
+            continue
+        if (
+            column == policy.stage_column("finance")
+            and mentor_value in finance_variants
+            and student_int in finance_variants
         ):
             continue
         if column == policy.columns.school_code and matches_school_with_wildcard(
-            int(student_value), mentor_value, policy.school_code_empty_as_zero
+            student_int, mentor_value, policy.school_code_empty_as_zero
         ):
             continue
-        if mentor_value != int(student_value):
+        if mentor_value != student_int:
             mismatches.append(
                 {
                     "column": column,
-                    "student_value": int(student_value),
+                    "student_value": student_int,
                     "mentor_value": mentor_value,
                     "mismatch_type": "unequal",
                 }
