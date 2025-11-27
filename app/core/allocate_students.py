@@ -23,8 +23,9 @@ from .common.filters import (
 )
 from .common.ids import build_mentor_id_map, inject_mentor_id, natural_key
 from .common.join_keys import (
+    JoinKeyCanonicalizationError,
+    canonicalize_join_key_value,
     center_wildcard_value,
-    coerce_join_int,
     normalize_join_key_name as _normalize_join_key_name,
     validate_selected_mentor_join_keys,
 )
@@ -501,6 +502,16 @@ class JoinKeyDataMissingError(ValueError):
         self.join_map: dict[str, int] = dict(join_map)
 
 
+class JoinKeyDataInvalidError(ValueError):
+    """خطای اختصاصی برای مقادیر نامعتبر کلیدهای Join."""
+
+    def __init__(self, column: str, value: object, join_map: Mapping[str, int]) -> None:
+        super().__init__("DATA_MISSING")
+        self.column = column
+        self.value = value
+        self.join_map: dict[str, int] = dict(join_map)
+
+
 def _resolve_capacity_column(policy: PolicyConfig, override: str | None) -> str:
     if override:
         return override
@@ -721,6 +732,7 @@ def _collect_join_key_map(
 ) -> tuple[dict[str, int], tuple[str, ...]]:
     join_map: dict[str, int] = {}
     missing_columns: list[str] = []
+    invalid_map: dict[str, object] = {}
     school_column = policy.columns.school_code
     school_code_resolved: StudentSchoolCode | None = None
     for column in policy.join_keys:
@@ -743,10 +755,18 @@ def _collect_join_key_map(
             continue
 
         try:
-            join_map[normalized] = coerce_join_int(value)
-        except ValueError:
-            join_map[normalized] = -1
-            missing_columns.append(column)
+            join_map[normalized] = canonicalize_join_key_value(column, value, policy=policy)
+        except JoinKeyCanonicalizationError as exc:
+            join_map[normalized] = 0 if allow_zero else -1
+            invalid_map[column] = exc.value
+            continue
+    if invalid_map:
+        for column in policy.join_keys:
+            normalized = _normalize_join_key_name(column)
+            if normalized not in join_map:
+                join_map[normalized] = 0 if column == school_column else -1
+        column, invalid_value = next(iter(invalid_map.items()))
+        raise JoinKeyDataInvalidError(column, invalid_value, join_map)
     return join_map, tuple(missing_columns)
 
 
@@ -1355,7 +1375,24 @@ def allocate_student(
             "center_column": center_info.column,
         }
 
-    join_map, missing_columns = _collect_join_key_map(student, policy)
+    try:
+        join_map, missing_columns = _collect_join_key_map(student, policy)
+    except JoinKeyDataInvalidError as exc:
+        trace: list[TraceStageRecord] = []
+        log = _build_log_from_join_map(student, exc.join_map)
+        log.update(
+            {
+                "error_type": "DATA_MISSING",
+                "detailed_reason": (f"Invalid join key value for '{exc.column}': {exc.value!r}"),
+                "suggested_actions": [
+                    "نرمال‌سازی ستون‌های join به عدد صحیح",
+                    "بازبینی StudentReport",
+                ],
+                "candidate_count": 0,
+                "stage_candidate_counts": _canonical_stage_counts({}),
+            }
+        )
+        return AllocationResult(None, trace, log)
 
     progress(5, "prefilter")
     stage_candidate_counts: dict[TraceStageName, int] = {

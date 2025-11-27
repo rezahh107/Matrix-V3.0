@@ -8,12 +8,18 @@ from typing import Literal, TypedDict, cast
 
 import pandas as pd
 
+from app.core.common.columns import _GENDER_TOKEN_MAP, CANON_EN_TO_FA
+from app.core.common.normalization import normalize_fa
+from app.core.common.types import JOIN_KEY_GENDER
+from app.core.counter import normalize_digits
 from app.core.policy_loader import PolicyConfig
 
 __all__ = [
+    "JoinKeyCanonicalizationError",
     "JoinKeyMismatchDetail",
     "center_wildcard_value",
     "coerce_join_int",
+    "canonicalize_join_key_value",
     "matches_center_with_wildcard",
     "matches_school_with_wildcard",
     "normalize_join_key_name",
@@ -31,6 +37,15 @@ class JoinKeyMismatchDetail(TypedDict):
     mismatch_type: Literal["unequal", "missing", "wildcard_mismatch"]
 
 
+class JoinKeyCanonicalizationError(ValueError):
+    """Raised when a join-key value cannot be canonicalized to ``int``."""
+
+    def __init__(self, column: str, value: object) -> None:
+        super().__init__("DATA_MISSING")
+        self.column = column
+        self.value = value
+
+
 def coerce_join_int(value: object) -> int:
     """Coerce join-key payloads to int, raising on missing/invalid data."""
 
@@ -40,7 +55,26 @@ def coerce_join_int(value: object) -> int:
         raise ValueError("DATA_MISSING")
     if isinstance(value, complex):
         raise ValueError("DATA_MISSING")
+    if isinstance(value, str):
+        digits = normalize_digits(value).strip()
+        if not digits:
+            raise ValueError("DATA_MISSING")
+        return int(digits)
     return int(cast(int, value))
+
+
+def canonicalize_join_key_value(column: str, value: object, *, policy: PolicyConfig) -> int:
+    """Normalize a single join-key value to ``int`` using Policy mappings."""
+
+    gender_column = CANON_EN_TO_FA.get("gender", JOIN_KEY_GENDER)
+    normalized_column = normalize_join_key_name(column)
+    is_gender = normalize_fa(normalized_column) == normalize_fa(gender_column)
+    try:
+        if is_gender:
+            return _canonicalize_gender_value(value, policy)
+        return coerce_join_int(value)
+    except ValueError as exc:
+        raise JoinKeyCanonicalizationError(column, value) from exc
 
 
 def normalize_join_key_name(column: str) -> str:
@@ -86,6 +120,25 @@ def _coerce_optional_int(value: object) -> int | None:
         return coerce_join_int(value)
     except Exception:
         return None
+
+
+def _canonicalize_gender_value(value: object, policy: PolicyConfig) -> int:
+    normalized = normalize_fa(value)
+    if not normalized:
+        raise ValueError("DATA_MISSING")
+    male_tokens = {token for token, code in _GENDER_TOKEN_MAP.items() if code == 1}
+    female_tokens = {token for token, code in _GENDER_TOKEN_MAP.items() if code == 0}
+    if normalized in male_tokens:
+        return int(policy.gender_codes.male.value)
+    if normalized in female_tokens:
+        return int(policy.gender_codes.female.value)
+    try:
+        numeric = coerce_join_int(value)
+    except ValueError as exc:
+        raise ValueError("DATA_MISSING") from exc
+    if numeric in {policy.gender_codes.male.value, policy.gender_codes.female.value}:
+        return numeric
+    raise ValueError("DATA_MISSING")
 
 
 def validate_policy_join_keys(
