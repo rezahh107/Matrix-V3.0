@@ -1,5 +1,6 @@
 # History / Allocation Channel / Binding / Governance Implementation Status
 
+> **منبع حقیقت قوانین تخصیص (LAW v3.0 / Technical SSoT v3.0):** این سند راهنما/تاریخچه است؛ تمام قواعد ثابت (کلیدهای join، رتبه‌بندی، انواع منتور/دانش‌آموز، گیت ظرفیت، trace و ...) فقط در `docs/LAW_Smart_Student_Allocation_v3.0.md` و `docs/Technical_SSoT_Smart_Student_Allocation_v3.0-TECH.md` معتبرند. در صورت هر تعارض، محتوای این دو فایل حاکم است و نکات قدیمی این سند به‌عنوان LEGACY خوانده شوند.
 This file captures the current implementation status (code vs. docs) for history-aware allocation, allocation channels, mentor school binding, mentor-pool governance, and QA across Core/Infra/UI. It reflects **Policy v1.0.3** and **SSoT v1.0.2** assumptions without redefining them.
 
 ## Summary Matrix

@@ -1,5 +1,6 @@
 # Rule Engine Evaluation Plan (Policy v1.0.3 / SSoT v1.0.2)
 
+> **منبع حقیقت قوانین تخصیص (LAW v3.0 / Technical SSoT v3.0):** این سند راهنما/تاریخچه است؛ تمام قواعد ثابت (کلیدهای join، رتبه‌بندی، انواع منتور/دانش‌آموز، گیت ظرفیت، trace و ...) فقط در `docs/LAW_Smart_Student_Allocation_v3.0.md` و `docs/Technical_SSoT_Smart_Student_Allocation_v3.0-TECH.md` معتبرند. در صورت هر تعارض، محتوای این دو فایل حاکم است و نکات قدیمی این سند به‌عنوان LEGACY خوانده شوند.
 ## 1. Current Architecture Snapshot
 
 ### Eligibility Filters
@@ -7,8 +8,8 @@
 - در `allocate_student` ابتدا `policy.join_keys` به `int` تبدیل می‌شوند (`_collect_join_key_map`) و سپس join map به `apply_join_filters` پاس داده می‌شود تا هر فیلتر بدون mutate اجرا شود.【F:app/core/allocate_students.py†L126-L200】【F:app/core/allocate_students.py†L230-L255】
 
 ### Ranking & Capacity
-- `apply_ranking_policy` از سیاست بارگذاری‌شده، ستون‌های `occupancy_ratio`، `allocations_new` و `mentor_sort_key` را محاسبه و طبق ترتیب Policy (`min occ → min alloc → natural mentor_id`) با sort پایدار مرتب می‌کند؛ state اولیه با `build_mentor_state` و natural key داخلی فراهم می‌شود.【F:app/core/common/ranking.py†L1-L193】
-- `allocate_student` پس از فیلتر ظرفیت (`capacity_mask`) حالت mentor را از `build_mentor_state` یا state تزریقی خوانده و با `consume_capacity` capacity_before/after و occupancy_ratio را در log ثبت می‌کند.【F:app/core/allocate_students.py†L256-L412】
+- `apply_ranking_policy` باید با RANK-CORE LAW/TECH کار کند: مرتب‌سازی بر اساس `remaining_capacity` نزولی و سپس `mentor_id` natural/stable. هر ستونی از نوع `occupancy_ratio/allocations_new` در کد/تست‌های قبلی LEGACY است و صرفاً برای بازبینی تاریخی استفاده می‌شود.【F:app/core/common/ranking.py†L1-L193】
+- `allocate_student` پس از فیلتر ظرفیت (`capacity_mask`) حالت mentor را از `build_mentor_state` یا state تزریقی می‌خواند و با `consume_capacity` ظرفیت باقی‌مانده قبل/بعد را در log ثبت می‌کند؛ اگر لاگ‌های قدیمی occupancy_ratio داشتند باید با remaining_capacity جایگزین شوند.【F:app/core/allocate_students.py†L256-L412】
 - `allocate_batch` هر بار پس از تخصیص، state و DataFrame اصلی را sync می‌کند تا دترمینیسم و trace حفظ شود؛ همچنین capacity داخلی در پایان sanity-check می‌شود.【F:app/core/allocate_students.py†L414-L631】
 
 ### Policy Loader & Schema
@@ -17,8 +18,8 @@
 ## 2. Fixed Rule Checklist (Actionable)
 1. **شش کلید join**: `PolicyConfig.join_keys` باید دقیقاً ۶ مقدار منحصربه‌فرد داشته باشد و در `_collect_join_key_map` همگی به `int` تبدیل شوند؛ خطای `JoinKeyDataMissingError` هر کمبود را گزارش می‌کند.【F:app/core/policy_loader.py†L23-L120】【F:app/core/allocate_students.py†L126-L200】
 2. **Trace هشت‌مرحله‌ای**: `trace_stages` از policy خوانده و در `build_trace_plan`/`build_allocation_trace` مصرف می‌شود؛ باید تضمین شود همه مراحل اجرا شده و candidate_count هر مرحله در explain trace ذخیره گردد.【F:config/policy.json†L53-L105】【F:app/core/allocate_students.py†L232-L247】
-3. **Ranking Policy**: ترتیب `occupancy_ratio` → `allocations_new` → `mentor_sort_key` اجباری است و sort باید stable/natural باشد؛ failure باید در تست (tie scenarios) شکست بخورد.【F:config/policy.json†L34-L71】【F:app/core/common/ranking.py†L117-L193】
-4. **Capacity و occupancy_ratio**: state باید همیشه non-negative باشد؛ `allocate_batch` پس از حلقه sanity-check انجام می‌دهد، اما تستی برای underflow state لازم است.【F:app/core/allocate_students.py†L526-L580】
+3. **Ranking Policy (LAW/TECH RANK-CORE)**: مرتب‌سازی فقط بر اساس `remaining_capacity` نزولی و سپس `mentor_id` natural/stable است؛ تست‌ها باید tie scenarios را با همین ترتیب بسنجند و هر استفاده از occupancy_ratio را LEGACY/خطا علامت بزنند.【F:config/policy.json†L34-L71】【F:app/core/common/ranking.py†L117-L193】
+4. **Capacity و remaining_capacity**: state باید همیشه non-negative باشد؛ `allocate_batch` پس از حلقه sanity-check انجام می‌دهد، اما تستی برای underflow state لازم است. محاسبات occupancy_ratio قدیمی فقط برای تاریخچه کاربرد دارد و نباید بر سیاست جدید تأثیر بگذارد.【F:app/core/allocate_students.py†L526-L580】
 5. **Policy-First / بدون I/O**: Eligibility و ranking فقط از `PolicyConfig` می‌خوانند؛ تست‌های `test_core_no_io.py` و `test_core_no_logging.py` این اصل را پوشش می‌دهند اما در golden test جدید نیز باید مراقبت شود.【F:tests/unit/test_core_no_io.py†L1-L120】
 6. **Join key types و school wildcard**: `enforce_join_key_types` و `resolve_student_school_code` باید تضمین کنند صفر به‌عنوان wildcard فقط وقتی `school_code_empty_as_zero` فعال است، اعمال شود.【F:app/core/allocate_students.py†L200-L239】【F:app/core/common/filters.py†L141-L197】
 
@@ -26,7 +27,7 @@
 - **Trace Stage Counters**: Trace builder فعلی در `allocate_student` فراخوانی می‌شود ولی instrumentation stage-by-stage candidate_count ذخیره نمی‌کند؛ نیاز به hook (مثلاً callback یا DataFrame with counts) برای مقایسه با policy trace order دارد.【F:app/core/allocate_students.py†L232-L247】
 - **Join Filter Coverage**: فیلترهای type و group هر دو از `policy.stage_column` استفاده می‌کنند؛ اگر Policy اشتباهاً هر دو را به `کدرشته` نگاشت کند، تست باید deviation را flag کند. پیشنهاد: instrumentation که mapping stage→column را log کند و در QA گزارش بدهد.
 - **Capacity Drift**: `consume_capacity` فقط روی state عمل می‌کند؛ instrumentation برای capture قبل/بعد (مثلاً ثبت `capacity_gate` stage در trace) ضروری است تا mismatch با DataFrame اصلی سریع کشف شود.【F:app/core/common/ranking.py†L195-L212】【F:app/core/allocate_students.py†L490-L560】
-- **Deterministic Ranking**: تست موجود `test_ranking_determinism.py` فقط سه ردیف را پوشش می‌دهد؛ سناریوهای برابری occupancy/allocations با mentor_idهای پیچیده (EMP-2 vs EMP-10 vs EMP-010) نیازمند instrumentation snapshot هستند.【F:tests/unit/test_ranking_determinism.py†L1-L21】
+- **Deterministic Ranking**: تست موجود `test_ranking_determinism.py` فقط سه ردیف را پوشش می‌دهد؛ سناریوهای برابری `remaining_capacity` با mentor_idهای پیچیده (EMP-2 vs EMP-10 vs EMP-010) نیازمند instrumentation snapshot هستند. هر تستی که هنوز occupancy/allocations را پایه قرار می‌دهد LEGACY است و باید به LAW/TECH RANK-CORE مهاجرت کند.【F:tests/unit/test_ranking_determinism.py†L1-L21】
 
 ## 4. Test Strategy (Three Layers)
 1. **Static Review / Lint Tests**
@@ -34,7 +35,7 @@
    - تست `tests/unit/test_filters_trace_counts.py`: دادهٔ کوچک (۲ mentor) و student فرضی برای assert اینکه `apply_join_filters` به‌ترتیب اجرا می‌شود و خروجی هر stage با trace stage plan match است.
 2. **Unit Tests**
    - `tests/unit/test_allocate_student_capacity_underflow.py`: state ساختگی با capacity=1، دو دانش‌آموز متوالی؛ نفر دوم باید خطای `CAPACITY_UNDERFLOW` در log ببیند و trace مرحله capacity را ثبت کند.【F:app/core/allocate_students.py†L355-L412】
-   - `tests/unit/test_ranking_tie_breakers.py`: DataFrame با occupancy/allocations مساوی اما mentor_idهای مختلف (EMP-1, EMP-02, EMP-10) تا natural sort و stability را enforce کند.【F:app/core/common/ranking.py†L117-L193】
+   - `tests/unit/test_ranking_tie_breakers.py`: DataFrame با `remaining_capacity` مساوی اما mentor_idهای مختلف (EMP-1, EMP-02, EMP-10) تا natural sort و stability را enforce کند؛ نسخهٔ قدیمی مبتنی بر occupancy باید LEGACY برچسب بخورد.【F:app/core/common/ranking.py†L117-L193】
    - `tests/unit/test_join_key_int_enforcement.py`: ساخت student با رشته‌های متنی؛ انتظار می‌رود `_collect_join_key_map` همه را به int تبدیل کرده و در log ثبت کند (با fixture `allocate_student`).
 3. **Golden / Integration Tests**
    - فایل `tests/integration/test_rule_engine_golden.py`: dataset ≈15 دانش‌آموز + 6 mentor با capacity مختلف. سناریوها: پرشدن ظرفیت mentor، gender mismatch، school wildcard، تفاوت رشته. خروجی نهایی باید در snapshot (`tests/snapshots/golden_allocations.json`) قفل شود با `pandas.testing.assert_frame_equal`.
@@ -48,16 +49,16 @@
 - سیاست trace columns باید توسط ابزار lint بررسی شود: اسکریپت QA (pytest) که policy.json را می‌خواند و مطمئن می‌شود `trace_stages` با `TRACE_STAGE_ORDER` هم‌پوشانی کامل دارد؛ در صورت تغییر Policy، تست نیازمند به‌روزرسانی است و به‌عنوان signal استفاده می‌شود.【F:app/core/policy_loader.py†L73-L120】
 
 ## 6. Golden Test Dataset Sketch
-- **Mentors**: 6 ردیف با ترکیب gender/center/finance متفاوت، ظرفیت 1 تا 3. برخی mentorها occupancy اولیه ≠0 دارند تا `allocations_new` اثر بگذارد.
+- **Mentors**: 6 ردیف با ترکیب gender/center/finance متفاوت، ظرفیت 1 تا 3. اگر دادهٔ تاریخی occupancy/allocations_new وجود داشته باشد صرفاً برای LEGACY تست‌ها نگه داشته می‌شود؛ RANK-CORE جدید باید از `remaining_capacity` استفاده کند.
 - **Students**: 15 ردیف که شامل:
   - 2 دختر و 2 پسر با یکسان بودن تمام join keys برای تست tie-break.
   - 3 دانش‌آموز با کد مدرسه ناقص/خط دار برای sanitation school.
   - 2 دانش‌آموز مرکز صفر (wildcard) برای تست skip center filter.
   - 4 دانش‌آموز که ظرفیت mentor منتخب آن‌ها بعد از تخصیص صفر می‌شود تا مسیر `CAPACITY_FULL` در نفر بعدی فعال گردد.
-- خروجی‌های مورد انتظار:
-  - جدول allocations با ستون‌های `student_id`, `mentor_id`, `occupancy_ratio`.
-  - جدول logs با error_type و candidate_count؛ از snapshot برای تشخیص regression استفاده می‌شود.
-  - جدول trace stage counts (8 مرحله) برای حداقل دو دانش‌آموز نماینده.
+  - خروجی‌های مورد انتظار:
+    - جدول allocations با ستون‌های `student_id`, `mentor_id`, `remaining_capacity_after` (یا معادل LAW/TECH)؛ ستون‌های occupancy_ratio صرفاً در LEGACY snapshotها مجازند.
+    - جدول logs با error_type و candidate_count؛ از snapshot برای تشخیص regression استفاده می‌شود.
+    - جدول trace stage counts (8 مرحله) برای حداقل دو دانش‌آموز نماینده.
 
 ## 7. Execution Checklist
 - اجرای `pytest -q tests/unit/test_policy_ranking_contract.py tests/unit/test_allocate_student_capacity_underflow.py tests/unit/test_ranking_tie_breakers.py` برای تست‌های واحد.
@@ -76,7 +77,7 @@
 | --- | --- | --- | --- |
 | R1_JOIN_KEYS | شش کلید Join همیشه `int` هستند و کمبود داده گزارش می‌شود. | PASS | `tests/unit/test_rule_engine_policy_contract.py::test_policy_join_keys_unique_and_int_enforced` و instrumentation `stage_candidate_counts` در `app/core/allocate_students.py`. |
 | R2_TRACE | Trace هشت‌مرحله‌ای و شمارش کاندید بعد از هر فیلتر ثبت می‌شود. | PASS | `tests/unit/test_allocate_stage_counts.py::test_stage_candidate_counts_align_with_trace` + مقایسه Trace/Log در `tests/integration/test_rule_engine_golden_realistic.py`. |
-| R3_RANKING | ترتیب `min occupancy → min alloc → natural mentor_id` پایدار است. | PASS | `tests/unit/test_rule_engine_policy_contract.py::test_ranking_policy_respects_order_and_natural_sort`. |
+| R3_RANKING | RANK-CORE LAW/TECH: مرتب‌سازی `remaining_capacity` نزولی سپس `mentor_id` natural/stable (occupancy روایت LEGACY است). | PASS | `tests/unit/test_rule_engine_policy_contract.py::test_ranking_policy_respects_order_and_natural_sort` باید بر اساس ظرفیت باقی‌مانده به‌روز شود. |
 | R4_CAPACITY | ظرفیت منفی و underflow شناسایی و به `CAPACITY_FULL` ختم می‌شود. | PASS | `tests/integration/test_rule_engine_golden_realistic.py::test_realistic_high_no_match_scenario_golden` (۶ خطای ظرفیت پس از پر شدن Mentor-A/B/C). |
 | R5_SCHOOL_WILDCARD | مقدار صفر برای مدرسه به‌عنوان wildcard پذیرفته و sanitation درست است. | PASS | `tests/unit/test_rule_engine_policy_contract.py::test_school_code_zero_behaves_as_wildcard`. |
 | R6_DETERMINISM | اجرای مجدد Golden Test خروجی‌های کاملاً یکسان می‌دهد. | PASS | دو اجرای پشت‌سرهم در `tests/integration/test_rule_engine_golden_realistic.py` با `assert_frame_equal` روی allocations/pool/log/trace. |

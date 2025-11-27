@@ -1,5 +1,6 @@
 # System Architecture Blueprint — Smart Student Allocation (v1.0)
 
+> **منبع حقیقت قوانین تخصیص (LAW v3.0 / Technical SSoT v3.0):** این سند راهنما/تاریخچه است؛ تمام قواعد ثابت (کلیدهای join، رتبه‌بندی، انواع منتور/دانش‌آموز، گیت ظرفیت، trace و ...) فقط در `docs/LAW_Smart_Student_Allocation_v3.0.md` و `docs/Technical_SSoT_Smart_Student_Allocation_v3.0-TECH.md` معتبرند. در صورت هر تعارض، محتوای این دو فایل حاکم است و نکات قدیمی این سند به‌عنوان LEGACY خوانده شوند.
 - **Status:** Authoritative architecture (aligned with Vision & Scope v1.0, Policy v1.0.3, SSoT v1.0.2)
 - **Audience:** Architects, tech leads, coding agents (AGENTS.md), QA, UI/Infra developers, product/ops owners
 - **Policy Alignment:** Policy-First (no rule drift), 6 Join Keys as `int`, deterministic ranking, 8-step trace
@@ -69,7 +70,7 @@
   - `app/core/policy_loader.py`: validates `config/policy.json` against Policy/SSoT schema (no I/O beyond data received).
   - `app/core/common`: natural sort helper, join-key enforcement, error taxonomy.
   - `app/core/matrix`: eligibility matrix builder using Policy rules, deterministic filters، نرمال‌سازی کد ملی و آماده‌سازی داده برای HistoryStore/کانال.
-  - `app/core/allocation`: ranking & assignment engine, 8-step trace creation, occupancy/allocations counters، اجرای `dedupe_by_national_id`, محاسبهٔ `allocation_channel`, و الحاق خلاصهٔ تاریخچه/کانال به trace.
+  - `app/core/allocation`: ranking & assignment engine, 8-step trace creation, شمارندهٔ ظرفیت باقی‌مانده (remaining_capacity) و تخصیص‌ها، اجرای `dedupe_by_national_id`, محاسبهٔ `allocation_channel`, و الحاق خلاصهٔ تاریخچه/کانال به trace؛ متریک‌های occupancy پیشین صرفاً LEGACY هستند.
   - `app/core/qa`: validation of matrix/allocation outputs vs Policy invariants.
 - **Infra** (adapters & I/O)
   - `app/infra/io_utils.py`: Excel read/write (atomic fallback), filesystem paths, schema validation, premap construction، و قراردادهای خواندن/نوشتن برای `HistoryStore`.
@@ -133,7 +134,7 @@ External (WP, Excel, FS) --> Infra --> Core
 2. **Policy Load**: Infra reads `config/policy.json`; validates against Policy/SSoT schema; passes immutable config to Core.
 3. **Matrix Build**: Core constructs eligibility matrix (filters per Policy §§3–9) using stable ordering; records intermediate counts.
 4. **History Snapshot & Dedupe**: Infra loads HistoryStore snapshot; Core runs `dedupe_by_national_id` to split `allocated_before` و `new_candidates`, ثبت `dedupe_reason` در trace، و آماده‌سازی ورودی کانال‌ها.
-5. **Channel Derivation & Allocation**: Core با `AllocationChannelConfig` مقدار `allocation_channel` را به ازای هر دانش‌آموز تعیین می‌کند و سپس همان رتبه‌بندی ثابت (`occupancy_ratio` → `allocations_new` → `mentor_id`) را اجرا می‌کند؛ trace/summary کانال‌محور تولید می‌شود.
+5. **Channel Derivation & Allocation**: Core با `AllocationChannelConfig` مقدار `allocation_channel` را به ازای هر دانش‌آموز تعیین می‌کند و سپس رتبه‌بندی LAW/TECH (`remaining_capacity` نزولی سپس `mentor_id` natural/stable) را اجرا می‌کند؛ هر اشاره به `occupancy_ratio` در نسخه‌های قبلی LEGACY است و باید با RANK-CORE جدید جایگزین شود؛ trace/summary کانال‌محور تولید می‌شود.
 6. **QA/Validation**: Core runs invariant checks; Infra logs results; Agents/CI apply QA checklist.
 7. **Export & History Update**: Infra writes Excel artifacts via `write_xlsx_atomic`; converts to ImportToSabt; sanitizes sheet names; version stamps outputs؛ رکوردهای موفق جدید به HistoryStore به‌شکل اتمیک/مقاوم اضافه می‌شود (هم‌راستا با FR-EXPORT-01). اگر درج HistoryStore پس از موفقیت ImportToSabt/Excel شکست بخورد، Infra اجرای تخصیص را failed علامت می‌زند، خروجی را به UI/Core برنمی‌گرداند، حداقل سه تلاش مجدد با backoff انجام می‌دهد و تا بازیابی کامل، تحویل artifact به اپراتور را مسدود می‌کند تا HistoryStore و خروجی منطبق باقی بمانند.
 8. **UI Orchestration**: PySide6 shell triggers pipeline, shows progress via injected callback, surfaces traces/logs; optional CLI mirrors flow.

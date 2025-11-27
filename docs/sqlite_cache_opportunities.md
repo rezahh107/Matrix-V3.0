@@ -1,5 +1,6 @@
 # SQLite Cache/Persistence Opportunities — Smart Student Allocation
 
+> **منبع حقیقت قوانین تخصیص (LAW v3.0 / Technical SSoT v3.0):** این سند راهنما/تاریخچه است؛ تمام قواعد ثابت (کلیدهای join، رتبه‌بندی، انواع منتور/دانش‌آموز، گیت ظرفیت، trace و ...) فقط در `docs/LAW_Smart_Student_Allocation_v3.0.md` و `docs/Technical_SSoT_Smart_Student_Allocation_v3.0-TECH.md` معتبرند. در صورت هر تعارض، محتوای این دو فایل حاکم است و نکات قدیمی این سند به‌عنوان LEGACY خوانده شوند.
 ## Scope and Assumptions
 - سیاست و SSoT بدون تغییر باقی می‌مانند (Policy v1.0.3 / SSoT v1.0.2). Core همچنان فاقد آگاهی از SQLite است و فقط DataFrame/نوع‌های خالص می‌گیرد.
 - الگوی لایه‌بندی (UI → Infra → Core) حفظ می‌شود؛ تعریف schema و اتصال SQLite فقط در Infra انجام می‌شود.
