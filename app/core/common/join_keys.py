@@ -23,6 +23,7 @@ __all__ = [
     "matches_center_with_wildcard",
     "matches_school_with_wildcard",
     "normalize_join_key_name",
+    "finance_variants_from_cell",
     "resolve_finance_variants",
     "validate_policy_join_keys",
     "validate_selected_mentor_join_keys",
@@ -116,24 +117,36 @@ def matches_school_with_wildcard(
     return mentor_school == student_school
 
 
-def _extract_finance_variants(value: object, policy: PolicyConfig) -> frozenset[int]:
+def finance_variants_from_cell(value: object, policy: PolicyConfig) -> frozenset[int]:
     """استخراج مجموعهٔ کدهای مالی منتور برای مقایسهٔ چندمقداری."""
 
     if isinstance(value, Mapping):
-        return frozenset(coerce_join_int(item) for item in value.values())
+        variants: set[int] = set()
+        for item in value.values():
+            try:
+                variants.update(resolve_finance_variants(coerce_join_int(item), policy))
+            except (ValueError, TypeError):
+                continue
+        return frozenset(variants)
     if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
         collected: set[int] = set()
         for item in value:
             try:
                 collected.update(resolve_finance_variants(coerce_join_int(item), policy))
-            except Exception:
+            except (ValueError, TypeError):
                 continue
         return frozenset(collected)
     try:
         coerced = coerce_join_int(value)
-    except Exception:
+    except (ValueError, TypeError):
         return frozenset()
     return resolve_finance_variants(coerced, policy)
+
+
+def _extract_finance_variants(value: object, policy: PolicyConfig) -> frozenset[int]:
+    """Compatibility wrapper for legacy callers."""
+
+    return finance_variants_from_cell(value, policy)
 
 
 def resolve_finance_variants(student_finance: int, policy: PolicyConfig) -> frozenset[int]:
@@ -241,13 +254,9 @@ def validate_policy_join_keys(
         student_int = int(student_value)
         if column == policy.stage_column("finance"):
             allowed_student_variants = resolve_finance_variants(student_int, policy)
-            mentor_variants = _extract_finance_variants(mentor_raw, policy)
+            mentor_variants = finance_variants_from_cell(mentor_raw, policy)
             if mentor_variants and allowed_student_variants.intersection(mentor_variants):
                 continue
-            if mentor_value is not None:
-                mentor_value_variants = resolve_finance_variants(mentor_value, policy)
-                if allowed_student_variants.intersection(mentor_value_variants):
-                    continue
             if mentor_value is None:
                 mismatches.append(
                     {

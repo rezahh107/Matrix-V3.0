@@ -27,6 +27,7 @@ from .common.join_keys import (
     canonicalize_join_key_value,
     center_wildcard_value,
     coerce_join_int,
+    finance_variants_from_cell,
     normalize_join_key_name as _normalize_join_key_name,
     resolve_finance_variants,
     validate_selected_mentor_join_keys,
@@ -588,32 +589,6 @@ def _canonicalize_gender_series(series: pd.Series, policy: PolicyConfig) -> pd.S
     return pd.Series(normalized, index=series.index, dtype="Int64")
 
 
-def _finance_variants_from_cell(value: object, policy: PolicyConfig) -> frozenset[int]:
-    """استخراج variantهای مالی از یک سلول استخر."""
-
-    if isinstance(value, Mapping):
-        variants: set[int] = set()
-        for item in value.values():
-            try:
-                variants.update(resolve_finance_variants(coerce_join_int(item), policy))
-            except Exception:
-                continue
-        return frozenset(variants)
-    if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
-        sequence_variants: set[int] = set()
-        for item in value:
-            try:
-                sequence_variants.update(resolve_finance_variants(coerce_join_int(item), policy))
-            except Exception:
-                continue
-        return frozenset(sequence_variants)
-    try:
-        coerced = coerce_join_int(value)
-    except Exception:
-        return frozenset()
-    return resolve_finance_variants(coerced, policy)
-
-
 def _filter_candidates_by_join_map(
     candidates: pd.DataFrame,
     *,
@@ -701,7 +676,7 @@ def _filter_candidates_by_join_map(
         elif column == policy.stage_column("finance"):
             allowed_finance = resolve_finance_variants(int(student_value), policy)
             mentor_variants = mentor_series_raw.map(
-                lambda cell: _finance_variants_from_cell(cell, policy)
+                lambda cell: finance_variants_from_cell(cell, policy)
             )
             col_mask = mentor_variants.map(
                 lambda variants: bool(allowed_finance.intersection(variants)) if variants else False
