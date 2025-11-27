@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+import pandas as pd
 import pytest
 
 from app.core.common.join_keys import (
@@ -72,6 +73,45 @@ def test_validate_policy_join_keys_finance_variants() -> None:
     assert mismatches_variant == []
     assert not valid_outside
     assert any(item.get("column") == finance_column for item in mismatches_outside)
+
+
+def test_validate_policy_join_keys_allows_global_center() -> None:
+    policy = load_policy()
+    join_map = {normalize_join_key_name(column): 1 for column in policy.join_keys}
+    join_map[normalize_join_key_name(policy.stage_column("center"))] = 5
+    mentor_row = {column: join_map[normalize_join_key_name(column)] for column in policy.join_keys}
+    mentor_row[policy.stage_column("center")] = 0
+
+    valid, mismatches = validate_policy_join_keys(mentor_row, join_map, policy)
+
+    assert valid
+    assert mismatches == []
+
+
+def test_validate_policy_join_keys_flags_missing_center() -> None:
+    policy = load_policy()
+    join_map = {normalize_join_key_name(column): 1 for column in policy.join_keys}
+    join_map[normalize_join_key_name(policy.stage_column("center"))] = 2
+    mentor_row = {column: join_map[normalize_join_key_name(column)] for column in policy.join_keys}
+    mentor_row[policy.stage_column("center")] = pd.NA
+
+    valid, mismatches = validate_policy_join_keys(mentor_row, join_map, policy)
+
+    assert not valid
+    assert any(match["column"] == policy.stage_column("center") for match in mismatches)
+
+
+def test_validate_policy_join_keys_detects_mismatching_center() -> None:
+    policy = load_policy()
+    join_map = {normalize_join_key_name(column): 1 for column in policy.join_keys}
+    join_map[normalize_join_key_name(policy.stage_column("center"))] = 3
+    mentor_row = {column: join_map[normalize_join_key_name(column)] for column in policy.join_keys}
+    mentor_row[policy.stage_column("center")] = 7
+
+    valid, mismatches = validate_policy_join_keys(mentor_row, join_map, policy)
+
+    assert not valid
+    assert any(match["column"] == policy.stage_column("center") for match in mismatches)
 
 
 def test_resolve_finance_variants_expands_policy_values() -> None:

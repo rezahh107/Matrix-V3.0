@@ -42,6 +42,34 @@ def test_filter_candidates_respects_finance_variants() -> None:
     )
 
 
+def test_filter_candidates_respects_center_wildcard_zero_and_rejects_missing() -> None:
+    policy = load_policy()
+    join_map = {
+        normalize_join_key_name(policy.stage_column("group")): 1,
+        normalize_join_key_name(policy.stage_column("gender")): 1,
+        normalize_join_key_name(policy.stage_column("graduation_status")): 0,
+        normalize_join_key_name(policy.stage_column("center")): 5,
+        normalize_join_key_name(policy.stage_column("finance")): 0,
+        normalize_join_key_name(policy.columns.school_code): 0,
+    }
+    pool = pd.DataFrame(
+        {
+            "mentor_id": ["m1", "m2", "m3", "m4"],
+            policy.stage_column("finance"): [0, 0, 0, 0],
+            policy.columns.school_code: [0, 0, 0, 0],
+            policy.stage_column("center"): [0, 5, pd.NA, 7],
+            policy.stage_column("gender"): [1, 1, 1, 1],
+            policy.stage_column("graduation_status"): [0, 0, 0, 0],
+            policy.stage_column("group"): [1, 1, 1, 1],
+        }
+    )
+
+    filtered, mismatches = _filter_candidates_by_join_map(pool, join_map=join_map, policy=policy)
+
+    assert filtered[policy.stage_column("center")].tolist() == [0, 5]
+    assert any(match.get("column") == policy.stage_column("center") for match in mismatches)
+
+
 def test_join_key_mismatches_preserved_on_success_allocation() -> None:
     policy = load_policy()
     student = {

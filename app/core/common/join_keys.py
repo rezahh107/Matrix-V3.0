@@ -103,7 +103,7 @@ def matches_center_with_wildcard(
 
     if wildcard_center is not None and student_center == wildcard_center:
         return True
-    return mentor_center == student_center
+    return mentor_center == 0 or mentor_center == student_center
 
 
 def matches_school_with_wildcard(
@@ -230,9 +230,17 @@ def validate_policy_join_keys(
             )
             continue
         student_int = int(student_value)
-        if column == policy.stage_column("center") and matches_center_with_wildcard(
-            student_int, mentor_value, wildcard_center
-        ):
+        if column == policy.stage_column("center"):
+            if matches_center_with_wildcard(student_int, mentor_value, wildcard_center):
+                continue
+            mismatches.append(
+                {
+                    "column": column,
+                    "student_value": student_int,
+                    "mentor_value": mentor_value,
+                    "mismatch_type": "unequal",
+                }
+            )
             continue
         if (
             column == policy.stage_column("finance")
