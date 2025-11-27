@@ -7,7 +7,7 @@ import warnings
 from collections.abc import Callable, Hashable, Mapping, Sequence
 from dataclasses import dataclass
 from numbers import Number, Real
-from typing import Any, Literal, SupportsFloat, SupportsInt, TypeVar, TypedDict, cast
+from typing import Any, Literal, SupportsFloat, SupportsInt, TypedDict, TypeVar, cast
 
 import pandas as pd
 from pandas.api import types as pd_types
