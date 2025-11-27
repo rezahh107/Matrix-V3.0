@@ -1186,6 +1186,44 @@ def test_allocate_batch_invalid_join_value_sets_error(_base_pool: pd.DataFrame) 
     assert "کدرشته" in str(record["detailed_reason"])
 
 
+def test_allocate_batch_handles_farsi_gender_tokens_for_male(_base_pool: pd.DataFrame) -> None:
+    policy = load_policy()
+    students = _single_student(**{"جنسیت": "پسر"})
+
+    allocations, _, logs, _ = allocate_batch(students, _base_pool, policy=policy)
+
+    assert not allocations.empty
+    assert logs.iloc[0]["error_type"] is None
+
+
+def test_allocate_batch_handles_farsi_gender_tokens_for_female(
+    _base_pool: pd.DataFrame,
+) -> None:
+    policy = load_policy()
+    pool = _base_pool.copy()
+    pool.loc[0, "جنسیت"] = 0
+    pool.loc[0, "جنسیت | gender"] = 0
+    students = _single_student(**{"جنسیت": "دختر"})
+
+    allocations, _, logs, _ = allocate_batch(students, pool, policy=policy)
+
+    assert not allocations.empty
+    assert logs.iloc[0]["mentor_id"] == pool.iloc[0]["کد کارمندی پشتیبان"]
+    assert logs.iloc[0]["error_type"] is None
+
+
+def test_allocate_batch_flags_non_int_join_key_values(_base_pool: pd.DataFrame) -> None:
+    policy = load_policy()
+    students = _single_student(**{"جنسیت": "نامعتبر"})
+
+    allocations, _, logs, _ = allocate_batch(students, _base_pool, policy=policy)
+
+    assert allocations.empty
+    record = logs.iloc[0]
+    assert record["error_type"] == "DATA_MISSING"
+    assert "جنسیت" in str(record["detailed_reason"])
+
+
 def test_policy_required_fields_enforced_from_config(
     _base_pool: pd.DataFrame,
 ) -> None:
