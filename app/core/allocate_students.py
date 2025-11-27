@@ -549,7 +549,8 @@ def _center_mask_series(
 
     if wildcard_center is not None and student_center == wildcard_center:
         return pd.Series(True, index=mentor_series.index)
-    return mentor_series == student_center
+    mentor_mask = mentor_series.eq(0) | mentor_series.eq(student_center)
+    return mentor_mask
 
 
 def _school_mask_series(
