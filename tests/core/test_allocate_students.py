@@ -7,6 +7,7 @@ import pandas as pd
 from app.core.allocate_students import (
     _detect_pool_mismatch,
     _filter_candidates_by_join_map,
+    _merge_join_mismatches,
     allocate_student,
 )
 from app.core.common.filters import apply_join_filters
@@ -173,23 +174,204 @@ def test_join_key_mismatches_preserved_on_success_allocation() -> None:
     }
     pool = pd.DataFrame(
         {
-            "mentor_id": ["m1", "m2"],
+            "mentor_id": ["m_match", "m_other"],
             policy.stage_column("group"): [1, 1],
             policy.stage_column("gender"): [1, 1],
             policy.stage_column("graduation_status"): [0, 0],
-            policy.stage_column("center"): [1, 1],
-            policy.stage_column("finance"): [1, 2],
+            policy.stage_column("center"): [1, 2],
+            policy.stage_column("finance"): [0, 0],
             policy.columns.school_code: [0, 0],
             "remaining_capacity": [1, 1],
             "allocations_new": [0, 0],
-            "occupancy_ratio": [0.0, 0.5],
+            "occupancy_ratio": [0.0, 0.0],
         }
     )
 
     result = allocate_student(student, pool, policy=policy)
 
     assert result.log.get("allocation_status") == "success"
-    assert result.log.get("join_key_mismatches")
+    assert result.log.get("mentor_id") == "m_match"
+    assert result.log.get("join_key_mismatches") == [
+        {
+            "column": policy.stage_column("center"),
+            "student_value": 1,
+            "mentor_values": [2],
+            "reason": "mentor_value_mismatch",
+        }
+    ]
+
+
+def test_join_key_mismatches_include_prefilter_details() -> None:
+    policy = load_policy()
+
+    primary = [
+        {
+            "column": policy.stage_column("finance"),
+            "student_value": 0,
+            "mentor_values": [2],
+            "reason": "mentor_value_mismatch",
+        }
+    ]
+    secondary = [
+        {
+            "column": policy.stage_column("group"),
+            "student_value": 1,
+            "mentor_values": [0],
+            "reason": "mentor_value_mismatch",
+        }
+    ]
+
+    merged = _merge_join_mismatches(primary, secondary)
+
+    assert len(merged) == 2
+    assert merged == [
+        {
+            "column": policy.stage_column("finance"),
+            "mentor_values": [2],
+            "reason": "mentor_value_mismatch",
+            "student_value": 0,
+        },
+        {
+            "column": policy.stage_column("group"),
+            "mentor_values": [0],
+            "reason": "mentor_value_mismatch",
+            "student_value": 1,
+        },
+    ]
+
+
+def test_merge_join_mismatches_deduplicates_and_sorts() -> None:
+    policy = load_policy()
+    primary = [
+        {
+            "column": policy.stage_column("center"),
+            "student_value": 1,
+            "mentor_values": [2, 2],
+            "reason": "mentor_value_mismatch",
+        }
+    ]
+    secondary = [
+        {
+            "column": policy.stage_column("center"),
+            "student_value": 1,
+            "mentor_values": [2],
+            "reason": "mentor_value_mismatch",
+        },
+        {
+            "column": policy.stage_column("finance"),
+            "student_value": 0,
+            "mentor_values": [3, 2],
+            "reason": "mentor_value_mismatch",
+        },
+    ]
+
+    merged = _merge_join_mismatches(primary, secondary)
+
+    assert merged == [
+        {
+            "column": policy.stage_column("finance"),
+            "mentor_values": [2, 3],
+            "reason": "mentor_value_mismatch",
+            "student_value": 0,
+        },
+        {
+            "column": policy.stage_column("center"),
+            "mentor_values": [2],
+            "reason": "mentor_value_mismatch",
+            "student_value": 1,
+        },
+    ]
+
+
+def test_join_key_mismatches_merge_combines_prefilter_and_eligibility_details() -> None:
+    policy = load_policy()
+    student = {
+        "student_id": "s-merge",
+        policy.stage_column("group"): 1,
+        policy.stage_column("gender"): 1,
+        policy.stage_column("graduation_status"): 0,
+        policy.stage_column("center"): 1,
+        policy.stage_column("finance"): 0,
+        policy.columns.school_code: 0,
+    }
+    candidate_pool = pd.DataFrame(
+        {
+            "mentor_id": ["m_center_mismatch", "m_finance_mismatch", "m_match"],
+            policy.stage_column("group"): [1, 1, 1],
+            policy.stage_column("gender"): [1, 1, 1],
+            policy.stage_column("graduation_status"): [0, 0, 0],
+            policy.stage_column("center"): [2, 1, 1],
+            policy.stage_column("finance"): [0, 2, 0],
+            policy.columns.school_code: [0, 0, 0],
+            "remaining_capacity": [1, 1, 1],
+            "allocations_new": [0, 0, 0],
+            "occupancy_ratio": [0.0, 0.0, 0.0],
+        }
+    )
+
+    result = allocate_student(student, candidate_pool, policy=policy)
+
+    assert result.log.get("allocation_status") == "success"
+    assert result.log.get("mentor_id") == "m_match"
+    assert result.log.get("join_key_mismatches") == [
+        {
+            "column": policy.stage_column("finance"),
+            "student_value": 0,
+            "mentor_values": [1],
+            "reason": "mentor_value_mismatch",
+        },
+        {
+            "column": policy.stage_column("center"),
+            "student_value": 1,
+            "mentor_values": [2],
+            "reason": "mentor_value_mismatch",
+        },
+    ]
+
+
+def test_join_key_mismatches_recorded_when_unallocated() -> None:
+    policy = load_policy()
+    student = {
+        "student_id": "s-unalloc",
+        policy.stage_column("group"): 1,
+        policy.stage_column("gender"): 1,
+        policy.stage_column("graduation_status"): 0,
+        policy.stage_column("center"): 1,
+        policy.stage_column("finance"): 0,
+        policy.columns.school_code: 0,
+    }
+    candidate_pool = pd.DataFrame(
+        {
+            "mentor_id": ["m_finance", "m_center"],
+            policy.stage_column("group"): [1, 1],
+            policy.stage_column("gender"): [1, 1],
+            policy.stage_column("graduation_status"): [0, 0],
+            policy.stage_column("center"): [2, 3],
+            policy.stage_column("finance"): [3, 4],
+            policy.columns.school_code: [0, 0],
+            "remaining_capacity": [1, 1],
+            "allocations_new": [0, 0],
+            "occupancy_ratio": [0.0, 0.0],
+        }
+    )
+
+    result = allocate_student(student, candidate_pool, policy=policy)
+
+    assert result.log.get("allocation_status") == "failed"
+    assert result.log.get("join_key_mismatches") == [
+        {
+            "column": policy.stage_column("finance"),
+            "student_value": 0,
+            "mentor_values": [3],
+            "reason": "mentor_value_mismatch",
+        },
+        {
+            "column": policy.stage_column("center"),
+            "student_value": 1,
+            "mentor_values": [2, 3],
+            "reason": "mentor_value_mismatch",
+        },
+    ]
 
 
 def test_apply_join_filters_finance_variants_with_join_map() -> None:

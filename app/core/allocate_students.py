@@ -7,7 +7,7 @@ import warnings
 from collections.abc import Callable, Hashable, Mapping, Sequence
 from dataclasses import dataclass
 from numbers import Number, Real
-from typing import Any, Literal, SupportsFloat, SupportsInt, TypeVar, cast
+from typing import Any, Literal, SupportsFloat, SupportsInt, TypedDict, TypeVar, cast
 
 import pandas as pd
 from pandas.api import types as pd_types
@@ -73,6 +73,14 @@ from .policy_loader import PolicyConfig, load_policy
 from .reason.selection_reason import build_selection_reason_rows as _build_selection_reason_rows
 
 ProgressFn = Callable[[int, str], None]
+
+
+class JoinMismatch(TypedDict):
+    column: str
+    student_value: object
+    mentor_values: list[object]
+    reason: str
+
 
 __all__ = [
     "ProgressFn",
@@ -588,12 +596,87 @@ def _canonicalize_gender_series(series: pd.Series, policy: PolicyConfig) -> pd.S
     return pd.Series(normalized, index=series.index, dtype="Int64")
 
 
+def _normalize_mismatch_scalar(value: object) -> object:
+    if value is None:
+        return None
+    if value is pd.NA:
+        return None
+    if isinstance(value, float) and math.isnan(value):
+        return None
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, SupportsInt):
+        return int(value)
+    if isinstance(value, Real):
+        return int(float(cast(SupportsFloat, value)))
+    return value
+
+
+def _sort_key_for_mismatch_value(value: object) -> tuple[int, str]:
+    if value is None:
+        return (0, "")
+    return (1, str(value))
+
+
+def _normalize_mismatch_entry(entry: Mapping[str, object]) -> JoinMismatch:
+    column = str(entry.get("column", ""))
+    reason = str(entry.get("reason", ""))
+    student_value = _normalize_mismatch_scalar(entry.get("student_value"))
+
+    raw_mentor_values = entry.get("mentor_values")
+    mentor_values: list[object]
+    if isinstance(raw_mentor_values, Sequence) and not isinstance(raw_mentor_values, (str, bytes)):
+        mentor_values = [_normalize_mismatch_scalar(value) for value in raw_mentor_values]
+    elif raw_mentor_values is None:
+        mentor_values = []
+    else:
+        mentor_values = [_normalize_mismatch_scalar(raw_mentor_values)]
+    mentor_values_sorted = sorted(
+        dict.fromkeys(mentor_values), key=_sort_key_for_mismatch_value  # preserves order + dedup
+    )
+
+    return {
+        "column": column,
+        "reason": reason,
+        "student_value": student_value,
+        "mentor_values": mentor_values_sorted,
+    }
+
+
+def _merge_join_mismatches(
+    primary: Sequence[Mapping[str, object]],
+    secondary: Sequence[Mapping[str, object]],
+) -> list[JoinMismatch]:
+    """ترکیب مغایرت‌های join با حذف موارد تکراری و ترتیب پایدار."""
+
+    normalized_entries = [_normalize_mismatch_entry(entry) for entry in (*primary, *secondary)]
+    dedup: dict[tuple[str, str, object, tuple[object, ...]], JoinMismatch] = {}
+    for entry in normalized_entries:
+        key = (
+            entry["column"],
+            entry["reason"],
+            entry["student_value"],
+            tuple(entry["mentor_values"]),
+        )
+        if key not in dedup:
+            dedup[key] = entry
+
+    def _sort_key(
+        entry: JoinMismatch,
+    ) -> tuple[str, str, tuple[int, str], tuple[tuple[int, str], ...]]:
+        student_sort = _sort_key_for_mismatch_value(entry["student_value"])
+        mentor_sort = tuple(_sort_key_for_mismatch_value(value) for value in entry["mentor_values"])
+        return (entry["column"], entry["reason"], student_sort, mentor_sort)
+
+    return sorted(dedup.values(), key=_sort_key)
+
+
 def _filter_candidates_by_join_map(
     candidates: pd.DataFrame,
     *,
     join_map: Mapping[str, int],
     policy: PolicyConfig,
-) -> tuple[pd.DataFrame, list[dict[str, object]]]:
+) -> tuple[pd.DataFrame, list[JoinMismatch]]:
     """اعمال فیلتر تطابق کامل ۶ کلید join روی استخر کاندید.
 
     این نگهبان پس از عبور از فیلترهای مرحله‌ای اجرا می‌شود تا اطمینان دهد هر
@@ -625,7 +708,7 @@ def _filter_candidates_by_join_map(
         return candidates, []
 
     mask = pd.Series(True, index=candidates.index)
-    mismatches: list[dict[str, object]] = []
+    mismatches: list[JoinMismatch] = []
     center_wildcard = center_wildcard_value(policy)
 
     for column in policy.join_keys:
@@ -1464,8 +1547,7 @@ def allocate_student(
     _, prefilter_mismatches = _filter_candidates_by_join_map(
         candidate_pool, join_map=join_map, policy=policy
     )
-    if not join_mismatch_details and prefilter_mismatches:
-        join_mismatch_details = prefilter_mismatches
+    join_mismatch_details = _merge_join_mismatches(join_mismatch_details, prefilter_mismatches)
     stage_candidate_counts = _canonical_stage_counts(stage_candidate_counts)
     trace = build_allocation_trace(
         student_row,
@@ -1554,6 +1636,8 @@ def allocate_student(
     if center_alert_payload is not None and not center_alert_payload.get("student_id"):
         center_alert_payload["student_id"] = log.get("student_id")
     _append_invalid_center_alert(log, center_alert_payload, center_fallback)
+    if join_mismatch_details:
+        log["join_key_mismatches"] = list(join_mismatch_details)
 
     if eligible.empty:
         if not join_mismatch_details:
