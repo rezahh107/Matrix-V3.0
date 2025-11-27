@@ -36,19 +36,46 @@ def validate_allocation_join_keys_with_wildcard(
     match_column = f"match_{school_col}"
     if match_column not in audit.columns:
         return base_result
+    constraint_column = "has_school_constraint"
+    constraint_lookup: pd.DataFrame | None = None
+    if constraint_column in pool_df.columns:
+        constraint_lookup = pool_df[[constraint_column]].copy()
+        if "mentor_id" in pool_df.columns:
+            constraint_lookup["mentor_id"] = pool_df["mentor_id"].astype("string").str.strip()
+        if "mentor_alias_code" in pool_df.columns:
+            constraint_lookup["mentor_alias_code"] = (
+                pool_df["mentor_alias_code"].astype("string").str.strip()
+            )
     student_school = audit.get(school_col)
     mentor_school = audit.get(f"{school_col}_mentor")
     if student_school is None or mentor_school is None:
         return base_result
+    if constraint_lookup is not None:
+        merge_keys = [
+            col
+            for col in ("mentor_id", "mentor_alias_code")
+            if col in audit.columns and col in constraint_lookup.columns
+        ]
+        if merge_keys:
+            audit = audit.merge(constraint_lookup, on=merge_keys, how="left")
     fixed_flags: list[bool] = []
-    for s_val, m_val, flag in zip(student_school, mentor_school, audit[match_column]):
+    constraints = audit.get(constraint_column)
+    for s_val, m_val, flag, constraint in zip(
+        student_school,
+        mentor_school,
+        audit[match_column],
+        constraints if constraints is not None else [False] * len(audit),
+    ):
         try:
             s_int = int(s_val)
             m_int = int(m_val)
         except Exception:
             fixed_flags.append(bool(flag))
             continue
-        if matches_school_with_wildcard(s_int, m_int, policy.school_code_empty_as_zero):
+        has_constraint = bool(constraint) if constraints is not None else True
+        if (not has_constraint) or matches_school_with_wildcard(
+            s_int, m_int, policy.school_code_empty_as_zero
+        ):
             fixed_flags.append(True)
         else:
             fixed_flags.append(bool(flag))

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pandas as pd
 
 from app.core.allocate_students import (
@@ -42,6 +44,65 @@ def test_filter_candidates_respects_finance_variants() -> None:
     )
 
 
+def test_filter_candidates_handles_finance_iterables() -> None:
+    policy = load_policy()
+    join_map = {
+        normalize_join_key_name(policy.stage_column("group")): 1,
+        normalize_join_key_name(policy.stage_column("gender")): 1,
+        normalize_join_key_name(policy.stage_column("graduation_status")): 0,
+        normalize_join_key_name(policy.stage_column("center")): 1,
+        normalize_join_key_name(policy.stage_column("finance")): 0,
+        normalize_join_key_name(policy.columns.school_code): 0,
+    }
+    pool = pd.DataFrame(
+        {
+            "mentor_id": ["m1", "m2"],
+            policy.stage_column("finance"): [(0, 1, 3), [0, 2]],
+            policy.columns.school_code: [0, 0],
+            policy.stage_column("center"): [1, 1],
+            policy.stage_column("gender"): [1, 1],
+            policy.stage_column("graduation_status"): [0, 0],
+            policy.stage_column("group"): [1, 1],
+        }
+    )
+
+    filtered, mismatches = _filter_candidates_by_join_map(pool, join_map=join_map, policy=policy)
+
+    assert len(filtered) == 2
+    assert not mismatches
+
+
+def test_filter_candidates_allows_global_school_without_wildcard() -> None:
+    policy = replace(load_policy(), school_code_empty_as_zero=False)
+    join_map = {
+        normalize_join_key_name(policy.stage_column("group")): 1,
+        normalize_join_key_name(policy.stage_column("gender")): int(policy.gender_codes.male.value),
+        normalize_join_key_name(policy.stage_column("graduation_status")): 0,
+        normalize_join_key_name(policy.stage_column("center")): 1,
+        normalize_join_key_name(policy.stage_column("finance")): 0,
+        normalize_join_key_name(policy.columns.school_code): 555,
+    }
+    pool = pd.DataFrame(
+        {
+            "mentor_id": ["g1", "r1"],
+            policy.stage_column("finance"): [0, 0],
+            policy.columns.school_code: [0, 999],
+            "has_school_constraint": [False, True],
+            policy.stage_column("center"): [1, 1],
+            policy.stage_column("gender"): [
+                int(policy.gender_codes.male.value),
+                int(policy.gender_codes.male.value),
+            ],
+            policy.stage_column("graduation_status"): [0, 0],
+            policy.stage_column("group"): [1, 1],
+        }
+    )
+
+    filtered, _ = _filter_candidates_by_join_map(pool, join_map=join_map, policy=policy)
+
+    assert filtered["mentor_id"].tolist() == ["g1"]
+
+
 def test_filter_candidates_respects_center_wildcard_zero_and_rejects_missing() -> None:
     policy = load_policy()
     join_map = {
@@ -68,6 +129,35 @@ def test_filter_candidates_respects_center_wildcard_zero_and_rejects_missing() -
 
     assert filtered[policy.stage_column("center")].tolist() == [0, 5]
     assert any(match.get("column") == policy.stage_column("center") for match in mismatches)
+
+
+def test_filter_candidates_accepts_farsi_gender_tokens() -> None:
+    policy = load_policy()
+    join_map = {
+        normalize_join_key_name(policy.stage_column("group")): 1,
+        normalize_join_key_name(policy.stage_column("gender")): int(
+            policy.gender_codes.female.value
+        ),
+        normalize_join_key_name(policy.stage_column("graduation_status")): 0,
+        normalize_join_key_name(policy.stage_column("center")): 1,
+        normalize_join_key_name(policy.stage_column("finance")): 0,
+        normalize_join_key_name(policy.columns.school_code): 0,
+    }
+    pool = pd.DataFrame(
+        {
+            "mentor_id": ["m1", "m2"],
+            policy.stage_column("finance"): [0, 0],
+            policy.columns.school_code: [0, 0],
+            policy.stage_column("center"): [1, 1],
+            policy.stage_column("gender"): ["دختر", "پسر"],
+            policy.stage_column("graduation_status"): [0, 0],
+            policy.stage_column("group"): [1, 1],
+        }
+    )
+
+    filtered, _ = _filter_candidates_by_join_map(pool, join_map=join_map, policy=policy)
+
+    assert filtered["mentor_id"].tolist() == ["m1"]
 
 
 def test_join_key_mismatches_preserved_on_success_allocation() -> None:

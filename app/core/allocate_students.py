@@ -26,6 +26,7 @@ from .common.join_keys import (
     JoinKeyCanonicalizationError,
     canonicalize_join_key_value,
     center_wildcard_value,
+    coerce_join_int,
     normalize_join_key_name as _normalize_join_key_name,
     resolve_finance_variants,
     validate_selected_mentor_join_keys,
@@ -554,15 +555,63 @@ def _center_mask_series(
 
 
 def _school_mask_series(
-    mentor_series: pd.Series, student_school: int, empty_as_zero: bool
+    mentor_series: pd.Series,
+    student_school: int,
+    empty_as_zero: bool,
+    constraint_series: pd.Series | None = None,
 ) -> pd.Series:
-    """ماسک برداری برای تطبیق مدرسه با درنظرگرفتن صفر به‌عنوان wildcard."""
+    """ماسک برداری برای تطبیق مدرسه با رعایت منتورهای global."""
 
-    if empty_as_zero and student_school == 0:
-        return pd.Series(True, index=mentor_series.index)
+    base_mask = mentor_series == student_school
     if empty_as_zero:
-        return (mentor_series == student_school) | (mentor_series == 0)
-    return mentor_series == student_school
+        if student_school == 0:
+            base_mask = pd.Series(True, index=mentor_series.index)
+        else:
+            base_mask = (mentor_series == student_school) | (mentor_series == 0)
+    if constraint_series is None:
+        return base_mask
+    restricted = ensure_series(constraint_series).fillna(False).astype(bool)
+    unrestricted_mask = ~restricted
+    return unrestricted_mask | base_mask
+
+
+def _canonicalize_gender_series(series: pd.Series, policy: PolicyConfig) -> pd.Series:
+    """نرمال‌سازی سری جنسیت منتورها به کد عددی Policy."""
+
+    def _normalize(value: object) -> int | None:
+        try:
+            return canonicalize_join_key_value(policy.stage_column("gender"), value, policy=policy)
+        except JoinKeyCanonicalizationError:
+            return None
+
+    normalized = series.map(_normalize)
+    return pd.Series(normalized, index=series.index, dtype="Int64")
+
+
+def _finance_variants_from_cell(value: object, policy: PolicyConfig) -> frozenset[int]:
+    """استخراج variantهای مالی از یک سلول استخر."""
+
+    if isinstance(value, Mapping):
+        variants: set[int] = set()
+        for item in value.values():
+            try:
+                variants.update(resolve_finance_variants(coerce_join_int(item), policy))
+            except Exception:
+                continue
+        return frozenset(variants)
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+        sequence_variants: set[int] = set()
+        for item in value:
+            try:
+                sequence_variants.update(resolve_finance_variants(coerce_join_int(item), policy))
+            except Exception:
+                continue
+        return frozenset(sequence_variants)
+    try:
+        coerced = coerce_join_int(value)
+    except Exception:
+        return frozenset()
+    return resolve_finance_variants(coerced, policy)
 
 
 def _filter_candidates_by_join_map(
@@ -632,19 +681,36 @@ def _filter_candidates_by_join_map(
             )
             continue
 
-        mentor_series = pd.to_numeric(ensure_series(candidates[column]), errors="coerce").astype(
-            "Int64"
-        )
+        mentor_series_raw = ensure_series(candidates[column])
         if column == policy.stage_column("center"):
+            mentor_series = pd.to_numeric(mentor_series_raw, errors="coerce").astype("Int64")
             col_mask = _center_mask_series(mentor_series, int(student_value), center_wildcard)
         elif column == policy.columns.school_code:
+            school_constraint = (
+                ensure_series(candidates.get("has_school_constraint"))
+                if "has_school_constraint" in candidates.columns
+                else None
+            )
+            mentor_series = pd.to_numeric(mentor_series_raw, errors="coerce").astype("Int64")
             col_mask = _school_mask_series(
-                mentor_series, int(student_value), policy.school_code_empty_as_zero
+                mentor_series,
+                int(student_value),
+                policy.school_code_empty_as_zero,
+                school_constraint,
             )
         elif column == policy.stage_column("finance"):
             allowed_finance = resolve_finance_variants(int(student_value), policy)
-            col_mask = mentor_series.isin(allowed_finance)
+            mentor_variants = mentor_series_raw.map(
+                lambda cell: _finance_variants_from_cell(cell, policy)
+            )
+            col_mask = mentor_variants.map(
+                lambda variants: bool(allowed_finance.intersection(variants)) if variants else False
+            )
         else:
+            if column == policy.stage_column("gender"):
+                mentor_series = _canonicalize_gender_series(mentor_series_raw, policy)
+            else:
+                mentor_series = pd.to_numeric(mentor_series_raw, errors="coerce").astype("Int64")
             col_mask = mentor_series == int(student_value)
         mask &= col_mask.fillna(False)
         if not bool(col_mask.all()):
@@ -1398,6 +1464,9 @@ def allocate_student(
             }
         )
         return AllocationResult(None, trace, log)
+
+    if pool_state_view is not None:
+        pool_state_view = pool_state_view.reindex(candidate_pool.index)
 
     progress(5, "prefilter")
     stage_candidate_counts: dict[TraceStageName, int] = {
