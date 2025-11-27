@@ -602,6 +602,7 @@ def _filter_candidates_by_join_map(
     mask = pd.Series(True, index=candidates.index)
     mismatches: list[dict[str, object]] = []
     center_wildcard = center_wildcard_value(policy)
+    finance_variants = tuple(sorted(set(policy.finance_variants)))
 
     for column in policy.join_keys:
         normalized = _normalize_join_key_name(column)
@@ -639,6 +640,11 @@ def _filter_candidates_by_join_map(
             col_mask = _school_mask_series(
                 mentor_series, int(student_value), policy.school_code_empty_as_zero
             )
+        elif column == policy.stage_column("finance"):
+            allowed_finance = set(finance_variants)
+            if int(student_value) not in allowed_finance:
+                allowed_finance = {int(student_value)}
+            col_mask = mentor_series.isin(tuple(sorted(allowed_finance)))
         else:
             col_mask = mentor_series == int(student_value)
         mask &= col_mask.fillna(False)
@@ -1413,6 +1419,12 @@ def allocate_student(
     eligible, join_mismatch_details = _filter_candidates_by_join_map(
         eligible, join_map=join_map, policy=policy
     )
+    if not join_mismatch_details:
+        _, prefilter_mismatches = _filter_candidates_by_join_map(
+            candidate_pool, join_map=join_map, policy=policy
+        )
+        if prefilter_mismatches:
+            join_mismatch_details = prefilter_mismatches
     stage_candidate_counts = _canonical_stage_counts(stage_candidate_counts)
     trace = build_allocation_trace(
         student_row,
@@ -1793,6 +1805,8 @@ def allocate_student(
             "pool_mismatch_detected": pool_mismatch_detected,
         }
     )
+    if join_mismatch_details:
+        log["join_key_mismatches"] = list(join_mismatch_details)
     return AllocationResult(capacity_filtered.loc[chosen_index], trace, log)
 
 
@@ -2105,6 +2119,13 @@ def allocate_batch(
             record.update(outcome.metadata)
             outcome_records.append(record)
         trace_summary_df = pd.DataFrame(outcome_records)
+        if "student_id" in trace_summary_df.columns:
+            trace_summary_df = trace_summary_df.drop_duplicates(subset=["student_id"], keep="last")
+            if "student_id" in students.columns:
+                ordered_ids = students["student_id"].tolist()
+                trace_summary_df = (
+                    trace_summary_df.set_index("student_id").reindex(ordered_ids).reset_index()
+                )
         if "student_id" in trace_summary_df.columns and "student_id" in students.columns:
             student_indexed = students.set_index("student_id", drop=False)
             for column in (

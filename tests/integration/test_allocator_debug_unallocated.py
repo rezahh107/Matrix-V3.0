@@ -18,7 +18,7 @@ def _build_basic_frames(policy):
                 policy.stage_column("gender"): 0,
                 policy.stage_column("graduation_status"): 0,
                 policy.stage_column("center"): 1,
-                policy.stage_column("finance"): 1,
+                policy.stage_column("finance"): 9,
                 policy.stage_column("school"): 1112,
                 "student_national_code": "001",
                 "student_educational_status": 1,

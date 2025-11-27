@@ -36,10 +36,12 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Protocol, cast
 
 import numpy as np
 import pandas as pd
+
+from app.core.common.columns import ensure_series
 
 from ..policy_loader import PolicyConfig, load_policy
 from .normalization import to_numlike_str
@@ -288,6 +290,18 @@ def _filter_by_stage(
         value = student_join_map[normalized]
     else:
         value = _student_value(student, column)
+    if stage == "finance":
+        allowed_variants = set(policy.finance_variants)
+        numeric_value: int | None
+        try:
+            numeric_value = int(cast(int, value))
+        except Exception:
+            numeric_value = None
+        if numeric_value is not None and numeric_value in allowed_variants:
+            variant_values = tuple(sorted(allowed_variants))
+            series = pd.to_numeric(ensure_series(pool[column]), errors="coerce").astype("Int64")
+            mask = series.isin(variant_values).fillna(False)
+            return pool.loc[mask]
     return _eq_filter(pool, column, value)
 
 
