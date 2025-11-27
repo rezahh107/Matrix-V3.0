@@ -1,5 +1,6 @@
 # Phase 0 System Requirements — Smart Student Allocation (v2.5 Final)
 
+> **منبع حقیقت قوانین تخصیص (LAW v3.0 / Technical SSoT v3.0):** این سند راهنما/تاریخچه است؛ تمام قواعد ثابت (کلیدهای join، رتبه‌بندی، انواع منتور/دانش‌آموز، گیت ظرفیت، trace و ...) فقط در `docs/LAW_Smart_Student_Allocation_v3.0.md` و `docs/Technical_SSoT_Smart_Student_Allocation_v3.0-TECH.md` معتبرند. در صورت هر تعارض، محتوای این دو فایل حاکم است و نکات قدیمی این سند به‌عنوان LEGACY خوانده شوند.
 ## 1. مقدمه و دامنه
 - این سند الزامات فاز ۰ سیستم تخصیص دانش‌آموزان را با تکیه بر Policy v1.0.3، SSoT v1.0.2 و معماری Core/Infra/UI تعریف می‌کند.
 - دامنه شامل منطق Policy-First، لایهٔ Infra برای I/O (WordPress، Excel، HistoryStore) و رابط PySide6/CLI است؛ تغییر سیاست رتبه‌بندی یا ۶ کلید Join در این نسخه مجاز نیست.
@@ -14,7 +15,7 @@
 ### 2.2 کانال‌های تخصیص سیاست‌محور
 - **FR-CHAN-01 — پشتیبانی AllocationChannelConfig:** PolicyConfig باید شامل بخش AllocationChannelConfig باشد و Core موظف است بدون هاردکد شناسه، مقدار `allocation_channel` را از بین چهار مقدار SCHOOL / GOLESTAN / SADRA / GENERIC برای هر دانش‌آموز محاسبه کند. قواعد تصمیم‌گیری می‌تواند از ترکیب `کد مدرسه`, `مرکز گلستان صدرا`, `مرکز ثبت‌نام` و وضعیت تحصیلی استفاده کند ولی باید همگی از PolicyConfig خوانده شوند.
 - **FR-CHAN-02 — کانال در trace/export:** مقدار `allocation_channel` برای تمام دانش‌آموزان (چه تخصیص‌یافته چه ردشده) باید در trace، خلاصهٔ مدیریتی و خروجی ImportToSabt/Excel قابل مشاهده باشد تا تحلیل جریان‌ها و مقایسهٔ کانال‌ها ممکن شود.
-- **FR-CHAN-03 — همزیستی با سیاست رتبه‌بندی:** اجرای کانال‌ها نباید ترتیب رتبه‌بندی را تغییر دهد؛ پس از تعیین کانال، همان سیاست ثابت `occupancy_ratio → allocations_new → mentor_id` با sort طبیعی/پایدار اجرا می‌شود. هرگونه استثناء باید در PolicyConfig تعریف شود، نه در Core.
+- **FR-CHAN-03 — همزیستی با سیاست رتبه‌بندی:** اجرای کانال‌ها نباید ترتیب رتبه‌بندی را تغییر دهد؛ پس از تعیین کانال، سیاست RANK-CORE مبتنی بر LAW/TECH (`remaining_capacity` نزولی سپس `mentor_id` natural/stable) اجرا می‌شود. ذکر `occupancy_ratio` در نسخه‌های قبلی LEGACY است؛ هر استثناء باید در PolicyConfig تعریف شود، نه در Core.
 
 ### 2.3 گزارش‌پذیری و خروجی‌ها
 - **FR-TRACE-01 — غنی‌سازی Trace:** trace هشت‌مرحله‌ای باید علاوه‌بر شمارش‌های استاندارد، ستون‌های `allocation_channel`, `dedupe_reason`, `allocated_before` را شامل شود تا اپراتور بتواند تصمیم تاریخچه/کانال را در کنار فیلترهای اصلی مشاهده کند.

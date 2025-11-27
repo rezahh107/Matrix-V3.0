@@ -1,8 +1,9 @@
 # AGENTS.md — Smart Student Allocation (Global)
 
 **Spec Level:** agentsmd.net (HEADER → PURPOSE → SCOPE → ROLES → BOUNDARIES → TASK ROUTING → ALLOWED/PROHIBITED → QA → VERSIONING → EXAMPLES)  
-**Policy Ref:** Policy v1.0.3 (immutable, Policy-First)  
-**SSoT Ref:** SSoT v1.0.2 (immutable)  
+**LAW / TECH Sources:** برای قواعد ثابت تخصیص، تنها `docs/LAW_Smart_Student_Allocation_v3.0.md` و `docs/Technical_SSoT_Smart_Student_Allocation_v3.0-TECH.md` مرجع هستند؛ سایر روایت‌ها (ازجمله اشاره به occupancy_ratio) LEGACY محسوب می‌شوند.
+**Policy Ref:** Policy v1.0.3 (immutable, Policy-First)
+**SSoT Ref:** SSoT v1.0.2 (immutable)
 **Vision & Scope:** docs/System_Vision_Scope_Smart_Student_Allocation_v1.0.md (read-only)  
 **Architecture Blueprint:** docs/System_Architecture_Blueprint_Smart_Student_Allocation_v1.0.md (read-only)  
 **Supersedes:** any prior subsystem-only AGENTS (e.g., Eligibility Matrix-only rules)  
@@ -23,7 +24,7 @@ layer.
 
 Applies to the entire repository. Local AGENTS.md files do not exist; this document governs every
 path. All agents must comply with Vision/Scope v1.0, Architecture Blueprint v1.0, Policy v1.0.3,
-and SSoT v1.0.2. Policy/SSoT content is referenced, never redefined.
+and SSoT v1.0.2. برای قواعد ثابت تخصیص، LAW v3.0 و Technical SSoT v3.0 بالادست همهٔ این اسناد هستند و هر تعارض یا اشاره به قواعد قدیمی (مثلاً رتبه‌بندی occupancy_ratio) LEGACY محسوب می‌شود.
 
 ---
 
@@ -125,17 +126,17 @@ and SSoT v1.0.2. Policy/SSoT content is referenced, never redefined.
 
 ## POLICY & SSoT ENFORCEMENT
 
-- **Immutable invariants (do NOT alter):**
-  - **Join Keys (6, int):** `"کدرشته"` (group_code), `"جنسیت"` (gender),
-    `"دانش آموز فارغ"` (graduation_status), `"مرکز گلستان صدرا"` (center),
-    `"مالی حکمت بنیاد"` (finance), `"کد مدرسه"` (school_code).
-    - **Trace mapping note:** `"کدرشته"` feeds both the `type` and `group` trace steps
-      (one-to-many mapping join key → trace steps).
-  - **Ranking Policy (stable):** minimize `occupancy_ratio` → minimize `allocations_new` →
-    natural sort `mentor_id` (stable sort required). Natural sort MUST be implemented via a shared
-    helper (e.g. `natural_key`) and reused consistently.
-  - **Trace (8-step explainability):** `type, group, gender, graduation_status, center, finance,
-    school, capacity_gate` with candidate counts after each filter.
+  - **Immutable invariants (do NOT alter):**
+    - **Join Keys (6, int):** `"کدرشته"` (group_code), `"جنسیت"` (gender),
+      `"دانش آموز فارغ"` (graduation_status), `"مرکز گلستان صدرا"` (center),
+      `"مالی حکمت بنیاد"` (finance), `"کد مدرسه"` (school_code).
+      - **Trace mapping note:** `"کدرشته"` feeds both the `type` and `group` trace steps
+        (one-to-many mapping join key → trace steps).
+    - **Ranking Policy (stable):** طبق LAW v3.0 / Technical SSoT v3.0 صرفاً بر اساس
+      `remaining_capacity` نزولی و سپس `mentor_id` صعودی (natural + stable) است؛ هر روایت قبلی
+      دربارهٔ `occupancy_ratio` LEGACY و صرفاً تاریخی است.
+    - **Trace (8-step explainability):** `type, group, gender, graduation_status, center, finance,
+      school, capacity_gate` with candidate counts after each filter.
   - **Determinism:** identical inputs yield identical outputs; stable sorts everywhere; no randomness/
     time-based logic in Core.
   - **Policy Version:** 1.0.3; **SSoT Version:** 1.0.2. Never downgrade/upgrade silently.

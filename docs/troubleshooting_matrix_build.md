@@ -1,5 +1,6 @@
 # راهنمای عیب‌یابی ساخت ماتریس
 
+> **منبع حقیقت قوانین تخصیص (LAW v3.0 / Technical SSoT v3.0):** این سند راهنما/تاریخچه است؛ تمام قواعد ثابت (کلیدهای join، رتبه‌بندی، انواع منتور/دانش‌آموز، گیت ظرفیت، trace و ...) فقط در `docs/LAW_Smart_Student_Allocation_v3.0.md` و `docs/Technical_SSoT_Smart_Student_Allocation_v3.0-TECH.md` معتبرند. در صورت هر تعارض، محتوای این دو فایل حاکم است و نکات قدیمی این سند به‌عنوان LEGACY خوانده شوند.
 ## خطای «Pool data missing canonical join-key columns»
 
 این خطا زمانی رخ می‌دهد که استخر پشتیبان‌ها قبل از ورود به Core فاقد ستون‌های کاننیکال

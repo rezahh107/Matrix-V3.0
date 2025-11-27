@@ -1,5 +1,7 @@
 # سامانه تخصیص دانشجو-منتور (نسخه معماری مدولار)
 
+> **منبع حقیقت قوانین تخصیص (LAW v3.0 / Technical SSoT v3.0):** این مخزن باید قوانین ثابت (۶ کلید join، رتبه‌بندی RANK-CORE بر اساس ظرفیت باقی‌مانده، انواع منتور/دانش‌آموز، گیت ظرفیت، trace) را فقط از `docs/LAW_Smart_Student_Allocation_v3.0.md` و `docs/Technical_SSoT_Smart_Student_Allocation_v3.0-TECH.md` بگیرد. این README راهنمای اجراست؛ هر تعارض با LAW/TECH یا روایت‌های قدیمی (مانند occupancy_ratio) LEGACY محسوب می‌شود.
+
 ## اجرا
 ```bash
 pip install -r requirements.txt

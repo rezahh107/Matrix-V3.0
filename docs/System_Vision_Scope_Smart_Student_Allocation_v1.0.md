@@ -1,5 +1,6 @@
 # Smart Student Allocation System — Vision & Scope (v1.0)
 
+> **منبع حقیقت قوانین تخصیص (LAW v3.0 / Technical SSoT v3.0):** این سند راهنما/تاریخچه است؛ تمام قواعد ثابت (کلیدهای join، رتبه‌بندی، انواع منتور/دانش‌آموز، گیت ظرفیت، trace و ...) فقط در `docs/LAW_Smart_Student_Allocation_v3.0.md` و `docs/Technical_SSoT_Smart_Student_Allocation_v3.0-TECH.md` معتبرند. در صورت هر تعارض، محتوای این دو فایل حاکم است و نکات قدیمی این سند به‌عنوان LEGACY خوانده شوند.
 - **Status:** Draft
 - **Related Documents:** SSoT v1.0.2; Policy v1.0.3; Eligibility Matrix AGENTS.md (v1.0.3); repository-level AGENTS.md (agentsmd.net-aligned); Phase 0 System Requirements
 - **Audience:** Product owner, tech lead/architect, QA/release, desktop operator/mentor admin, WordPress/Gravity Forms maintainer, coding agents (Codex/LLM) following AGENTS.md
@@ -62,7 +63,7 @@ Unified Smart Student Allocation ecosystem covering intake, matrix, allocation, 
 
 ## Invariants & Constraints
 - **6 Join Keys (int, immutable):** `کدرشته`, `جنسیت`, `دانش آموز فارغ`, `مرکز گلستان صدرا`, `مالی حکمت بنیاد`, `کد مدرسه`; used consistently across intake, matrix, allocation, exporter.
-- **Ranking policy (Policy §10.1):** sort by `occupancy_ratio` → `allocations_new` → `mentor_id` (natural + stable); deterministic ties.
+- **Ranking policy (LAW v3.0 / Technical SSoT v3.0):** مرتب‌سازی صرفاً بر اساس `remaining_capacity` نزولی و سپس `mentor_id` صعودی (natural + stable). توضیحات قبلی بر پایهٔ `occupancy_ratio` LEGACY است و نباید برای اجرا استفاده شود.
 - **حافظهٔ تخصیص:** تاریخچهٔ تخصیص‌ها با کلید ملی نگهداری می‌شود و قبل از ورود به رتبه‌بندی اعمال می‌شود؛ این مکانیسم صرفاً ورودی صف را مدیریت می‌کند و در هستهٔ سیاست رتبه‌بندی دخالتی ندارد.
 - **کانال‌های تخصیص:** مقدار `allocation_channel` برای هر دانش‌آموز به‌صورت سیاست‌محور و بدون هاردکد مرکز/مدرسه تعیین می‌شود و به‌عنوان متادیتای trace/خلاصه نگه داشته می‌شود.
 - **Determinism:** same inputs/policy versions yield the same outputs; stable sorts; explicit version tagging (policy_version, ssot_version, schema versions).
@@ -80,10 +81,11 @@ Unified Smart Student Allocation ecosystem covering intake, matrix, allocation, 
 - **Maintainability:** clear separation of concerns; AGENTS.md for agent operations; SSoT/Policy for domain rules; this Vision/Scope for product boundaries; modular roles for agents.
 
 ## Relationship to SSoT, Policy, and AGENTS.md
-- **SSoT v1.0.2 + Policy v1.0.3:** define domain semantics, join keys, ranking, trace steps, and rule constraints—the authoritative rule set.
+- **LAW v3.0 + Technical SSoT v3.0:** تنها منبع حقیقت برای قواعد ثابت (join keys، RANK-CORE capacity-based، trace، انواع دانش‌آموز/منتور). این سند به آن‌ها ارجاع می‌دهد و در صورت تعارض تابع آن‌هاست.
+- **SSoT v1.0.2 + Policy v1.0.3:** برای بقیهٔ حوزه‌های محصول (پیش از LAW/TECH v3.0) خواندنی هستند، اما هر قاعدهٔ تخصیص باید با LAW/TECH v3.0 سنجیده شود.
 - **Vision & Scope (this document):** defines why and what the product delivers, phase boundaries, invariants, and quality expectations; it does not redefine rules.
 - **AGENTS.md (agentsmd.net compliant):** defines how coding agents operate (repo navigation, coding conventions, test commands, Core vs Infra vs UI boundaries); Eligibility Matrix AGENTS.md adds component-specific guidance. AGENTS.md must stay consistent with this Vision/Scope and Policy; if conflicts arise, Policy/SSoT win, then Vision/Scope, then AGENTS.md.
-- **Evolution:** Vision/Scope changes only with product direction shifts; AGENTS.md can evolve operationally but must never contradict Policy/SSoT/this document; policy updates require re-alignment and version bumps in all artifacts.
+- **Evolution:** Vision/Scope changes only with product direction shifts; AGENTS.md can evolve operationally but must never contradict Policy/SSoT/LAW/TECH; policy updates require re-alignment and version bumps in all artifacts.
 
 ## Risks, Assumptions, and Open Questions
 - **Risks:** Excel template drift; Gravity Forms schema changes; crosswalk misalignment; policy/SSoT divergence; insufficient audit retention; deterministic sorting accidentally broken; performance regressions on large batches.
@@ -92,7 +94,7 @@ Unified Smart Student Allocation ecosystem covering intake, matrix, allocation, 
 
 ## Glossary
 - **Student:** person to be allocated; source from intake/Excel.
-- **Mentor/پشتیبان:** capacity provider; may have allocations_new and occupancy_ratio.
+- **Mentor/پشتیبان:** capacity provider؛ ظرفیت و نوع منتور طبق LAW/TECH مشخص می‌شود؛ متریک‌های occupancy_ratio صرفاً تاریخی‌اند.
 - **Eligibility Matrix:** matrix built from normalized inputs per Policy to gate eligibility.
 - **Allocation:** assignment of a student to a mentor using ranking policy and constraints.
 - **ImportToSabt:** exporter format for downstream systems (e.g., Sabt/Hekmat).
@@ -100,5 +102,5 @@ Unified Smart Student Allocation ecosystem covering intake, matrix, allocation, 
 - **Policy:** governing rules (v1.0.3) including join keys, ranking, trace steps.
 - **AGENTS.md:** agent-facing operational guide aligned with agentsmd.net; includes Eligibility Matrix-specific and repo-level instructions.
 - **Join Keys:** six integer keys linking data across sources: `کدرشته`, `جنسیت`, `دانش آموز فارغ`, `مرکز گلستان صدرا`, `مالی حکمت بنیاد`, `کد مدرسه`.
-- **occupancy_ratio:** capacity usage metric used in ranking (lower is better).
-- **allocations_new:** count of new allocations per mentor used in ranking (lower is better).
+- **occupancy_ratio (LEGACY):** متریک تاریخی از نسخه‌های قبلی؛ از LAW/TECH v3.0 به بعد رتبه‌بندی بر اساس ظرفیت باقی‌مانده است.
+- **allocations_new:** count of new allocations per mentor historically used; در LAW/TECH v3.0 فقط ظرفیت باقی‌مانده و mentor_id معیار رتبه‌بندی‌اند.
