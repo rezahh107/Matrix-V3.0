@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from typing import Any, cast
 
 import pandas as pd
 import pytest
@@ -8,11 +9,12 @@ import pytest
 from app.core.common.join_keys import (
     JoinKeyCanonicalizationError,
     canonicalize_join_key_value,
+    coerce_join_int,
     normalize_join_key_name,
     resolve_finance_variants,
     validate_policy_join_keys,
 )
-from app.core.policy_loader import load_policy
+from app.core.policy_loader import PolicyConfig, load_policy
 
 
 def test_validate_policy_join_keys_handles_farsi_gender_string() -> None:
@@ -21,7 +23,7 @@ def test_validate_policy_join_keys_handles_farsi_gender_string() -> None:
     join_map[normalize_join_key_name(policy.stage_column("gender"))] = int(
         policy.gender_codes.male.value
     )
-    mentor_row = {column: 1 for column in policy.join_keys}
+    mentor_row: dict[str, object] = {column: 1 for column in policy.join_keys}
     mentor_row[policy.stage_column("gender")] = "پسر"
 
     valid, mismatches = validate_policy_join_keys(mentor_row, join_map, policy)
@@ -73,6 +75,44 @@ def test_validate_policy_join_keys_finance_variants() -> None:
     assert mismatches_variant == []
     assert not valid_outside
     assert any(item.get("column") == finance_column for item in mismatches_outside)
+
+
+def test_validate_policy_join_keys_finance_iterable_cells() -> None:
+    policy = load_policy()
+    finance_column = policy.stage_column("finance")
+    join_map = {normalize_join_key_name(column): 1 for column in policy.join_keys}
+    join_map[normalize_join_key_name(finance_column)] = 0
+
+    mentor_row: dict[str, object] = {
+        column: join_map.get(normalize_join_key_name(column), 0) for column in policy.join_keys
+    }
+    mentor_row[finance_column] = (0, 1, 3)
+
+    valid, mismatches = validate_policy_join_keys(mentor_row, join_map, policy)
+
+    assert valid
+    assert mismatches == []
+
+
+def test_validate_policy_join_keys_finance_list_clusters() -> None:
+    base_policy = load_policy()
+    policy: PolicyConfig = replace(
+        base_policy,
+        finance_variants=cast(Any, [[0, 1, 3], [4, 5]]),
+    )
+    finance_column = policy.stage_column("finance")
+    join_map = {normalize_join_key_name(column): 1 for column in policy.join_keys}
+    join_map[normalize_join_key_name(finance_column)] = 0
+
+    mentor_row: dict[str, object] = {
+        column: join_map.get(normalize_join_key_name(column), 0) for column in policy.join_keys
+    }
+    mentor_row[finance_column] = 3
+
+    valid, mismatches = validate_policy_join_keys(mentor_row, join_map, policy)
+
+    assert valid
+    assert mismatches == []
 
 
 def test_validate_policy_join_keys_allows_global_center() -> None:
@@ -130,12 +170,15 @@ def test_resolve_finance_variants_unknown_falls_back() -> None:
 
 def test_resolve_finance_variants_supports_mapping_policy_definition() -> None:
     policy = load_policy()
-    mapping_policy = replace(
+    mapping_policy: PolicyConfig = replace(
         policy,
-        finance_variants={
-            "0": ["0", "1", "۳"],
-            2: (2,),
-        },
+        finance_variants=cast(
+            Any,
+            {
+                "0": ["0", "1", "۳"],
+                2: (2,),
+            },
+        ),
     )
 
     expanded_zero = resolve_finance_variants(0, mapping_policy)
@@ -149,13 +192,13 @@ def test_resolve_finance_variants_supports_mapping_policy_definition() -> None:
 
 def test_resolve_finance_variants_supports_sequence_clusters() -> None:
     policy = load_policy()
-    cluster_policy = replace(
+    cluster_policy: PolicyConfig = replace(
         policy,
-        finance_variants=(("۰", "1", 3), ("۴", 5)),
+        finance_variants=cast(Any, (("۰", "1", 3), ("۴", 5))),
     )
 
     expanded_one = resolve_finance_variants(1, cluster_policy)
-    expanded_three = resolve_finance_variants("۳", cluster_policy)
+    expanded_three = resolve_finance_variants(coerce_join_int("۳"), cluster_policy)
     expanded_four = resolve_finance_variants(4, cluster_policy)
     unknown = resolve_finance_variants(9, cluster_policy)
 

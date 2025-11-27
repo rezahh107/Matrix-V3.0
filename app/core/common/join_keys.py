@@ -116,6 +116,26 @@ def matches_school_with_wildcard(
     return mentor_school == student_school
 
 
+def _extract_finance_variants(value: object, policy: PolicyConfig) -> frozenset[int]:
+    """استخراج مجموعهٔ کدهای مالی منتور برای مقایسهٔ چندمقداری."""
+
+    if isinstance(value, Mapping):
+        return frozenset(coerce_join_int(item) for item in value.values())
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+        collected: set[int] = set()
+        for item in value:
+            try:
+                collected.update(resolve_finance_variants(coerce_join_int(item), policy))
+            except Exception:
+                continue
+        return frozenset(collected)
+    try:
+        coerced = coerce_join_int(value)
+    except Exception:
+        return frozenset()
+    return resolve_finance_variants(coerced, policy)
+
+
 def resolve_finance_variants(student_finance: int, policy: PolicyConfig) -> frozenset[int]:
     """استخراج مجموعهٔ variantهای مالی بر اساس Policy.
 
@@ -196,7 +216,6 @@ def validate_policy_join_keys(
 
     mismatches: list[JoinKeyMismatchDetail] = []
     wildcard_center = center_wildcard_value(policy)
-    finance_variants = set(policy.finance_variants)
     for column in policy.join_keys:
         normalized = normalize_join_key_name(column)
         student_value = join_map.get(normalized)
@@ -219,17 +238,45 @@ def validate_policy_join_keys(
                 }
             )
             continue
+        student_int = int(student_value)
+        if column == policy.stage_column("finance"):
+            allowed_student_variants = resolve_finance_variants(student_int, policy)
+            mentor_variants = _extract_finance_variants(mentor_raw, policy)
+            if mentor_variants and allowed_student_variants.intersection(mentor_variants):
+                continue
+            if mentor_value is not None:
+                mentor_value_variants = resolve_finance_variants(mentor_value, policy)
+                if allowed_student_variants.intersection(mentor_value_variants):
+                    continue
+            if mentor_value is None:
+                mismatches.append(
+                    {
+                        "column": column,
+                        "student_value": student_int,
+                        "mentor_value": mentor_raw,
+                        "mismatch_type": "missing",
+                    }
+                )
+                continue
+            mismatches.append(
+                {
+                    "column": column,
+                    "student_value": student_int,
+                    "mentor_value": mentor_raw,
+                    "mismatch_type": "unequal",
+                }
+            )
+            continue
         if mentor_value is None:
             mismatches.append(
                 {
                     "column": column,
-                    "student_value": int(student_value),
+                    "student_value": student_int,
                     "mentor_value": mentor_raw,
                     "mismatch_type": "missing",
                 }
             )
             continue
-        student_int = int(student_value)
         if column == policy.stage_column("center"):
             if matches_center_with_wildcard(student_int, mentor_value, wildcard_center):
                 continue
@@ -241,12 +288,6 @@ def validate_policy_join_keys(
                     "mismatch_type": "unequal",
                 }
             )
-            continue
-        if (
-            column == policy.stage_column("finance")
-            and mentor_value in finance_variants
-            and student_int in finance_variants
-        ):
             continue
         if column == policy.columns.school_code and matches_school_with_wildcard(
             student_int, mentor_value, policy.school_code_empty_as_zero
