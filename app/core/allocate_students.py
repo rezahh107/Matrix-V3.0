@@ -2119,6 +2119,13 @@ def allocate_batch(
             record.update(outcome.metadata)
             outcome_records.append(record)
         trace_summary_df = pd.DataFrame(outcome_records)
+        if "student_id" in trace_summary_df.columns:
+            trace_summary_df = trace_summary_df.drop_duplicates(subset=["student_id"], keep="last")
+            if "student_id" in students.columns:
+                ordered_ids = students["student_id"].tolist()
+                trace_summary_df = (
+                    trace_summary_df.set_index("student_id").reindex(ordered_ids).reset_index()
+                )
         if "student_id" in trace_summary_df.columns and "student_id" in students.columns:
             student_indexed = students.set_index("student_id", drop=False)
             for column in (

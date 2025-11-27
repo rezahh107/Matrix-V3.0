@@ -170,6 +170,11 @@ def _mentors_match_value(
     if column not in pool.columns:
         return False
     series = pd.to_numeric(pool[column], errors="coerce").astype("Int64")
+    if column == policy.stage_column("finance"):
+        allowed_variants = set(policy.finance_variants)
+        if student_value in allowed_variants:
+            return bool(series.isin(tuple(sorted(allowed_variants))).any())
+        return bool((series == student_value).any())
     if column == policy.stage_column("center"):
         wildcard = _coerce_optional_int(policy.center_map.get("*"))
         mentor_centers = series.dropna().astype(int)

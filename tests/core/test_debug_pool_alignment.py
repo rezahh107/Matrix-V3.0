@@ -46,6 +46,9 @@ def test_analyzer_happy_path_returns_candidates() -> None:
 def test_analyzer_zero_after_finance_stage() -> None:
     policy = load_policy()
     student = {"student_id": "s2", **_base_student(policy)}
+    # Ensure the student finance code is outside the policy variant family so the finance
+    # stage legitimately removes all candidates.
+    student[policy.stage_column("finance")] = 9
     pool = _build_pool(policy, finance_value=0)
 
     report = analyze_pool_alignment_for_student(student, pool, policy=policy)
