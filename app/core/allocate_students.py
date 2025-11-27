@@ -27,6 +27,7 @@ from .common.join_keys import (
     canonicalize_join_key_value,
     center_wildcard_value,
     normalize_join_key_name as _normalize_join_key_name,
+    resolve_finance_variants,
     validate_selected_mentor_join_keys,
 )
 from .common.ranking import (
@@ -602,7 +603,6 @@ def _filter_candidates_by_join_map(
     mask = pd.Series(True, index=candidates.index)
     mismatches: list[dict[str, object]] = []
     center_wildcard = center_wildcard_value(policy)
-    finance_variants = tuple(sorted(set(policy.finance_variants)))
 
     for column in policy.join_keys:
         normalized = _normalize_join_key_name(column)
@@ -641,10 +641,8 @@ def _filter_candidates_by_join_map(
                 mentor_series, int(student_value), policy.school_code_empty_as_zero
             )
         elif column == policy.stage_column("finance"):
-            allowed_finance = set(finance_variants)
-            if int(student_value) not in allowed_finance:
-                allowed_finance = {int(student_value)}
-            col_mask = mentor_series.isin(tuple(sorted(allowed_finance)))
+            allowed_finance = resolve_finance_variants(int(student_value), policy)
+            col_mask = mentor_series.isin(allowed_finance)
         else:
             col_mask = mentor_series == int(student_value)
         mask &= col_mask.fillna(False)
@@ -1419,12 +1417,11 @@ def allocate_student(
     eligible, join_mismatch_details = _filter_candidates_by_join_map(
         eligible, join_map=join_map, policy=policy
     )
-    if not join_mismatch_details:
-        _, prefilter_mismatches = _filter_candidates_by_join_map(
-            candidate_pool, join_map=join_map, policy=policy
-        )
-        if prefilter_mismatches:
-            join_mismatch_details = prefilter_mismatches
+    _, prefilter_mismatches = _filter_candidates_by_join_map(
+        candidate_pool, join_map=join_map, policy=policy
+    )
+    if not join_mismatch_details and prefilter_mismatches:
+        join_mismatch_details = prefilter_mismatches
     stage_candidate_counts = _canonical_stage_counts(stage_candidate_counts)
     trace = build_allocation_trace(
         student_row,
@@ -1889,7 +1886,7 @@ def allocate_batch(
             by=existing_sort_columns,
             ascending=[True] * len(existing_sort_columns),
             kind="stable",
-        ).reset_index(drop=True)
+        )
 
     pool_internal = canonicalize_headers(pool_with_ids, header_mode="en")
     pool_internal = pool_internal.loc[:, ~pool_internal.columns.duplicated(keep="first")]
@@ -1897,17 +1894,6 @@ def allocate_batch(
         "mentor_sort_key" in pool_with_ids.columns
     ):
         pool_internal["mentor_sort_key"] = pool_with_ids["mentor_sort_key"].values
-    internal_sort_columns = [
-        column
-        for column in ("occupancy_ratio", "allocations_new", "mentor_sort_key")
-        if column in pool_internal.columns
-    ]
-    if internal_sort_columns:
-        pool_internal = pool_internal.sort_values(
-            by=internal_sort_columns,
-            ascending=[True] * len(internal_sort_columns),
-            kind="stable",
-        ).reset_index(drop=True)
     if capacity_internal not in pool_internal.columns:
         pool_internal[capacity_internal] = 0
     if "allocations_new" not in pool_internal.columns:
@@ -1968,11 +1954,13 @@ def allocate_batch(
                     "center_column": center_column_name,
                 }
             pool_view = pool_with_ids
+            pool_state_view_local = pool_internal
             if enforce_center_manager and student_center is not None:
                 center_key = int(student_center)
                 manager_index = center_manager_index.get(center_key)
                 if manager_index is not None and len(manager_index) > 0:
                     pool_view = pool_with_ids.loc[manager_index]
+                    pool_state_view_local = pool_internal.loc[manager_index]
 
             result = allocate_student(
                 student_dict,
@@ -1983,7 +1971,7 @@ def allocate_batch(
                 trace_plan=trace_plan,
                 stage_rules=stage_rules,
                 state=cast(Mapping[Hashable, MentorCapacityState], mentor_state),
-                pool_state_view=pool_internal,
+                pool_state_view=pool_state_view_local,
                 alert_progress=progress,
             )
             if invalid_center_payload is not None:

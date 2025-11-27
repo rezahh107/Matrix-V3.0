@@ -48,7 +48,7 @@ def validate_allocation_join_keys_with_wildcard(
         except Exception:
             fixed_flags.append(bool(flag))
             continue
-        if matches_school_with_wildcard(s_int, m_int, True):
+        if matches_school_with_wildcard(s_int, m_int, policy.school_code_empty_as_zero):
             fixed_flags.append(True)
         else:
             fixed_flags.append(bool(flag))

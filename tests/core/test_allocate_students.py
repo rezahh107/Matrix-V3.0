@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import pandas as pd
 
-from app.core.allocate_students import _filter_candidates_by_join_map, allocate_student
+from app.core.allocate_students import (
+    _detect_pool_mismatch,
+    _filter_candidates_by_join_map,
+    allocate_student,
+)
+from app.core.common.filters import apply_join_filters
 from app.core.common.join_keys import normalize_join_key_name
 from app.core.policy_loader import load_policy
 
@@ -67,6 +72,122 @@ def test_join_key_mismatches_preserved_on_success_allocation() -> None:
 
     assert result.log.get("allocation_status") == "success"
     assert result.log.get("join_key_mismatches")
+
+
+def test_apply_join_filters_finance_variants_with_join_map() -> None:
+    policy = load_policy()
+    student = {
+        policy.stage_column("group"): 1,
+        policy.stage_column("gender"): 1,
+        policy.stage_column("graduation_status"): 0,
+        policy.stage_column("center"): 1,
+        policy.stage_column("finance"): 0,
+        policy.columns.school_code: 0,
+    }
+    join_map = {
+        normalize_join_key_name(column): int(student[column]) for column in policy.join_keys
+    }
+    pool = pd.DataFrame(
+        {
+            policy.stage_column("group"): [1, 1],
+            policy.stage_column("gender"): [1, 1],
+            policy.stage_column("graduation_status"): [0, 0],
+            policy.stage_column("center"): [1, 1],
+            policy.stage_column("finance"): [
+                policy.finance_variants[1],
+                policy.finance_variants[2],
+            ],
+            policy.columns.school_code: [0, 0],
+        }
+    )
+
+    filtered = apply_join_filters(pool, student, policy=policy, student_join_map=join_map)
+
+    assert filtered.shape[0] == 2
+
+
+def test_apply_join_filters_finance_accepts_string_variants() -> None:
+    policy = load_policy()
+    student = {
+        policy.stage_column("group"): 1,
+        policy.stage_column("gender"): 1,
+        policy.stage_column("graduation_status"): 0,
+        policy.stage_column("center"): 1,
+        policy.stage_column("finance"): "۰",
+        policy.columns.school_code: 0,
+    }
+    join_map = {
+        normalize_join_key_name(policy.stage_column("group")): 1,
+        normalize_join_key_name(policy.stage_column("gender")): int(policy.gender_codes.male.value),
+        normalize_join_key_name(policy.stage_column("graduation_status")): 0,
+        normalize_join_key_name(policy.stage_column("center")): 1,
+        normalize_join_key_name(policy.stage_column("finance")): 0,
+        normalize_join_key_name(policy.columns.school_code): 0,
+    }
+    pool = pd.DataFrame(
+        {
+            policy.stage_column("group"): [1, 1],
+            policy.stage_column("gender"): [1, 1],
+            policy.stage_column("graduation_status"): [0, 0],
+            policy.stage_column("center"): [1, 1],
+            policy.stage_column("finance"): [
+                policy.finance_variants[0],
+                policy.finance_variants[2],
+            ],
+            policy.columns.school_code: [0, 0],
+        }
+    )
+
+    filtered = apply_join_filters(pool, student, policy=policy, student_join_map=join_map)
+
+    assert filtered.shape[0] == 2
+
+
+def test_apply_join_filters_accepts_farsi_gender_tokens() -> None:
+    policy = load_policy()
+    student = {
+        policy.stage_column("group"): 1,
+        policy.stage_column("gender"): "پسر",
+        policy.stage_column("graduation_status"): 0,
+        policy.stage_column("center"): 1,
+        policy.stage_column("finance"): 0,
+        policy.columns.school_code: 0,
+    }
+    join_map = {
+        normalize_join_key_name(policy.stage_column("group")): 1,
+        normalize_join_key_name(policy.stage_column("gender")): int(policy.gender_codes.male.value),
+        normalize_join_key_name(policy.stage_column("graduation_status")): 0,
+        normalize_join_key_name(policy.stage_column("center")): 1,
+        normalize_join_key_name(policy.stage_column("finance")): 0,
+        normalize_join_key_name(policy.columns.school_code): 0,
+    }
+    pool = pd.DataFrame(
+        {
+            policy.stage_column("group"): [1],
+            policy.stage_column("gender"): [int(policy.gender_codes.male.value)],
+            policy.stage_column("graduation_status"): [0],
+            policy.stage_column("center"): [1],
+            policy.stage_column("finance"): [policy.finance_variants[0]],
+            policy.columns.school_code: [0],
+        }
+    )
+
+    filtered = apply_join_filters(pool, student, policy=policy, student_join_map=join_map)
+
+    assert filtered.shape[0] == 1
+
+
+def test_detect_pool_mismatch_center_subset_alignment() -> None:
+    candidate_pool = pd.DataFrame({"mentor_id": ["m1", "m2"]}).set_index(pd.Index([5, 7]))
+    pool_state_view = pd.DataFrame({"mentor_id": ["m1", "m2"]}).set_index(pd.Index([5, 7]))
+
+    mismatch = _detect_pool_mismatch(
+        candidate_pool=candidate_pool,
+        pool_view=candidate_pool,
+        pool_state_view=pool_state_view,
+    )
+
+    assert not mismatch
 
 
 def test_allocate_student_finance_variants_success() -> None:
