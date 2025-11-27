@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from numbers import Number
 from typing import Literal, TypedDict, cast
 
@@ -23,6 +23,7 @@ __all__ = [
     "matches_center_with_wildcard",
     "matches_school_with_wildcard",
     "normalize_join_key_name",
+    "resolve_finance_variants",
     "validate_policy_join_keys",
     "validate_selected_mentor_join_keys",
 ]
@@ -113,6 +114,51 @@ def matches_school_with_wildcard(
     if empty_as_zero and (student_school == 0 or mentor_school == 0):
         return True
     return mentor_school == student_school
+
+
+def resolve_finance_variants(student_finance: int, policy: PolicyConfig) -> frozenset[int]:
+    """استخراج مجموعهٔ variantهای مالی بر اساس Policy.
+
+    ورودی «student_finance» یک کد عددی است. اگر این کد در ``finance_variants``
+    تعریف‌شدهٔ Policy حضور داشته باشد، تمام variantها به‌صورت یک ``frozenset``
+    بازگردانده می‌شوند تا فیلتر مالی از روی برابری چند مقداری (`isin`) اجرا شود.
+    در غیر این صورت، همان مقدار دانش‌آموز به‌تنهایی بازگردانده می‌شود تا رفتار
+    قبلی حفظ گردد.
+    """
+
+    def _normalize_iterable(raw: object) -> frozenset[int]:
+        if isinstance(raw, Mapping):
+            return frozenset(coerce_join_int(item) for item in raw.values())
+        if isinstance(raw, Sequence) and not isinstance(raw, (str, bytes)):
+            return frozenset(coerce_join_int(item) for item in raw)
+        return frozenset({coerce_join_int(raw)})
+
+    finance_value = coerce_join_int(student_finance)
+    finance_variants = policy.finance_variants
+    if isinstance(finance_variants, Mapping):
+        for canonical_value, variants in finance_variants.items():
+            variant_values = _normalize_iterable(variants)
+            bucket: set[int] = {coerce_join_int(canonical_value), *variant_values}
+            if finance_value in bucket:
+                return frozenset(bucket)
+        return frozenset({finance_value})
+
+    has_nested_clusters = any(
+        isinstance(entry, Sequence) and not isinstance(entry, (str, bytes))
+        for entry in finance_variants
+    )
+    if has_nested_clusters:
+        for cluster in finance_variants:
+            if isinstance(cluster, Sequence) and not isinstance(cluster, (str, bytes)):
+                bucket_set = _normalize_iterable(cluster)
+                if finance_value in bucket_set:
+                    return bucket_set
+        return frozenset({finance_value})
+
+    flat_variants = _normalize_iterable(finance_variants)
+    if finance_value in flat_variants:
+        return flat_variants
+    return frozenset({finance_value})
 
 
 def _coerce_optional_int(value: object) -> int | None:

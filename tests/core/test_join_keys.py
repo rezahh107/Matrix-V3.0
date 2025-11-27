@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from app.core.common.join_keys import (
     JoinKeyCanonicalizationError,
     canonicalize_join_key_value,
     normalize_join_key_name,
+    resolve_finance_variants,
     validate_policy_join_keys,
 )
 from app.core.policy_loader import load_policy
@@ -69,3 +72,63 @@ def test_validate_policy_join_keys_finance_variants() -> None:
     assert mismatches_variant == []
     assert not valid_outside
     assert any(item.get("column") == finance_column for item in mismatches_outside)
+
+
+def test_resolve_finance_variants_expands_policy_values() -> None:
+    policy = load_policy()
+    variants = resolve_finance_variants(policy.finance_variants[0], policy)
+
+    assert variants.issuperset(set(policy.finance_variants))
+
+
+def test_resolve_finance_variants_unknown_falls_back() -> None:
+    policy = load_policy()
+    variants = resolve_finance_variants(999, policy)
+
+    assert variants == frozenset({999})
+
+
+def test_resolve_finance_variants_supports_mapping_policy_definition() -> None:
+    policy = load_policy()
+    mapping_policy = replace(
+        policy,
+        finance_variants={
+            "0": ["0", "1", "۳"],
+            2: (2,),
+        },
+    )
+
+    expanded_zero = resolve_finance_variants(0, mapping_policy)
+    expanded_three = resolve_finance_variants(3, mapping_policy)
+    unrelated = resolve_finance_variants(7, mapping_policy)
+
+    assert expanded_zero == frozenset({0, 1, 3})
+    assert expanded_three == frozenset({0, 1, 3})
+    assert unrelated == frozenset({7})
+
+
+def test_resolve_finance_variants_supports_sequence_clusters() -> None:
+    policy = load_policy()
+    cluster_policy = replace(
+        policy,
+        finance_variants=(("۰", "1", 3), ("۴", 5)),
+    )
+
+    expanded_one = resolve_finance_variants(1, cluster_policy)
+    expanded_three = resolve_finance_variants("۳", cluster_policy)
+    expanded_four = resolve_finance_variants(4, cluster_policy)
+    unknown = resolve_finance_variants(9, cluster_policy)
+
+    assert expanded_one == frozenset({0, 1, 3})
+    assert expanded_three == frozenset({0, 1, 3})
+    assert expanded_four == frozenset({4, 5})
+    assert unknown == frozenset({9})
+
+
+def test_canonicalize_gender_farsi_tokens() -> None:
+    policy = load_policy()
+    male = canonicalize_join_key_value(policy.stage_column("gender"), "پسر", policy=policy)
+    female = canonicalize_join_key_value(policy.stage_column("gender"), "دختر", policy=policy)
+
+    assert male == int(policy.gender_codes.male.value)
+    assert female == int(policy.gender_codes.female.value)
