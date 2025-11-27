@@ -26,7 +26,6 @@ from .common.join_keys import (
     JoinKeyCanonicalizationError,
     canonicalize_join_key_value,
     center_wildcard_value,
-    coerce_join_int,
     finance_variants_from_cell,
     normalize_join_key_name as _normalize_join_key_name,
     resolve_finance_variants,
