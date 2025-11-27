@@ -81,6 +81,7 @@ class JoinMismatch(TypedDict):
     mentor_values: list[object]
     reason: str
 
+
 __all__ = [
     "ProgressFn",
     "AllocationResult",
@@ -656,7 +657,9 @@ def _merge_join_mismatches(
         if key not in dedup:
             dedup[key] = entry
 
-    def _sort_key(entry: JoinMismatch) -> tuple[str, str, tuple[int, str], tuple[tuple[int, str], ...]]:
+    def _sort_key(
+        entry: JoinMismatch,
+    ) -> tuple[str, str, tuple[int, str], tuple[tuple[int, str], ...]]:
         student_sort = _sort_key_for_mismatch_value(entry["student_value"])
         mentor_sort = tuple(_sort_key_for_mismatch_value(value) for value in entry["mentor_values"])
         return (entry["column"], entry["reason"], student_sort, mentor_sort)
@@ -1540,9 +1543,7 @@ def allocate_student(
     _, prefilter_mismatches = _filter_candidates_by_join_map(
         candidate_pool, join_map=join_map, policy=policy
     )
-    join_mismatch_details = _merge_join_mismatches(
-        join_mismatch_details, prefilter_mismatches
-    )
+    join_mismatch_details = _merge_join_mismatches(join_mismatch_details, prefilter_mismatches)
     stage_candidate_counts = _canonical_stage_counts(stage_candidate_counts)
     trace = build_allocation_trace(
         student_row,
