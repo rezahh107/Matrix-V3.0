@@ -603,8 +603,12 @@ def _normalize_mismatch_scalar(value: object) -> object:
         return None
     if isinstance(value, float) and math.isnan(value):
         return None
-    if isinstance(value, Real) and not isinstance(value, bool):
+    if isinstance(value, bool):
         return int(value)
+    if isinstance(value, SupportsInt):
+        return int(value)
+    if isinstance(value, Real):
+        return int(float(cast(SupportsFloat, value)))
     return value
 
 

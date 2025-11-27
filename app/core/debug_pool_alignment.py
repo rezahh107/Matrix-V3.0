@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
-from typing import Literal, TypedDict, cast
+from collections.abc import Mapping, Sequence
+from typing import Literal, SupportsInt, TypedDict, cast
 
 import pandas as pd
 
 from app.core.allocate_students import (
+    JoinMismatch,
     _canonical_stage_counts,
     _collect_join_key_map,
     _filter_candidates_by_join_map,
@@ -99,7 +100,7 @@ def _unique_missing_indexes(frame: pd.DataFrame, columns: list[str]) -> list[int
 
 
 def _convert_mismatches(
-    mismatches: list[dict[str, object]],
+    mismatches: Sequence[JoinMismatch],
     *,
     policy: PolicyConfig,
     join_map: Mapping[str, int],
@@ -113,11 +114,15 @@ def _convert_mismatches(
         student_value_raw = join_map.get(column_raw)
         mentor_values = item.get("mentor_values")
         mentor_value = None
-        if isinstance(mentor_values, list) and mentor_values:
-            try:
-                mentor_value = int(mentor_values[0])
-            except (TypeError, ValueError):
-                mentor_value = None
+        if isinstance(mentor_values, Sequence) and mentor_values:
+            first_value = mentor_values[0]
+            if isinstance(first_value, (bool, SupportsInt)):
+                mentor_value = int(first_value)
+            else:
+                try:
+                    mentor_value = int(str(first_value))
+                except (TypeError, ValueError):
+                    mentor_value = None
         if item.get("reason") == "student_join_key_missing":
             mismatch_type: Literal["student_missing", "mentor_missing", "value_mismatch"] = (
                 "student_missing"
