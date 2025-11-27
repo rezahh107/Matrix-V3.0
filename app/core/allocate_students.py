@@ -588,6 +588,27 @@ def _canonicalize_gender_series(series: pd.Series, policy: PolicyConfig) -> pd.S
     return pd.Series(normalized, index=series.index, dtype="Int64")
 
 
+def _merge_join_mismatches(
+    primary: Sequence[Mapping[str, object]],
+    secondary: Sequence[Mapping[str, object]],
+) -> list[dict[str, object]]:
+    """ترکیب مغایرت‌های join با حذف موارد تکراری."""
+
+    merged: list[dict[str, object]] = []
+    seen: set[tuple[tuple[str, object], ...]] = set()
+    for entry in [*primary, *secondary]:
+        normalized = tuple(
+            sorted(
+                (str(k), tuple(v) if isinstance(v, list) else v) for k, v in entry.items()
+            )
+        )
+        if normalized in seen:
+            continue
+        merged.append(dict(entry))
+        seen.add(normalized)
+    return merged
+
+
 def _filter_candidates_by_join_map(
     candidates: pd.DataFrame,
     *,
@@ -1464,8 +1485,9 @@ def allocate_student(
     _, prefilter_mismatches = _filter_candidates_by_join_map(
         candidate_pool, join_map=join_map, policy=policy
     )
-    if not join_mismatch_details and prefilter_mismatches:
-        join_mismatch_details = prefilter_mismatches
+    join_mismatch_details = _merge_join_mismatches(
+        join_mismatch_details, prefilter_mismatches
+    )
     stage_candidate_counts = _canonical_stage_counts(stage_candidate_counts)
     trace = build_allocation_trace(
         student_row,
@@ -1554,6 +1576,8 @@ def allocate_student(
     if center_alert_payload is not None and not center_alert_payload.get("student_id"):
         center_alert_payload["student_id"] = log.get("student_id")
     _append_invalid_center_alert(log, center_alert_payload, center_fallback)
+    if join_mismatch_details:
+        log["join_key_mismatches"] = list(join_mismatch_details)
 
     if eligible.empty:
         if not join_mismatch_details:

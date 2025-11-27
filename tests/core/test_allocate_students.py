@@ -7,6 +7,7 @@ import pandas as pd
 from app.core.allocate_students import (
     _detect_pool_mismatch,
     _filter_candidates_by_join_map,
+    _merge_join_mismatches,
     allocate_student,
 )
 from app.core.common.filters import apply_join_filters
@@ -190,6 +191,35 @@ def test_join_key_mismatches_preserved_on_success_allocation() -> None:
 
     assert result.log.get("allocation_status") == "success"
     assert result.log.get("join_key_mismatches")
+
+
+def test_join_key_mismatches_include_prefilter_details() -> None:
+    policy = load_policy()
+
+    primary = [
+        {
+            "column": policy.stage_column("finance"),
+            "student_value": 0,
+            "mentor_values": [2],
+            "reason": "mentor_value_mismatch",
+        }
+    ]
+    secondary = [
+        {
+            "column": policy.stage_column("group"),
+            "student_value": 1,
+            "mentor_values": [0],
+            "reason": "mentor_value_mismatch",
+        }
+    ]
+
+    merged = _merge_join_mismatches(primary, secondary)
+
+    assert len(merged) == 2
+    assert {entry["column"] for entry in merged} == {
+        policy.stage_column("finance"),
+        policy.stage_column("group"),
+    }
 
 
 def test_apply_join_filters_finance_variants_with_join_map() -> None:
