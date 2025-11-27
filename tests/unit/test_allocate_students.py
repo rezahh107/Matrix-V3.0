@@ -28,6 +28,7 @@ from app.core.common import columns
 from app.core.common.reasons import ReasonCode
 from app.core.common.types import CANONICAL_JOIN_KEYS, JoinKeyValues
 from app.core.policy_loader import PolicyConfig, load_policy, parse_policy_dict
+from app.infra.canonical_frames import build_student_group_crosswalk
 from app.infra.excel_writer import write_selection_reasons_sheet
 
 
@@ -259,6 +260,67 @@ def test_allocate_batch_respects_center_priority_ordering() -> None:
     )
 
     assert logs["student_id"].tolist() == ["S-B", "S-C", "S-A"]
+
+
+def test_allocate_batch_aligns_group_crosswalk_for_students_and_pool() -> None:
+    policy = load_policy()
+    crosswalk = pd.DataFrame(
+        {
+            "گروه آزمایشی": ["علوم پایه", "علوم پایه"],
+            "کد گروه": [9100, 9100],
+            "کدرشته خام": [9101, 9102],
+            "مقطع تحصیلی": ["دهم", "یازدهم"],
+        }
+    )
+    group_crosswalk = build_student_group_crosswalk(crosswalk)
+    students = pd.DataFrame(
+        {
+            "student_id": ["S-X", "S-Y"],
+            "کدرشته": [9101, 9102],
+            "گروه آزمایشی": ["علوم پایه", "علوم پایه"],
+            "جنسیت": [1, 1],
+            "دانش آموز فارغ": [0, 0],
+            "مرکز گلستان صدرا": [1, 1],
+            "مالی حکمت بنیاد": [0, 0],
+            "کد مدرسه": [3581, 3581],
+        }
+    )
+    pool = pd.DataFrame(
+        {
+            "پشتیبان": ["M1", "M2"],
+            "کد کارمندی پشتیبان": ["EMP-10", "EMP-20"],
+            "کدرشته": [9100, 9100],
+            "کدرشته | group_code": [9100, 9100],
+            "گروه آزمایشی": ["علوم پایه", "علوم پایه"],
+            "گروه آزمایشی | exam_group": ["علوم پایه", "علوم پایه"],
+            "جنسیت": [1, 1],
+            "جنسیت | gender": [1, 1],
+            "دانش آموز فارغ": [0, 0],
+            "دانش آموز فارغ | graduation_status": [0, 0],
+            "مرکز گلستان صدرا": [1, 1],
+            "مرکز گلستان صدرا | center": [1, 1],
+            "مالی حکمت بنیاد": [0, 0],
+            "مالی حکمت بنیاد | finance": [0, 0],
+            "کد مدرسه": [3581, 3581],
+            "کد مدرسه | school_code": [3581, 3581],
+            "remaining_capacity": [1, 1],
+            "occupancy_ratio": [0.1, 0.2],
+            "allocations_new": [0, 0],
+        }
+    )
+
+    students_norm = canonicalize_students_frame(
+        students, policy=policy, group_code_crosswalk=group_crosswalk
+    )
+    pool_norm = canonicalize_pool_frame(pool, policy=policy, sanitize_pool=False)
+
+    _, _, logs, _ = allocate_batch(students_norm, pool_norm, policy=policy)
+
+    log_records = logs.to_dict("records") if hasattr(logs, "to_dict") else list(logs)
+    for log in log_records:
+        join_keys = log["join_keys"]
+        assert join_keys["کدرشته"] == 9100
+        assert log["candidate_count"] == 2
 
 
 def test_allocate_batch_filters_by_center_manager() -> None:

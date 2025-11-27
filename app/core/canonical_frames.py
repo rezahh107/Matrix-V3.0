@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -22,7 +22,7 @@ from .common.columns import (
     resolve_aliases,
 )
 from .common.ids import build_mentor_alias_map, extract_alias_code_series
-from .common.normalization import normalize_fa
+from .common.normalization import normalize_fa, parse_int_safe
 from .common.types import HeaderMode, parse_header_mode
 from .policy_loader import PolicyConfig
 
@@ -460,14 +460,72 @@ def _ensure_exam_group_column(frame: pd.DataFrame) -> pd.DataFrame:
     return ensured
 
 
+def _apply_group_crosswalk(
+    series: pd.Series, crosswalk: Mapping[str | int, int], *, column_name: str
+) -> pd.Series:
+    """اعمال Crosswalk رشته به سری ورودی با خطا برای کدهای ناشناخته."""
+
+    normalized_numeric: dict[int, int] = {}
+    normalized_text: dict[str, int] = {}
+    for raw, target in crosswalk.items():
+        canonical_target = parse_int_safe(target)
+        if canonical_target is None:
+            raise ValueError(f"Invalid crosswalk target: {target}")
+        if isinstance(raw, int):
+            normalized_numeric[int(raw)] = canonical_target
+            continue
+        text_key = normalize_fa(str(raw))
+        if text_key:
+            normalized_text[text_key] = canonical_target
+
+    base = ensure_series(series)
+    mapped = pd.Series([pd.NA] * len(base), dtype="Int64", index=base.index)
+    unresolved: list[tuple[object, object]] = []
+    for idx, value in base.items():
+        if pd.isna(value):
+            unresolved.append((idx, value))
+            continue
+        numeric_value = parse_int_safe(value)
+        if numeric_value is not None:
+            mapped_value = normalized_numeric.get(numeric_value)
+            if mapped_value is not None:
+                mapped.loc[idx] = int(mapped_value)
+                continue
+        text_value = normalize_fa(value)
+        if text_value:
+            mapped_value = normalized_text.get(text_value)
+            if mapped_value is not None:
+                mapped.loc[idx] = int(mapped_value)
+                continue
+        unresolved.append((idx, value))
+
+    if unresolved:
+        first_idx, first_value = unresolved[0]
+        raise ValueError(
+            "Unknown group code "
+            f"'{first_value}' in column '{column_name}' at index {first_idx}; crosswalk update required"
+        )
+    return mapped
+
+
 def canonicalize_students_frame(
     students_df: pd.DataFrame,
     *,
     policy: PolicyConfig,
+    group_code_crosswalk: Mapping[str | int, int] | None = None,
 ) -> pd.DataFrame:
     """کاننیکال‌سازی کامل دیتافریم دانش‌آموز برای تخصیص (SSoT)."""
 
     students = resolve_aliases(students_df.copy(deep=True), "report")
+    group_column_fa = CANON_EN_TO_FA["group_code"]
+    raw_group_series: pd.Series | None = None
+    if group_code_crosswalk:
+        raw_group_series = ensure_series(
+            students.get(
+                group_column_fa,
+                pd.Series([pd.NA] * len(students), dtype="object", index=students.index),
+            )
+        ).copy()
     students = _promote_final_exam_group_column(students)
     if isinstance(students.columns, pd.MultiIndex):
         students.columns = [
@@ -489,6 +547,8 @@ def canonicalize_students_frame(
         students, kind="StudentReport", include_alias=True, report=False
     )
     students_en = canonicalize_headers(students, header_mode="en")
+    if group_code_crosswalk and raw_group_series is not None:
+        students_en["group_code_raw"] = raw_group_series.reindex(students_en.index).astype("string")
     if "school_code_raw" not in students_en.columns:
         students_en["school_code_raw"] = pre_normal_raw.reindex(students_en.index)
     students_en = enrich_school_columns_en(
@@ -526,6 +586,14 @@ def canonicalize_students_frame(
             missing_required.append(field)
     if missing_required:
         raise ValueError(f"Missing columns: {missing_required}")
+    if group_code_crosswalk:
+        group_column = CANON_EN_TO_FA["group_code"]
+        source_series = raw_group_series if raw_group_series is not None else students[group_column]
+        students[group_column] = _apply_group_crosswalk(
+            source_series.reindex(students.index),
+            group_code_crosswalk,
+            column_name=group_column,
+        )
     students = enforce_join_key_types(students, policy.join_keys)
     return students
 
