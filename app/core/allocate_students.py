@@ -2359,4 +2359,3 @@ def build_selection_reason_rows(
         logs=logs,
         trace=trace,
     )
-```
