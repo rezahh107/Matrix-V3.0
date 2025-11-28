@@ -6,7 +6,7 @@ import warnings
 from collections.abc import Callable, Hashable, Mapping, Sequence
 from dataclasses import dataclass
 from numbers import Number, Real
-from typing import Any, Literal, SupportsFloat, SupportsInt, TypedDict, TypeVar, cast
+from typing import Any, Literal, SupportsFloat, SupportsInt, TypedDict, cast
 
 import pandas as pd
 from pandas.api import types as pd_types
@@ -144,7 +144,6 @@ _STAGE_LABEL_FA: dict[str, str] = {
     "capacity_gate": "capacity",
 }
 
-T = TypeVar("T")
 HeaderMode = Literal["fa", "en", "fa_en"]
 
 
@@ -1683,7 +1682,7 @@ def allocate_student(
 
     derived_name = canonicalize_headers(
         pd.DataFrame(columns=[resolved_capacity_column]),
-        header_mode="en",
+        header_mode=cast(HeaderMode, policy.excel.header_mode_internal),
     ).columns[0]
     if derived_name not in capacity_candidates:
         capacity_candidates.append(derived_name)
