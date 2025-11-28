@@ -1,13 +1,17 @@
 """ماژول تخصیص دانش‌آموز به پشتیبان مطابق Policy-First و LAW v3.0."""
+
 from __future__ import annotations
+
 import math
 import warnings
 from collections.abc import Callable, Hashable, Mapping, Sequence
 from dataclasses import dataclass
 from numbers import Number, Real
 from typing import Any, Literal, SupportsFloat, SupportsInt, TypedDict, TypeVar, cast
+
 import pandas as pd
 from pandas.api import types as pd_types
+
 from .allocation.trace import attach_allocation_channel
 from .canonical_frames import canonicalize_pool_frame, canonicalize_students_frame
 from .center_manager import resolve_center_manager_config, validate_center_config
@@ -67,12 +71,17 @@ from .common.types import (
 from .counter import normalize_digits, strip_hidden_chars
 from .policy_loader import PolicyConfig, load_policy
 from .reason.selection_reason import build_selection_reason_rows as _build_selection_reason_rows
+
 ProgressFn = Callable[[int, str], None]
+
+
 class JoinMismatch(TypedDict):
     column: str
     student_value: object
     mentor_values: list[object]
     reason: str
+
+
 __all__ = [
     "ProgressFn",
     "AllocationResult",
@@ -80,6 +89,7 @@ __all__ = [
     "allocate_batch",
     "build_selection_reason_rows",
 ]
+
 # شناسه‌های پایدار مطابق §4.2 Technical SSoT
 _STUDENT_NATIONAL_KEYS: tuple[str, ...] = (
     "student_national_code",
@@ -89,6 +99,7 @@ _STUDENT_NATIONAL_KEYS: tuple[str, ...] = (
     "کدملی",
     "کد ملی",
 )
+
 _MENTOR_ALIAS_KEYS: tuple[str, ...] = (
     "mentor_alias_code",
     "mentor_alias_postal_code",
@@ -102,6 +113,7 @@ _MENTOR_ALIAS_KEYS: tuple[str, ...] = (
     "کدپستی",
     "کد پستی",
 )
+
 # ستون‌های خروجی تخصیص مطابق §4.2
 _ALLOCATION_OUTPUT_COLUMNS: tuple[str, ...] = (
     "student_id",
@@ -110,6 +122,7 @@ _ALLOCATION_OUTPUT_COLUMNS: tuple[str, ...] = (
     "mentor_id",
     "mentor_alias_code",
 )
+
 # ترتیب مراحل Trace مطابق §5.3 Technical SSoT و §6.1 LAW
 _JOIN_STAGE_FAILURE_ORDER: tuple[TraceStageLiteral, ...] = (
     "type",
@@ -120,6 +133,7 @@ _JOIN_STAGE_FAILURE_ORDER: tuple[TraceStageLiteral, ...] = (
     "finance",
     "school",
 )
+
 _STAGE_LABEL_FA: dict[str, str] = {
     "type": CANON_EN_TO_FA.get("group_code", "type"),
     "group": CANON_EN_TO_FA.get("exam_group", "group"),
@@ -130,8 +144,11 @@ _STAGE_LABEL_FA: dict[str, str] = {
     "school": CANON_EN_TO_FA.get("school_code", "school"),
     "capacity_gate": "capacity",
 }
+
 T = TypeVar("T")
 HeaderMode = Literal["fa", "en", "fa_en"]
+
+
 def safe_int(value: Any) -> int | None:
     """تبدیل امن انواع مختلف به int با هندل کردن pandas NaN و None."""
     if value is None or (isinstance(value, float) and math.isnan(value)):
@@ -153,7 +170,9 @@ def safe_int(value: Any) -> int | None:
     if isinstance(value, pd.Timestamp):
         return int(value.timestamp())
     return None
-def safe_float(value: Any) -> float | None:
+
+
+def safe_float(value: Any)) -> float | None:
     """تبدیل امن انواع مختلف به float."""
     if value is None or (isinstance(value, float) and math.isnan(value)):
         return None
@@ -172,11 +191,15 @@ def safe_float(value: Any) -> float | None:
         except ValueError:
             return None
     return None
+
+
 def safe_str(value: Any) -> str | None:
     """تبدیل امن به رشته با هندل کردن None و NaN."""
     if value is None or (isinstance(value, float) and math.isnan(value)):
         return None
     return str(value).strip() or None
+
+
 def _normalize_digit_code(
     value: object, *, length: int | None = None, pad: bool = False, allow_shorter: bool = False
 ) -> str:
@@ -202,6 +225,8 @@ def _normalize_digit_code(
         elif len(digits) < length and not allow_shorter:
             return ""
     return digits
+
+
 def _extract_student_national_code(student: Mapping[str, object]) -> str:
     """بازیابی امن کد ملی دانش‌آموز از کلیدهای چندزبانهٔ ورودی."""
     for key in _STUDENT_NATIONAL_KEYS:
@@ -210,6 +235,8 @@ def _extract_student_national_code(student: Mapping[str, object]) -> str:
         if normalized:
             return normalized
     return ""
+
+
 def _extract_mentor_alias_code(mentor_row: Mapping[str, object] | pd.Series) -> str:
     """دریافت کد جایگزین/پستی پشتیبان با حذف نویز ورودی."""
     for key in _MENTOR_ALIAS_KEYS:
@@ -220,6 +247,8 @@ def _extract_mentor_alias_code(mentor_row: Mapping[str, object] | pd.Series) -> 
             if trimmed:
                 return trimmed
     return ""
+
+
 def _normalize_mentor_identifier(value: object) -> str | None:
     """تبدیل امن شناسهٔ پشتیبان به مقدار قابل جست‌وجو در state."""
     if value is None:
@@ -243,18 +272,23 @@ def _normalize_mentor_identifier(value: object) -> str | None:
         normalized = value.strip()
         return normalized or None
     return str(value).strip() or None
+
+
 def _resolve_mentor_identifier(result: AllocationResult, *, policy: PolicyConfig) -> str:
     """بازیابی شناسهٔ پشتیبان با اولویت: log → سطر فارسی → سطر canonical."""
     mentor_identifier_logged = _normalize_mentor_identifier(result.log.get("mentor_id"))
     if mentor_identifier_logged is not None:
         result.log["mentor_id"] = mentor_identifier_logged
         return mentor_identifier_logged
+
     if result.mentor_row is None:
         raise KeyError("Mentor identifier missing: row not provided")
+
     mentor_identifier = _normalize_mentor_identifier(result.mentor_row.get("کد کارمندی پشتیبان"))
     if mentor_identifier is not None:
         result.log["mentor_id"] = mentor_identifier
         return mentor_identifier
+
     mentor_row_en = canonicalize_headers(
         result.mentor_row.to_frame().T,
         header_mode=cast(HeaderMode, policy.excel.header_mode_internal),
@@ -263,22 +297,33 @@ def _resolve_mentor_identifier(result: AllocationResult, *, policy: PolicyConfig
     if mentor_identifier is not None:
         result.log["mentor_id"] = mentor_identifier
         return mentor_identifier
+
     raise KeyError("Mentor identifier missing from allocation log and row")
+
+
 def _noop_progress(_: int, __: str) -> None:
     """تابع پیش‌فرض progress که کاری انجام نمی‌دهد."""
+
+
 @dataclass(frozen=True)
 class AllocationResult:
     """خروجی تخصیص یک دانش‌آموز مطابق §5 Technical SSoT."""
+
     mentor_row: pd.Series | None
     trace: list[TraceStageRecord]
     log: AllocationLogRecord
+
+
 @dataclass(frozen=True)
 class StudentCenterInfo:
     """اطلاعات استخراج‌شده از ستون مرکز برای یک دانش‌آموز."""
+
     column: str
     raw_value: object | None
     normalized_value: int | None
     is_invalid: bool
+
+
 def _maybe_int_from_text(value: object) -> int | None:
     """تبدیل امن ورودی‌های متنوع به شناسه عددی پایدار."""
     try:
@@ -294,6 +339,8 @@ def _maybe_int_from_text(value: object) -> int | None:
     if pd.isna(numeric):
         return None
     return None
+
+
 def _resolve_mentor_state_entry(
     mentor_state: Mapping[str, MentorCapacityState],
     identifier: str | None,
@@ -301,8 +348,10 @@ def _resolve_mentor_state_entry(
     """Resolve mentor state entry while tolerating minor formatting mismatches."""
     if identifier is None:
         return None, None
+
     candidates: list[str] = []
     seen: set[str] = set()
+
     def _push(value: str | None) -> None:
         if value is None:
             return
@@ -311,15 +360,19 @@ def _resolve_mentor_state_entry(
             return
         seen.add(marker)
         candidates.append(marker)
+
     _push(identifier)
     numeric_candidate = _maybe_int_from_text(identifier)
     if numeric_candidate is not None:
         _push(str(numeric_candidate))
+
     for candidate in candidates:
         entry = mentor_state.get(candidate)
         if entry is not None:
             return candidate, entry
     return None, None
+
+
 def _stringify_mentor_state(
     mentor_state: Mapping[Any, MentorCapacityState],
 ) -> dict[str, MentorCapacityState]:
@@ -331,6 +384,8 @@ def _stringify_mentor_state(
             continue
         normalized[normalized_key] = value
     return normalized
+
+
 def _safe_state_int(value: object) -> int:
     """تبدیل امن ورودی‌های متنوع ظرفیت به int پایدار."""
     if isinstance(value, Number):
@@ -349,6 +404,8 @@ def _safe_state_int(value: object) -> int:
         return int(float(text))
     except Exception:
         return 0
+
+
 def _safe_state_float(value: object) -> float:
     """تبدیل عمومی مقادیر occupancy_ratio به float."""
     if isinstance(value, Number):
@@ -367,6 +424,8 @@ def _safe_state_float(value: object) -> float:
         return float(text)
     except Exception:
         return 0.0
+
+
 def _snapshot_state_entry(
     entry: Mapping[str, Any] | None,
 ) -> MentorStateSnapshot:
@@ -378,6 +437,8 @@ def _snapshot_state_entry(
         "occupancy_ratio": _safe_state_float(source.get("occupancy_ratio")),
     }
     return snapshot
+
+
 def _build_state_delta(before: MentorStateSnapshot, after: MentorStateSnapshot) -> MentorStateDelta:
     """محاسبهٔ diff بین دو snapshot برای استفاده در ExplainAgent."""
     diff: MentorStateSnapshot = {
@@ -390,19 +451,27 @@ def _build_state_delta(before: MentorStateSnapshot, after: MentorStateSnapshot) 
         "after": after,
         "diff": diff,
     }
+
+
 class JoinKeyDataMissingError(ValueError):
     """خطای اختصاصی برای کمبود دادهٔ کلیدهای Join در ورودی دانش‌آموز."""
+
     def __init__(self, missing_columns: Sequence[str], join_map: Mapping[str, int]) -> None:
         super().__init__("DATA_MISSING")
         self.missing_columns: tuple[str, ...] = tuple(missing_columns)
         self.join_map: dict[str, int] = dict(join_map)
+
+
 class JoinKeyDataInvalidError(ValueError):
     """خطای اختصاصی برای مقادیر نامعتبر کلیدهای Join."""
+
     def __init__(self, column: str, value: object, join_map: Mapping[str, int]) -> None:
         super().__init__("DATA_MISSING")
         self.column = column
         self.value = value
         self.join_map: dict[str, int] = dict(join_map)
+
+
 def _resolve_capacity_column(policy: PolicyConfig, override: str | None) -> str:
     """تعیین ستون ظرفیت با اولویت override سپس policy."""
     if override:
@@ -411,26 +480,36 @@ def _resolve_capacity_column(policy: PolicyConfig, override: str | None) -> str:
         return policy.stage_column("capacity_gate")
     except KeyError:
         return policy.columns.remaining_capacity
+
+
 def _canonical_stage_counts(
     stage_candidate_counts: Mapping[str, int] | Mapping[TraceStageName, int],
 ) -> dict[TraceStageName, int]:
     """بازگردانی شمارنده‌ها روی ترتیب ۸ مرحلهٔ استاندارد."""
     return {stage: int(stage_candidate_counts.get(stage, 0)) for stage in CANONICAL_TRACE_ORDER}
+
+
 def _derive_error_type_from_stage_counts(
     stage_candidate_counts: Mapping[TraceStageName, int],
 ) -> AllocationErrorLiteral:
     """طبقه‌بندی خطا براساس شمارندهٔ مراحل Trace با بهبود برای BUG_ERR_01."""
     canonical = _canonical_stage_counts(stage_candidate_counts)
+
     # تفکیک خطاهای join از خطاهای ظرفیت
     join_stages = CANONICAL_TRACE_ORDER[:-1]  # همه مراحل به جز capacity_gate
     capacity_stage = CANONICAL_TRACE_ORDER[-1]
+
     # اگر در هر یک از مراحل join تعداد کاندید صفر شود
     if any(canonical.get(stage, 0) == 0 for stage in join_stages):
         return "ELIGIBILITY_NO_MATCH"
+
     # اگر در مرحله ظرفیت صفر شود ولی مراحل قبل کاندید داشتند
     if canonical.get(capacity_stage, 0) == 0:
         return "CAPACITY_FULL"
+
     return "INTERNAL_ERROR"
+
+
 def _center_mask_series(
     mentor_series: pd.Series, student_center: int, wildcard_center: int | None
 ) -> pd.Series:
@@ -439,34 +518,58 @@ def _center_mask_series(
         return pd.Series(True, index=mentor_series.index)
     mentor_mask = mentor_series.eq(0) | mentor_series.eq(student_center)
     return mentor_mask
+
+
 def _school_mask_series(
     mentor_series: pd.Series,
     student_school: int,
     empty_as_zero: bool,
     constraint_series: pd.Series | None = None,
 ) -> pd.Series:
-    """ماسک برداری برای تطبیق مدرسه با رعایت منتورهای global و empty_as_zero مطابق §6.3 Technical SSoT."""
+    """
+    ماسک تطبیق مدرسه با رعایت:
+      - school_code = 0 و has_school_constraint = False → mentor global روی مدرسه
+      - ردیف‌های مدرسه‌ای (school_code = student_school) → فقط برای همان مدرسه
+    مطابق §6.3 Technical SSoT و BUG_SCH_01.
+    """
     series = ensure_series(mentor_series)
+
     try:
-        # خالی/NaN به‌عنوان ۰ (global) در نظر گرفته می‌شود اگر empty_as_zero=True باشد، 
-        # در غیر این صورت به مقدار نامعتبر -1 نگاشت می‌شود تا match نشود
-        series = series.fillna(0) if empty_as_zero else series.fillna(-1)
+        if empty_as_zero:
+            # خالی/NaN به‌عنوان ۰ (global) در نظر گرفته می‌شود
+            series = series.fillna(0)
+        else:
+            # خالی/NaN به مقدار نامعتبر نگاشت می‌شود تا match نشود
+            series = series.fillna(-1)
     except Exception:
-        series = mentor_series
-    # منتورهای global
-    base_mask = series.eq(0)
-    # اگر دانش‌آموز مدرسهٔ مشخصی دارد، همان مدرسه نیز مجاز است
+        series = ensure_series(mentor_series)
+
+    # بدون constraint: global + same-school
+    if constraint_series is None:
+        base_mask = series.eq(0)
+        if student_school != 0:
+            base_mask = base_mask | series.eq(student_school)
+        return base_mask
+
+    # با constraint: has_school_constraint = True یعنی school-specific
+    constraint = ensure_series(constraint_series).fillna(False).astype(bool)
+
+    # منتورهای global واقعی: school_code = 0 و has_school_constraint = False
+    global_mask = series.eq(0) & ~constraint
+
+    # شاخه‌های مدرسه‌ای: school_code = student_school (restricted یا غیرrestricted)
     if student_school != 0:
         school_mask = series.eq(student_school)
-        base_mask = base_mask | school_mask
-    # اگر constraint تعریف شده، منتورهای restricted حذف می‌شوند
-    if constraint_series is not None:
-        restricted = ensure_series(constraint_series).fillna(False).astype(bool)
-        unrestricted_mask = ~restricted
-        base_mask = base_mask & unrestricted_mask
-    return base_mask
+    else:
+        # دانش‌آموز بدون مدرسه مشخص → فقط global
+        school_mask = pd.Series(False, index=series.index)
+
+    return global_mask | school_mask
+
+
 def _canonicalize_gender_series(series: pd.Series, policy: PolicyConfig) -> pd.Series:
     """نرمال‌سازی سری جنسیت منتورها به کد عددی Policy با بهبود برای BUG_GND_01."""
+
     def _normalize(value: object) -> int | None:
         # تبدیل جنسیت فارسی به کد عددی
         if isinstance(value, str):
@@ -475,12 +578,16 @@ def _canonicalize_gender_series(series: pd.Series, policy: PolicyConfig) -> pd.S
                 return 1
             elif value == "دختر":
                 return 0
+
         try:
             return canonicalize_join_key_value(policy.stage_column("gender"), value, policy=policy)
         except JoinKeyCanonicalizationError:
             return None
+
     normalized = series.map(_normalize)
     return pd.Series(normalized, index=series.index, dtype="Int64")
+
+
 def _normalize_mismatch_scalar(value: object) -> object:
     """نرمال‌سازی مقدار برای گزارش مغایرت."""
     if value is None:
@@ -496,16 +603,21 @@ def _normalize_mismatch_scalar(value: object) -> object:
     if isinstance(value, Real):
         return int(float(cast(SupportsFloat, value)))
     return value
+
+
 def _sort_key_for_mismatch_value(value: object) -> tuple[int, str]:
     """کلید مرتب‌سازی برای مقادیر مغایرت."""
     if value is None:
         return (0, "")
     return (1, str(value))
+
+
 def _normalize_mismatch_entry(entry: Mapping[str, object]) -> JoinMismatch:
     """نرمال‌سازی ورودی مغایرت برای گزارش یکپارچه."""
     column = str(entry.get("column", ""))
     reason = str(entry.get("reason", ""))
     student_value = _normalize_mismatch_scalar(entry.get("student_value"))
+
     raw_mentor_values = entry.get("mentor_values")
     mentor_values: list[object]
     if isinstance(raw_mentor_values, Sequence) and not isinstance(raw_mentor_values, (str, bytes)):
@@ -517,12 +629,15 @@ def _normalize_mismatch_entry(entry: Mapping[str, object]) -> JoinMismatch:
     mentor_values_sorted = sorted(
         dict.fromkeys(mentor_values), key=_sort_key_for_mismatch_value
     )
+
     return {
         "column": column,
         "reason": reason,
         "student_value": student_value,
         "mentor_values": mentor_values_sorted,
     }
+
+
 def _merge_join_mismatches(
     primary: Sequence[Mapping[str, object]],
     secondary: Sequence[Mapping[str, object]],
@@ -539,13 +654,17 @@ def _merge_join_mismatches(
         )
         if key not in dedup:
             dedup[key] = entry
+
     def _sort_key(
         entry: JoinMismatch,
     ) -> tuple[str, str, tuple[int, str], tuple[tuple[int, str], ...]]:
         student_sort = _sort_key_for_mismatch_value(entry["student_value"])
         mentor_sort = tuple(_sort_key_for_mismatch_value(value) for value in entry["mentor_values"])
         return (entry["column"], entry["reason"], student_sort, mentor_sort)
+
     return sorted(dedup.values(), key=_sort_key)
+
+
 def _filter_candidates_by_join_map(
     candidates: pd.DataFrame,
     *,
@@ -555,9 +674,11 @@ def _filter_candidates_by_join_map(
     """اعمال فیلتر تطابق کامل ۶ کلید join روی استخر کاندید."""
     if candidates.empty:
         return candidates, []
+
     mask = pd.Series(True, index=candidates.index)
     mismatches: list[JoinMismatch] = []
     center_wildcard = center_wildcard_value(policy)
+
     for column in policy.join_keys:
         normalized = _normalize_join_key_name(column)
         student_value = join_map.get(normalized)
@@ -572,6 +693,7 @@ def _filter_candidates_by_join_map(
                 }
             )
             continue
+
         if column not in candidates.columns:
             mask &= False
             mismatches.append(
@@ -583,6 +705,7 @@ def _filter_candidates_by_join_map(
                 }
             )
             continue
+
         mentor_series_raw = ensure_series(candidates[column])
         if column == policy.stage_column("center"):
             mentor_series = pd.to_numeric(mentor_series_raw, errors="coerce").astype("Int64")
@@ -626,8 +749,11 @@ def _filter_candidates_by_join_map(
                     "reason": "mentor_value_mismatch",
                 }
             )
+
     filtered = candidates.loc[mask]
     return filtered, mismatches
+
+
 def _student_value(student: Mapping[str, object], column: str) -> object:
     """استخراج مقدار دانش‌آموز از ستون با پشتیبانی از نام‌های مختلف."""
     if column in student:
@@ -636,6 +762,8 @@ def _student_value(student: Mapping[str, object], column: str) -> object:
     if normalized in student:
         return student[normalized]
     raise KeyError(f"Student row missing value for '{column}'")
+
+
 def _resolve_student_center_info(
     student: Mapping[str, object], policy: PolicyConfig
 ) -> StudentCenterInfo:
@@ -665,6 +793,8 @@ def _resolve_student_center_info(
         normalized_value=normalized,
         is_invalid=is_invalid,
     )
+
+
 def _extract_and_validate_center(
     student: Mapping[str, object], policy: PolicyConfig
 ) -> tuple[int | None, bool]:
@@ -691,6 +821,8 @@ def _extract_and_validate_center(
     if numeric_value is None:
         return fallback_center, False
     return numeric_value, True
+
+
 def _collect_join_key_map(
     student: Mapping[str, object], policy: PolicyConfig
 ) -> tuple[dict[str, int], tuple[str, ...]]:
@@ -699,12 +831,15 @@ def _collect_join_key_map(
     missing_columns: list[str] = []
     invalid_map: dict[str, object] = {}
     school_column = policy.columns.school_code
+
     # بهبود برای BUG_GRP_01 - استفاده از crosswalk برای کدرشته
     group_crosswalk = getattr(policy, "group_crosswalk", {})
+
     school_code_resolved: StudentSchoolCode | None = None
     for column in policy.join_keys:
         normalized = _normalize_join_key_name(column)
         allow_zero = policy.school_code_empty_as_zero and column == school_column
+
         if allow_zero:
             if school_code_resolved is None:
                 school_code_resolved = resolve_student_school_code(student, policy)
@@ -714,12 +849,14 @@ def _collect_join_key_map(
             else:
                 join_map[normalized] = int(school_code.value or 0)
             continue
+
         try:
             value = _student_value(student, column)
         except KeyError:
             join_map[normalized] = -1
             missing_columns.append(column)
             continue
+
         try:
             # بهبود برای BUG_GND_01 - هندل کردن جنسیت فارسی
             if column == policy.stage_column("gender"):
@@ -733,17 +870,22 @@ def _collect_join_key_map(
                         value = canonicalize_join_key_value(column, value, policy=policy)
                 else:
                     value = canonicalize_join_key_value(column, value, policy=policy)
+
             # بهبود برای BUG_GRP_01 - استفاده از crosswalk
             elif column == policy.stage_column("group") and group_crosswalk:
                 raw_value = canonicalize_join_key_value(column, value, policy=policy)
                 value = group_crosswalk.get(raw_value, raw_value)
+
             else:
                 value = canonicalize_join_key_value(column, value, policy=policy)
+
             join_map[normalized] = value
+
         except JoinKeyCanonicalizationError as exc:
             join_map[normalized] = 0 if allow_zero else -1
             invalid_map[column] = exc.value
             continue
+
     if invalid_map:
         for column in policy.join_keys:
             normalized = _normalize_join_key_name(column)
@@ -751,7 +893,10 @@ def _collect_join_key_map(
                 join_map[normalized] = 0 if column == school_column else -1
         column, invalid_value = next(iter(invalid_map.items()))
         raise JoinKeyDataInvalidError(column, invalid_value, join_map)
+
     return join_map, tuple(missing_columns)
+
+
 def _build_log_from_join_map(
     student: Mapping[str, object], join_map: Mapping[str, int]
 ) -> AllocationLogRecord:
@@ -784,6 +929,8 @@ def _build_log_from_join_map(
         "phase_rule_trace": [],
     }
     return log
+
+
 def _phase_guard_source(students: pd.DataFrame, policy: PolicyConfig) -> Sequence[object]:
     """ساخت ورودی بهینه برای Stage Guard فاز مدرسه‌ای/مرکزی."""
     column = policy.center_management.school_student_column
@@ -798,6 +945,8 @@ def _phase_guard_source(students: pd.DataFrame, policy: PolicyConfig) -> Sequenc
             series = ensure_series(students[name])
             return list(series.fillna(0))
     return [False] * len(students)
+
+
 def _phase_stage_extras(stage: str, pool: pd.DataFrame, capacity_column: str) -> Mapping[str, Any]:
     """تولید پیام مرحله‌ای ثابت برای Trace Rule Engine."""
     if stage == "school_phase_start":
@@ -809,6 +958,8 @@ def _phase_stage_extras(stage: str, pool: pd.DataFrame, capacity_column: str) ->
             "remaining_capacity": int(remaining.sum()),
         }
     return {}
+
+
 def _build_phase_rule_engines(policy: PolicyConfig) -> tuple[RuleEngine, RuleEngine]:
     """ساخت Rule Engine های فاز مدرسه‌ای و مرکزی براساس Policy."""
     if not policy.center_management.enabled:
@@ -828,6 +979,8 @@ def _build_phase_rule_engines(policy: PolicyConfig) -> tuple[RuleEngine, RuleEng
         pair_rules = ()
     center_engine = RuleEngine(stage_guards=center_guards, pair_rules=pair_rules)
     return school_engine, center_engine
+
+
 def _phase_reason_message(reason: ReasonCode) -> str:
     """متن فارسی پایدار برای رویدادهای Trace فازها."""
     if reason is ReasonCode.SCHOOL_STUDENT_PRIORITY:
@@ -839,6 +992,8 @@ def _phase_reason_message(reason: ReasonCode) -> str:
     if reason is ReasonCode.NO_MANAGER_FOR_CENTER:
         return "هیچ مدیری برای این مرکز در استخر موجود نبود"
     return build_reason(reason).message_fa
+
+
 def _sort_students_by_center_priority(
     students: pd.DataFrame, policy: PolicyConfig, priority: Sequence[int] | None
 ) -> pd.DataFrame:
@@ -868,6 +1023,8 @@ def _sort_students_by_center_priority(
         by_columns.append("student_id")
     sorted_students = sorted_students.sort_values(by=by_columns, kind="stable")
     return sorted_students.drop(columns=["__center_order__"])
+
+
 def _separate_school_students(
     students: pd.DataFrame,
     policy: PolicyConfig,
@@ -893,6 +1050,8 @@ def _separate_school_students(
     school_students = students.loc[school_mask].copy()
     center_students = students.loc[~school_mask].copy()
     return school_students, center_students
+
+
 def _build_center_manager_index(
     pool: pd.DataFrame,
     policy: PolicyConfig,
@@ -946,11 +1105,15 @@ def _build_center_manager_index(
     ):
         raise ValueError(f"مدیران مورد نیاز برای مراکز {missing_centers} در استخر یافت نشدند")
     return result, missing_centers
+
+
 def _normalize_rule_details(payload: object) -> Mapping[str, object] | None:
     """نرمال‌سازی جزئیات rule برای گزارش."""
     if isinstance(payload, Mapping):
         return dict(payload)
     return None
+
+
 def _derive_rule_reason(
     trace: Sequence[TraceStageRecord],
 ) -> tuple[str, str, Mapping[str, object] | None]:
@@ -973,6 +1136,8 @@ def _derive_rule_reason(
     if code:
         return (str(code), str(message or fallback.message_fa), details)
     return fallback.code, fallback.message_fa, None
+
+
 def _display_expected_value(value: object) -> str:
     """تبدیل مقدار مورد انتظار به متن قابل‌گزارش."""
     if value is None:
@@ -984,6 +1149,8 @@ def _display_expected_value(value: object) -> str:
         pass
     text = str(value).strip()
     return text or "نامشخص"
+
+
 def _format_alert_message(stage: str, record: TraceStageRecord | None) -> str:
     """ساخت پیام فارسی برای هشدار حذف کاندید در یک مرحله."""
     label = _STAGE_LABEL_FA.get(stage, stage)
@@ -994,6 +1161,8 @@ def _format_alert_message(stage: str, record: TraceStageRecord | None) -> str:
         return f"ظرفیت فعال در ستون {column_text} صفر است؛ هیچ منتوری باقی نماند."
     value_text = _display_expected_value(expected_value)
     return f"فیلتر {label} با مقدار {value_text} هیچ کاندیدی باقی نگذاشت."
+
+
 def _derive_failure_alerts(
     stage_candidate_counts: Mapping[TraceStageName, int],
     trace: Sequence[TraceStageRecord],
@@ -1035,6 +1204,8 @@ def _derive_failure_alerts(
         "context": context,
     }
     return [alert]
+
+
 def _append_invalid_center_alert(
     log: AllocationLogRecord,
     student_info: Mapping[str, object] | None,
@@ -1107,6 +1278,8 @@ def _append_invalid_center_alert(
             }
         ]
     warnings.warn(message, stacklevel=2)
+
+
 def _emit_alert_progress(
     alerts: Sequence[AllocationAlertRecord], alert_progress: ProgressFn | None
 ) -> None:
@@ -1132,6 +1305,8 @@ def _emit_alert_progress(
         hint_text = f" ({' | '.join(hints)})" if hints else ""
         message = alert.get("message") or "هشدار"
         alert_progress(pct, f"⚠️ {alert.get('code', 'WARNING')} - {message}{hint_text}")
+
+
 def _build_log_base(
     student: Mapping[str, object],
     policy: PolicyConfig,
@@ -1145,9 +1320,13 @@ def _build_log_base(
     if missing:
         raise JoinKeyDataMissingError(missing, join_map)
     return _build_log_from_join_map(student, join_map)
+
+
 def _normalize_students(df: pd.DataFrame, policy: PolicyConfig) -> pd.DataFrame:
     """نرمال‌سازی قاب دانش‌آموز برای ورودی تابع allocate_batch."""
     return canonicalize_students_frame(df, policy=policy)
+
+
 def _normalize_pool(df: pd.DataFrame, policy: PolicyConfig) -> pd.DataFrame:
     """تبدیل قاب استخر به نمای canonical بدون پاک‌سازی تهاجمی."""
     return canonicalize_pool_frame(
@@ -1156,6 +1335,8 @@ def _normalize_pool(df: pd.DataFrame, policy: PolicyConfig) -> pd.DataFrame:
         sanitize_pool=False,
         pool_source="inspactor",
     )
+
+
 def _ensure_students_canonical(df: pd.DataFrame, policy: PolicyConfig) -> pd.DataFrame:
     """اعتبارسنجی قاب دانش‌آموز canonical و تضمین ستون‌های حیاتی."""
     students = df.copy(deep=True)
@@ -1173,6 +1354,8 @@ def _ensure_students_canonical(df: pd.DataFrame, policy: PolicyConfig) -> pd.Dat
         if series.isna().any():
             raise ValueError(f"Canonical student join key '{column}' has invalid values")
     return students
+
+
 def _ensure_pool_canonical(
     df: pd.DataFrame,
     policy: PolicyConfig,
@@ -1201,6 +1384,8 @@ def _ensure_pool_canonical(
             if numeric.isna().any():
                 raise ValueError(f"Canonical pool column '{column}' has non-numeric values")
     return pool
+
+
 def _detect_pool_mismatch(
     *,
     candidate_pool: pd.DataFrame,
@@ -1212,6 +1397,8 @@ def _detect_pool_mismatch(
     candidate_index = pd.Index(candidate_pool.index)
     missing_indexes = candidate_index.difference(state_view.index)
     return bool(missing_indexes.size)
+
+
 def allocate_student(
     student: Mapping[str, object],
     candidate_pool: pd.DataFrame,
@@ -1226,8 +1413,10 @@ def allocate_student(
     alert_progress: ProgressFn | None = None,
 ) -> AllocationResult:
     """تخصیص تک‌دانش‌آموز با حفظ Trace و لاگ کامل مطابق §5 Technical SSoT."""
+
     if policy is None:
         policy = load_policy()
+
     resolved_capacity_column = _resolve_capacity_column(policy, capacity_column)
     if trace_plan is None:
         trace_plan = build_trace_plan(policy, capacity_column=resolved_capacity_column)
@@ -1235,7 +1424,9 @@ def allocate_student(
         stage_rules = default_stage_rule_map()
     if alert_progress is None:
         alert_progress = progress
+
     student_row = cast(StudentRow, dict(student))
+
     # پردازش مرکز دانش‌آموز
     center_info = _resolve_student_center_info(student, policy)
     center_fallback = None
@@ -1248,6 +1439,7 @@ def allocate_student(
             "original_center": center_info.raw_value,
             "center_column": center_info.column,
         }
+
     # جمع‌آوری join keys با بهبود برای باگ‌های join
     try:
         join_map, missing_columns = _collect_join_key_map(student, policy)
@@ -1267,16 +1459,20 @@ def allocate_student(
             }
         )
         return AllocationResult(None, trace, log)
+
     if pool_state_view is not None:
         pool_state_view = pool_state_view.reindex(candidate_pool.index)
+
     progress(5, "prefilter")
     stage_candidate_counts: dict[TraceStageName, int] = {
         stage: 0 for stage in CANONICAL_TRACE_ORDER
     }
+
     def _record_stage(stage: str, count: int) -> None:
         """ثبت شمارنده مراحل برای Trace."""
         stage_name = ensure_trace_stage_name(stage)
         stage_candidate_counts[stage_name] = int(count)
+
     # اعمال فیلترهای join
     eligible = apply_join_filters(
         candidate_pool,
@@ -1285,6 +1481,7 @@ def allocate_student(
         student_join_map=join_map,
         tracker=_record_stage,
     )
+
     # بهبود برای OBS_JOIN_01 - همیشه جمع‌آوری mismatches
     eligible, join_mismatch_details = _filter_candidates_by_join_map(
         eligible, join_map=join_map, policy=policy
@@ -1293,6 +1490,7 @@ def allocate_student(
         candidate_pool, join_map=join_map, policy=policy
     )
     join_mismatch_details = _merge_join_mismatches(join_mismatch_details, prefilter_mismatches)
+
     stage_candidate_counts = _canonical_stage_counts(stage_candidate_counts)
     trace = build_allocation_trace(
         student_row,
@@ -1303,6 +1501,7 @@ def allocate_student(
         stage_rules=stage_rules,
     )
     rule_reason_code, rule_reason_text, rule_details = _derive_rule_reason(trace)
+
     try:
         log = _build_log_base(
             student,
@@ -1336,11 +1535,13 @@ def allocate_student(
             center_alert_payload["student_id"] = log.get("student_id")
         _append_invalid_center_alert(log, center_alert_payload, center_fallback)
         return AllocationResult(None, trace, log)
+
     pool_mismatch_detected = _detect_pool_mismatch(
         candidate_pool=eligible,
         pool_view=candidate_pool,
         pool_state_view=pool_state_view,
     )
+
     def _fail_allocation(
         detailed_reason: str,
         *,
@@ -1370,6 +1571,7 @@ def allocate_student(
             payload.update(cast(AllocationLogRecord, dict(extra_updates)))
         log.update(payload)
         return AllocationResult(None, trace, log)
+
     log["candidate_count"] = int(eligible.shape[0])
     log["stage_candidate_counts"] = _canonical_stage_counts(stage_candidate_counts)
     log["rule_reason_code"] = rule_reason_code
@@ -1378,9 +1580,11 @@ def allocate_student(
     if center_alert_payload is not None and not center_alert_payload.get("student_id"):
         center_alert_payload["student_id"] = log.get("student_id")
     _append_invalid_center_alert(log, center_alert_payload, center_fallback)
+
     # بهبود برای OBS_JOIN_01 - همیشه ثبت mismatches
     if join_mismatch_details:
         log["join_key_mismatches"] = list(join_mismatch_details)
+
     if eligible.empty:
         if not join_mismatch_details:
             _, join_mismatch_details = _filter_candidates_by_join_map(
@@ -1395,9 +1599,11 @@ def allocate_student(
             suggested_actions=["بازبینی دادهٔ ورودی", "تطبیق join keys"],
             extra_updates=extra_updates,
         )
+
     progress(30, "capacity")
     state_frame = pool_state_view if pool_state_view is not None else candidate_pool
     state_view_en = dedupe_columns(canonicalize_headers(state_frame, header_mode="en"))
+
     capacity_candidates: list[str] = []
     if "remaining_capacity" in state_view_en.columns:
         capacity_candidates.append("remaining_capacity")
@@ -1407,6 +1613,7 @@ def allocate_student(
     ).columns[0]
     if derived_name not in capacity_candidates:
         capacity_candidates.append(derived_name)
+
     capacity_column_name: str | None = None
     for candidate in capacity_candidates:
         if candidate in state_view_en.columns:
@@ -1416,6 +1623,7 @@ def allocate_student(
         raise KeyError(
             f"Capacity column '{resolved_capacity_column}' not found after canonicalization"
         )
+
     capacity_series = ensure_series(state_view_en.loc[eligible.index, capacity_column_name])
     capacity_numeric = pd.to_numeric(capacity_series, errors="coerce").fillna(0).astype(int)
     capacity_mask = capacity_numeric > 0
@@ -1423,12 +1631,14 @@ def allocate_student(
     stage_candidate_counts["capacity_gate"] = int(capacity_mask.sum())
     stage_candidate_counts = _canonical_stage_counts(stage_candidate_counts)
     log["stage_candidate_counts"] = stage_candidate_counts
+
     pool_mismatch_detected = pool_mismatch_detected or _detect_pool_mismatch(
         candidate_pool=capacity_filtered,
         pool_view=candidate_pool,
         pool_state_view=pool_state_view,
     )
     log["pool_mismatch_detected"] = pool_mismatch_detected
+
     if capacity_filtered.empty:
         error_updates: dict[str, object] = {}
         if join_mismatch_details:
@@ -1439,8 +1649,11 @@ def allocate_student(
             suggested_actions=["بازبینی join keys", "افزایش ظرفیت", "بازنگری محدودیت‌ها"],
             extra_updates=error_updates if error_updates else None,
         )
+
     progress(60, "ranking")
+
     ranking_input = capacity_filtered.copy()
+
     active_state = (
         _stringify_mentor_state(state)
         if state is not None
@@ -1452,6 +1665,7 @@ def allocate_student(
         Mapping[Hashable, Mapping[str, int | float | str | None]],
         active_state,
     )
+
     # ابتدا سیاست رتبه‌بندی رسمی اجرا می‌شود
     ranked = apply_ranking_policy(ranking_input, state=ranking_state, policy=policy)
     fairness_reason = ranked.attrs.get("fairness_reason")
@@ -1465,6 +1679,7 @@ def allocate_student(
         else:
             formatted = fairness_message
         log["fairness_reason_text"] = formatted
+
     if ranked.empty:
         return _fail_allocation(
             "Ranking policy returned no candidates",
@@ -1473,13 +1688,16 @@ def allocate_student(
                 "بررسی قوانین رتبه‌بندی",
             ],
         )
-    # --- RANK-CORE: مرتب‌سازی نهایی بر اساس remaining → alloc_new → natural mentor_id ---
+
+    # --- RANK-CORE نهایی: فقط بر اساس remaining → mentor_id (یا mentor_sort_key) ---
+
     try:
         mentor_ids_for_rank = ensure_series(
             state_view_en.loc[ranked.index, "mentor_id"]
         ).map(_normalize_mentor_identifier)
     except KeyError:
         mentor_ids_for_rank = pd.Series([None] * len(ranked), index=ranked.index)
+
     def _state_lookup(ident: str | None, field: str, default: int | float) -> int | float:
         if ident is None:
             return default
@@ -1487,29 +1705,35 @@ def allocate_student(
         if not entry:
             return default
         value = entry.get(field, default)
-        if field in ("remaining", "alloc_new"):
+        if field in ("remaining",):
             return _safe_state_int(value)
         return _safe_state_float(value)
+
     remaining_series = mentor_ids_for_rank.map(
         lambda ident: _state_lookup(ident, "remaining", 0)
     )
-    alloc_new_series = mentor_ids_for_rank.map(
-        lambda ident: _state_lookup(ident, "alloc_new", 0)
+
+    ranked_with_keys = ranked.assign(
+        __remaining_rank__=-pd.to_numeric(remaining_series, errors="coerce").fillna(0).astype(int)
     )
+    sort_by: list[str] = ["__remaining_rank__"]
+    ascending_flags: list[bool] = [True]
+
+    if "mentor_sort_key" in ranked_with_keys.columns:
+        sort_by.append("mentor_sort_key")
+        ascending_flags.append(True)
+    elif "mentor_id" in ranked_with_keys.columns:
+        sort_by.append("mentor_id")
+        ascending_flags.append(True)
+
     ranked = (
-        ranked.assign(
-            __remaining_rank__=-pd.to_numeric(remaining_series, errors="coerce").fillna(0).astype(
-                int
-            ),
-            __alloc_rank__=pd.to_numeric(alloc_new_series, errors="coerce").fillna(0).astype(int),
-        )
-        .sort_values(
-            by=["__remaining_rank__", "__alloc_rank__", "mentor_sort_key"],
-            ascending=[True, True, True],
+        ranked_with_keys.sort_values(
+            by=sort_by,
+            ascending=ascending_flags,
             kind="stable",
-        )
-        .drop(columns=["__remaining_rank__", "__alloc_rank__"])
+        ).drop(columns=["__remaining_rank__"])
     )
+
     if ranked.empty:
         return _fail_allocation(
             "Ranking policy produced empty set after state-based ordering",
@@ -1518,6 +1742,7 @@ def allocate_student(
                 "بررسی سازگاری state با pool",
             ],
         )
+
     try:
         chosen_index = ranked.index[0]
         selected_row = capacity_filtered.loc[chosen_index]
@@ -1529,6 +1754,7 @@ def allocate_student(
                 "بررسی فیلترهای capacity",
             ],
         )
+
     chosen_row = ranked.iloc[0].copy()
     ranked_en = canonicalize_headers(
         ranked, header_mode=cast(HeaderMode, policy.excel.header_mode_internal)
@@ -1551,6 +1777,7 @@ def allocate_student(
                 "بررسی canonicalize_headers",
             ],
         )
+
     mentor_identifier = _normalize_mentor_identifier(
         chosen_row.get("mentor_id_en", chosen_en.get("mentor_id"))
     )
@@ -1562,6 +1789,7 @@ def allocate_student(
     capacity_before = int(snapshot_entry.get("remaining", 0))
     capacity_after = capacity_before
     occupancy_value = float(chosen_row.get("occupancy_ratio", 0.0))
+
     join_valid, join_mismatches = validate_selected_mentor_join_keys(
         selected_row, student_join_map=join_map, policy=policy
     )
@@ -1586,12 +1814,14 @@ def allocate_student(
             ],
             extra_updates=corruption_updates,
         )
+
     if mentor_identifier is None:
         return _fail_allocation(
             "Mentor identifier missing after normalization",
             error_type="DATA_MISSING",
             suggested_actions=["بازبینی شناسه‌های پشتیبان", "بازسازی دادهٔ استخر"],
         )
+
     try:
         capacity_before, capacity_after, occupancy_value = consume_capacity(
             cast(dict[Hashable, MentorCapacityState], active_state), mentor_identifier
@@ -1651,12 +1881,15 @@ def allocate_student(
             }
         )
         return AllocationResult(None, trace, log)
+
     mentor_name = chosen_row.get("پشتیبان", chosen_row.get("mentor_name", ""))
     mentor_id_text = chosen_row.get("کد کارمندی پشتیبان", chosen_en.get("mentor_id", ""))
+
     mentor_state_after = _snapshot_state_entry(
         active_state.get(mentor_identifier) if active_state else None
     )
     log["mentor_state_delta"] = _build_state_delta(snapshot_entry, mentor_state_after)
+
     tie_breakers = {
         "stage1": {
             "metric": "remaining_capacity",
@@ -1671,6 +1904,7 @@ def allocate_student(
             "value": list(chosen_row.get("mentor_sort_key", ())),
         },
     }
+
     log.update(
         {
             "row_index": int(chosen_index) if chosen_index is not None else 0,
@@ -1678,7 +1912,7 @@ def allocate_student(
             "mentor_selected": str(mentor_name),
             "mentor_id": mentor_id_text,
             "occupancy_ratio": float(occupancy_value),
-            "selection_reason": "policy: max remaining → min alloc_new → natural mentor_id",
+            "selection_reason": "policy: max remaining → natural mentor_id",
             "tie_breakers": tie_breakers,
             "capacity_before": int(capacity_before),
             "capacity_after": int(capacity_after),
@@ -1688,7 +1922,10 @@ def allocate_student(
     )
     if join_mismatch_details:
         log["join_key_mismatches"] = list(join_mismatch_details)
+
     return AllocationResult(selected_row, trace, log)
+
+
 def allocate_batch(
     students: pd.DataFrame,
     candidate_pool: pd.DataFrame,
@@ -1703,13 +1940,16 @@ def allocate_batch(
     strict_center_validation: bool = False,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """تخصیص دسته‌ای دانش‌آموزان و بازگشت خروجی‌های چهارتایی مطابق §3 Technical SSoT."""
+
     if policy is None:
         policy = load_policy()
+
     resolved_capacity_column = _resolve_capacity_column(policy, capacity_column)
     capacity_internal = canonicalize_headers(
         pd.DataFrame(columns=[resolved_capacity_column]),
         header_mode=cast(HeaderMode, policy.excel.header_mode_internal),
     ).columns[0]
+
     def _validate_pool(frame: pd.DataFrame) -> pd.DataFrame:
         """اعتبارسنجی قاب استخر."""
         try:
@@ -1718,6 +1958,7 @@ def allocate_batch(
             if frames_already_canonical:
                 raise ValueError("DATA_MISSING") from exc
             raise
+
     # نرمال‌سازی ورودی‌ها
     if frames_already_canonical:
         students_norm = _ensure_students_canonical(students, policy)
@@ -1725,6 +1966,7 @@ def allocate_batch(
     else:
         students_norm = _normalize_students(students, policy)
         pool_norm = _validate_pool(_normalize_pool(candidate_pool, policy))
+
     # پیکربندی مدیریت مرکز
     final_manager_map, final_priority = resolve_center_manager_config(
         policy=policy,
@@ -1736,16 +1978,19 @@ def allocate_batch(
     config_warnings = validate_center_config(policy, final_manager_map, final_priority)
     for message in config_warnings:
         warnings.warn(message, UserWarning, stacklevel=2)
+
     # مرتب‌سازی و جداسازی دانش‌آموزان
     sorted_students = _sort_students_by_center_priority(students_norm, policy, final_priority)
     school_students, center_students = _separate_school_students(sorted_students, policy)
     students_norm = pd.concat([school_students, center_students], axis=0)
+
     # آماده‌سازی استخر
     pool_stats = pool_norm.attrs.get("pool_canonicalization_stats")
     alias_autofill = int(getattr(pool_stats, "alias_autofill", 0) or 0) if pool_stats else 0
     alias_unmatched = int(getattr(pool_stats, "alias_unmatched", 0) or 0) if pool_stats else 0
     extra_columns = [column for column in pool_norm.columns if column not in candidate_pool.columns]
     pool_with_ids = inject_mentor_id(pool_norm, build_mentor_id_map(pool_norm))
+
     # تضمین ستون‌های مورد نیاز
     if "mentor_sort_key" not in pool_with_ids.columns:
         pool_with_ids["mentor_sort_key"] = pool_with_ids["کد کارمندی پشتیبان"].map(natural_key)
@@ -1753,6 +1998,7 @@ def allocate_batch(
         pool_with_ids["allocations_new"] = 0
     if "occupancy_ratio" not in pool_with_ids.columns:
         pool_with_ids["occupancy_ratio"] = 0.0
+
     # رتبه‌بندی اولیه
     sort_columns = ["occupancy_ratio", "allocations_new", "mentor_sort_key"]
     existing_sort_columns = [column for column in sort_columns if column in pool_with_ids.columns]
@@ -1762,8 +2008,10 @@ def allocate_batch(
             ascending=[True] * len(existing_sort_columns),
             kind="stable",
         )
+
     pool_internal = canonicalize_headers(pool_with_ids, header_mode="en")
     pool_internal = pool_internal.loc[:, ~pool_internal.columns.duplicated(keep="first")]
+
     # تضمین ستون‌های حیاتی در نمای داخلی
     if "mentor_sort_key" not in pool_internal.columns and (
         "mentor_sort_key" in pool_with_ids.columns
@@ -1777,10 +2025,12 @@ def allocate_batch(
         pool_internal["occupancy_ratio"] = 0.0
     if "mentor_id" not in pool_internal.columns:
         raise KeyError("Pool must contain 'mentor_id' column after canonicalization")
+
     # ساخت state اولیه
     mentor_state = _stringify_mentor_state(
         build_mentor_state(pool_internal, capacity_column=capacity_internal, policy=policy)
     )
+
     # ساخت ایندکس مدیران مرکز
     center_manager_index, _ = _build_center_manager_index(
         pool_with_ids,
@@ -1789,16 +2039,20 @@ def allocate_batch(
         strict_validation=strict_center_validation,
     )
     center_column_name = policy.stage_column("center")
+
     # داده‌های خروجی
     allocations: list[Mapping[str, object]] = []
     logs: list[AllocationLogRecord] = []
     trace_rows: list[Mapping[str, object]] = []
     trace_outcomes: list[TraceOutcome] = []
     stage_rules = default_stage_rule_map()
+
     total = max(int(students_norm.shape[0]), 1)
     trace_plan = build_trace_plan(policy, capacity_column=resolved_capacity_column)
+
     progress(0, "start")
     processed = 0
+
     def _allocate_group(
         group: pd.DataFrame,
         *,
@@ -1810,14 +2064,17 @@ def allocate_batch(
         nonlocal processed
         if group.empty:
             return
+
         stage_students = _phase_guard_source(group, policy)
         stage_extras = _phase_stage_extras(phase_stage, pool_with_ids, resolved_capacity_column)
         base_phase_trace = rule_engine.run_stage(phase_stage, stage_students, extras=stage_extras)
         is_school_phase = not enforce_center_manager
+
         for _, student_row in group.iterrows():
             processed += 1
             student_dict = student_row.to_dict()
             progress(int(processed * 100 / total), f"allocating {processed}/{total}")
+
             student_center, center_is_valid = _extract_and_validate_center(student_dict, policy)
             invalid_center_payload: dict[str, object] | None = None
             if not center_is_valid:
@@ -1826,15 +2083,18 @@ def allocate_batch(
                     "original_center": student_dict.get(center_column_name),
                     "center_column": center_column_name,
                 }
+
             # بهبود برای BUG_CAP_01 - هماهنگی pool_view و pool_state_view
             pool_view = pool_with_ids
             pool_state_view_local = pool_internal
+
             if enforce_center_manager and student_center is not None:
                 center_key = int(student_center)
                 manager_index = center_manager_index.get(center_key)
                 if manager_index is not None and len(manager_index) > 0:
                     pool_view = pool_with_ids.loc[manager_index]
                     pool_state_view_local = pool_internal.loc[manager_index]
+
             result = allocate_student(
                 student_dict,
                 pool_view,
@@ -1847,12 +2107,15 @@ def allocate_batch(
                 pool_state_view=pool_state_view_local,
                 alert_progress=progress,
             )
+
             if invalid_center_payload is not None:
                 _append_invalid_center_alert(result.log, invalid_center_payload, student_center)
+
             phase_trace: list[Mapping[str, Any]] = [dict(entry) for entry in base_phase_trace]
             existing_phase_entries = result.log.get("phase_rule_trace")
             if isinstance(existing_phase_entries, list) and existing_phase_entries:
                 phase_trace.extend(existing_phase_entries)
+
             if is_school_phase:
                 phase_trace.append(
                     {
@@ -1884,16 +2147,20 @@ def allocate_batch(
                             "message": _phase_reason_message(phase_reason),
                         }
                     )
+
             result.log["phase_rule_trace"] = phase_trace
             logs.append(result.log)
+
             for stage in result.trace:
                 trace_rows.append({"student_id": result.log["student_id"], **stage})
+
             outcome = summarize_trace_outcome(student_dict, result.trace, result.log, policy=policy)
             trace_outcomes.append(outcome)
             result.log["trace_final_status"] = outcome.final_status
             result.log["trace_failure_stage"] = outcome.failure_stage
             result.log["trace_final_reason"] = outcome.final_reason
             result.log["trace_stage_flags"] = dict(outcome.stage_flags)
+
             # بهبود برای BUG_OUT_01 - تضمین خروجی بر اساس allocation_status
             if result.mentor_row is not None and result.log.get("allocation_status") == "success":
                 chosen_index = result.mentor_row.name
@@ -1905,6 +2172,7 @@ def allocate_batch(
                     raise KeyError(
                         f"Mentor '{mentor_identifier}' missing from state after allocation"
                     )
+
                 # به‌روزرسانی state و pool
                 pool_internal.loc[chosen_index, capacity_internal] = state_entry["remaining"]
                 if (
@@ -1917,6 +2185,7 @@ def allocate_batch(
                 pool_internal.loc[chosen_index, "occupancy_ratio"] = (
                     int(state_entry.get("initial", 0)) - state_entry["remaining"]
                 ) / initial_value
+
                 pool_with_ids.loc[chosen_index, resolved_capacity_column] = state_entry["remaining"]
                 if (
                     resolved_capacity_column != "remaining_capacity"
@@ -1929,11 +2198,13 @@ def allocate_batch(
                 pool_with_ids.loc[chosen_index, "occupancy_ratio"] = pool_internal.loc[
                     chosen_index, "occupancy_ratio"
                 ]
+
                 mentor_id_display = result.log.get("mentor_id")
                 if mentor_id_display is None:
                     mentor_id_display = resolved_identifier
                 student_national_code = _extract_student_national_code(student_dict)
                 mentor_alias_code = _extract_mentor_alias_code(result.mentor_row)
+
                 allocations.append(
                     {
                         "student_id": student_dict.get("student_id", ""),
@@ -1943,6 +2214,7 @@ def allocate_batch(
                         "mentor_alias_code": mentor_alias_code,
                     }
                 )
+
     # تخصیص فازهای مدرسه‌ای و مرکزی
     school_rules, center_rules = _build_phase_rule_engines(policy)
     _allocate_group(
@@ -1957,15 +2229,19 @@ def allocate_batch(
         phase_stage="center_phase_start",
         rule_engine=center_rules,
     )
+
     # ثبت آمار alias
     for log in logs:
         log["alias_autofill"] = alias_autofill
         log["alias_unmatched"] = alias_unmatched
+
     progress(100, "done")
+
     # ساخت خروجی‌های نهایی
     allocations_df = pd.DataFrame(allocations, columns=_ALLOCATION_OUTPUT_COLUMNS)
     logs_df = pd.DataFrame(logs)
     trace_df = pd.DataFrame(trace_rows)
+
     # پردازش نتایج Trace
     if trace_outcomes:
         outcome_records: list[dict[str, object]] = []
@@ -1983,9 +2259,8 @@ def allocate_batch(
         if "student_id" in trace_summary_df.columns:
             trace_summary_df = trace_summary_df.drop_duplicates(subset=["student_id"], keep="last")
             if "student_id" in students.columns:
-                ordered_ids = students["student_id"].tolist()
                 trace_summary_df = (
-                    trace_summary_df.set_index("student_id").reindex(ordered_ids).reset_index()
+                    trace_summary_df.set_index("student_id").reindex(students["student_id"]).reset_index()
                 )
         if "student_id" in trace_summary_df.columns and "student_id" in students.columns:
             student_indexed = students.set_index("student_id", drop=False)
@@ -2009,6 +2284,7 @@ def allocate_batch(
         trace_df.attrs["policy_violations"] = find_allocation_policy_violations(
             trace_summary_df, pool_with_ids, policy=policy
         )
+
     # آماده‌سازی خروجی استخر
     pool_output = pool_with_ids.copy()
     original_columns = list(candidate_pool.columns)
@@ -2019,6 +2295,7 @@ def allocate_batch(
         if column not in pool_output.columns:
             pool_output[column] = pd.NA
     pool_output = pool_output.loc[:, desired_columns]
+
     # حفظ انواع داده‌ای اصلی
     for column in original_columns:
         if column in candidate_pool.columns:
@@ -2026,16 +2303,21 @@ def allocate_batch(
                 pool_output[column] = pool_output[column].astype(candidate_pool[column].dtype)
             except (TypeError, ValueError):
                 continue
+
     # اعتبارسنجی نهایی ظرفیت
     for entry in mentor_state.values():
         if entry["remaining"] < 0:
             raise ValueError("Negative remaining capacity detected after allocation")
+
     internal_remaining = pd.to_numeric(
         ensure_series(pool_internal[capacity_internal]), errors="coerce"
     ).fillna(0)
     if (internal_remaining < 0).any():
         raise ValueError("Pool capacity column contains negative values after allocation")
+
     return allocations_df, pool_output, logs_df, trace_df
+
+
 def build_selection_reason_rows(
     allocations: pd.DataFrame,
     students: pd.DataFrame,
@@ -2046,12 +2328,14 @@ def build_selection_reason_rows(
     trace: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """واسطهٔ سازگار برای ساخت شیت دلایل انتخاب پشتیبان."""
+
     summary_df = None
     if trace is not None:
         summary_attr = getattr(trace, "attrs", {}) or {}
         maybe_summary = summary_attr.get("summary_df")
         if isinstance(maybe_summary, pd.DataFrame) and not maybe_summary.empty:
             summary_df = maybe_summary
+
     students_enriched = students
     if summary_df is not None and "student_id" in summary_df.columns:
         students_enriched = canonicalize_headers(students, header_mode="en").copy()
@@ -2080,6 +2364,7 @@ def build_selection_reason_rows(
             students_enriched,
             header_mode=cast(HeaderMode, policy.excel.header_mode_internal),
         )
+
     return _build_selection_reason_rows(
         allocations,
         students_enriched,
