@@ -1,4 +1,5 @@
 """ماژول تخصیص دانش‌آموز به پشتیبان مطابق Policy-First و LAW v3.0."""
+
 from __future__ import annotations
 
 import math
@@ -73,11 +74,13 @@ from .reason.selection_reason import build_selection_reason_rows as _build_selec
 
 ProgressFn = Callable[[int, str], None]
 
+
 class JoinMismatch(TypedDict):
     column: str
     student_value: object
     mentor_values: list[object]
     reason: str
+
 
 __all__ = [
     "ProgressFn",
@@ -142,6 +145,7 @@ _STAGE_LABEL_FA: dict[str, str] = {
 T = TypeVar("T")
 HeaderMode = Literal["fa", "en", "fa_en"]
 
+
 def safe_int(value: Any) -> int | None:
     """تبدیل امن انواع مختلف به int با هندل کردن pandas NaN و None."""
     if value is None or (isinstance(value, float) and math.isnan(value)):
@@ -164,6 +168,7 @@ def safe_int(value: Any) -> int | None:
         return int(value.timestamp())
     return None
 
+
 # ✅ این تابع اصلاح شده و بدون خطا است
 def safe_float(value: Any) -> float | None:
     """تبدیل امن انواع مختلف به float."""
@@ -185,12 +190,12 @@ def safe_float(value: Any) -> float | None:
             return None
     return None
 
+
 def safe_str(value: Any) -> str | None:
     """تبدیل امن به رشته با هندل کردن None و NaN."""
     if value is None or (isinstance(value, float) and math.isnan(value)):
         return None
     return str(value).strip() or None
-
 
 
 def _normalize_digit_code(
@@ -770,9 +775,7 @@ def _resolve_student_center_info(
     normalized = _maybe_int_from_text(value)
     text_value = str(value).strip() if isinstance(value, str) else value
     is_invalid = bool(
-        value is None
-        or (isinstance(text_value, str) and not text_value)
-        or normalized is None,
+        value is None or (isinstance(text_value, str) and not text_value) or normalized is None,
     )
     return StudentCenterInfo(
         column=str(source),
@@ -1700,9 +1703,9 @@ def allocate_student(
 
     # --- RANK-CORE: مرتب‌سازی نهایی بر اساس remaining_capacity ↓ سپس natural mentor_id ↑ ---
     try:
-        mentor_ids_for_rank = ensure_series(
-            state_view_en.loc[ranked.index, "mentor_id"]
-        ).map(_normalize_mentor_identifier)
+        mentor_ids_for_rank = ensure_series(state_view_en.loc[ranked.index, "mentor_id"]).map(
+            _normalize_mentor_identifier
+        )
     except KeyError:
         mentor_ids_for_rank = pd.Series([None] * len(ranked), index=ranked.index)
 
@@ -1857,7 +1860,9 @@ def allocate_student(
             "CAPACITY_UNDERFLOW",
         }
         error_type_value: AllocationErrorLiteral = (
-            cast(AllocationErrorLiteral, error_code) if error_code in known_errors else "INTERNAL_ERROR"
+            cast(AllocationErrorLiteral, error_code)
+            if error_code in known_errors
+            else "INTERNAL_ERROR"
         )
         student_label = str(log.get("student_id") or student.get("student_id", ""))
         snapshot_detail = (
