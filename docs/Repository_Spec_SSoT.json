@@ -1,0 +1,317 @@
+{
+  "version": "2025-11-28",
+  "coverage": {
+    "core": [
+      "app/core/common/types.py",
+      "app/core/common/join_keys.py",
+      "app/core/common/ranking.py",
+      "app/core/common/trace.py",
+      "app/core/canonical_frames.py",
+      "app/core/build_matrix.py",
+      "app/core/matrix/coverage.py",
+      "app/core/allocate_students.py",
+      "app/core/allocation/engine.py",
+      "app/core/allocation/channels.py",
+      "app/core/allocation/mentor_pool.py",
+      "app/core/allocation/history_metrics.py",
+      "app/core/qa/invariants.py"
+    ],
+    "infra": [
+      "app/infra/canonical_frames.py",
+      "app/infra/excel/export_allocations.py",
+      "app/infra/excel/export_qa_validation.py",
+      "app/infra/local_database.py",
+      "app/infra/history_store.py",
+      "app/infra/qa/alloc_join_validation.py",
+      "app/infra/cli.py"
+    ],
+    "ui": [
+      "app/ui/main_window.py",
+      "app/ui/history_dialog.py",
+      "app/ui/history_metrics_dialog.py",
+      "app/ui/widgets/database_status_widget.py",
+      "app/ui/widgets/status_bar.py",
+      "app/ui/widgets/file_picker.py"
+    ],
+    "policy_docs": [
+      "LAW_Smart_Student_Allocation_v3.0.md",
+      "Technical_SSoT_Smart_Student_Allocation_v3.0-TECH.md",
+      "Policy-Eligibility-Matrix-v1.0.3.md",
+      "docs/System_Architecture_Blueprint_Smart_Student_Allocation_v1.0.md",
+      "README.md"
+    ]
+  },
+  "invariants": [
+    {
+      "id": "JOIN-CORE",
+      "severity": "P0",
+      "description": "All joins between students and mentors must use six canonical integer join keys with consistent semantics across Import, Matrix, Core, QA and Export.",
+      "responsible_modules": [
+        "app/core/common/types.py",
+        "app/core/common/join_keys.py",
+        "app/core/canonical_frames.py",
+        "app/infra/qa/alloc_join_validation.py",
+        "app/core/qa/invariants.py"
+      ]
+    },
+    {
+      "id": "JOIN-01",
+      "severity": "P0",
+      "description": "QA and Infra must use the same join keys and wildcard rules as Core when validating allocations and matrix coverage.",
+      "responsible_modules": [
+        "app/infra/qa/alloc_join_validation.py",
+        "app/core/qa/invariants.py",
+        "app/core/common/join_keys.py"
+      ]
+    },
+    {
+      "id": "RANK-CORE",
+      "severity": "P0",
+      "description": "Mentor ranking must be based only on remaining_capacity in descending order plus a deterministic tie-breaker (mentor_id natural sort). occupancy_ratio must not influence ranking.",
+      "responsible_modules": [
+        "app/core/common/ranking.py",
+        "app/core/allocate_students.py",
+        "app/core/allocation/engine.py"
+      ]
+    },
+    {
+      "id": "TRACE-CORE",
+      "severity": "P0",
+      "description": "Every allocation decision must be explainable via an 8-stage trace in the fixed order: type, group, gender, graduation_status, center, finance, school, capacity_gate.",
+      "responsible_modules": [
+        "app/core/common/types.py",
+        "app/core/common/trace.py",
+        "app/core/allocate_students.py"
+      ]
+    },
+    {
+      "id": "CAPACITY-01",
+      "severity": "P0",
+      "description": "Remaining capacity for any mentor must never become negative; capacity is enforced by a capacity gate before selection.",
+      "responsible_modules": [
+        "app/core/common/ranking.py",
+        "app/core/allocate_students.py",
+        "app/core/qa/invariants.py"
+      ]
+    },
+    {
+      "id": "R0-CAPACITY-GATE-01",
+      "severity": "P0",
+      "description": "Mentors with zero remaining capacity must be excluded from the candidate pool before allocation.",
+      "responsible_modules": [
+        "app/core/common/ranking.py",
+        "app/core/allocate_students.py"
+      ]
+    },
+    {
+      "id": "SCHOOL-01",
+      "severity": "P0.5",
+      "description": "School join semantics must respect wildcard values and distinguish global vs constrained mentors/students as defined by Policy.",
+      "responsible_modules": [
+        "app/core/common/join_keys.py",
+        "app/infra/qa/alloc_join_validation.py",
+        "app/core/qa/invariants.py"
+      ]
+    },
+    {
+      "id": "CENTER-01",
+      "severity": "P0.5",
+      "description": "Center join semantics must respect wildcard values and constraints as defined by Policy.",
+      "responsible_modules": [
+        "app/core/common/join_keys.py",
+        "app/core/qa/invariants.py"
+      ]
+    },
+    {
+      "id": "POOL-GOVERNANCE-01",
+      "severity": "P0.5",
+      "description": "Only mentors with allowed type/status are eligible; frozen or inactive mentors must be filtered or reported via QA.",
+      "responsible_modules": [
+        "app/core/allocation/mentor_pool.py",
+        "app/core/qa/invariants.py"
+      ]
+    },
+    {
+      "id": "ALIAS-CONSISTENCY-01",
+      "severity": "P0.5",
+      "description": "Alias expansions for mentors and schools must not create conflicting six-key profiles for the same mentor_id.",
+      "responsible_modules": [
+        "app/core/canonical_frames.py",
+        "app/core/build_matrix.py",
+        "app/core/matrix/coverage.py"
+      ]
+    },
+    {
+      "id": "CENTER-MANAGEMENT-01",
+      "severity": "P0.5",
+      "description": "Center management (center manager, priority order, strict manager validation, channels) must be deterministic and Policy-driven.",
+      "responsible_modules": [
+        "app/core/allocation/channels.py",
+        "app/core/allocation/mentor_pool.py",
+        "app/core/qa/invariants.py"
+      ]
+    },
+    {
+      "id": "DET-CORE",
+      "severity": "P0",
+      "description": "Core must be pure logic with deterministic outputs given the same inputs and Policy; no DB or time dependencies.",
+      "responsible_modules": [
+        "app/core"
+      ]
+    },
+    {
+      "id": "HISTORY-GOVERNANCE-01",
+      "severity": "P1",
+      "description": "History persistence must not alter allocation correctness; DB failures should be logged but must not fail the run.",
+      "responsible_modules": [
+        "app/infra/local_database.py",
+        "app/infra/history_store.py",
+        "app/ui/history_dialog.py"
+      ]
+    },
+    {
+      "id": "QA-OUTPUT-01",
+      "severity": "P1",
+      "description": "QA workbooks must conform to the sheet and column contracts defined in LAW and Policy-Eligibility-Matrix.",
+      "responsible_modules": [
+        "app/core/qa/invariants.py",
+        "app/infra/excel/export_qa_validation.py"
+      ]
+    }
+  ],
+  "modules": [
+    {
+      "path": "app/core/common/types.py",
+      "layer": "core",
+      "role": "Single source of truth for canonical join keys, trace order and type aliases.",
+      "implements_invariants": ["JOIN-CORE", "TRACE-CORE", "DET-CORE"]
+    },
+    {
+      "path": "app/core/common/join_keys.py",
+      "layer": "core",
+      "role": "Canonicalization and validation of join keys (gender, center, school, finance) with wildcard handling.",
+      "implements_invariants": ["JOIN-CORE", "JOIN-01", "SCHOOL-01", "CENTER-01", "DET-CORE"]
+    },
+    {
+      "path": "app/core/common/ranking.py",
+      "layer": "core",
+      "role": "Building mentor capacity state and sorting candidate pools.",
+      "implements_invariants": ["RANK-CORE", "CAPACITY-01", "R0-CAPACITY-GATE-01", "DET-CORE"],
+      "known_discrepancies": ["DISC-RANK-CORE-OCCUPANCY"]
+    },
+    {
+      "path": "app/core/common/trace.py",
+      "layer": "core",
+      "role": "Building and executing 8-stage allocation traces.",
+      "implements_invariants": ["TRACE-CORE", "DET-CORE"]
+    },
+    {
+      "path": "app/core/canonical_frames.py",
+      "layer": "core",
+      "role": "Core-level canonicalization of student and mentor-pool frames.",
+      "implements_invariants": ["JOIN-CORE", "ALIAS-CONSISTENCY-01", "DET-CORE"]
+    },
+    {
+      "path": "app/core/build_matrix.py",
+      "layer": "core",
+      "role": "Building the eligibility matrix from mentor pool and Policy.",
+      "implements_invariants": ["JOIN-CORE", "ALIAS-CONSISTENCY-01", "DET-CORE"]
+    },
+    {
+      "path": "app/core/matrix/coverage.py",
+      "layer": "core",
+      "role": "Computing coverage metrics for the eligibility matrix.",
+      "implements_invariants": ["ALIAS-CONSISTENCY-01", "DET-CORE"]
+    },
+    {
+      "path": "app/core/allocate_students.py",
+      "layer": "core",
+      "role": "Single-student allocation engine with trace and logging.",
+      "implements_invariants": ["JOIN-CORE", "TRACE-CORE", "RANK-CORE", "CAPACITY-01", "R0-CAPACITY-GATE-01", "DET-CORE"]
+    },
+    {
+      "path": "app/core/allocation/mentor_pool.py",
+      "layer": "core",
+      "role": "Effective mentor pool construction with governance (status, type, overrides).",
+      "implements_invariants": ["POOL-GOVERNANCE-01", "CENTER-MANAGEMENT-01", "DET-CORE"]
+    },
+    {
+      "path": "app/core/allocation/channels.py",
+      "layer": "core",
+      "role": "Derivation of allocation channels based on Policy, center and finance.",
+      "implements_invariants": ["CENTER-MANAGEMENT-01", "DET-CORE"]
+    },
+    {
+      "path": "app/core/qa/invariants.py",
+      "layer": "core",
+      "role": "QA invariant implementation and aggregation into QaReport.",
+      "implements_invariants": ["JOIN-01", "SCHOOL-01", "CENTER-01", "POOL-GOVERNANCE-01", "CAPACITY-01", "QA-OUTPUT-01", "DET-CORE"]
+    },
+    {
+      "path": "app/infra/local_database.py",
+      "layer": "infra",
+      "role": "SQLite LocalDatabase wrapper with schema management and diagnostics.",
+      "implements_invariants": ["HISTORY-GOVERNANCE-01"]
+    },
+    {
+      "path": "app/infra/history_store.py",
+      "layer": "infra",
+      "role": "Mapping allocation runs, metrics and QA outcomes into LocalDatabase records.",
+      "implements_invariants": ["HISTORY-GOVERNANCE-01"]
+    },
+    {
+      "path": "app/infra/excel/export_qa_validation.py",
+      "layer": "infra",
+      "role": "QA workbook export for matrix and matrix_vs_students validation.",
+      "implements_invariants": ["QA-OUTPUT-01"]
+    },
+    {
+      "path": "app/infra/qa/alloc_join_validation.py",
+      "layer": "infra",
+      "role": "Join-key QA for allocations with wildcard-aware school semantics.",
+      "implements_invariants": ["JOIN-01", "SCHOOL-01", "CENTER-01"]
+    },
+    {
+      "path": "app/ui/main_window.py",
+      "layer": "ui",
+      "role": "Main PySide6 window orchestrating the workflow from input selection to allocation, QA and history.",
+      "implements_invariants": []
+    }
+  ],
+  "discrepancies": [
+    {
+      "id": "DISC-RANK-CORE-OCCUPANCY",
+      "severity": "P0",
+      "description": "Ranking still uses occupancy_ratio (and allocations_new) as sort keys when present, violating RANK-CORE which requires capacity-only ranking.",
+      "location": "app/core/common/ranking.py",
+      "violated_invariants": ["RANK-CORE"]
+    }
+  ],
+  "gaps": [
+    {
+      "id": "GAP-QA-SHEET-MAPPING",
+      "severity": "P1",
+      "description": "No formal LAW-sheet to exporter-function mapping table exists for QA workbooks.",
+      "related_modules": [
+        "app/infra/excel/export_qa_validation.py"
+      ]
+    },
+    {
+      "id": "GAP-CENTER-MANAGEMENT-MAPPING",
+      "severity": "P0.5",
+      "description": "No formal mapping table between AllocationChannel values and Policy-defined center management rules.",
+      "related_modules": [
+        "app/core/allocation/channels.py",
+        "app/core/qa/invariants.py"
+      ]
+    },
+    {
+      "id": "GAP-TRACE-LOG-DETAIL",
+      "severity": "P2",
+      "description": "Trace records counts per stage but no structured list of removed mentors per stage for debugging.",
+      "related_modules": [
+        "app/core/common/trace.py"
+      ]
+    }
+  ]
+}
