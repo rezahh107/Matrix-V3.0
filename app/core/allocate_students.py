@@ -73,13 +73,11 @@ from .reason.selection_reason import build_selection_reason_rows as _build_selec
 
 ProgressFn = Callable[[int, str], None]
 
-
 class JoinMismatch(TypedDict):
     column: str
     student_value: object
     mentor_values: list[object]
     reason: str
-
 
 __all__ = [
     "ProgressFn",
@@ -89,7 +87,6 @@ __all__ = [
     "build_selection_reason_rows",
 ]
 
-# شناسه‌های پایدار مطابق §4.2 Technical SSoT
 _STUDENT_NATIONAL_KEYS: tuple[str, ...] = (
     "student_national_code",
     "student_national_id",
@@ -113,7 +110,6 @@ _MENTOR_ALIAS_KEYS: tuple[str, ...] = (
     "کد پستی",
 )
 
-# ستون‌های خروجی تخصیص مطابق §4.2
 _ALLOCATION_OUTPUT_COLUMNS: tuple[str, ...] = (
     "student_id",
     "student_national_code",
@@ -122,7 +118,6 @@ _ALLOCATION_OUTPUT_COLUMNS: tuple[str, ...] = (
     "mentor_alias_code",
 )
 
-# ترتیب مراحل Trace مطابق §5.3 Technical SSoT و §6.1 LAW
 _JOIN_STAGE_FAILURE_ORDER: tuple[TraceStageLiteral, ...] = (
     "type",
     "group",
@@ -147,7 +142,6 @@ _STAGE_LABEL_FA: dict[str, str] = {
 T = TypeVar("T")
 HeaderMode = Literal["fa", "en", "fa_en"]
 
-
 def safe_int(value: Any) -> int | None:
     """تبدیل امن انواع مختلف به int با هندل کردن pandas NaN و None."""
     if value is None or (isinstance(value, float) and math.isnan(value)):
@@ -170,8 +164,8 @@ def safe_int(value: Any) -> int | None:
         return int(value.timestamp())
     return None
 
-
-def safe_float(value: Any)) -> float | None:
+# ✅ این تابع اصلاح شده و بدون خطا است
+def safe_float(value: Any) -> float | None:
     """تبدیل امن انواع مختلف به float."""
     if value is None or (isinstance(value, float) and math.isnan(value)):
         return None
@@ -191,12 +185,12 @@ def safe_float(value: Any)) -> float | None:
             return None
     return None
 
-
 def safe_str(value: Any) -> str | None:
     """تبدیل امن به رشته با هندل کردن None و NaN."""
     if value is None or (isinstance(value, float) and math.isnan(value)):
         return None
     return str(value).strip() or None
+
 
 
 def _normalize_digit_code(
