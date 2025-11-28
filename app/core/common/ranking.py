@@ -1,4 +1,4 @@
-"""منطق رتبه‌بندی پشتیبان‌ها طبق Policy نسخهٔ 1.0.3."""
+"""منطق رتبه‌بندی پشتیبان‌ها طبق Policy (RANK-CORE)."""
 
 from __future__ import annotations
 
@@ -30,7 +30,23 @@ _DEFAULT_POLICY_PATH = Path("config/policy.json")
 
 
 class MentorCapacityState(TypedDict):
-    """Normalized capacity state for a mentor."""
+    """Normalized capacity state for a mentor.
+
+    initial:
+        ظرفیت اولیه در شروع run.
+    remaining:
+        ظرفیت باقی‌مانده در هر لحظه.
+    alloc_new:
+        تعداد تخصیص‌های جدید در این run.
+    occupancy_ratio:
+        نسبت اشغال‌شدگی (فقط برای DIAG؛ در ranking استفاده نمی‌شود).
+    total_capacity:
+        ظرفیت کل (برای گزارش).
+    current_allocations:
+        تعداد تخصیص‌های فعلی (برای گزارش).
+    remaining_capacity:
+        همان remaining، برای سازگاری با خروجی‌ها.
+    """
 
     initial: int
     remaining: int
@@ -148,33 +164,29 @@ def apply_ranking_policy(
     policy: PolicyConfig | None = None,
     policy_path: str | Path = _DEFAULT_POLICY_PATH,
 ) -> pd.DataFrame:
-    """مرتب‌سازی استخر کاندید با قوانین Policy و حالت ظرفیت."""
+    """مرتب‌سازی استخر کاندید طبق RANK-CORE.
+
+    قانون RANK-CORE:
+      1. primary sort: remaining_capacity (descending)
+      2. tie-break: natural_key(mentor_id) (ascending)
+
+    - occupancy_ratio فقط برای DIAG محاسبه و نگه‌داری می‌شود و در ترتیب استفاده نمی‌شود.
+    """
+
+    if candidate_pool.empty:
+        ranked = candidate_pool.copy()
+        ranked.attrs["fairness_strategy"] = "none"
+        ranked.attrs["fairness_reason"] = None
+        return ranked
 
     if policy is None:
         policy = load_policy(policy_path)
 
     ranked = candidate_pool.copy()
+    ranked = ensure_ranking_columns(ranked)
     en_view = dedupe_columns(canonicalize_headers(ranked, header_mode="en"))
     state_source = en_view.copy()
 
-    if "allocations_new" not in ranked.columns and "allocations_new" in en_view.columns:
-        ranked["allocations_new"] = en_view["allocations_new"]
-    if "allocations_new" not in ranked.columns:
-        ranked["allocations_new"] = 0
-    if "occupancy_ratio" not in ranked.columns and "occupancy_ratio" in en_view.columns:
-        ranked["occupancy_ratio"] = en_view["occupancy_ratio"]
-    if "occupancy_ratio" not in ranked.columns:
-        ranked["occupancy_ratio"] = 0.0
-    if "کد کارمندی پشتیبان" not in ranked.columns:
-        mentor_id_series = en_view.get("mentor_id")
-        if mentor_id_series is None:
-            raise KeyError("candidate pool must include mentor identifier column")
-        if isinstance(mentor_id_series, pd.DataFrame):
-            mentor_id_series = mentor_id_series.iloc[:, 0]
-        ranked["کد کارمندی پشتیبان"] = mentor_id_series
-
-    ranked = ensure_ranking_columns(ranked)
-    en_view = dedupe_columns(canonicalize_headers(ranked, header_mode="en"))
     mentor_ids = en_view.get("mentor_id")
     if isinstance(mentor_ids, pd.DataFrame):
         mentor_ids = mentor_ids.iloc[:, 0]
@@ -216,41 +228,27 @@ def apply_ranking_policy(
     remaining_int = _series_as_int(remaining)
     allocations_int = _series_as_int(allocations)
 
+    # occupancy_ratio صرفاً برای گزارش و دیباگ
     safe_initial = initial_int.mask(initial_int <= 0, 1)
     occupancy = (initial_int - remaining_int) / safe_initial
 
     ranked["occupancy_ratio"] = occupancy.astype(float)
     ranked["allocations_new"] = allocations_int
     ranked["remaining_capacity"] = remaining_int
-    ranked["remaining_capacity_desc"] = (-remaining_int).astype(int)
     ranked["mentor_sort_key"] = mentor_ids.map(natural_key)
     ranked["mentor_id_en"] = mentor_ids
 
-    sort_columns: list[str] = []
-    ascending_flags: list[bool] = []
-    for rule in policy.ranking_rules:
-        if rule.column not in ranked.columns:
-            raise KeyError(f"Ranking column '{rule.column}' missing from candidate pool")
-        sort_columns.append(rule.column)
-        ascending_flags.append(bool(rule.ascending))
+    # RANK-CORE: فقط remaining_capacity (desc) و natural_key(mentor_id) (asc)
+    sort_columns: list[str] = ["remaining_capacity", "mentor_sort_key"]
+    ascending_flags: list[bool] = [False, True]
 
     ranked = ranked.sort_values(by=sort_columns, ascending=ascending_flags, kind="stable")
     ranked = ranked.reset_index(drop=True)
-    tie_columns: Sequence[str] = (
-        tuple(sort_columns[:-1]) if len(sort_columns) > 1 else tuple(sort_columns)
-    )
-    ranked["__fair_origin__"] = ranked.index
-    strategy = getattr(policy, "fairness_strategy", "none") or "none"
-    ranked, fairness_applied = _apply_fairness_strategy(
-        ranked,
-        strategy=strategy,
-        tie_columns=tie_columns,
-    )
-    if fairness_applied:
-        ranked.attrs["fairness_reason"] = build_reason(ReasonCode.FAIRNESS_ORDER)
-    ranked.attrs["fairness_strategy"] = strategy
-    ranked = ranked.drop(columns=["__fair_origin__"], errors="ignore")
-    return ranked.reset_index(drop=True)
+
+    # در این نسخه fairness عملاً غیرفعال است، ولی متادیتا را برای سازگاری نگه می‌داریم
+    ranked.attrs["fairness_strategy"] = "none"
+    ranked.attrs["fairness_reason"] = None
+    return ranked
 
 
 def _coerce_capacity_value(value: CapacityScalar) -> int:
@@ -363,6 +361,7 @@ def _apply_fairness_strategy(
     strategy: str,
     tie_columns: Sequence[str],
 ) -> tuple[pd.DataFrame, bool]:
+    """تابع قدیمی fairness؛ در نسخهٔ فعلی عملاً استفاده نمی‌شود."""
     if strategy == "none" or ranked.empty or not tie_columns:
         return ranked, False
     working = ranked.copy()
@@ -374,4 +373,6 @@ def _apply_fairness_strategy(
     else:
         return ranked, False
     applied = tuple(working.get("__fair_origin__", working.index)) != original
+    if applied:
+        working.attrs["fairness_reason"] = build_reason(ReasonCode.FAIRNESS_ORDER)
     return working, applied
