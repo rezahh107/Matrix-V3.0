@@ -71,7 +71,6 @@ from .counter import normalize_digits, strip_hidden_chars
 from .policy_loader import PolicyConfig, load_policy
 from .reason.selection_reason import build_selection_reason_rows as _build_selection_reason_rows
 
-
 ProgressFn = Callable[[int, str], None]
 
 
@@ -282,7 +281,7 @@ def _normalize_mentor_identifier(value: object) -> str | None:
     return str(value).strip() or None
 
 
-def _resolve_mentor_identifier(result: "AllocationResult", *, policy: PolicyConfig) -> str:
+def _resolve_mentor_identifier(result: AllocationResult, *, policy: PolicyConfig) -> str:
     """بازیابی شناسهٔ پشتیبان با اولویت: log → سطر فارسی → سطر canonical."""
     mentor_identifier_logged = _normalize_mentor_identifier(result.log.get("mentor_id"))
     if mentor_identifier_logged is not None:
