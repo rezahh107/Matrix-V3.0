@@ -1,6 +1,3 @@
-نسخهٔ کامل ماژول با اصلاح SCHOOL-01 (`_school_mask_series`) و RANK-CORE در `allocate_student`:
-
-```python
 """ماژول تخصیص دانش‌آموز به پشتیبان مطابق Policy-First و LAW v3.0."""
 
 from __future__ import annotations
