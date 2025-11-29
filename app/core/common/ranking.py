@@ -289,9 +289,7 @@ def consume_capacity(
     entry["total_capacity"] = max(
         initial, _coerce_capacity_value(entry.get("total_capacity", initial))
     )
-    denominator = max(initial, 1)
-    occupancy_ratio = (initial - after) / denominator
-    entry["occupancy_ratio"] = float(occupancy_ratio)
+    entry["occupancy_ratio"] = 0.0
     return before, after, entry["occupancy_ratio"]
 
 

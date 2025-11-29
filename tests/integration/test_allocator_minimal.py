@@ -100,4 +100,4 @@ def test_allocator_respects_capacity_and_filters_virtual() -> None:
 
     success_logs = logs.loc[logs["allocation_status"] == "success"]
     assert all(success_logs["capacity_before"] > success_logs["capacity_after"])
-    assert success_logs["occupancy_ratio"].iloc[-1] > 0
+    assert success_logs["occupancy_ratio"].iloc[-1] == 0

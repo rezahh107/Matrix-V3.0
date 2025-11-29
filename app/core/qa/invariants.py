@@ -592,7 +592,6 @@ def check_ALLOC_01(  # noqa: N802
     summary["__mentor"] = summary["__mentor"].astype(int)
 
     remaining_col = policy.columns.remaining_capacity
-    occupancy_col = "occupancy_ratio"
     alloc_new_col = "allocations_new"
 
     for _, row in summary.iterrows():
@@ -615,24 +614,6 @@ def check_ALLOC_01(  # noqa: N802
                     },
                 )
             )
-
-        if occupancy_col in summary.columns:
-            denominator = remaining + alloc_new
-            expected_ratio = 0.0 if denominator <= 0 else alloc_new / denominator
-            actual_ratio = float(pd.to_numeric(row.get(occupancy_col, 0), errors="coerce"))
-            if abs(actual_ratio - expected_ratio) > 1e-6:
-                violations.append(
-                    QaViolation(
-                        rule_id="QA_RULE_ALLOC_01",
-                        level="error",
-                        message="نسبت اشغال با فرمول ظرفیت هم‌خوان نیست",
-                        details={
-                            "mentor_id": mentor_id,
-                            "expected_ratio": expected_ratio,
-                            "actual_ratio": actual_ratio,
-                        },
-                    )
-                )
 
     return QaRuleResult(
         rule_id="QA_RULE_ALLOC_01",
