@@ -236,7 +236,7 @@ def apply_ranking_policy(
         by=sort_columns,
         ascending=ascending_flags,
         kind="mergesort",
-    ).reset_index(drop=True)
+    )
 
     strategy = getattr(policy, "fairness_strategy", "none")
     fairness_reason_obj: object | None = None
@@ -251,7 +251,7 @@ def apply_ranking_policy(
                 tie_columns=tie_columns,
             )
             if applied:
-                ranked = fair_ranked.reset_index(drop=True)
+                ranked = fair_ranked
                 fairness_reason_obj = ranked.attrs.get("fairness_reason") or build_reason(
                     ReasonCode.FAIRNESS_ORDER
                 )
@@ -387,7 +387,7 @@ def _apply_fairness_strategy(
     if not frames:
         return ranked, False
 
-    merged = pd.concat(frames, axis=0, ignore_index=True)
+    merged = pd.concat(frames, axis=0)
     if applied:
         merged.attrs["fairness_reason"] = build_reason(ReasonCode.FAIRNESS_ORDER)
-    return merged.reset_index(drop=True), applied
+    return merged, applied

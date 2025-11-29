@@ -1084,6 +1084,7 @@ def _normalize_ranking_rules(raw: Sequence[RankingRuleRaw]) -> list[Mapping[str,
     if not ranking_items:
         raise ValueError("ranking must contain at least one rule")
 
+    seen_names: set[str] = set()
     parsed: dict[str, Mapping[str, object]] = {}
     for index, item in enumerate(ranking_items):
         if isinstance(item, Mapping):
@@ -1111,11 +1112,16 @@ def _normalize_ranking_rules(raw: Sequence[RankingRuleRaw]) -> list[Mapping[str,
         else:
             raise TypeError(f"ranking rule at position {index} must be a mapping or string")
 
+        if name in seen_names:
+            raise ValueError("ranking items must be unique")
+        seen_names.add(name)
+
         if name not in _RANKING_RULE_LIBRARY:
             raise ValueError(f"Unknown ranking rule '{name}'")
-        if name not in parsed:
-            parsed[name] = {"name": name, "column": column, "ascending": ascending}
+        parsed[name] = {"name": name, "column": column, "ascending": ascending}
 
+    # میراث: اگر قانون min_occupancy_ratio ارائه شود، صرفاً برای متن استفاده می‌شود
+    # و در ترتیب رسمی capacity-based نقشی ندارد.
     normalized: list[Mapping[str, object]] = []
     for name in _CANONICAL_RANKING_ORDER:
         column, ascending = _RANKING_RULE_LIBRARY[name]

@@ -120,10 +120,9 @@ def test_tiebreak_explanation_reflects_policy() -> None:
         trace=None,
     )
     reason_text = reasons.iloc[0]["دلیل انتخاب پشتیبان"]
-    assert "۱) نسبت اشغال کمتر" in reason_text
-    assert "۲) ظرفیت مطلق باقی‌مانده بیشتر" in reason_text
-    assert "۳) تخصیص جدید کمتر" in reason_text
-    assert "۴) شناسه پشتیبان" in reason_text
+    assert "۱) ظرفیت مطلق باقی‌مانده بیشتر" in reason_text
+    assert "۲) تخصیص جدید کمتر" in reason_text
+    assert "۳) شناسه پشتیبان" in reason_text
 
 
 def test_selection_reason_handles_duplicate_student_rows() -> None:

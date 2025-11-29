@@ -110,10 +110,17 @@ def test_join_keys_constraints() -> None:
 def test_ranking_constraints() -> None:
     payload = _valid_payload()
     payload["ranking_rules"] = [
-        {"name": "dup", "column": "occupancy_ratio", "ascending": True},
-        {"name": "dup", "column": "remaining_capacity_desc", "ascending": True},
-        {"name": "ok", "column": "allocations_new", "ascending": True},
-        {"name": "ok2", "column": "mentor_sort_key", "ascending": True},
+        {
+            "name": "max_remaining_capacity",
+            "column": "remaining_capacity_desc",
+            "ascending": True,
+        },
+        {
+            "name": "max_remaining_capacity",
+            "column": "remaining_capacity_desc",
+            "ascending": True,
+        },
+        {"name": "min_allocations_new", "column": "allocations_new", "ascending": True},
     ]
     with pytest.raises(ValueError, match="ranking items must be unique"):
         parse_policy_dict(payload)
@@ -142,8 +149,12 @@ def test_ranking_rule_requires_string_columns() -> None:
 def test_ranking_must_have_four_items() -> None:
     payload = _valid_payload()
     payload["ranking_rules"].pop()
-    with pytest.raises(ValueError, match="ranking must contain exactly 4 items"):
-        parse_policy_dict(payload)
+    policy = parse_policy_dict(payload)
+    assert [rule.name for rule in policy.ranking_rules] == [
+        "max_remaining_capacity",
+        "min_allocations_new",
+        "min_mentor_id",
+    ]
 
 
 def test_trace_stage_order_enforced() -> None:
@@ -267,7 +278,6 @@ def test_ranking_legacy_strings_supported() -> None:
 
     policy = parse_policy_dict(legacy_payload)
     assert [rule.name for rule in policy.ranking_rules] == [
-        "min_occupancy_ratio",
         "max_remaining_capacity",
         "min_allocations_new",
         "min_mentor_id",
@@ -362,7 +372,6 @@ def test_load_policy_reads_default_config(tmp_path: Path) -> None:
     assert isinstance(policy, PolicyConfig)
     assert len(policy.join_keys) == 6
     assert policy.ranking == [
-        "min_occupancy_ratio",
         "max_remaining_capacity",
         "min_allocations_new",
         "min_mentor_id",
