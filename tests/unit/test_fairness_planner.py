@@ -11,10 +11,9 @@ from app.core.policy_loader import load_policy
 def _tie_pool() -> pd.DataFrame:
     return pd.DataFrame(
         {
-            "mentor_id": ["EMP-101", "EMP-102", "EMP-103"],
+            "mentor_id": ["EMP1", "EMP01", "EMP0001"],
             "occupancy_ratio": [0.1, 0.1, 0.1],
             "allocations_new": [0, 0, 0],
-            "mentor_sort_key": [(), (), ()],
             "remaining_capacity": [5, 5, 5],
             "counter": ["543570001", "543570005", "543570003"],
         }

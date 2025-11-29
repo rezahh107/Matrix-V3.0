@@ -174,30 +174,40 @@ def inject_mentor_id(pool: pd.DataFrame, id_map: Mapping[str, str]) -> pd.DataFr
 
 
 def ensure_ranking_columns(pool: pd.DataFrame) -> pd.DataFrame:
-    """تضمین وجود ستون‌های رتبه‌بندی و افزودن ستون‌های مشتق طبیعی.
+    """بازگشت نسخهٔ ایمن از دیتافریم با ستون‌های رتبه‌بندی حداقلی.
 
-    این تابع دیتافریم جدیدی برمی‌گرداند تا ورودی تغییری نکند. علاوه بر
-    «mentor_id_str» که نسخهٔ رشته‌ای نرمال‌شده است، ستون «mentor_sort_key» نیز
-    محاسبه می‌شود تا کلید طبیعی (tuple) برای sort پایدار آماده باشد.
-
-    Args:
-        pool: دیتافریم کاندید با ستون‌های مورد نیاز.
-
-    Returns:
-        pd.DataFrame: کپی با ستون‌های اضافه برای مرتب‌سازی طبیعی.
-
-    Raises:
-        KeyError: اگر ستون‌های ضروری وجود نداشته باشند.
+    ورودی ممکن است فقط شامل ``mentor_id`` یا «کد کارمندی پشتیبان» باشد. این تابع
+    بدون تحمیل پیش‌شرط Farsi/English ستون‌های زیر را تضمین می‌کند:
+    ``mentor_id``، ``remaining_capacity``، ``allocations_new``، ``occupancy_ratio``،
+    ``mentor_id_str`` و ``mentor_sort_key``.
     """
 
-    required = {"occupancy_ratio", "allocations_new", "کد کارمندی پشتیبان"}
-    missing = required - set(pool.columns)
-    if missing:
-        raise KeyError(f"Missing columns for ranking: {sorted(missing)}")
-
     result = pool.copy()
-    result["mentor_id_str"] = result["کد کارمندی پشتیبان"].map(to_numlike_str)
-    result["mentor_sort_key"] = result["کد کارمندی پشتیبان"].map(natural_key)
+
+    mentor_column: str | None = None
+    if "mentor_id" in result.columns:
+        mentor_column = "mentor_id"
+    elif "کد کارمندی پشتیبان" in result.columns:
+        mentor_column = "کد کارمندی پشتیبان"
+        result = result.rename(columns={"کد کارمندی پشتیبان": "mentor_id"})
+    else:
+        for candidate in ("mentor id", "mentor", "پشتیبان"):
+            if candidate in result.columns:
+                mentor_column = candidate
+                result = result.rename(columns={candidate: "mentor_id"})
+                break
+    if mentor_column is None and "mentor_id" not in result.columns:
+        raise KeyError("Missing mentor identifier column for ranking")
+
+    if "remaining_capacity" not in result.columns:
+        result["remaining_capacity"] = 0
+    if "allocations_new" not in result.columns:
+        result["allocations_new"] = 0
+    if "occupancy_ratio" not in result.columns:
+        result["occupancy_ratio"] = 0.0
+
+    result["mentor_id_str"] = result["mentor_id"].map(to_numlike_str)
+    result["mentor_sort_key"] = result["mentor_id"].map(natural_key)
     return result
 
 

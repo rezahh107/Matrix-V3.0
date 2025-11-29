@@ -164,14 +164,7 @@ def apply_ranking_policy(
     policy: PolicyConfig | None = None,
     policy_path: str | Path = _DEFAULT_POLICY_PATH,
 ) -> pd.DataFrame:
-    """مرتب‌سازی استخر کاندید طبق RANK-CORE.
-
-    قانون RANK-CORE:
-      1. primary sort: remaining_capacity (descending)
-      2. tie-break: natural_key(mentor_id) (ascending)
-
-    - occupancy_ratio فقط برای DIAG محاسبه و نگه‌داری می‌شود و در ترتیب استفاده نمی‌شود.
-    """
+    """مرتب‌سازی استخر کاندید طبق RANK-CORE (ظرفیت‌محور)."""
 
     if candidate_pool.empty:
         ranked = candidate_pool.copy()
@@ -182,10 +175,8 @@ def apply_ranking_policy(
     if policy is None:
         policy = load_policy(policy_path)
 
-    ranked = candidate_pool.copy()
-    ranked = ensure_ranking_columns(ranked)
+    ranked = ensure_ranking_columns(candidate_pool)
     en_view = dedupe_columns(canonicalize_headers(ranked, header_mode="en"))
-    state_source = en_view.copy()
 
     mentor_ids = en_view.get("mentor_id")
     if isinstance(mentor_ids, pd.DataFrame):
@@ -197,6 +188,7 @@ def apply_ranking_policy(
     if state is not None:
         state_view = state
     else:
+        state_source = en_view.copy()
         state_view = cast(
             Mapping[Hashable, Mapping[str, CapacityScalar]],
             build_mentor_state(state_source, policy=policy),
@@ -228,7 +220,6 @@ def apply_ranking_policy(
     remaining_int = _series_as_int(remaining)
     allocations_int = _series_as_int(allocations)
 
-    # occupancy_ratio صرفاً برای گزارش و دیباگ
     safe_initial = initial_int.mask(initial_int <= 0, 1)
     occupancy = (initial_int - remaining_int) / safe_initial
 
@@ -238,16 +229,35 @@ def apply_ranking_policy(
     ranked["mentor_sort_key"] = mentor_ids.map(natural_key)
     ranked["mentor_id_en"] = mentor_ids
 
-    # RANK-CORE: فقط remaining_capacity (desc) و natural_key(mentor_id) (asc)
-    sort_columns: list[str] = ["remaining_capacity", "mentor_sort_key"]
-    ascending_flags: list[bool] = [False, True]
+    sort_columns: list[str] = ["remaining_capacity", "allocations_new", "mentor_sort_key"]
+    ascending_flags: list[bool] = [False, True, True]
 
-    ranked = ranked.sort_values(by=sort_columns, ascending=ascending_flags, kind="stable")
-    ranked = ranked.reset_index(drop=True)
+    ranked = ranked.sort_values(
+        by=sort_columns,
+        ascending=ascending_flags,
+        kind="mergesort",
+    ).reset_index(drop=True)
 
-    # در این نسخه fairness عملاً غیرفعال است، ولی متادیتا را برای سازگاری نگه می‌داریم
-    ranked.attrs["fairness_strategy"] = "none"
-    ranked.attrs["fairness_reason"] = None
+    strategy = getattr(policy, "fairness_strategy", "none")
+    fairness_reason_obj: object | None = None
+
+    if strategy != "none":
+        tie_columns: tuple[str, ...] = tuple(sort_columns)
+        has_ties = ranked.duplicated(subset=list(tie_columns), keep=False).any()
+        if has_ties:
+            fair_ranked, applied = _apply_fairness_strategy(
+                ranked,
+                strategy=strategy,
+                tie_columns=tie_columns,
+            )
+            if applied:
+                ranked = fair_ranked.reset_index(drop=True)
+                fairness_reason_obj = ranked.attrs.get("fairness_reason") or build_reason(
+                    ReasonCode.FAIRNESS_ORDER
+                )
+
+    ranked.attrs["fairness_strategy"] = strategy
+    ranked.attrs["fairness_reason"] = fairness_reason_obj
     return ranked
 
 
