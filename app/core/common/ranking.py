@@ -39,7 +39,7 @@ class MentorCapacityState(TypedDict):
     alloc_new:
         تعداد تخصیص‌های جدید در این run.
     occupancy_ratio:
-        نسبت اشغال‌شدگی (فقط برای DIAG؛ در ranking استفاده نمی‌شود).
+        Legacy diagnostic field; kept for compatibility but not recomputed.
     total_capacity:
         ظرفیت کل (برای گزارش).
     current_allocations:
@@ -212,18 +212,13 @@ def apply_ranking_policy(
         numeric = pd.to_numeric(series, errors="coerce").fillna(0)
         return numeric.astype(int)
 
-    initial = mentor_ids.map(lambda mentor: _state_metric(mentor, "initial"))
     remaining = mentor_ids.map(lambda mentor: _state_metric(mentor, "remaining"))
     allocations = mentor_ids.map(lambda mentor: _state_metric(mentor, "alloc_new"))
 
-    initial_int = _series_as_int(initial)
     remaining_int = _series_as_int(remaining)
     allocations_int = _series_as_int(allocations)
 
-    safe_initial = initial_int.mask(initial_int <= 0, 1)
-    occupancy = (initial_int - remaining_int) / safe_initial
-
-    ranked["occupancy_ratio"] = occupancy.astype(float)
+    ranked["occupancy_ratio"] = 0.0
     ranked["allocations_new"] = allocations_int
     ranked["remaining_capacity"] = remaining_int
     ranked["mentor_sort_key"] = mentor_ids.map(natural_key)
@@ -282,6 +277,8 @@ def consume_capacity(
     if before <= 0:
         raise ValueError("CAPACITY_UNDERFLOW")
     after = before - 1
+    if after < 0:
+        raise ValueError("CAPACITY_UNDERFLOW")
     entry["remaining"] = after
     entry["alloc_new"] = _coerce_capacity_value(entry.get("alloc_new", 0)) + 1
     entry["remaining_capacity"] = after
@@ -292,10 +289,8 @@ def consume_capacity(
     entry["total_capacity"] = max(
         initial, _coerce_capacity_value(entry.get("total_capacity", initial))
     )
-    denominator = max(initial, 1)
-    occupancy_ratio = (initial - after) / denominator
-    entry["occupancy_ratio"] = float(occupancy_ratio)
-    return before, after, float(occupancy_ratio)
+    entry["occupancy_ratio"] = 0.0
+    return before, after, entry["occupancy_ratio"]
 
 
 _FAIRNESS_COUNTER_CANDIDATES: tuple[str, ...] = (

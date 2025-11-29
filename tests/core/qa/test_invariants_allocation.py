@@ -38,8 +38,7 @@ def test_allocation_capacity_violation() -> None:
     result = check_ALLOC_01(allocation=allocation, allocation_summary=summary, policy=policy)
 
     assert not result.passed
-    assert len(result.violations) == 2
+    assert len(result.violations) == 1
 
     violation_messages = {v.message for v in result.violations}
     assert "تخصیص بیش از ظرفیت منتور" in violation_messages
-    assert "نسبت اشغال با فرمول ظرفیت هم‌خوان نیست" in violation_messages

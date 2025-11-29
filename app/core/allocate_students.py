@@ -555,8 +555,9 @@ def _school_mask_series(
     # اگر constraint تعریف شده، منتورهای restricted حذف می‌شوند
     if constraint_series is not None:
         restricted = ensure_series(constraint_series).fillna(False).astype(bool)
-        unrestricted_mask = ~restricted
-        base_mask = base_mask & unrestricted_mask
+        restricted_match = restricted & series.eq(student_school)
+        unrestricted_match = (~restricted) & base_mask
+        base_mask = restricted_match | unrestricted_match
 
     return base_mask
 
@@ -1657,6 +1658,20 @@ def allocate_student(
     stage_candidate_counts = _canonical_stage_counts(stage_candidate_counts)
     log["stage_candidate_counts"] = stage_candidate_counts
 
+    for stage_entry in trace:
+        if stage_entry["stage"] != "capacity_gate":
+            continue
+        total_before_capacity = int(capacity_series.shape[0])
+        total_after_capacity = int(capacity_mask.sum())
+        stage_entry["total_before"] = total_before_capacity
+        stage_entry["total_after"] = total_after_capacity
+        stage_entry["matched"] = bool(total_after_capacity)
+        extras = dict(stage_entry.get("extras") or {})
+        extras["capacity_before"] = total_before_capacity
+        extras["capacity_after"] = total_after_capacity
+        stage_entry["extras"] = extras
+        break
+
     pool_mismatch_detected = pool_mismatch_detected or _detect_pool_mismatch(
         candidate_pool=capacity_filtered,
         pool_view=candidate_pool,
@@ -2161,10 +2176,9 @@ def allocate_batch(
                 ):
                     pool_internal.loc[chosen_index, "remaining_capacity"] = state_entry["remaining"]
                 pool_internal.loc[chosen_index, "allocations_new"] = state_entry["alloc_new"]
-                initial_value = max(int(state_entry.get("initial", 0)), 1)
-                pool_internal.loc[chosen_index, "occupancy_ratio"] = (
-                    int(state_entry.get("initial", 0)) - state_entry["remaining"]
-                ) / initial_value
+                pool_internal.loc[chosen_index, "occupancy_ratio"] = state_entry.get(
+                    "occupancy_ratio", 0.0
+                )
 
                 pool_with_ids.loc[chosen_index, resolved_capacity_column] = state_entry["remaining"]
                 if (
@@ -2173,10 +2187,9 @@ def allocate_batch(
                 ):
                     pool_with_ids.loc[chosen_index, "remaining_capacity"] = state_entry["remaining"]
                 pool_with_ids.loc[chosen_index, "allocations_new"] = state_entry["alloc_new"]
-                pool_with_ids.loc[chosen_index, "occupancy_ratio"] = pool_internal.loc[
-                    chosen_index,
-                    "occupancy_ratio",
-                ]
+                pool_with_ids.loc[chosen_index, "occupancy_ratio"] = state_entry.get(
+                    "occupancy_ratio", 0.0
+                )
 
                 mentor_id_display = result.log.get("mentor_id")
                 if mentor_id_display is None:
