@@ -24,7 +24,7 @@ VersionMismatchMode = Literal["raise", "warn", "migrate"]
 
 DEFAULT_POLICY_VERSION = "1.0.3"
 _EXPECTED_JOIN_KEYS_COUNT = 6
-_EXPECTED_RANKING_ITEMS_COUNT = 4
+_EXPECTED_RANKING_ITEMS_COUNT = 3
 
 _DEFAULT_VIRTUAL_ALIAS_RANGES: tuple[tuple[int, int], ...] = ((7000, 7999),)
 _DEFAULT_VIRTUAL_NAME_PATTERNS: tuple[str, ...] = (
@@ -100,11 +100,17 @@ _LEGACY_TRACE_DEFAULTS: Mapping[str, str] = {
 }
 
 _RANKING_RULE_LIBRARY: Mapping[str, tuple[str, bool]] = {
-    "min_occupancy_ratio": ("occupancy_ratio", True),
     "max_remaining_capacity": ("remaining_capacity_desc", True),
     "min_allocations_new": ("allocations_new", True),
     "min_mentor_id": ("mentor_sort_key", True),
+    "min_occupancy_ratio": ("occupancy_ratio", True),
 }
+
+_CANONICAL_RANKING_ORDER: tuple[str, ...] = (
+    "max_remaining_capacity",
+    "min_allocations_new",
+    "min_mentor_id",
+)
 
 RankingRuleRaw = Mapping[str, object] | str
 
@@ -1077,12 +1083,8 @@ def _normalize_ranking_rules(raw: Sequence[RankingRuleRaw]) -> list[Mapping[str,
     ranking_items = list(raw)
     if not ranking_items:
         raise ValueError("ranking must contain at least one rule")
-    if len(ranking_items) != _EXPECTED_RANKING_ITEMS_COUNT:
-        raise ValueError(
-            f"ranking must contain exactly {_EXPECTED_RANKING_ITEMS_COUNT} items",
-        )
-    normalized: list[Mapping[str, object]] = []
-    ranking_names: list[str] = []
+
+    parsed: dict[str, Mapping[str, object]] = {}
     for index, item in enumerate(ranking_items):
         if isinstance(item, Mapping):
             name_value = item.get("name")
@@ -1108,10 +1110,21 @@ def _normalize_ranking_rules(raw: Sequence[RankingRuleRaw]) -> list[Mapping[str,
             column, ascending = _RANKING_RULE_LIBRARY[name]
         else:
             raise TypeError(f"ranking rule at position {index} must be a mapping or string")
-        ranking_names.append(name)
-        normalized.append({"name": name, "column": column, "ascending": ascending})
-    if len(set(ranking_names)) != len(ranking_names):
-        raise ValueError("ranking items must be unique")
+
+        if name not in _RANKING_RULE_LIBRARY:
+            raise ValueError(f"Unknown ranking rule '{name}'")
+        if name not in parsed:
+            parsed[name] = {"name": name, "column": column, "ascending": ascending}
+
+    normalized: list[Mapping[str, object]] = []
+    for name in _CANONICAL_RANKING_ORDER:
+        column, ascending = _RANKING_RULE_LIBRARY[name]
+        rule = parsed.get(name, {"name": name, "column": column, "ascending": ascending})
+        normalized.append(rule)
+
+    if len(normalized) != _EXPECTED_RANKING_ITEMS_COUNT:
+        raise ValueError("ranking must resolve to canonical capacity-based ordering")
+
     return normalized
 
 
@@ -1831,15 +1844,13 @@ def _prepare_policy_payload(
     if "ranking_rules" not in migrated:
         ranking_raw = migrated.get("ranking")
         if ranking_raw is None:
-            ranking_names = [rule for rule in _RANKING_RULE_LIBRARY]
+            ranking_names = list(_CANONICAL_RANKING_ORDER)
         elif isinstance(ranking_raw, Sequence) and not isinstance(ranking_raw, (str, bytes)):
-            ranking_names = list(ranking_raw)
+            ranking_names = [name for name in ranking_raw if name in _RANKING_RULE_LIBRARY]
         else:
             raise TypeError("ranking must be a sequence when provided in legacy policy")
         ranking_rules = []
-        for name in ranking_names:
-            if name not in _RANKING_RULE_LIBRARY:
-                raise ValueError(f"Unknown ranking rule '{name}' in legacy policy")
+        for name in _CANONICAL_RANKING_ORDER:
             column, ascending = _RANKING_RULE_LIBRARY[name]
             ranking_rules.append({"name": name, "column": column, "ascending": ascending})
         migrated["ranking_rules"] = ranking_rules

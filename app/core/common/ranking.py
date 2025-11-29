@@ -242,7 +242,7 @@ def apply_ranking_policy(
     fairness_reason_obj: object | None = None
 
     if strategy != "none":
-        tie_columns: tuple[str, ...] = tuple(sort_columns)
+        tie_columns: tuple[str, ...] = ("remaining_capacity", "allocations_new")
         has_ties = ranked.duplicated(subset=list(tie_columns), keep=False).any()
         if has_ties:
             fair_ranked, applied = _apply_fairness_strategy(
@@ -325,7 +325,7 @@ def _hash_counter_series(series: pd.Series) -> pd.Series:
     return series.map(_hash)
 
 
-def _apply_deterministic_jitter(df: pd.DataFrame, tie_columns: Sequence[str]) -> pd.DataFrame:
+def _apply_deterministic_jitter(df: pd.DataFrame) -> pd.DataFrame:
     source: pd.Series | None = None
     for column in _FAIRNESS_COUNTER_CANDIDATES:
         if column in df.columns:
@@ -334,9 +334,8 @@ def _apply_deterministic_jitter(df: pd.DataFrame, tie_columns: Sequence[str]) ->
     if source is None:
         source = df.index.astype("string")
     jitter = _hash_counter_series(source)
-    order = list(tie_columns) + ["__fairness_key__"]
     df = df.assign(__fairness_key__=jitter)
-    df = df.sort_values(order, kind="stable")
+    df = df.sort_values("__fairness_key__", kind="stable")
     return df.drop(columns=["__fairness_key__"])
 
 
@@ -346,23 +345,13 @@ def _hash_text(value: object) -> int:
     return int.from_bytes(digest.digest(), "big")
 
 
-def _apply_round_robin(df: pd.DataFrame, tie_columns: Sequence[str]) -> pd.DataFrame:
+def _apply_round_robin(df: pd.DataFrame) -> pd.DataFrame:
     if "mentor_id_en" not in df.columns:
         return df
-    groups = df.groupby(list(tie_columns), sort=False, group_keys=False)
-    frames: list[pd.DataFrame] = []
-    for _, block in groups:
-        if len(block) <= 1:
-            frames.append(block)
-            continue
-        block = block.copy()
-        block["__fairness_key__"] = block["mentor_id_en"].astype("string").map(_hash_text)
-        block = block.sort_values("__fairness_key__", kind="stable")
-        block = block.drop(columns=["__fairness_key__"])
-        frames.append(block)
-    if not frames:
-        return df
-    return pd.concat(frames, ignore_index=True)
+    working = df.copy()
+    working["__fairness_key__"] = working["mentor_id_en"].astype("string").map(_hash_text)
+    working = working.sort_values("__fairness_key__", kind="stable")
+    return working.drop(columns=["__fairness_key__"])
 
 
 def _apply_fairness_strategy(
@@ -371,18 +360,34 @@ def _apply_fairness_strategy(
     strategy: str,
     tie_columns: Sequence[str],
 ) -> tuple[pd.DataFrame, bool]:
-    """تابع قدیمی fairness؛ در نسخهٔ فعلی عملاً استفاده نمی‌شود."""
+    """اعمال استراتژی عدالت فقط درون گره‌های تساوی ظرفیت."""
+
     if strategy == "none" or ranked.empty or not tie_columns:
         return ranked, False
-    working = ranked.copy()
-    original = tuple(working.get("__fair_origin__", working.index))
-    if strategy == "deterministic_jitter":
-        working = _apply_deterministic_jitter(working, tie_columns)
-    elif strategy == "round_robin":
-        working = _apply_round_robin(working, tie_columns)
-    else:
+
+    groups = ranked.groupby(list(tie_columns), sort=False, group_keys=False)
+    frames: list[pd.DataFrame] = []
+    applied = False
+
+    for _, block in groups:
+        if len(block) <= 1:
+            frames.append(block)
+            continue
+        original_index = tuple(block.index)
+        if strategy == "deterministic_jitter":
+            reordered = _apply_deterministic_jitter(block)
+        elif strategy == "round_robin":
+            reordered = _apply_round_robin(block)
+        else:
+            return ranked, False
+        if tuple(reordered.index) != original_index:
+            applied = True
+        frames.append(reordered)
+
+    if not frames:
         return ranked, False
-    applied = tuple(working.get("__fair_origin__", working.index)) != original
+
+    merged = pd.concat(frames, axis=0, ignore_index=True)
     if applied:
-        working.attrs["fairness_reason"] = build_reason(ReasonCode.FAIRNESS_ORDER)
-    return working, applied
+        merged.attrs["fairness_reason"] = build_reason(ReasonCode.FAIRNESS_ORDER)
+    return merged.reset_index(drop=True), applied
