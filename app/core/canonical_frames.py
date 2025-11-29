@@ -97,8 +97,9 @@ def _coerce_capacity_series(series: pd.Series, stats: PoolCanonicalizationStats)
     numeric = pd.to_numeric(series, errors="coerce")
     invalid_mask = numeric.isna() & series.notna()
     stats.capacity_coerced += int(invalid_mask.sum())
-    filled = numeric.fillna(0).astype("Int64")
-    return filled
+    filled = numeric.fillna(0)
+    clipped = filled.clip(lower=0)
+    return clipped.astype("Int64")
 
 
 def _safe_canonical_join_value(column: str, raw: object, *, policy: PolicyConfig) -> int | NAType:

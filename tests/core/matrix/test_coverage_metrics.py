@@ -157,6 +157,47 @@ def test_compute_coverage_metrics_intersects_with_students_when_requested() -> N
     assert coverage_df["in_coverage_denominator"].sum() == 1
 
 
+def test_compute_coverage_metrics_includes_student_only_groups_in_union() -> None:
+    base_df = pd.DataFrame(columns=JOIN_KEYS)
+    students_df = pd.DataFrame(
+        [
+            {
+                "کدرشته": 501,
+                "جنسیت": 1,
+                "دانش آموز فارغ": 0,
+                "مرکز گلستان صدرا": 1,
+                "مالی حکمت بنیاد": 0,
+                "کد مدرسه": 1001,
+            }
+        ]
+    )
+    matrix_df = pd.DataFrame(columns=list(JOIN_KEYS) + ["کد کارمندی پشتیبان"])
+
+    policy = CoveragePolicyConfig(
+        denominator_mode="mentors_students_union",
+        require_student_presence=False,
+        include_blocked_candidates_in_denominator=False,
+    )
+
+    metrics, coverage_df, _ = compute_coverage_metrics(
+        matrix_df=matrix_df,
+        base_df=base_df,
+        students_df=students_df,
+        join_keys=JOIN_KEYS,
+        policy=policy,
+        unmatched_school_count=0,
+        invalid_group_token_count=0,
+        center_column="مرکز گلستان صدرا",
+        finance_column="مالی حکمت بنیاد",
+        school_code_column="کد مدرسه",
+    )
+
+    assert metrics.total_groups == 1
+    assert metrics.covered_groups == 0
+    assert metrics.unseen_viable_groups == 1
+    assert coverage_df["in_coverage_denominator"].sum() == 1
+
+
 def test_build_coverage_validation_fields_aligns_with_metrics() -> None:
     base_df = pd.DataFrame([_base_row(group_code=301)])
     matrix_df = pd.DataFrame(

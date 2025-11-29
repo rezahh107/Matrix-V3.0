@@ -125,6 +125,50 @@ def test_default_inactive_requires_override():
     assert overridden["mentor_id"].tolist() == [41]
 
 
+def test_frozen_mentor_is_excluded_from_pool() -> None:
+    policy = _policy_with_governance(
+        _base_policy_payload(),
+        {
+            "default_status": "active",
+            "allowed_statuses": ["active", "inactive", "frozen"],
+            "mentors": [],
+        },
+    )
+    mentors = pd.DataFrame(
+        {
+            "mentor_id": [50, 51],
+            "mentor_status": ["active", "frozen"],
+            "remaining_capacity": [2, 3],
+        }
+    )
+
+    filtered = filter_active_mentors(mentors, policy.mentor_pool_governance, attach_status=True)
+
+    assert filtered["mentor_id"].tolist() == [50]
+    assert filtered["mentor_status"].tolist() == ["active"]
+
+
+def test_capacity_gate_removes_non_positive_capacity() -> None:
+    policy = _policy_with_governance(
+        _base_policy_payload(),
+        {
+            "default_status": "active",
+            "allowed_statuses": ["active", "inactive"],
+            "mentors": [],
+        },
+    )
+    mentors = pd.DataFrame(
+        {
+            "mentor_id": [60, 61, 62],
+            "remaining_capacity": [1, 0, -5],
+        }
+    )
+
+    filtered = filter_active_mentors(mentors, policy.mentor_pool_governance)
+
+    assert filtered["mentor_id"].tolist() == [60]
+
+
 def test_apply_mentor_pool_governance_delegates_to_effective_status():
     policy = _policy_with_governance(
         _base_policy_payload(),

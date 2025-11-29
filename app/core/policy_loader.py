@@ -311,12 +311,16 @@ class MentorStatus(str, Enum):
 
     ACTIVE = "active"
     INACTIVE = "inactive"
+    FROZEN = "frozen"
+    RESTRICTED = "restricted"
 
     @classmethod
     def from_value(cls, value: object) -> MentorStatus:
         """تبدیل مقدار متنی به Enum؛ در صورت مقدار ناشناخته خطا می‌دهد."""
 
         text = str(value).strip().lower()
+        if text.startswith("restricted"):
+            return cls.RESTRICTED
         for item in cls:
             if item.value == text:
                 return item
@@ -1431,6 +1435,8 @@ def _to_mentor_pool_governance(data: RawMentorPoolGovernance) -> MentorPoolGover
     allowed_raw = data.get("allowed_statuses") or (
         MentorStatus.ACTIVE.value,
         MentorStatus.INACTIVE.value,
+        MentorStatus.FROZEN.value,
+        MentorStatus.RESTRICTED.value,
     )
     if not isinstance(allowed_raw, Sequence):
         raise TypeError("allowed_statuses must be a sequence")

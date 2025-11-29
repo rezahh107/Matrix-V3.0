@@ -299,6 +299,44 @@ def _denominator_mask(
     return mask
 
 
+def _include_student_only_groups(
+    coverage_df: pd.DataFrame,
+    *,
+    student_groups: pd.DataFrame,
+    join_keys: Sequence[str],
+) -> pd.DataFrame:
+    if student_groups.empty:
+        return coverage_df
+
+    existing_keys = (
+        coverage_df.loc[:, list(join_keys)]
+        if not coverage_df.empty
+        else pd.DataFrame(columns=list(join_keys))
+    )
+    merged = student_groups.merge(existing_keys, on=list(join_keys), how="left", indicator=True)
+    missing_students = merged["_merge"] == "left_only"
+    if not bool(missing_students.any()):
+        return coverage_df
+
+    missing_groups = merged.loc[missing_students, list(join_keys)].copy()
+    missing_groups["candidate_row_count"] = 0
+    missing_groups["candidate_mentor_count"] = 0
+    missing_groups["candidate_can_generate"] = False
+    missing_groups["candidate_has_alias"] = False
+    missing_groups["matrix_row_count"] = 0
+    missing_groups["matrix_mentor_count"] = 0
+    missing_groups["status"] = "student_only"
+    missing_groups["has_candidate"] = False
+    missing_groups["is_candidate_viable"] = False
+    missing_groups["is_blocked_candidate"] = False
+    missing_groups["variant_set"] = [tuple()] * len(missing_groups)
+
+    if coverage_df.empty:
+        return missing_groups.reset_index(drop=True)
+    combined = pd.concat([coverage_df, missing_groups], axis=0, ignore_index=True)
+    return combined
+
+
 def compute_coverage_metrics(
     *,
     matrix_df: pd.DataFrame,
@@ -329,6 +367,9 @@ def compute_coverage_metrics(
 
     student_groups = _student_group_keys(
         students_df if students_df is not None else pd.DataFrame(), join_keys
+    )
+    coverage_df = _include_student_only_groups(
+        coverage_df, student_groups=student_groups, join_keys=join_keys
     )
     denominator_mask = _denominator_mask(coverage_df, policy=policy, student_groups=student_groups)
     coverage_df = coverage_df.copy()
