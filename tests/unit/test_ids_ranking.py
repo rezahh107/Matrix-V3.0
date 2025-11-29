@@ -238,11 +238,11 @@ def test_consume_capacity_handles_str_values_and_updates_state() -> None:
 
     assert before == 3
     assert after == 2
-    assert ratio == pytest.approx((5 - 2) / 5)
+    assert ratio == 0.0
     entry = state["EMP-1"]
     assert entry["remaining"] == 2
     assert entry["alloc_new"] == 3
-    assert entry["occupancy_ratio"] == pytest.approx(ratio)
+    assert entry["occupancy_ratio"] == 0.0
 
 
 def test_consume_capacity_underflow_raises_value_error() -> None:

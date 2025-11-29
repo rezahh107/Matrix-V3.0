@@ -104,6 +104,37 @@ def test_filter_candidates_allows_global_school_without_wildcard() -> None:
     assert filtered["mentor_id"].tolist() == ["g1"]
 
 
+def test_filter_candidates_respects_school_constraints_without_excluding_matches() -> None:
+    policy = load_policy()
+    join_map = {
+        normalize_join_key_name(policy.stage_column("group")): 1,
+        normalize_join_key_name(policy.stage_column("gender")): int(policy.gender_codes.male.value),
+        normalize_join_key_name(policy.stage_column("graduation_status")): 0,
+        normalize_join_key_name(policy.stage_column("center")): 1,
+        normalize_join_key_name(policy.stage_column("finance")): 0,
+        normalize_join_key_name(policy.columns.school_code): 777,
+    }
+    pool = pd.DataFrame(
+        {
+            "mentor_id": ["global", "restricted"],
+            policy.stage_column("finance"): [0, 0],
+            policy.columns.school_code: [0, 777],
+            "has_school_constraint": [False, True],
+            policy.stage_column("center"): [1, 1],
+            policy.stage_column("gender"): [
+                int(policy.gender_codes.male.value),
+                int(policy.gender_codes.male.value),
+            ],
+            policy.stage_column("graduation_status"): [0, 0],
+            policy.stage_column("group"): [1, 1],
+        }
+    )
+
+    filtered, _ = _filter_candidates_by_join_map(pool, join_map=join_map, policy=policy)
+
+    assert filtered["mentor_id"].tolist() == ["global", "restricted"]
+
+
 def test_filter_candidates_respects_center_wildcard_zero_and_rejects_missing() -> None:
     policy = load_policy()
     join_map = {
