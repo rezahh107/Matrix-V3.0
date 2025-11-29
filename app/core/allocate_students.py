@@ -518,9 +518,8 @@ def _center_mask_series(
     except (TypeError, ValueError):
         series = mentor_series
 
-    series = series.fillna(0)
     mentor_mask = series.eq(0) | series.eq(student_center)
-    return mentor_mask
+    return mentor_mask.fillna(False)
 
 
 def _school_mask_series(
