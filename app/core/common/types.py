@@ -96,6 +96,18 @@ CANONICAL_JOIN_KEYS: tuple[str, ...] = (
     JOIN_KEY_SCHOOL_CODE,
 )
 
+# مطابق LAW v3.0 شش کلید join به‌صورت عدد صحیح نگه داشته می‌شوند.
+JoinKeyName = Literal[
+    "کدرشته",
+    "جنسیت",
+    "دانش_آموز_فارغ",
+    "مرکز_گلستان_صدرا",
+    "مالی_حکمت_بنیاد",
+    "کد_مدرسه",
+]
+
+JoinProfile = Mapping[JoinKeyName, int]
+
 PolicyGender = Literal["male", "female"]
 GraduationStatus = Literal["graduated", "not_graduated"]
 CenterStatus = Literal["registered", "not_registered"]

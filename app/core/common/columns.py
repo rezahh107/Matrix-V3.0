@@ -240,7 +240,7 @@ _INT_COLUMNS_INSPACTOR: tuple[str, ...] = _INT_COLUMNS_BASE + (
 )
 
 _INT_COLUMNS_BY_SOURCE: Mapping[Source, Sequence[str]] = {
-    "report": _INT_COLUMNS_BASE + ("graduation_status", "center", "finance"),
+    "report": _INT_COLUMNS_BASE + ("graduation_status", "center"),
     "inspactor": _INT_COLUMNS_INSPACTOR,
     "matrix": _INT_COLUMNS_INSPACTOR,
     "school": _INT_COLUMNS_BASE,
@@ -598,6 +598,8 @@ def _identifier_to_string(value: object) -> object:
 
 
 def _clean_numeric(value: object) -> str:
+    if isinstance(value, (Mapping, Sequence)) and not isinstance(value, (str, bytes)):
+        return ""
     if pd.isna(value):
         return ""
     text = strip_school_code_separators(normalize_fa(value))

@@ -94,3 +94,44 @@ def test_student_crosswalk_unknown_group_fails_loudly() -> None:
 
     with pytest.raises(ValueError, match="Unknown group code.*کدرشته"):
         canonicalize_students_frame(students, policy=policy, group_code_crosswalk=mapping)
+
+
+def test_canonicalize_students_frame_handles_localized_join_keys() -> None:
+    policy = load_policy()
+    students = pd.DataFrame(
+        {
+            "student_id": ["s1"],
+            "کدرشته": ["۹۱۰۰"],
+            "جنسیت": ["پسر"],
+            "دانش آموز فارغ": ["۰"],
+            "مرکز گلستان صدرا": ["۰"],
+            "مالی حکمت بنیاد": [["۱", "0"]],
+            "کد مدرسه": ["۰"],
+        }
+    )
+
+    canonical = canonicalize_students_frame(students, policy=policy)
+
+    assert canonical["جنسیت"].iloc[0] == policy.gender_codes.male.value
+    assert all(canonical[column].dtype == "int64" for column in policy.join_keys)
+
+
+def test_canonicalize_students_frame_aligns_with_core_canonicalization() -> None:
+    policy = load_policy()
+    students = pd.DataFrame(
+        {
+            "student_id": ["s1", "s2"],
+            policy.stage_column("group"): ["۹۱۰۰", "۹۱۰۰"],
+            policy.stage_column("gender"): ["پسر", "دختر"],
+            policy.stage_column("graduation_status"): [0, 1],
+            policy.stage_column("center"): ["۰", "1"],
+            policy.stage_column("finance"): [["۱", "0"], "۳"],
+            policy.columns.school_code: [0, "۰"],
+        }
+    )
+
+    canonical = canonicalize_students_frame(students, policy=policy)
+    direct_gender = canonical[policy.stage_column("gender")].tolist()
+
+    assert direct_gender == [policy.gender_codes.male.value, policy.gender_codes.female.value]
+    assert canonical[policy.stage_column("finance")].tolist()[0] == 1

@@ -16,12 +16,12 @@ from .common.columns import (
     CANON_FA_TO_EN,
     canonicalize_headers,
     coerce_semantics,
-    enforce_join_key_types,
     enrich_school_columns_en,
     ensure_series,
     resolve_aliases,
 )
 from .common.ids import build_mentor_alias_map, extract_alias_code_series
+from .common.join_keys import canonicalize_join_key_value
 from .common.normalization import normalize_fa, parse_int_safe
 from .common.types import HeaderMode, parse_header_mode
 from .policy_loader import PolicyConfig
@@ -98,6 +98,25 @@ def _coerce_capacity_series(series: pd.Series, stats: PoolCanonicalizationStats)
     stats.capacity_coerced += int(invalid_mask.sum())
     filled = numeric.fillna(0).astype("Int64")
     return filled
+
+
+def _canonicalize_join_key_columns(
+    frame: pd.DataFrame, join_keys: Sequence[str], policy: PolicyConfig
+) -> pd.DataFrame:
+    """Apply join-key canonicalization and enforce ``int64`` dtype with no nulls."""
+
+    canonicalized = frame.copy()
+    for column in join_keys:
+        if column not in canonicalized.columns:
+            raise KeyError(f"Missing join key column: {column}")
+        series = ensure_series(canonicalized[column])
+        canonical_series = series.map(
+            lambda raw: canonicalize_join_key_value(column, raw, policy=policy)
+        )
+        canonicalized[column] = pd.Series(
+            canonical_series, index=canonicalized.index, dtype="int64"
+        )
+    return canonicalized
 
 
 def _make_unique_columns(columns: Sequence[str]) -> list[str]:
@@ -594,7 +613,7 @@ def canonicalize_students_frame(
             group_code_crosswalk,
             column_name=group_column,
         )
-    students = enforce_join_key_types(students, policy.join_keys)
+    students = _canonicalize_join_key_columns(students, policy.join_keys, policy)
     return students
 
 
@@ -727,7 +746,7 @@ def canonicalize_pool_frame(
 
     present_join_keys = [column for column in policy.join_keys if column in pool.columns]
     if present_join_keys:
-        pool = enforce_join_key_types(pool, present_join_keys)
+        pool = _canonicalize_join_key_columns(pool, present_join_keys, policy)
     duplicate_scope = "per_key" if include_distinct_mentor_duplicates else "per_mentor"
     duplicate_report = _build_join_key_duplicate_report(
         pool,
