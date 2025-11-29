@@ -5,6 +5,7 @@ from dataclasses import replace
 import pandas as pd
 
 from app.core.allocate_students import (
+    _collect_join_key_map,
     _detect_pool_mismatch,
     _filter_candidates_by_join_map,
     _merge_join_mismatches,
@@ -71,6 +72,54 @@ def test_filter_candidates_handles_finance_iterables() -> None:
 
     assert len(filtered) == 2
     assert not mismatches
+
+
+def test_collect_join_key_map_marks_missing_none_values() -> None:
+    policy = load_policy()
+    student = {
+        policy.stage_column("group"): 1,
+        policy.stage_column("gender"): None,
+        policy.stage_column("graduation_status"): 0,
+        policy.stage_column("center"): 1,
+        policy.stage_column("finance"): 0,
+        policy.columns.school_code: 10,
+    }
+
+    join_map, missing = _collect_join_key_map(student, policy)
+
+    assert policy.stage_column("gender") in missing
+    assert join_map[normalize_join_key_name(policy.stage_column("gender"))] == -1
+
+
+def test_allocate_student_returns_data_missing_for_blank_join_key() -> None:
+    policy = load_policy()
+    student = {
+        "student_id": "s-1",
+        policy.stage_column("group"): " ",
+        policy.stage_column("gender"): 1,
+        policy.stage_column("graduation_status"): 0,
+        policy.stage_column("center"): 1,
+        policy.stage_column("finance"): 0,
+        policy.columns.school_code: 10,
+    }
+    candidate_pool = pd.DataFrame(
+        {
+            "mentor_id": ["m1"],
+            policy.stage_column("group"): [1],
+            policy.stage_column("gender"): [1],
+            policy.stage_column("graduation_status"): [0],
+            policy.stage_column("center"): [1],
+            policy.stage_column("finance"): [0],
+            policy.columns.school_code: [10],
+            policy.columns.remaining_capacity: [1],
+        }
+    )
+
+    result = allocate_student(student, candidate_pool, policy=policy)
+
+    assert result.mentor_row is None
+    assert result.log.get("error_type") == "DATA_MISSING"
+    assert "Missing student join key data" in str(result.log.get("detailed_reason"))
 
 
 def test_filter_candidates_allows_global_school_without_wildcard() -> None:
@@ -161,6 +210,90 @@ def test_filter_candidates_respects_center_wildcard_zero_and_rejects_missing() -
 
     assert filtered[policy.stage_column("center")].tolist() == [0, 5]
     assert any(match.get("column") == policy.stage_column("center") for match in mismatches)
+
+
+def test_filter_candidates_respects_policy_wildcard_value_for_mentor_centers() -> None:
+    policy = load_policy()
+    policy.center_map["*"] = 99
+    join_map = {
+        normalize_join_key_name(policy.stage_column("group")): 1,
+        normalize_join_key_name(policy.stage_column("gender")): 1,
+        normalize_join_key_name(policy.stage_column("graduation_status")): 0,
+        normalize_join_key_name(policy.stage_column("center")): 5,
+        normalize_join_key_name(policy.stage_column("finance")): 0,
+        normalize_join_key_name(policy.columns.school_code): 0,
+    }
+    pool = pd.DataFrame(
+        {
+            "mentor_id": ["wildcard", "exact", "global"],
+            policy.stage_column("finance"): [0, 0, 0],
+            policy.columns.school_code: [0, 0, 0],
+            policy.stage_column("center"): [99, 5, 0],
+            policy.stage_column("gender"): [1, 1, 1],
+            policy.stage_column("graduation_status"): [0, 0, 0],
+            policy.stage_column("group"): [1, 1, 1],
+        }
+    )
+
+    filtered, _ = _filter_candidates_by_join_map(pool, join_map=join_map, policy=policy)
+
+    assert filtered["mentor_id"].tolist() == ["wildcard", "exact"]
+
+
+def test_filter_candidates_accepts_student_center_wildcard_value() -> None:
+    policy = load_policy()
+    policy.center_map["*"] = 42
+    join_map = {
+        normalize_join_key_name(policy.stage_column("group")): 1,
+        normalize_join_key_name(policy.stage_column("gender")): 1,
+        normalize_join_key_name(policy.stage_column("graduation_status")): 0,
+        normalize_join_key_name(policy.stage_column("center")): 42,
+        normalize_join_key_name(policy.stage_column("finance")): 0,
+        normalize_join_key_name(policy.columns.school_code): 0,
+    }
+    pool = pd.DataFrame(
+        {
+            "mentor_id": ["c1", "c2", "wildcard"],
+            policy.stage_column("finance"): [0, 0, 0],
+            policy.columns.school_code: [0, 0, 0],
+            policy.stage_column("center"): [1, 2, 42],
+            policy.stage_column("gender"): [1, 1, 1],
+            policy.stage_column("graduation_status"): [0, 0, 0],
+            policy.stage_column("group"): [1, 1, 1],
+        }
+    )
+
+    filtered, _ = _filter_candidates_by_join_map(pool, join_map=join_map, policy=policy)
+
+    assert filtered["mentor_id"].tolist() == ["c1", "c2", "wildcard"]
+
+
+def test_filter_candidates_treats_student_center_zero_as_wildcard_without_policy_code() -> None:
+    policy = replace(load_policy(), center_map={})
+    join_map = {
+        normalize_join_key_name(policy.stage_column("group")): 1,
+        normalize_join_key_name(policy.stage_column("gender")): 1,
+        normalize_join_key_name(policy.stage_column("graduation_status")): 0,
+        normalize_join_key_name(policy.stage_column("center")): 0,
+        normalize_join_key_name(policy.stage_column("finance")): 0,
+        normalize_join_key_name(policy.columns.school_code): 0,
+    }
+    pool = pd.DataFrame(
+        {
+            "mentor_id": ["c1", "c2", "c3"],
+            policy.stage_column("finance"): [0, 0, 0],
+            policy.columns.school_code: [0, 0, 0],
+            policy.stage_column("center"): [1, 2, 0],
+            policy.stage_column("gender"): [1, 1, 1],
+            policy.stage_column("graduation_status"): [0, 0, 0],
+            policy.stage_column("group"): [1, 1, 1],
+        }
+    )
+
+    filtered, mismatches = _filter_candidates_by_join_map(pool, join_map=join_map, policy=policy)
+
+    assert filtered["mentor_id"].tolist() == ["c1", "c2", "c3"]
+    assert all(match.get("column") != policy.stage_column("center") for match in mismatches)
 
 
 def test_filter_candidates_accepts_farsi_gender_tokens() -> None:
