@@ -6,6 +6,7 @@ from typing import Any, cast
 import pandas as pd
 import pytest
 
+from app.core.canonical_frames import canonicalize_pool_frame, canonicalize_students_frame
 from app.core.common.join_keys import (
     JoinKeyCanonicalizationError,
     canonicalize_join_key_value,
@@ -215,3 +216,63 @@ def test_canonicalize_gender_farsi_tokens() -> None:
 
     assert male == int(policy.gender_codes.male.value)
     assert female == int(policy.gender_codes.female.value)
+
+
+def test_canonicalize_join_key_value_localized_digits_and_iterables() -> None:
+    policy = load_policy()
+    finance_column = policy.stage_column("finance")
+
+    localized = canonicalize_join_key_value(finance_column, "۱۲۳", policy=policy)
+    iterable_first = canonicalize_join_key_value(finance_column, ["۲", "3"], policy=policy)
+
+    assert localized == 123
+    assert iterable_first == 2
+
+
+def test_canonicalize_join_key_value_school_wildcard_policy_driven() -> None:
+    base_policy = load_policy()
+    school_column = base_policy.columns.school_code
+
+    wildcard_value = canonicalize_join_key_value(school_column, "", policy=base_policy)
+
+    strict_policy: PolicyConfig = replace(base_policy, school_code_empty_as_zero=False)
+    with pytest.raises(JoinKeyCanonicalizationError):
+        canonicalize_join_key_value(school_column, "", policy=strict_policy)
+
+    assert wildcard_value == 0
+
+
+def test_canonical_frames_enforce_canon01_join_key_ints() -> None:
+    policy = load_policy()
+    students = pd.DataFrame(
+        {
+            "student_id": ["s1"],
+            policy.stage_column("group"): ["۹۱۰۰"],
+            policy.stage_column("gender"): ["پسر"],
+            policy.stage_column("graduation_status"): [0],
+            policy.stage_column("center"): ["۰"],
+            policy.stage_column("finance"): [["۱", "0"]],
+            policy.columns.school_code: [""],
+        }
+    )
+    pool = pd.DataFrame(
+        {
+            policy.stage_column("group"): ["۹۱۰۰"],
+            policy.stage_column("gender"): ["دختر"],
+            policy.stage_column("graduation_status"): ["0"],
+            policy.stage_column("center"): [0],
+            policy.stage_column("finance"): ["۱"],
+            policy.columns.school_code: [0],
+            "کد کارمندی پشتیبان": ["m1"],
+            "remaining_capacity": [1],
+        }
+    )
+
+    canonical_students = canonicalize_students_frame(students, policy=policy)
+    canonical_pool = canonicalize_pool_frame(pool, policy=policy)
+
+    for column in policy.join_keys:
+        assert pd.api.types.is_integer_dtype(canonical_students[column])
+        assert pd.api.types.is_integer_dtype(canonical_pool[column])
+        assert canonical_students[column].isna().sum() == 0
+        assert canonical_pool[column].isna().sum() == 0

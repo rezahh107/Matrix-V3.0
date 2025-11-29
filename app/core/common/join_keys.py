@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from numbers import Number
 from typing import Literal, TypedDict, cast
 
@@ -10,7 +10,7 @@ import pandas as pd
 
 from app.core.common.columns import _GENDER_TOKEN_MAP, CANON_EN_TO_FA
 from app.core.common.normalization import normalize_fa
-from app.core.common.types import JOIN_KEY_GENDER
+from app.core.common.types import CANONICAL_JOIN_KEYS, JOIN_KEY_GENDER, JoinKeyName
 from app.core.counter import normalize_digits
 from app.core.policy_loader import PolicyConfig
 
@@ -43,7 +43,7 @@ class JoinKeyCanonicalizationError(ValueError):
     """Raised when a join-key value cannot be canonicalized to ``int``."""
 
     def __init__(self, column: str, value: object) -> None:
-        super().__init__("DATA_MISSING")
+        super().__init__(f"Cannot canonicalize join key '{column}' from value {value!r}")
         self.column = column
         self.value = value
 
@@ -53,6 +53,12 @@ def coerce_join_int(value: object) -> int:
 
     if value is None:
         raise ValueError("DATA_MISSING")
+    if not isinstance(value, str):
+        try:
+            if pd.isna(value):
+                raise ValueError("DATA_MISSING")
+        except TypeError:
+            pass
     if isinstance(value, Number) and pd.isna(value):
         raise ValueError("DATA_MISSING")
     if isinstance(value, complex):
@@ -65,24 +71,125 @@ def coerce_join_int(value: object) -> int:
     return int(cast(int, value))
 
 
+def _canonical_join_key_name(column: str) -> JoinKeyName:
+    normalized = normalize_fa(column)
+    resolved = _JOIN_KEY_LOOKUP.get(normalized)
+    if resolved is None:
+        raise ValueError(f"Unknown join key: {column}")
+    return resolved
+
+
+def _is_gender_key(column: JoinKeyName, policy: PolicyConfig) -> bool:
+    gender_column = CANON_EN_TO_FA.get("gender", JOIN_KEY_GENDER)
+    return normalize_fa(column) == normalize_fa(gender_column) or normalize_fa(
+        policy.stage_column("gender")
+    ) == normalize_fa(column)
+
+
+def _is_center_key(column: JoinKeyName, policy: PolicyConfig) -> bool:
+    return normalize_fa(column) == normalize_fa(policy.stage_column("center"))
+
+
+def _is_school_key(column: JoinKeyName, policy: PolicyConfig) -> bool:
+    return normalize_fa(column) == normalize_fa(policy.columns.school_code)
+
+
+def _is_missing_value(value: object) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, Number) and pd.isna(value):
+        return True
+    if isinstance(value, str):
+        return not normalize_digits(value).strip()
+    return False
+
+
+def _iterable_values(raw: object) -> Iterable[object]:
+    if isinstance(raw, Mapping):
+        return raw.values()
+    if isinstance(raw, Sequence) and not isinstance(raw, (str, bytes)):
+        return raw
+    return (raw,)
+
+
+def _canonicalize_numeric_value(value: object, *, allow_zero_from_empty: bool) -> int:
+    if _is_missing_value(value):
+        if allow_zero_from_empty:
+            return 0
+        raise ValueError("DATA_MISSING")
+    last_error: ValueError | None = None
+    for candidate in _iterable_values(value):
+        try:
+            return coerce_join_int(candidate)
+        except ValueError as exc:  # pragma: no cover - loop handles next candidate
+            last_error = exc
+            continue
+    if allow_zero_from_empty:
+        return 0
+    raise last_error if last_error is not None else ValueError("DATA_MISSING")
+
+
 def canonicalize_join_key_value(column: str, value: object, *, policy: PolicyConfig) -> int:
     """Normalize a single join-key value to ``int`` using Policy mappings."""
 
-    gender_column = CANON_EN_TO_FA.get("gender", JOIN_KEY_GENDER)
-    normalized_column = normalize_join_key_name(column)
-    is_gender = normalize_fa(normalized_column) == normalize_fa(gender_column)
     try:
-        if is_gender:
+        join_key = _canonical_join_key_name(column)
+        if _is_gender_key(join_key, policy):
             return _canonicalize_gender_value(value, policy)
-        return coerce_join_int(value)
+        if _is_center_key(join_key, policy):
+            return _canonicalize_center_value(value, policy)
+        if _is_school_key(join_key, policy):
+            return _canonicalize_school_value(value, policy)
+        return _canonicalize_numeric_value(value, allow_zero_from_empty=False)
     except ValueError as exc:
         raise JoinKeyCanonicalizationError(column, value) from exc
+
+
+def _canonicalize_center_value(value: object, policy: PolicyConfig) -> int:
+    center_lookup = {normalize_fa(str(key)): int(val) for key, val in policy.center_map.items()}
+    if _is_missing_value(value):
+        wildcard = center_lookup.get(normalize_fa("*"))
+        if wildcard is not None:
+            return wildcard
+    if isinstance(value, str):
+        normalized = normalize_fa(value)
+        mapped = center_lookup.get(normalized)
+        if mapped is not None:
+            return mapped
+    return _canonicalize_numeric_value(value, allow_zero_from_empty=False)
+
+
+def _canonicalize_school_value(value: object, policy: PolicyConfig) -> int:
+    return _canonicalize_numeric_value(
+        value, allow_zero_from_empty=policy.school_code_empty_as_zero
+    )
 
 
 def normalize_join_key_name(column: str) -> str:
     """Normalize join-key names to the underscore form used in join_map."""
 
     return column.replace(" ", "_")
+
+
+_JOIN_KEY_LOOKUP: dict[str, JoinKeyName] = {
+    normalize_fa(name): cast(JoinKeyName, name) for name in CANONICAL_JOIN_KEYS
+}
+for en_key in (
+    "group_code",
+    "gender",
+    "graduation_status",
+    "center",
+    "finance",
+    "school_code",
+):
+    fa_value = CANON_EN_TO_FA.get(en_key)
+    if fa_value is None:
+        continue
+    normalized = normalize_fa(fa_value)
+    canonical_name = cast(JoinKeyName, normalize_join_key_name(fa_value))
+    if normalized not in _JOIN_KEY_LOOKUP:
+        _JOIN_KEY_LOOKUP[normalized] = canonical_name
+    _JOIN_KEY_LOOKUP.setdefault(normalize_fa(en_key), canonical_name)
 
 
 def center_wildcard_value(policy: PolicyConfig) -> int | None:
@@ -102,7 +209,9 @@ def matches_center_with_wildcard(
 ) -> bool:
     """Compare center with wildcard support."""
 
-    if wildcard_center is not None and student_center == wildcard_center:
+    if wildcard_center is not None and (
+        student_center == wildcard_center or mentor_center == wildcard_center
+    ):
         return True
     return mentor_center == 0 or mentor_center == student_center
 
@@ -194,10 +303,10 @@ def resolve_finance_variants(student_finance: int, policy: PolicyConfig) -> froz
     return frozenset({finance_value})
 
 
-def _coerce_optional_int(value: object) -> int | None:
+def _canonicalize_optional_value(column: str, value: object, policy: PolicyConfig) -> int | None:
     try:
-        return coerce_join_int(value)
-    except Exception:
+        return canonicalize_join_key_value(column, value, policy=policy)
+    except JoinKeyCanonicalizationError:
         return None
 
 
@@ -233,14 +342,7 @@ def validate_policy_join_keys(
         normalized = normalize_join_key_name(column)
         student_value = join_map.get(normalized)
         mentor_raw = mentor_row.get(column)
-        mentor_value: int | None
-        if column == policy.stage_column("gender"):
-            try:
-                mentor_value = canonicalize_join_key_value(column, mentor_raw, policy=policy)
-            except JoinKeyCanonicalizationError:
-                mentor_value = None
-        else:
-            mentor_value = _coerce_optional_int(mentor_raw)
+        mentor_value = _canonicalize_optional_value(column, mentor_raw, policy)
         if student_value is None:
             mismatches.append(
                 {

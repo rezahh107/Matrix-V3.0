@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Iterable
+
 import pandas as pd
 
-from app.core.common.join_keys import matches_school_with_wildcard
+from app.core.common.join_keys import (
+    center_wildcard_value,
+    matches_center_with_wildcard,
+    matches_school_with_wildcard,
+)
 from app.core.policy_loader import PolicyConfig
 from app.infra.validators.join_keys import JoinKeyAuditResult, validate_allocation_join_keys
 
@@ -29,13 +35,11 @@ def validate_allocation_join_keys_with_wildcard(
     base_result: JoinKeyAuditResult = validate_allocation_join_keys(
         allocations_df, students_df, pool_df, policy=policy
     )
-    if not policy.school_code_empty_as_zero:
-        return base_result
     audit = base_result.audit_frame.copy()
     school_col = policy.columns.school_code
-    match_column = f"match_{school_col}"
-    if match_column not in audit.columns:
-        return base_result
+    center_col = policy.stage_column("center")
+    wildcard_center = center_wildcard_value(policy)
+
     constraint_column = "has_school_constraint"
     constraint_lookup: pd.DataFrame | None = None
     if constraint_column in pool_df.columns:
@@ -46,10 +50,7 @@ def validate_allocation_join_keys_with_wildcard(
             constraint_lookup["mentor_alias_code"] = (
                 pool_df["mentor_alias_code"].astype("string").str.strip()
             )
-    student_school = audit.get(school_col)
-    mentor_school = audit.get(f"{school_col}_mentor")
-    if student_school is None or mentor_school is None:
-        return base_result
+
     if constraint_lookup is not None:
         merge_keys = [
             col
@@ -58,31 +59,75 @@ def validate_allocation_join_keys_with_wildcard(
         ]
         if merge_keys:
             audit = audit.merge(constraint_lookup, on=merge_keys, how="left")
-    fixed_flags: list[bool] = []
-    constraints = audit.get(constraint_column)
-    for s_val, m_val, flag, constraint in zip(
-        student_school,
-        mentor_school,
-        audit[match_column],
-        constraints if constraints is not None else [False] * len(audit),
-    ):
-        try:
-            s_int = int(s_val)
-            m_int = int(m_val)
-        except Exception:
-            fixed_flags.append(bool(flag))
-            continue
-        has_constraint = bool(constraint) if constraints is not None else True
-        if (not has_constraint) or matches_school_with_wildcard(
-            s_int, m_int, policy.school_code_empty_as_zero
-        ):
-            fixed_flags.append(True)
+
+    def _fix_match_column(
+        column: str,
+        mentor_column: str,
+        matcher: Callable[[int, int, object], bool],
+        constraint_series: pd.Series | None = None,
+    ) -> None:
+        match_column = f"match_{column}"
+        if match_column not in audit.columns:
+            return
+        student_series = audit.get(column)
+        mentor_series = audit.get(mentor_column)
+        if student_series is None or mentor_series is None:
+            return
+        fixed: list[bool] = []
+        constraints_iterable: Iterable[object]
+        if constraint_series is not None:
+            constraints_iterable = constraint_series
         else:
-            fixed_flags.append(bool(flag))
-    audit[match_column] = fixed_flags
+            constraints_iterable = [None] * len(audit)
+        for student_value, mentor_value, base_flag, constraint_value in zip(
+            student_series, mentor_series, audit[match_column], constraints_iterable
+        ):
+            try:
+                student_int = int(student_value)
+                mentor_int = int(mentor_value)
+            except Exception:
+                fixed.append(bool(base_flag))
+                continue
+            fixed.append(matcher(student_int, mentor_int, constraint_value))
+        audit[match_column] = fixed
+
+    school_constraint = audit.get(constraint_column)
+
+    def _school_matcher(student_value: int, mentor_value: int, constraint_value: object) -> bool:
+        if constraint_value is None:
+            has_constraint = True
+        else:
+            try:
+                has_constraint = bool(constraint_value)
+            except Exception:
+                has_constraint = True
+        if not has_constraint:
+            return True
+        return matches_school_with_wildcard(
+            student_value, mentor_value, policy.school_code_empty_as_zero
+        )
+
+    _fix_match_column(
+        school_col,
+        f"{school_col}_mentor",
+        _school_matcher,
+        constraint_series=school_constraint if school_constraint is not None else None,
+    )
+    _fix_match_column(
+        center_col,
+        f"{center_col}_mentor",
+        lambda student_value, mentor_value, _constraint: matches_center_with_wildcard(
+            student_value, mentor_value, wildcard_center
+        ),
+    )
+
     mismatch_columns = [name for name in audit.columns if name.startswith("match_")]
     if mismatch_columns:
         audit["any_mismatch"] = ~audit[mismatch_columns].all(axis=1)
+        audit["mismatch_summary"] = audit[mismatch_columns].apply(
+            lambda row: ", ".join(col.replace("match_", "") for col, ok in row.items() if not ok),
+            axis=1,
+        )
     return JoinKeyAuditResult(
         audit_frame=audit,
         invalid_count=int(audit["any_mismatch"].sum()) if "any_mismatch" in audit.columns else 0,

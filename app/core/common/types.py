@@ -32,7 +32,7 @@ from collections.abc import (
     ValuesView,
 )
 from types import MappingProxyType
-from typing import Any, Final, Literal, TypedDict, TypeGuard, cast
+from typing import Any, Final, Literal, NewType, TypedDict, TypeGuard, cast
 
 from .columns import CANON_EN_TO_FA
 
@@ -95,6 +95,10 @@ CANONICAL_JOIN_KEYS: tuple[str, ...] = (
     JOIN_KEY_FINANCE,
     JOIN_KEY_SCHOOL_CODE,
 )
+
+JoinKeyName = NewType("JoinKeyName", str)
+
+JoinProfile = Mapping[JoinKeyName, int]
 
 PolicyGender = Literal["male", "female"]
 GraduationStatus = Literal["graduated", "not_graduated"]
