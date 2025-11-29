@@ -2176,7 +2176,9 @@ def allocate_batch(
                 ):
                     pool_internal.loc[chosen_index, "remaining_capacity"] = state_entry["remaining"]
                 pool_internal.loc[chosen_index, "allocations_new"] = state_entry["alloc_new"]
-                pool_internal.loc[chosen_index, "occupancy_ratio"] = 0.0
+                pool_internal.loc[chosen_index, "occupancy_ratio"] = state_entry.get(
+                    "occupancy_ratio", 0.0
+                )
 
                 pool_with_ids.loc[chosen_index, resolved_capacity_column] = state_entry["remaining"]
                 if (
@@ -2185,7 +2187,9 @@ def allocate_batch(
                 ):
                     pool_with_ids.loc[chosen_index, "remaining_capacity"] = state_entry["remaining"]
                 pool_with_ids.loc[chosen_index, "allocations_new"] = state_entry["alloc_new"]
-                pool_with_ids.loc[chosen_index, "occupancy_ratio"] = 0.0
+                pool_with_ids.loc[chosen_index, "occupancy_ratio"] = state_entry.get(
+                    "occupancy_ratio", 0.0
+                )
 
                 mentor_id_display = result.log.get("mentor_id")
                 if mentor_id_display is None:

@@ -277,6 +277,8 @@ def consume_capacity(
     if before <= 0:
         raise ValueError("CAPACITY_UNDERFLOW")
     after = before - 1
+    if after < 0:
+        raise ValueError("CAPACITY_UNDERFLOW")
     entry["remaining"] = after
     entry["alloc_new"] = _coerce_capacity_value(entry.get("alloc_new", 0)) + 1
     entry["remaining_capacity"] = after
@@ -287,7 +289,9 @@ def consume_capacity(
     entry["total_capacity"] = max(
         initial, _coerce_capacity_value(entry.get("total_capacity", initial))
     )
-    entry["occupancy_ratio"] = float(entry.get("occupancy_ratio", 0.0) or 0.0)
+    denominator = max(initial, 1)
+    occupancy_ratio = (initial - after) / denominator
+    entry["occupancy_ratio"] = float(occupancy_ratio)
     return before, after, entry["occupancy_ratio"]
 
 
