@@ -56,7 +56,6 @@ def test_apply_ranking_policy_orders_by_policy(
     )
 
     ranked = apply_ranking_policy(df, state=state)
-    occupancy = ranked["occupancy_ratio"].tolist()
     remaining_capacity = ranked["remaining_capacity"].tolist()
     allocations = ranked["allocations_new"].tolist()
     sort_keys = ranked["mentor_sort_key"].tolist()
