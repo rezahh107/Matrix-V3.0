@@ -511,7 +511,15 @@ def _center_mask_series(
     """ماسک برداری برای تطبیق مرکز با پشتیبانی wildcard مطابق §6.3 Technical SSoT."""
     if wildcard_center is not None and student_center == wildcard_center:
         return pd.Series(True, index=mentor_series.index)
-    mentor_mask = mentor_series.eq(0) | mentor_series.eq(student_center)
+
+    series = ensure_series(mentor_series)
+    try:
+        series = series.astype("Int64")
+    except (TypeError, ValueError):
+        series = mentor_series
+
+    series = series.fillna(0)
+    mentor_mask = series.eq(0) | series.eq(student_center)
     return mentor_mask
 
 
