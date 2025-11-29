@@ -9,6 +9,7 @@ from typing import Any
 
 # mypy: follow_imports=skip
 import pandas as pd
+from pandas._libs.missing import NAType
 
 from .common.column_normalizer import normalize_input_columns
 from .common.columns import (
@@ -21,7 +22,7 @@ from .common.columns import (
     resolve_aliases,
 )
 from .common.ids import build_mentor_alias_map, extract_alias_code_series
-from .common.join_keys import canonicalize_join_key_value
+from .common.join_keys import JoinKeyCanonicalizationError, canonicalize_join_key_value
 from .common.normalization import normalize_fa, parse_int_safe
 from .common.types import HeaderMode, parse_header_mode
 from .policy_loader import PolicyConfig
@@ -100,10 +101,19 @@ def _coerce_capacity_series(series: pd.Series, stats: PoolCanonicalizationStats)
     return filled
 
 
+def _safe_canonical_join_value(column: str, raw: object, *, policy: PolicyConfig) -> int | NAType:
+    """Canonicalize a join value while preserving NA on failure."""
+
+    try:
+        return canonicalize_join_key_value(column, raw, policy=policy)
+    except JoinKeyCanonicalizationError:
+        return pd.NA
+
+
 def _canonicalize_join_key_columns(
     frame: pd.DataFrame, join_keys: Sequence[str], policy: PolicyConfig
 ) -> pd.DataFrame:
-    """Apply join-key canonicalization and enforce ``int64`` dtype with no nulls."""
+    """Apply join-key canonicalization and enforce integer dtype with nullable support."""
 
     canonicalized = frame.copy()
     for column in join_keys:
@@ -111,10 +121,10 @@ def _canonicalize_join_key_columns(
             raise KeyError(f"Missing join key column: {column}")
         series = ensure_series(canonicalized[column])
         canonical_series = series.map(
-            lambda raw: canonicalize_join_key_value(column, raw, policy=policy)
+            lambda raw: _safe_canonical_join_value(column, raw, policy=policy)
         )
         canonicalized[column] = pd.Series(
-            canonical_series, index=canonicalized.index, dtype="int64"
+            canonical_series, index=canonicalized.index, dtype="Int64"
         )
     return canonicalized
 
@@ -553,6 +563,12 @@ def canonicalize_students_frame(
         ]
     if students.columns.duplicated().any():
         students.columns = _make_unique_columns(list(map(str, students.columns)))
+    center_fa = CANON_EN_TO_FA["center"]
+    center_raw = (
+        ensure_series(students[center_fa]).copy()
+        if center_fa in students.columns
+        else pd.Series([pd.NA] * len(students), dtype="object", index=students.index)
+    )
     school_fa = CANON_EN_TO_FA["school_code"]
     if school_fa in students.columns:
         # استفاده از ensure_series باعث می‌شود در صورت وجود ستون‌های تکراری، فقط
@@ -576,6 +592,7 @@ def canonicalize_students_frame(
     students_en = _ensure_exam_group_column(students_en)
     students = canonicalize_headers(students_en, header_mode="fa")
     default_index = students_en.index
+    students["center_raw"] = center_raw.reindex(default_index)
     school_code_raw = students_en.get(
         "school_code_raw",
         pd.Series([pd.NA] * len(default_index), dtype="string", index=default_index),
@@ -614,6 +631,9 @@ def canonicalize_students_frame(
             column_name=group_column,
         )
     students = _canonicalize_join_key_columns(students, policy.join_keys, policy)
+    for column in policy.join_keys:
+        if column in students.columns and not ensure_series(students[column]).isna().any():
+            students[column] = ensure_series(students[column]).astype("int64")
     return students
 
 

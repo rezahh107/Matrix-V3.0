@@ -766,7 +766,9 @@ def _resolve_student_center_info(
 ) -> StudentCenterInfo:
     """استخراج ستون مرکز و تشخیص معتبر بودن مقدار."""
     column = policy.stage_column("center")
+    raw_column = "center_raw"
     candidates = (
+        raw_column,
         column,
         column.replace(" ", "_"),
         CANON_EN_TO_FA.get("center", "center"),
@@ -1335,7 +1337,11 @@ def _build_log_base(
 
 def _normalize_students(df: pd.DataFrame, policy: PolicyConfig) -> pd.DataFrame:
     """نرمال‌سازی قاب دانش‌آموز برای ورودی تابع allocate_batch."""
-    return canonicalize_students_frame(df, policy=policy)
+    students = canonicalize_students_frame(df, policy=policy)
+    for column in policy.join_keys:
+        if column in students.columns:
+            students[column] = students[column].astype("Int64")
+    return students
 
 
 def _normalize_pool(df: pd.DataFrame, policy: PolicyConfig) -> pd.DataFrame:

@@ -32,7 +32,7 @@ from collections.abc import (
     ValuesView,
 )
 from types import MappingProxyType
-from typing import Any, Final, Literal, TypedDict, TypeGuard, cast
+from typing import Any, Final, Literal, NewType, TypedDict, TypeGuard, cast
 
 from .columns import CANON_EN_TO_FA
 
@@ -96,15 +96,7 @@ CANONICAL_JOIN_KEYS: tuple[str, ...] = (
     JOIN_KEY_SCHOOL_CODE,
 )
 
-# مطابق LAW v3.0 شش کلید join به‌صورت عدد صحیح نگه داشته می‌شوند.
-JoinKeyName = Literal[
-    "کدرشته",
-    "جنسیت",
-    "دانش_آموز_فارغ",
-    "مرکز_گلستان_صدرا",
-    "مالی_حکمت_بنیاد",
-    "کد_مدرسه",
-]
+JoinKeyName = NewType("JoinKeyName", str)
 
 JoinProfile = Mapping[JoinKeyName, int]
 
