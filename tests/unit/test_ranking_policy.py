@@ -41,3 +41,18 @@ def test_occupancy_still_has_priority_over_absolute_capacity() -> None:
     }
     ranked = apply_ranking_policy(candidate_pool, state=state, policy=policy)
     assert list(ranked["کد کارمندی پشتیبان"]) == ["MENTOR-1", "MENTOR-5"]
+
+
+def test_apply_ranking_policy_clamps_negative_capacity_and_ranks() -> None:
+    candidate_pool = pd.DataFrame({"mentor_id": ["a", "b"]})
+    state = {
+        "a": {"remaining": -2, "alloc_new": 5},
+        "b": {"remaining": 1, "alloc_new": -3},
+    }
+
+    ranked = apply_ranking_policy(candidate_pool, state=state)
+
+    assert ranked["remaining_capacity"].tolist() == [1, 0]
+    assert ranked["allocations_new"].tolist() == [0, 5]
+    assert all(value >= 0 for value in ranked["allocations_new"])
+    assert ranked["mentor_id"].tolist() == ["b", "a"]

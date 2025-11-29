@@ -210,7 +210,8 @@ def apply_ranking_policy(
 
     def _series_as_int(series: pd.Series) -> pd.Series:
         numeric = pd.to_numeric(series, errors="coerce").fillna(0)
-        return numeric.astype(int)
+        clipped = numeric.clip(lower=0)
+        return clipped.astype(int)
 
     remaining = mentor_ids.map(lambda mentor: _state_metric(mentor, "remaining"))
     allocations = mentor_ids.map(lambda mentor: _state_metric(mentor, "alloc_new"))

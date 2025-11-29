@@ -509,16 +509,21 @@ def _center_mask_series(
     wildcard_center: int | None,
 ) -> pd.Series:
     """ماسک برداری برای تطبیق مرکز با پشتیبانی wildcard مطابق §6.3 Technical SSoT."""
-    if wildcard_center is not None and student_center == wildcard_center:
+    wildcard_values: set[int] = {wildcard_center} if wildcard_center is not None else {0}
+    if student_center in wildcard_values:
         return pd.Series(True, index=mentor_series.index)
 
     series = ensure_series(mentor_series)
     try:
-        series = series.astype("Int64")
+        numeric = pd.to_numeric(series, errors="coerce").astype("Int64")
     except (TypeError, ValueError):
-        series = mentor_series
+        numeric = series
 
-    mentor_mask = series.eq(0) | series.eq(student_center)
+    if not pd_types.is_integer_dtype(numeric):
+        numeric = pd.to_numeric(numeric, errors="coerce").astype("Int64")
+
+    wildcard_mask = numeric.isin(wildcard_values)
+    mentor_mask = numeric.eq(student_center) | wildcard_mask
     return mentor_mask.fillna(False)
 
 
@@ -761,6 +766,21 @@ def _student_value(student: Mapping[str, object], column: str) -> object:
     raise KeyError(f"Student row missing value for '{column}'")
 
 
+def _is_missing_join_value(value: object) -> bool:
+    """تشخیص تهی بودن مقدار کلید join برای ثبت DATA_MISSING."""
+
+    if value is None:
+        return True
+    try:
+        if isinstance(value, Number) and pd.isna(value):
+            return True
+    except TypeError:
+        return False
+    if isinstance(value, str):
+        return not normalize_digits(value).strip()
+    return False
+
+
 def _resolve_student_center_info(
     student: Mapping[str, object],
     policy: PolicyConfig,
@@ -852,6 +872,10 @@ def _collect_join_key_map(
         try:
             value = _student_value(student, column)
         except KeyError:
+            join_map[normalized] = -1
+            missing_columns.append(column)
+            continue
+        if _is_missing_join_value(value):
             join_map[normalized] = -1
             missing_columns.append(column)
             continue

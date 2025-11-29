@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import re
 import warnings
@@ -1901,12 +1902,14 @@ def load_policy(
         raise FileNotFoundError(f"Policy file not found: {policy_path}") from exc
 
     resolved = str(policy_path.resolve())
-    return _load_policy_cached(
-        resolved,
-        raw,
-        mtime_ns,
-        expected_version,
-        on_version_mismatch,
+    return copy.deepcopy(
+        _load_policy_cached(
+            resolved,
+            raw,
+            mtime_ns,
+            expected_version,
+            on_version_mismatch,
+        )
     )
 
 

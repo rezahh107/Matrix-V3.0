@@ -209,11 +209,10 @@ def matches_center_with_wildcard(
 ) -> bool:
     """Compare center with wildcard support."""
 
-    if wildcard_center is not None and (
-        student_center == wildcard_center or mentor_center == wildcard_center
-    ):
+    wildcard_values: set[int] = {wildcard_center} if wildcard_center is not None else {0}
+    if student_center in wildcard_values or mentor_center in wildcard_values:
         return True
-    return mentor_center == 0 or mentor_center == student_center
+    return mentor_center == student_center
 
 
 def matches_school_with_wildcard(
