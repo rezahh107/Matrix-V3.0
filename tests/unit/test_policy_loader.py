@@ -381,7 +381,9 @@ def test_load_policy_reads_default_config(tmp_path: Path) -> None:
     assert policy.finance_variants == (0, 1, 3)
     assert policy.center_map["شهدخت کشاورز"] == 1
     assert policy.columns.postal_code == "کدپستی"
-    assert load_policy(config_path) is policy
+    cached = load_policy(config_path)
+    assert cached == policy
+    assert cached is not policy
 
 
 def test_load_policy_cache_invalidates_on_mtime(tmp_path: Path) -> None:
