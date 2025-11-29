@@ -1024,6 +1024,7 @@ def test_allocate_student_records_fairness_reason_code(_base_pool: pd.DataFrame)
     pool = _base_pool.assign(
         occupancy_ratio=[0.0, 0.0],
         allocations_new=[0, 0],
+        **{"کد کارمندی پشتیبان": ["EMP1", "EMP01"]},
         counter=["543570002", "543570001"],
     )
 

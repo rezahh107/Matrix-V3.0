@@ -45,8 +45,8 @@ def test_trace_plan_matches_policy_order() -> None:
     ]
 
 
-def test_ranking_policy_respects_order_and_natural_sort() -> None:
-    """Rule R3: ترتیب occ→alloc→natural mentor_id باید پایدار باشد."""
+def test_ranking_policy_respects_capacity_order_and_natural_sort() -> None:
+    """Rule R3: ظرفیت ↓ سپس تخصیص جدید ↑ سپس شناسه طبیعی ↑."""
 
     policy = load_policy()
     candidate_pool = pd.DataFrame(
@@ -74,8 +74,7 @@ def test_ranking_policy_respects_order_and_natural_sort() -> None:
         "EMP-11",
     ]
     ranking_names = [rule.name for rule in policy.ranking_rules]
-    assert ranking_names == [
-        "min_occupancy_ratio",
+    assert ranking_names[:3] == [
         "max_remaining_capacity",
         "min_allocations_new",
         "min_mentor_id",

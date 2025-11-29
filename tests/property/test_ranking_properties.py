@@ -56,16 +56,13 @@ def test_apply_ranking_policy_orders_by_policy(
     )
 
     ranked = apply_ranking_policy(df, state=state)
-    occupancy = ranked["occupancy_ratio"].tolist()
     remaining_capacity = ranked["remaining_capacity"].tolist()
     allocations = ranked["allocations_new"].tolist()
     sort_keys = ranked["mentor_sort_key"].tolist()
 
-    # سورت باید مطابق Policy باشد: occupancy → ظرفیت مطلق → تخصیص جدید → کلید طبیعی
-    assert occupancy == sorted(occupancy)
-    if occupancy[0] == occupancy[1]:
-        assert remaining_capacity == sorted(remaining_capacity, reverse=True)
-        if remaining_capacity[0] == remaining_capacity[1]:
-            assert allocations == sorted(allocations)
-            if allocations[0] == allocations[1]:
-                assert sort_keys == sorted(sort_keys)
+    # ترتیب باید ظرفیت‌محور باشد: ظرفیت باقی‌مانده ↓ سپس تخصیص جدید ↑ سپس شناسه طبیعی ↑
+    assert remaining_capacity == sorted(remaining_capacity, reverse=True)
+    if remaining_capacity[0] == remaining_capacity[1]:
+        assert allocations == sorted(allocations)
+        if allocations[0] == allocations[1]:
+            assert sort_keys == sorted(sort_keys)

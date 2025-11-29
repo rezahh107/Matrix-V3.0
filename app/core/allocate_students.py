@@ -1701,43 +1701,6 @@ def allocate_student(
             ],
         )
 
-    # --- RANK-CORE: مرتب‌سازی نهایی بر اساس remaining_capacity ↓ سپس natural mentor_id ↑ ---
-    try:
-        mentor_ids_for_rank = ensure_series(state_view_en.loc[ranked.index, "mentor_id"]).map(
-            _normalize_mentor_identifier
-        )
-    except KeyError:
-        mentor_ids_for_rank = pd.Series([None] * len(ranked), index=ranked.index)
-
-    def _state_lookup(ident: str | None, field: str, default: int | float) -> int | float:
-        if ident is None:
-            return default
-        entry = ranking_state.get(ident)
-        if not entry:
-            return default
-        value = entry.get(field, default)
-        if field == "remaining":
-            return _safe_state_int(value)
-        return _safe_state_float(value)
-
-    remaining_series = mentor_ids_for_rank.map(
-        lambda ident: _state_lookup(ident, "remaining", 0),
-    )
-
-    ranked = (
-        ranked.assign(
-            __remaining_rank__=-pd.to_numeric(remaining_series, errors="coerce")
-            .fillna(0)
-            .astype(int),
-        )
-        .sort_values(
-            by=["__remaining_rank__", "mentor_sort_key"],
-            ascending=[True, True],
-            kind="stable",
-        )
-        .drop(columns=["__remaining_rank__"])
-    )
-
     if ranked.empty:
         return _fail_allocation(
             "Ranking policy produced empty set after state-based ordering",
