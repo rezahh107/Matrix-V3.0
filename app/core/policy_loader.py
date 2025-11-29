@@ -1843,11 +1843,9 @@ def _prepare_policy_payload(
 
     if "ranking_rules" not in migrated:
         ranking_raw = migrated.get("ranking")
-        if ranking_raw is None:
-            ranking_names = list(_CANONICAL_RANKING_ORDER)
-        elif isinstance(ranking_raw, Sequence) and not isinstance(ranking_raw, (str, bytes)):
-            ranking_names = [name for name in ranking_raw if name in _RANKING_RULE_LIBRARY]
-        else:
+        if ranking_raw is not None and not (
+            isinstance(ranking_raw, Sequence) and not isinstance(ranking_raw, (str, bytes))
+        ):
             raise TypeError("ranking must be a sequence when provided in legacy policy")
         ranking_rules = []
         for name in _CANONICAL_RANKING_ORDER:
