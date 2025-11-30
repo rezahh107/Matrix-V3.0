@@ -4,7 +4,9 @@ from unittest.mock import Mock, patch
 import pandas as pd
 import pytest
 
-pytest.importorskip("PySide6.QtWidgets")
+pytest.importorskip(
+    "PySide6.QtWidgets", exc_type=ImportError, reason="PySide6 Qt widgets unavailable in CI"
+)
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")

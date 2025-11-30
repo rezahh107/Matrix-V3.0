@@ -5,7 +5,7 @@ import time
 
 import pytest
 
-pytest.importorskip("PySide6")
+pytest.importorskip("PySide6", exc_type=ImportError)
 try:  # noqa: SIM105 - وابستگی سیستمی ممکن است موجود نباشد
     from PySide6.QtWidgets import (
         QApplication,  # noqa: E402  # pylint: disable=wrong-import-position

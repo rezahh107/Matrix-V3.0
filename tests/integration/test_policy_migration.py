@@ -43,5 +43,6 @@ def test_load_policy_respects_migration_mode(tmp_path: Path) -> None:
     with pytest.raises(ValueError):
         load_policy(legacy_path, expected_version="1.0.3", on_version_mismatch="raise")
 
-    config = load_policy(legacy_path, expected_version="1.0.3", on_version_mismatch="migrate")
+    with pytest.warns(RuntimeWarning, match="migrated in-memory"):
+        config = load_policy(legacy_path, expected_version="1.0.3", on_version_mismatch="migrate")
     assert config.version == "1.0.3"

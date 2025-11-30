@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-pytest.importorskip("PySide6.QtWidgets", reason="محیط CI بدون libGL")
+pytest.importorskip(
+    "PySide6.QtWidgets",
+    exc_type=ImportError,
+    reason="محیط CI بدون libGL",
+)
 
 from app.ui import theme
 

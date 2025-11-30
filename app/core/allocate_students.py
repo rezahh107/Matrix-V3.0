@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import math
-import warnings
 from collections.abc import Callable, Hashable, Mapping, Sequence
 from dataclasses import dataclass
 from numbers import Number, Real
@@ -1083,10 +1082,11 @@ def _build_center_manager_index(
     manager_map: Mapping[int, Sequence[str]] | None,
     *,
     strict_validation: bool = False,
-) -> tuple[dict[int, pd.Index], list[int]]:
-    """ساخت نگاشت مرکز → ایندکس منتورها با گزارش مراکز بدون مدیر."""
+) -> tuple[dict[int, pd.Index], list[int], list[str]]:
+    """ساخت نگاشت مرکز → ایندکس منتورها با گزارش مراکز بدون مدیر بدون صدور هشدار جهانی."""
+
     if not manager_map:
-        return {}, []
+        return {}, [], []
     center_candidates = (
         policy.stage_column("center"),
         policy.stage_column("center").replace(" ", "_"),
@@ -1100,7 +1100,7 @@ def _build_center_manager_index(
     )
     manager_column = next((name for name in manager_candidates if name in pool.columns), None)
     if center_column is None or manager_column is None:
-        return {}, []
+        return {}, [], []
 
     center_series = pd.to_numeric(ensure_series(pool[center_column]), errors="coerce").fillna(-1)
     center_series = center_series.astype(int)
@@ -1108,6 +1108,7 @@ def _build_center_manager_index(
 
     result: dict[int, pd.Index] = {}
     missing_centers: list[int] = []
+    warnings_messages: list[str] = []
 
     for center_value, names in manager_map.items():
         normalized_names = [str(name).strip() for name in names if str(name).strip()]
@@ -1119,14 +1120,9 @@ def _build_center_manager_index(
         else:
             missing_centers.append(int(center_value))
             manager_list = ", ".join(str(name) for name in normalized_names)
-            warnings.warn(
-                (
-                    f"هیچ منتوری با نام‌های {manager_list or 'نامشخص'} برای مرکز "
-                    f"{center_value} یافت نشد. دانش‌آموزان این مرکز بدون محدودیت مدیر "
-                    "تخصیص خواهند یافت."
-                ),
-                UserWarning,
-                stacklevel=2,
+            warnings_messages.append(
+                f"هیچ منتوری با نام‌های {manager_list or 'نامشخص'} برای مرکز {center_value}"
+                " یافت نشد. دانش‌آموزان این مرکز بدون محدودیت مدیر تخصیص خواهند یافت."
             )
 
     if missing_centers and (
@@ -1134,7 +1130,7 @@ def _build_center_manager_index(
     ):
         raise ValueError(f"مدیران مورد نیاز برای مراکز {missing_centers} در استخر یافت نشدند")
 
-    return result, missing_centers
+    return result, missing_centers, warnings_messages
 
 
 def _normalize_rule_details(payload: object) -> Mapping[str, object] | None:
@@ -1311,8 +1307,6 @@ def _append_invalid_center_alert(
                 "message": message,
             }
         ]
-
-    warnings.warn(message, stacklevel=2)
 
 
 def _emit_alert_progress(
@@ -1993,9 +1987,9 @@ def allocate_batch(
         cli_priority=center_priority,
         cli_strict_validation=strict_center_validation,
     )
+    run_warnings: list[str] = []
     config_warnings = validate_center_config(policy, final_manager_map, final_priority)
-    for message in config_warnings:
-        warnings.warn(message, UserWarning, stacklevel=2)
+    run_warnings.extend(config_warnings)
 
     # مرتب‌سازی و جداسازی دانش‌آموزان
     sorted_students = _sort_students_by_center_priority(students_norm, policy, final_priority)
@@ -2049,12 +2043,13 @@ def allocate_batch(
     )
 
     # ساخت ایندکس مدیران مرکز
-    center_manager_index, _ = _build_center_manager_index(
+    center_manager_index, _, center_manager_warnings = _build_center_manager_index(
         pool_with_ids,
         policy,
         final_manager_map,
         strict_validation=strict_center_validation,
     )
+    run_warnings.extend(center_manager_warnings)
     center_column_name = policy.stage_column("center")
 
     # داده‌های خروجی
@@ -2255,6 +2250,8 @@ def allocate_batch(
     # ساخت خروجی‌های نهایی
     allocations_df = pd.DataFrame(allocations, columns=_ALLOCATION_OUTPUT_COLUMNS)
     logs_df = pd.DataFrame(logs)
+    if run_warnings:
+        logs_df.attrs["warnings"] = tuple(run_warnings)
     trace_df = pd.DataFrame(trace_rows)
 
     # پردازش نتایج Trace

@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import pytest
 
-pytest.importorskip("PySide6.QtWidgets", reason="PySide6 GUI stack نیاز به libGL دارد")
+pytest.importorskip(
+    "PySide6.QtWidgets",
+    exc_type=ImportError,
+    reason="PySide6 GUI stack نیاز به libGL دارد",
+)
 from PySide6.QtWidgets import QApplication
 
 from app.ui.texts import UiTranslator
