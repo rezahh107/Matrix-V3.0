@@ -144,12 +144,13 @@ def test_canonicalize_center_na_rejected() -> None:
         canonicalize_join_key_value(policy.stage_column("center"), pd.NA, policy=policy)
 
 
-def test_matches_center_with_wildcard_requires_mentor_global() -> None:
+def test_matches_center_with_wildcard_accepts_student_or_mentor_global() -> None:
     policy = load_policy()
     wildcard = policy.center_map.get("*")
 
     assert matches_center_with_wildcard(5, 0, wildcard)
-    assert not matches_center_with_wildcard(0, 2, wildcard)
+    assert matches_center_with_wildcard(0, 2, wildcard)
+    assert not matches_center_with_wildcard(3, 4, wildcard)
 
 
 def test_validate_policy_join_keys_flags_missing_center() -> None:

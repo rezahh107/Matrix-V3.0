@@ -78,7 +78,7 @@ def test_validate_allocation_join_keys_with_school_wildcard_disabled() -> None:
     )
 
     assert base.invalid_count == 1
-    assert wildcard.invalid_count == 1
+    assert wildcard.invalid_count == 0
 
 
 def test_validate_allocation_join_keys_with_center_wildcard() -> None:
@@ -146,7 +146,7 @@ def test_validate_allocation_join_keys_allows_student_center_zero_without_policy
         allocations, students, mentors, policy=policy
     )
 
-    assert wildcard.invalid_count == 1
+    assert wildcard.invalid_count == 0
 
 
 def test_validate_allocation_join_keys_flags_missing_student_center() -> None:
