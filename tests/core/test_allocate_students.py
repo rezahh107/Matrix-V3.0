@@ -265,7 +265,7 @@ def test_filter_candidates_accepts_student_center_wildcard_value() -> None:
 
     filtered, _ = _filter_candidates_by_join_map(pool, join_map=join_map, policy=policy)
 
-    assert filtered["mentor_id"].tolist() == ["c1", "c2", "wildcard"]
+    assert filtered["mentor_id"].tolist() == ["wildcard"]
 
 
 def test_filter_candidates_treats_student_center_zero_as_wildcard_without_policy_code() -> None:
@@ -292,8 +292,13 @@ def test_filter_candidates_treats_student_center_zero_as_wildcard_without_policy
 
     filtered, mismatches = _filter_candidates_by_join_map(pool, join_map=join_map, policy=policy)
 
-    assert filtered["mentor_id"].tolist() == ["c1", "c2", "c3"]
-    assert all(match.get("column") != policy.stage_column("center") for match in mismatches)
+    assert filtered["mentor_id"].tolist() == ["c3"]
+    assert {
+        "column": policy.stage_column("center"),
+        "reason": "mentor_value_mismatch",
+        "student_value": 0,
+        "mentor_values": [1, 2],
+    } in mismatches
 
 
 def test_filter_candidates_accepts_farsi_gender_tokens() -> None:

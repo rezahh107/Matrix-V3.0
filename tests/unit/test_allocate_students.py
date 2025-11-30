@@ -778,10 +778,10 @@ def test_allocate_student_center_zero_skips_filter(_base_pool: pd.DataFrame) -> 
 
     result = allocate_student(student_row, _base_pool)
 
-    assert result.log["allocation_status"] == "success"
-    assert result.log["error_type"] is None
-    assert result.log["candidate_count"] == 2
-    assert result.log["candidate_count"] == len(_base_pool)
+    assert result.log["allocation_status"] == "failed"
+    assert result.log["error_type"] == "ELIGIBILITY_NO_MATCH"
+    assert result.log["candidate_count"] == 0
+    assert result.log["rule_reason_code"] == "CENTER_MISMATCH"
 
 
 def test_allocate_batch_skips_canonicalization_when_frames_prepared(
