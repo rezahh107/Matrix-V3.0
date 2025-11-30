@@ -210,10 +210,10 @@ def center_wildcard_value(policy: PolicyConfig) -> int | None:
 def matches_center_with_wildcard(
     student_center: int, mentor_center: int, wildcard_center: int | None
 ) -> bool:
-    """Compare center with wildcard support."""
+    """Compare centers using mentor-side-only wildcard semantics."""
 
     wildcard_values: set[int] = {int(wildcard_center)} if wildcard_center is not None else {0}
-    if student_center in wildcard_values or mentor_center in wildcard_values:
+    if mentor_center in wildcard_values:
         return True
     return mentor_center == student_center
 

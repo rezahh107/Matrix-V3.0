@@ -144,12 +144,12 @@ def test_canonicalize_center_na_rejected() -> None:
         canonicalize_join_key_value(policy.stage_column("center"), pd.NA, policy=policy)
 
 
-def test_matches_center_with_wildcard_accepts_student_or_mentor_global() -> None:
+def test_matches_center_with_wildcard_requires_mentor_side_global_or_match() -> None:
     policy = load_policy()
     wildcard = policy.center_map.get("*")
 
     assert matches_center_with_wildcard(5, 0, wildcard)
-    assert matches_center_with_wildcard(0, 2, wildcard)
+    assert not matches_center_with_wildcard(0, 2, None)
     assert not matches_center_with_wildcard(3, 4, wildcard)
 
 
@@ -184,6 +184,15 @@ def test_resolve_finance_variants_expands_policy_values() -> None:
     variants = resolve_finance_variants(policy.finance_variants[0], policy)
 
     assert variants.issuperset(set(policy.finance_variants))
+
+
+def test_matches_center_with_wildcard_rejects_student_side_global_with_policy_wildcard() -> None:
+    policy = load_policy()
+    wildcard = policy.center_map.get("*")
+
+    assert wildcard is not None
+    assert matches_center_with_wildcard(5, 0, wildcard)
+    assert not matches_center_with_wildcard(0, 5, wildcard)
 
 
 def test_resolve_finance_variants_unknown_falls_back() -> None:

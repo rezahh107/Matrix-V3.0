@@ -13,9 +13,17 @@ def test_center_mask_rejects_missing_centers_when_student_specific() -> None:
     assert mask.tolist() == [False, True, False, True]
 
 
-def test_center_mask_respects_policy_wildcard_passthrough() -> None:
+def test_center_mask_applies_policy_wildcard_to_mentor_only() -> None:
+    mentor_centers = pd.Series([pd.NA, 7, 99], dtype="Int64")
+
+    mask = _center_mask_series(mentor_centers, student_center=3, wildcard_center=99)
+
+    assert mask.tolist() == [False, False, True]
+
+
+def test_center_mask_student_center_matching_wildcard_is_not_global() -> None:
     mentor_centers = pd.Series([pd.NA, 7, 12], dtype="Int64")
 
     mask = _center_mask_series(mentor_centers, student_center=99, wildcard_center=99)
 
-    assert mask.tolist() == [True, True, True]
+    assert mask.tolist() == [False, False, False]
