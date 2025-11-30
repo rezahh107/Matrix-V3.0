@@ -11,6 +11,7 @@ from app.core.common.join_keys import (
     JoinKeyCanonicalizationError,
     canonicalize_join_key_value,
     coerce_join_int,
+    matches_center_with_wildcard,
     normalize_join_key_name,
     resolve_finance_variants,
     validate_policy_join_keys,
@@ -127,6 +128,28 @@ def test_validate_policy_join_keys_allows_global_center() -> None:
 
     assert valid
     assert mismatches == []
+
+
+def test_canonicalize_center_missing_rejected() -> None:
+    policy = load_policy()
+
+    with pytest.raises(JoinKeyCanonicalizationError):
+        canonicalize_join_key_value(policy.stage_column("center"), "", policy=policy)
+
+
+def test_canonicalize_center_na_rejected() -> None:
+    policy = load_policy()
+
+    with pytest.raises(JoinKeyCanonicalizationError):
+        canonicalize_join_key_value(policy.stage_column("center"), pd.NA, policy=policy)
+
+
+def test_matches_center_with_wildcard_requires_mentor_global() -> None:
+    policy = load_policy()
+    wildcard = policy.center_map.get("*")
+
+    assert matches_center_with_wildcard(5, 0, wildcard)
+    assert not matches_center_with_wildcard(0, 2, wildcard)
 
 
 def test_validate_policy_join_keys_flags_missing_center() -> None:
