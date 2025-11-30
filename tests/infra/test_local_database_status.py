@@ -45,7 +45,11 @@ def test_health_counts_with_data(tmp_path):
     db.initialize()
     with db.connect() as conn:
         conn.execute("INSERT INTO students_cache (student_id) VALUES (?)", ("s1",))
-        conn.execute("INSERT INTO mentor_pool_cache (mentor_id) VALUES (?)", ("m1",))
+        conn.execute(
+            "INSERT INTO mentor_pool_cache (mentor_id, policy_version, ssot_version, pool_hash)"
+            " VALUES (?, ?, ?, ?)",
+            ("m1", "1.0.3", "1.0.2", ""),
+        )
     record = RunRecord(
         run_uuid="run-1",
         started_at=datetime.utcnow(),
