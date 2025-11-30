@@ -24,6 +24,41 @@ from app.infra.local_database import LocalDatabase, QaSummaryRow, RunMetricRow, 
 logger = logging.getLogger(__name__)
 
 
+def canonicalize_national_code(value: object) -> str | None:
+    """نرمال‌سازی کد ملی برای استفادهٔ پایدار در تاریخچه.
+
+    کاراکترهای غیررقمی حذف و خروجی به طول ده رقم با صفر پیشرو پر می‌شود.
+    در صورت فقدان عدد معتبر، ``None`` بازگردانده می‌شود.
+    """
+
+    if value is None:
+        return None
+    text = str(value).strip()
+    digits = "".join(ch for ch in text if ch.isdigit())
+    if not digits:
+        return None
+    trimmed = digits[-10:]
+    return trimmed.zfill(10)
+
+
+def _normalize_history_info(history_info_df: pd.DataFrame) -> pd.DataFrame:
+    """تبدیل امن ``history_info_df`` قبل از ذخیرهٔ Snapshot.
+
+    تنها ستون‌های شناخته‌شده (کد ملی و allocation_channel) نرمال می‌شوند تا
+    هم‌خوانی با Policy/History برقرار بماند و تکرارهای ناخواسته رخ ندهد.
+    """
+
+    normalized = history_info_df.copy()
+    for column in ("کد ملی", "national_code"):
+        if column in normalized.columns:
+            normalized[column] = normalized[column].map(canonicalize_national_code)
+    if "allocation_channel" in normalized.columns:
+        normalized["allocation_channel"] = (
+            normalized["allocation_channel"].astype("string").str.upper().str.strip()
+        )
+    return normalized
+
+
 @dataclass(frozen=True)
 class RunContext:
     """اطلاعات پایهٔ اجرای تخصیص برای ثبت در تاریخچه."""
@@ -238,7 +273,9 @@ def _maybe_store_snapshots(
             trace_df=trace_snapshot,
             summary_df=summary_df if isinstance(summary_df, pd.DataFrame) else None,
             history_info_df=(
-                history_info_df if isinstance(history_info_df, pd.DataFrame) else None
+                _normalize_history_info(history_info_df)
+                if isinstance(history_info_df, pd.DataFrame)
+                else None
             ),
         )
     if qa_report is not None or qa_extras:
