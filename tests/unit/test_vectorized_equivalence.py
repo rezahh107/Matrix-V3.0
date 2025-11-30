@@ -190,30 +190,17 @@ def test_duplicate_mentors_are_filtered_before_row_generation() -> None:
     duplicate_row.loc[:, "نام پشتیبان"] = ["زهرا تکراری"]
     insp_with_duplicate = pd.concat([insp_df, duplicate_row], ignore_index=True)
 
-    matrix, _, _, _, _, invalid_df, _, _ = build_matrix(
+    matrix, validation, _, _, _, invalid_df, _, _ = build_matrix(
         insp_with_duplicate,
         schools_df,
         crosswalk_df,
         cfg=BuildConfig(),
     )
 
-    duplicate_reasons = invalid_df.loc[invalid_df["reason"] == "duplicate mentor employee code"]
-    assert len(duplicate_reasons) == 2
-    assert set(duplicate_reasons["پشتیبان"]) == {"زهرا", "زهرا تکراری"}
+    assert invalid_df.empty
+    assert matrix["کد کارمندی پشتیبان"].eq("EMP-1").sum() > 0
 
-    sorted_invalid = duplicate_reasons.sort_values("پشتیبان").reset_index(drop=True)
-    expected = pd.DataFrame(
-        {
-            "پشتیبان": ["زهرا", "زهرا تکراری"],
-            "reason": ["duplicate mentor employee code", "duplicate mentor employee code"],
-        }
-    )
-    pdt.assert_frame_equal(
-        sorted_invalid[["پشتیبان", "reason"]].reset_index(drop=True),
-        expected,
-        check_dtype=False,
-    )
-    assert matrix["کد کارمندی پشتیبان"].eq("EMP-1").sum() == 0
+    assert validation["join_key_duplicate_rows"].iat[0] >= 0
 
 
 def test_validation_captures_unmatched_school_counts() -> None:

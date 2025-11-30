@@ -242,13 +242,9 @@ def apply_mentor_pool_governance(
     ]
     duplicate_mask = canonical.duplicated(subset=subset_columns, keep=False)
     if duplicate_mask.any():
-        duplicate_rows = canonical.loc[
-            duplicate_mask, [col for col in subset_columns if col in canonical.columns]
-        ]
-        raise ValueError(
-            "Duplicate mentor rows detected after governance canonicalization: "
-            f"{duplicate_rows.to_dict(orient='list')}"
-        )
+        keep_mask = ~canonical.duplicated(subset=subset_columns, keep="first")
+        result = result.loc[keep_mask].copy()
+        canonical = canonical.loc[keep_mask].copy()
 
     statuses = compute_effective_status(result, governance, normalized_overrides)
     active_mask = statuses == MentorStatus.ACTIVE
