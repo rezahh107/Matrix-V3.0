@@ -26,7 +26,17 @@ __all__ = [
     "check_SCHOOL_01",
     "check_GOV_01",
     "check_ALLOC_01",
+    "check_HISTORY_CHANNEL_01",
 ]
+
+
+def _canonicalize_national_code(value: object) -> str | None:
+    text = str(value).strip()
+    digits = "".join(ch for ch in text if ch.isdigit())
+    if not digits:
+        return None
+    trimmed = digits[-10:]
+    return trimmed.zfill(10)
 
 
 @dataclass(frozen=True)
@@ -155,6 +165,7 @@ def run_all_invariants(
     governance_overrides: Mapping[int | str | float, bool] | None = None,
     pool: pd.DataFrame | None = None,
     extras: Mapping[str, pd.DataFrame] | None = None,
+    history_info: pd.DataFrame | None = None,
 ) -> QaReport:
     """اجرای همهٔ قوانین QA و تولید گزارش تجمیعی.
 
@@ -191,6 +202,7 @@ def run_all_invariants(
             allocation_summary=allocation_summary,
             policy=policy,
         ),
+        check_HISTORY_CHANNEL_01(history_info=history_info),
     ]
     pool_result, pool_conflicts = check_POOL_JOIN_01(pool=pool, policy=policy)
     checks.append(pool_result)
@@ -617,6 +629,61 @@ def check_ALLOC_01(  # noqa: N802
 
     return QaRuleResult(
         rule_id="QA_RULE_ALLOC_01",
+        passed=not violations,
+        violations=violations,
+    )
+
+
+def check_HISTORY_CHANNEL_01(*, history_info: pd.DataFrame | None) -> QaRuleResult:  # noqa: N802
+    """QA_RULE_HISTORY_CHANNEL_01 — کلید تاریخچه باید کاننیکال و یکتا باشد."""
+
+    if history_info is None or history_info.empty:
+        return QaRuleResult("QA_RULE_HISTORY_CHANNEL_01", True, [])
+
+    violations: list[QaViolation] = []
+    frame = history_info.copy()
+    if "allocation_channel" in frame.columns:
+        frame["allocation_channel"] = (
+            frame["allocation_channel"].astype("string").str.upper().str.strip()
+        )
+
+    national_col: str | None = None
+    for candidate in ("national_code", "کد ملی"):
+        if candidate in frame.columns:
+            national_col = candidate
+            frame[national_col] = frame[national_col].map(_canonicalize_national_code)
+            break
+
+    if national_col is None:
+        return QaRuleResult("QA_RULE_HISTORY_CHANNEL_01", True, [])
+
+    missing = frame[national_col].isna()
+    if bool(missing.any()):
+        violations.append(
+            QaViolation(
+                rule_id="QA_RULE_HISTORY_CHANNEL_01",
+                level="error",
+                message="کد ملی تاریخچه نامعتبر یا خالی است",
+                details={"invalid_rows": int(missing.sum())},
+            )
+        )
+
+    key_cols = [national_col]
+    if "allocation_channel" in frame.columns:
+        key_cols.append("allocation_channel")
+    duplicates = frame.dropna(subset=key_cols).duplicated(subset=key_cols, keep=False)
+    if bool(duplicates.any()):
+        violations.append(
+            QaViolation(
+                rule_id="QA_RULE_HISTORY_CHANNEL_01",
+                level="error",
+                message="کلید تاریخچه (کد ملی/کانال) یکتا نیست",
+                details={"duplicate_rows": int(duplicates.sum())},
+            )
+        )
+
+    return QaRuleResult(
+        rule_id="QA_RULE_HISTORY_CHANNEL_01",
         passed=not violations,
         violations=violations,
     )
