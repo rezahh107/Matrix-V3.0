@@ -1927,6 +1927,7 @@ def _allocate_and_write(
         updated_pool_df = _ensure_valid_dataframe(updated_pool_df, "updated_pool")
         logs_df = _ensure_valid_dataframe(logs_df, "logs")
         trace_df = _ensure_valid_dataframe(trace_df, "trace")
+        history_info_df = trace_df.attrs.get("history_info_df")
         selection_reasons_df = build_selection_reason_rows(
             allocations_df,
             students_base,
@@ -1971,6 +1972,7 @@ def _allocate_and_write(
             allocation_summary=updated_pool_df,
             student_report=None,
             pool=pool_base,
+            history_info=history_info_df,
         )
         merged_extras = dict(qa_report.extras or {})
         qa_context = QaValidationContext(
@@ -2026,7 +2028,6 @@ def _allocate_and_write(
         sheets["allocation_vs_pool_audit"] = join_key_audit_sheet
 
         summary_df_attr = trace_df.attrs.get("summary_df")
-        history_info_df = trace_df.attrs.get("history_info_df")
         ui_overrides = getattr(args, "_ui_overrides", {}) or {}
         history_metrics_df = _empty_history_metrics_df()
         if (
