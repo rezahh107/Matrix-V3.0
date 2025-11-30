@@ -11,6 +11,7 @@ from app.core.allocation.mentor_pool import (
     compute_effective_status,
     filter_active_mentors,
 )
+from app.core.common.types import CANONICAL_JOIN_KEYS
 from app.core.policy_loader import MentorStatus, PolicyConfig, parse_policy_dict
 
 
@@ -271,6 +272,21 @@ def test_unknown_future_status_is_rejected() -> None:
         compute_effective_status(mentors, policy.mentor_pool_governance)
 
 
+def test_apply_mentor_pool_governance_rejects_disallowed_status() -> None:
+    policy = _policy_with_governance(
+        _base_policy_payload(),
+        {
+            "default_status": "active",
+            "allowed_statuses": ["active", "inactive"],
+            "mentors": [],
+        },
+    )
+    mentors = pd.DataFrame({"mentor_id": [77], "mentor_status": ["frozen"]})
+
+    with pytest.raises(ValueError):
+        apply_mentor_pool_governance(mentors, policy.mentor_pool_governance)
+
+
 def test_apply_mentor_pool_governance_delegates_to_effective_status() -> None:
     policy = _policy_with_governance(
         _base_policy_payload(),
@@ -296,6 +312,53 @@ def test_apply_mentor_pool_governance_delegates_to_effective_status() -> None:
         "removed": 1,
         "overrides_count": 2,
     }
+
+
+def test_apply_mentor_pool_governance_filters_zero_capacity() -> None:
+    policy = _policy_with_governance(
+        _base_policy_payload(),
+        {
+            "default_status": "active",
+            "allowed_statuses": ["active", "inactive"],
+            "mentors": [],
+        },
+    )
+    mentors = pd.DataFrame(
+        {
+            "mentor_id": [11, 12, 13],
+            "remaining_capacity": [2, 0, -1],
+        }
+    )
+
+    governed = apply_mentor_pool_governance(mentors, policy.mentor_pool_governance)
+
+    assert governed["mentor_id"].tolist() == [11]
+    assert governed.attrs["mentor_pool_governance"] == {
+        "total": 3,
+        "removed": 2,
+        "overrides_count": 0,
+    }
+
+
+def test_apply_mentor_pool_governance_detects_duplicate_rows() -> None:
+    policy = _policy_with_governance(
+        _base_policy_payload(),
+        {
+            "default_status": "active",
+            "allowed_statuses": ["active", "inactive"],
+            "mentors": [],
+        },
+    )
+    join_key_payload = {key: [1, 1] for key in CANONICAL_JOIN_KEYS}
+    mentors = pd.DataFrame(
+        {
+            "mentor_id": [21, 21],
+            **join_key_payload,
+        }
+    )
+
+    with pytest.raises(ValueError):
+        apply_mentor_pool_governance(mentors, policy.mentor_pool_governance)
 
 
 def test_apply_mentor_pool_without_identifier_is_noop_with_attrs() -> None:

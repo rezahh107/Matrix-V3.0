@@ -48,8 +48,27 @@ def _base_row(
 
 
 def _with_pool_attrs(df: pd.DataFrame) -> pd.DataFrame:
-    df.attrs["mentor_pool_governance"] = {"total": len(df)}
+    df.attrs["mentor_pool_governance"] = {"total": len(df), "removed": 0}
     return df
+
+
+def test_coverage_metrics_require_removed_metadata() -> None:
+    base_df = pd.DataFrame({"mentor_id": [1]})
+    base_df.attrs["mentor_pool_governance"] = {"total": len(base_df)}
+
+    with pytest.raises(ValueError):
+        compute_coverage_metrics(
+            matrix_df=pd.DataFrame(),
+            base_df=base_df,
+            students_df=None,
+            join_keys=JOIN_KEYS,
+            policy=CoveragePolicyConfig(),
+            unmatched_school_count=0,
+            invalid_group_token_count=0,
+            center_column="مرکز گلستان صدرا",
+            finance_column="مالی حکمت بنیاد",
+            school_code_column="کد مدرسه",
+        )
 
 
 def test_compute_coverage_metrics_excludes_blocked_candidates() -> None:
@@ -391,7 +410,7 @@ def test_coverage_metrics_normalizes_blank_gender_and_status_to_zero() -> None:
             }
         ]
     )
-    base_df.attrs["mentor_pool_governance"] = {"total": len(base_df)}
+    base_df.attrs["mentor_pool_governance"] = {"total": len(base_df), "removed": 0}
 
     cap_current_col = cfg.capacity_current_column or build_matrix.CAPACITY_CURRENT_COL
     cap_special_col = cfg.capacity_special_column or build_matrix.CAPACITY_SPECIAL_COL
@@ -470,7 +489,7 @@ def test_coverage_metrics_normalizes_missing_join_keys_to_zero_int64() -> None:
             }
         ]
     )
-    base_df.attrs["mentor_pool_governance"] = {"total": len(base_df)}
+    base_df.attrs["mentor_pool_governance"] = {"total": len(base_df), "removed": 0}
 
     cap_current_col = cfg.capacity_current_column or build_matrix.CAPACITY_CURRENT_COL
     cap_special_col = cfg.capacity_special_column or build_matrix.CAPACITY_SPECIAL_COL

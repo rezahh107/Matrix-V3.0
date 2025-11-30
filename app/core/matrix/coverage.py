@@ -116,8 +116,21 @@ def compute_group_coverage_debug(
     خلاصهٔ عددی نیز برای لاگ و شیت متادیتا بازگردانده می‌شود.
     """
 
-    if require_governed_pool and "mentor_pool_governance" not in base_df.attrs:
-        raise ValueError("base_df must be the governed mentor pool (apply_mentor_pool_governance)")
+    if require_governed_pool:
+        governance_attrs = base_df.attrs.get("mentor_pool_governance")
+        if governance_attrs is None:
+            raise ValueError(
+                "base_df must be the governed mentor pool (apply_mentor_pool_governance)"
+            )
+        if not isinstance(governance_attrs, Mapping):
+            raise ValueError("mentor_pool_governance attrs must be a mapping")
+        missing_keys = {"total", "removed"} - set(governance_attrs)
+        if missing_keys:
+            raise ValueError("mentor_pool_governance attrs must include total and removed counts")
+        total_count = int(governance_attrs["total"])
+        removed_count = int(governance_attrs["removed"])
+        if total_count < len(base_df) or removed_count < 0:
+            raise ValueError("mentor_pool_governance attrs contain inconsistent counts")
 
     candidate_keys = build_candidate_group_keys(
         base_df,
