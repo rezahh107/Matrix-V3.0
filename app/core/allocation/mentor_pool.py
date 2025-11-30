@@ -93,9 +93,7 @@ def compute_effective_status(
         return status if status in allowed_statuses else None
 
     if "mentor_status" in canonical.columns:
-        parsed_statuses = _as_series(canonical["mentor_status"], "mentor_status").map(
-            _parse_status
-        )
+        parsed_statuses = _as_series(canonical["mentor_status"], "mentor_status").map(_parse_status)
         base_statuses = base_statuses.where(parsed_statuses.isna(), parsed_statuses)
 
     policy_status = mentor_ids.map(governance.mentor_status_map)
