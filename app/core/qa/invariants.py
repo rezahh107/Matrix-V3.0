@@ -9,6 +9,7 @@ import pandas as pd
 from pandas.api import types as ptypes
 
 from app.core.allocation.mentor_pool import compute_effective_status
+from app.core.common.national_id import canonical_national_code
 from app.core.canonical_frames import POOL_JOIN_KEY_DUPLICATES_ATTR
 from app.core.policy_loader import MentorStatus, PolicyConfig
 
@@ -31,12 +32,7 @@ __all__ = [
 
 
 def _canonicalize_national_code(value: object) -> str | None:
-    text = str(value).strip()
-    digits = "".join(ch for ch in text if ch.isdigit())
-    if not digits:
-        return None
-    trimmed = digits[-10:]
-    return trimmed.zfill(10)
+    return canonical_national_code(value)
 
 
 @dataclass(frozen=True)

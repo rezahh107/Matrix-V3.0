@@ -44,3 +44,19 @@ def test_history_channel_rule_flags_missing_national_code() -> None:
     assert any(v.rule_id == "QA_RULE_HISTORY_CHANNEL_01" for v in result.violations)
     missing_detail = result.violations[0].details or {}
     assert missing_detail.get("invalid_rows") == 2
+
+
+def test_history_channel_rule_flags_duplicates_after_trimming_prefix() -> None:
+    history_info = pd.DataFrame(
+        {
+            "national_code": ["12345678901", "0012345678901"],
+            "allocation_channel": ["SADRA", "SADRA"],
+        }
+    )
+
+    result = invariants.check_HISTORY_CHANNEL_01(history_info=history_info)
+
+    assert not result.passed
+    assert any(v.rule_id == "QA_RULE_HISTORY_CHANNEL_01" for v in result.violations)
+    duplicate_detail = result.violations[0].details or {}
+    assert duplicate_detail.get("duplicate_rows") == 2

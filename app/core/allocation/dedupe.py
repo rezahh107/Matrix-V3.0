@@ -6,7 +6,7 @@ from collections.abc import Iterable
 import pandas as pd
 
 from app.core.common.columns import CANON_EN_TO_FA
-from app.core.common.phone_rules import normalize_digits
+from app.core.common.national_id import canonical_national_code
 
 __all__ = [
     "HistoryStatus",
@@ -51,21 +51,12 @@ class HistoryStatus(str, enum.Enum):
 def _normalize_national_code(value: object) -> str:
     """تبدیل مقدار ورودی به رشتهٔ ده‌رقمی کد ملی یا رشتهٔ خالی.
 
-    - مقادیر None یا NaN و هر مقدار غیر ده‌رقمی به رشتهٔ خالی تبدیل می‌شوند.
-    - تنها رقم‌ها پس از نرمال‌سازی ارقام فارسی/عربی نگه داشته می‌شوند.
+    این تابع برای سازگاری با خروجی‌های قبلی در صورت نبود مقدار کاننیکال
+    رشتهٔ خالی برمی‌گرداند.
     """
 
-    if value is None:
-        return ""
-    try:
-        if pd.isna(value):
-            return ""
-    except TypeError:
-        # برای مقادیری که isna پشتیبانی نمی‌کند
-        pass
-
-    digits_only = normalize_digits(value) or ""
-    return digits_only if len(digits_only) == 10 else ""
+    canonical = canonical_national_code(value)
+    return canonical or ""
 
 
 def _normalize_series(series: pd.Series | None, index: pd.Index | None) -> pd.Series:
