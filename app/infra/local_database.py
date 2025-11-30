@@ -1443,7 +1443,7 @@ class LocalDatabase:
         )
 
     def _migrate_v10_to_v11(self, conn: sqlite3.Connection) -> None:
-        """افزودن ستون‌های نسخه برای کش استخر منتورها در نسخهٔ ۱۱."""
+        """افزودن ستون‌های نسخه و گروه آزمایشی به کش منتورها در نسخهٔ ۱۱."""
 
         if not _table_exists(conn, "mentor_pool_cache"):
             conn.execute("UPDATE schema_meta SET schema_version = ? WHERE id = 1", (11,))
@@ -1460,6 +1460,13 @@ class LocalDatabase:
             )
         if "pool_hash" not in columns:
             conn.execute("ALTER TABLE mentor_pool_cache ADD COLUMN pool_hash TEXT")
+        if "گروه آزمایشی" not in columns:
+            _ensure_column_exists(
+                conn,
+                table="mentor_pool_cache",
+                column=_quote_identifier("گروه آزمایشی"),
+                definition="TEXT",
+            )
         conn.execute(
             "UPDATE mentor_pool_cache SET policy_version = ?, ssot_version = ?, pool_hash = COALESCE(pool_hash, '')",
             (_POLICY_VERSION, _SSOT_VERSION),
