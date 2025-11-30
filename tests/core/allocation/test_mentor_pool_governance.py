@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from typing import Any, cast
 
 import pandas as pd
+import pytest
 
 from app.core.allocation.mentor_pool import (
     apply_mentor_pool_governance,
@@ -200,6 +201,74 @@ def test_duplicate_mentor_id_headers_are_resolved() -> None:
     filtered = filter_active_mentors(mentors, policy.mentor_pool_governance)
 
     assert filtered["mentor_id"].tolist() == [70]
+
+
+def test_frozen_status_not_allowed_raises_validation_error() -> None:
+    policy = _policy_with_governance(
+        _base_policy_payload(),
+        {
+            "default_status": "active",
+            "allowed_statuses": ["active", "inactive"],
+            "mentors": [],
+        },
+    )
+    mentors = pd.DataFrame(
+        {
+            "mentor_id": [81, 82],
+            "mentor_status": ["active", "frozen"],
+            "remaining_capacity": [1, 1],
+        }
+    )
+
+    with pytest.raises(ValueError):
+        filter_active_mentors(mentors, policy.mentor_pool_governance)
+
+
+def test_all_frozen_mentors_result_in_empty_pool() -> None:
+    policy = _policy_with_governance(
+        _base_policy_payload(),
+        {
+            "default_status": "active",
+            "allowed_statuses": ["active", "inactive", "frozen"],
+            "mentors": [],
+        },
+    )
+    mentors = pd.DataFrame(
+        {
+            "mentor_id": [91, 92],
+            "mentor_status": ["frozen", "frozen"],
+            "remaining_capacity": [2, 3],
+        }
+    )
+
+    governed = apply_mentor_pool_governance(mentors, policy.mentor_pool_governance)
+
+    assert governed.empty
+    assert governed.attrs["mentor_pool_governance"] == {
+        "total": 2,
+        "removed": 2,
+        "overrides_count": 0,
+    }
+
+
+def test_unknown_future_status_is_rejected() -> None:
+    policy = _policy_with_governance(
+        _base_policy_payload(),
+        {
+            "default_status": "active",
+            "allowed_statuses": ["active", "inactive", "frozen"],
+            "mentors": [],
+        },
+    )
+    mentors = pd.DataFrame(
+        {
+            "mentor_id": [101],
+            "mentor_status": ["paused"],
+        }
+    )
+
+    with pytest.raises(ValueError):
+        compute_effective_status(mentors, policy.mentor_pool_governance)
 
 
 def test_apply_mentor_pool_governance_delegates_to_effective_status() -> None:

@@ -11,11 +11,16 @@ from app.core.build_matrix import prepare_crosswalk_mappings
 from app.core.canonical_frames import canonicalize_students_frame
 from app.core.common.columns import canonicalize_headers
 from app.core.common.normalization import normalize_fa
-from app.core.policy_loader import PolicyConfig
+from app.core.policy_loader import (
+    MentorPoolGovernanceConfig,
+    MentorStatus,
+    PolicyConfig,
+)
 
 __all__ = [
     "build_student_group_crosswalk",
     "canonicalize_students_frame_with_crosswalk",
+    "canonicalize_mentor_pool_frame",
 ]
 
 _RAW_GROUP_COLUMNS: Final[tuple[str, ...]] = ("کدرشته خام", "کد گروه خام", "کدرشته")
@@ -71,3 +76,30 @@ def canonicalize_students_frame_with_crosswalk(
     return canonicalize_students_frame(
         students_df, policy=policy, group_code_crosswalk=group_crosswalk
     )
+
+
+def canonicalize_mentor_pool_frame(
+    mentors_df: pd.DataFrame,
+    *,
+    governance: MentorPoolGovernanceConfig,
+) -> pd.DataFrame:
+    """کاننیکال‌سازی دیتافریم منتورها با اعتبارسنجی وضعیت."""
+
+    canonical = canonicalize_headers(mentors_df.copy(), header_mode="en")
+    allowed_statuses = set(governance.allowed_statuses)
+    if "mentor_status" in canonical.columns:
+        normalized_status = pd.Series(index=canonical.index, dtype=object)
+        for idx, value in canonical["mentor_status"].items():
+            try:
+                status = MentorStatus.from_value(value)
+            except ValueError as exc:
+                raise ValueError(
+                    f"Unknown mentor_status value '{value}' in mentor pool frame"
+                ) from exc
+            if status not in allowed_statuses:
+                raise ValueError(
+                    "mentor_status value is not allowed by governance.allowed_statuses"
+                )
+            normalized_status.iloc[idx] = status.value
+        canonical["mentor_status"] = normalized_status
+    return canonical

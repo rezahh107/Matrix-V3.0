@@ -55,6 +55,7 @@ def test_compute_group_coverage_flags_candidate_and_matrix_states() -> None:
             _base_row(group_code=104, mentor_id="m3", alias_normal="1104"),
         ]
     )
+    base_df.attrs["mentor_pool_governance"] = {"total": len(base_df)}
     matrix_df = pd.DataFrame(
         [
             {
