@@ -73,7 +73,14 @@ def compute_effective_status(
         raise KeyError("mentors_df must contain 'mentor_id' column")
 
     canonical = canonicalize_headers(mentors_df, header_mode="en")
-    mentor_ids = pd.to_numeric(canonical["mentor_id"], errors="coerce")
+
+    def _as_series(values: pd.Series | pd.DataFrame, column: str) -> pd.Series:
+        if isinstance(values, pd.DataFrame):
+            return values.iloc[:, 0]
+        return values.rename(column)
+
+    mentor_id_values = canonical["mentor_id"]
+    mentor_ids = pd.to_numeric(_as_series(mentor_id_values, "mentor_id"), errors="coerce")
     allowed_statuses = set(governance.allowed_statuses)
 
     base_statuses = pd.Series(governance.default_status, index=canonical.index, dtype=object)
@@ -86,7 +93,9 @@ def compute_effective_status(
         return status if status in allowed_statuses else None
 
     if "mentor_status" in canonical.columns:
-        parsed_statuses = canonical["mentor_status"].map(_parse_status)
+        parsed_statuses = _as_series(canonical["mentor_status"], "mentor_status").map(
+            _parse_status
+        )
         base_statuses = base_statuses.where(parsed_statuses.isna(), parsed_statuses)
 
     policy_status = mentor_ids.map(governance.mentor_status_map)

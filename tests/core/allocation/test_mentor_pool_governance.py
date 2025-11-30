@@ -176,6 +176,32 @@ def test_capacity_gate_removes_non_positive_capacity() -> None:
     assert filtered["mentor_id"].tolist() == [60]
 
 
+def test_duplicate_mentor_id_headers_are_resolved() -> None:
+    policy = _policy_with_governance(
+        _base_policy_payload(),
+        {
+            "default_status": "active",
+            "allowed_statuses": ["active", "inactive", "frozen"],
+            "mentors": [],
+        },
+    )
+    mentors = pd.DataFrame(
+        {
+            "mentor_id": [70, 71],
+            "کد کارمندی پشتیبان": [70, 71],
+            "mentor_status": ["active", "frozen"],
+            "remaining_capacity": [1, 2],
+        }
+    )
+
+    statuses = compute_effective_status(mentors, policy.mentor_pool_governance)
+    assert statuses.tolist() == [MentorStatus.ACTIVE, MentorStatus.FROZEN]
+
+    filtered = filter_active_mentors(mentors, policy.mentor_pool_governance)
+
+    assert filtered["mentor_id"].tolist() == [70]
+
+
 def test_apply_mentor_pool_governance_delegates_to_effective_status() -> None:
     policy = _policy_with_governance(
         _base_policy_payload(),
