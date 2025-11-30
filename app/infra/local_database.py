@@ -1303,6 +1303,10 @@ class LocalDatabase:
                 self._migrate_v9_to_v10(conn, allow_autofix=start_version >= 9)
                 version = 10
                 continue
+            if version == 10:
+                self._migrate_v10_to_v11(conn)
+                version = 11
+                continue
             raise SchemaVersionMismatchError(
                 expected_version=_SCHEMA_VERSION,
                 actual_version=version,
@@ -1437,6 +1441,30 @@ class LocalDatabase:
             "UPDATE schema_meta SET schema_version = ? WHERE id = 1",
             (10,),
         )
+
+    def _migrate_v10_to_v11(self, conn: sqlite3.Connection) -> None:
+        """افزودن ستون‌های نسخه برای کش استخر منتورها در نسخهٔ ۱۱."""
+
+        if not _table_exists(conn, "mentor_pool_cache"):
+            conn.execute("UPDATE schema_meta SET schema_version = ? WHERE id = 1", (11,))
+            return
+
+        columns = _get_table_columns(conn, "mentor_pool_cache")
+        if "policy_version" not in columns:
+            conn.execute(
+                "ALTER TABLE mentor_pool_cache ADD COLUMN policy_version TEXT NOT NULL DEFAULT ''"
+            )
+        if "ssot_version" not in columns:
+            conn.execute(
+                "ALTER TABLE mentor_pool_cache ADD COLUMN ssot_version TEXT NOT NULL DEFAULT ''"
+            )
+        if "pool_hash" not in columns:
+            conn.execute("ALTER TABLE mentor_pool_cache ADD COLUMN pool_hash TEXT")
+        conn.execute(
+            "UPDATE mentor_pool_cache SET policy_version = ?, ssot_version = ?, pool_hash = COALESCE(pool_hash, '')",
+            (_POLICY_VERSION, _SSOT_VERSION),
+        )
+        conn.execute("UPDATE schema_meta SET schema_version = ? WHERE id = 1", (11,))
 
     @staticmethod
     def _ensure_year_tables(conn: sqlite3.Connection) -> None:

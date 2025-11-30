@@ -1,7 +1,7 @@
 from datetime import datetime
 from pathlib import Path
 
-from app.infra.local_database import _SCHEMA_VERSION, LocalDatabase
+from app.infra.local_database import _POLICY_VERSION, _SCHEMA_VERSION, _SSOT_VERSION, LocalDatabase
 
 
 def _insert_dummy_run(db: LocalDatabase) -> None:
@@ -68,8 +68,8 @@ def _insert_cache_rows(db: LocalDatabase) -> None:
             INSERT INTO mentor_pool_cache (
                 mentor_id, "کد کارمندی پشتیبان", "کدرشته", "گروه آزمایشی", "جنسیت",
                 "دانش آموز فارغ", "مرکز گلستان صدرا", "مالی حکمت بنیاد", "کد مدرسه",
-                remaining_capacity, allocations_new, occupancy_ratio
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                remaining_capacity, allocations_new, occupancy_ratio, policy_version, ssot_version, pool_hash
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 "m1",
@@ -84,6 +84,9 @@ def _insert_cache_rows(db: LocalDatabase) -> None:
                 5.0,
                 0,
                 0.0,
+                _POLICY_VERSION,
+                _SSOT_VERSION,
+                "",
             ),
         )
         conn.execute(

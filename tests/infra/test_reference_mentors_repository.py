@@ -49,9 +49,13 @@ def test_mentor_pool_cache_roundtrip(tmp_path: Path) -> None:
     loaded = load_mentor_pool_from_cache(db=db, policy=policy)
 
     assert list(loaded.dtypes[policy.join_keys]) == ["Int64"] * len(policy.join_keys)
+    assert {"policy_version", "ssot_version", "pool_hash"}.issubset(loaded.columns)
+    comparable_columns = [
+        col for col in normalized.columns if col in loaded.columns and col not in {"pool_hash"}
+    ]
     assert_frame_equal(
-        loaded.sort_values(by="کد کارمندی پشتیبان").reset_index(drop=True),
-        normalized.sort_values(by="کد کارمندی پشتیبان").reset_index(drop=True),
+        loaded.sort_values(by="کد کارمندی پشتیبان")[comparable_columns].reset_index(drop=True),
+        normalized.sort_values(by="کد کارمندی پشتیبان")[comparable_columns].reset_index(drop=True),
         check_dtype=False,
     )
 
