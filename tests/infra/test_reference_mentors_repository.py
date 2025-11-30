@@ -178,6 +178,41 @@ def test_import_pool_reports_unmapped_school(tmp_path: Path) -> None:
     assert int(normalized["کد مدرسه"].iloc[0]) == 0
 
 
+def test_import_pool_deduplicates_exact_rows(tmp_path: Path) -> None:
+    policy = load_policy()
+    db = LocalDatabase(tmp_path / "cache.sqlite")
+
+    schools_df = pd.DataFrame({"کد مدرسه": [3581], "نام مدرسه": ["نمونه"]})
+    schools_path = tmp_path / "schools.xlsx"
+    _write_pool_excel(schools_df, schools_path)
+    import_school_report_from_excel(schools_path, db=db)
+
+    crosswalk_path = tmp_path / "crosswalk.xlsx"
+    with pd.ExcelWriter(crosswalk_path, engine="openpyxl") as writer:
+        pd.DataFrame(
+            {"گروه آزمایشی": ["تجربی"], "کد گروه": [1201], "مقطع تحصیلی": ["دوازدهم"]}
+        ).to_excel(writer, sheet_name="پایه تحصیلی (گروه آزمایشی)", index=False)
+    import_school_crosswalk_from_excel(crosswalk_path, db=db)
+
+    inspactor_df = pd.DataFrame(
+        {
+            "نام پشتیبان": ["پشتیبان A", "پشتیبان A"],
+            "نام مدیر": ["مرکز", "مرکز"],
+            "کد کارمندی پشتیبان": ["2", "2"],
+            "گروه آزمایشی": ["تجربی", "تجربی"],
+            "جنسیت": ["پسر", "پسر"],
+            "نام مدرسه 1": ["نمونه", "نمونه"],
+        }
+    )
+    insp_path = tmp_path / "insp.xlsx"
+    _write_pool_excel(inspactor_df, insp_path)
+
+    normalized = import_mentor_pool_from_excel(insp_path, db=db, policy=policy)
+
+    assert len(normalized) == 1
+    assert normalized["کد کارمندی پشتیبان"].iloc[0] == "2"
+
+
 def test_import_pool_respects_existing_join_keys(tmp_path: Path) -> None:
     policy = load_policy()
     db = LocalDatabase(tmp_path / "cache.sqlite")

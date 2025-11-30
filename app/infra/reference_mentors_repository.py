@@ -62,6 +62,10 @@ def import_mentor_pool_from_excel(
     """
 
     raw_df = read_inspactor_workbook(path)
+    # حذف ردیف‌های کاملاً تکراری پیش از استخراج کلیدها برای جلوگیری از
+    # خطای یکتایی روی ترکیب mentor_id + کلیدهای اتصال. این حذف فقط روی
+    # ردیف‌های یکسان اعمال می‌شود و ترتیب پایدار حفظ می‌گردد.
+    raw_df = raw_df.drop_duplicates(keep="first")
     raw_employee = None
     if "کد کارمندی پشتیبان" in raw_df.columns:
         candidate = raw_df.loc[:, "کد کارمندی پشتیبان"]
