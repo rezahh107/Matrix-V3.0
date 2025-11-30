@@ -127,6 +127,14 @@ def _canonicalize_join_key_columns(
         canonicalized[column] = pd.Series(
             canonical_series, index=canonicalized.index, dtype="Int64"
         )
+        negative_mask = canonicalized[column].notna() & (canonicalized[column] < 0)
+        if negative_mask.any():
+            invalid_index = canonicalized.index[negative_mask.argmax()]
+            raise JoinKeyCanonicalizationError(column, series.loc[invalid_index])
+        if canonicalized[column].isna().any():
+            first_invalid = canonicalized[column].isna()
+            invalid_index = canonicalized.index[first_invalid.argmax()]
+            raise JoinKeyCanonicalizationError(column, series.loc[invalid_index])
     return canonicalized
 
 
