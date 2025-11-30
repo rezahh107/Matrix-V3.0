@@ -509,10 +509,6 @@ def _center_mask_series(
     wildcard_center: int | None,
 ) -> pd.Series:
     """ماسک برداری برای تطبیق مرکز با پشتیبانی wildcard مطابق §6.3 Technical SSoT."""
-    wildcard_values: set[int] = {wildcard_center} if wildcard_center is not None else {0}
-    if student_center in wildcard_values:
-        return pd.Series(True, index=mentor_series.index)
-
     series = ensure_series(mentor_series)
     try:
         numeric = pd.to_numeric(series, errors="coerce").astype("Int64")
@@ -521,6 +517,11 @@ def _center_mask_series(
 
     if not pd_types.is_integer_dtype(numeric):
         numeric = pd.to_numeric(numeric, errors="coerce").astype("Int64")
+
+    wildcard_values: set[int] = {int(wildcard_center)} if wildcard_center is not None else {0}
+
+    if student_center in wildcard_values:
+        return pd.Series(True, index=numeric.index)
 
     wildcard_mask = numeric.isin(wildcard_values)
     mentor_mask = numeric.eq(student_center) | wildcard_mask

@@ -103,9 +103,10 @@ def validate_allocation_join_keys_with_wildcard(
                 has_constraint = True
         if not has_constraint:
             return True
-        return matches_school_with_wildcard(
-            student_value, mentor_value, policy.school_code_empty_as_zero
+        allow_empty_as_zero = (
+            policy.school_code_empty_as_zero or student_value == 0 or mentor_value == 0
         )
+        return matches_school_with_wildcard(student_value, mentor_value, allow_empty_as_zero)
 
     _fix_match_column(
         school_col,

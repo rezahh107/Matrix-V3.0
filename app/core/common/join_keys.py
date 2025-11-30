@@ -147,15 +147,18 @@ def canonicalize_join_key_value(column: str, value: object, *, policy: PolicyCon
 
 def _canonicalize_center_value(value: object, policy: PolicyConfig) -> int:
     center_lookup = {normalize_fa(str(key)): int(val) for key, val in policy.center_map.items()}
-    if _is_missing_value(value):
-        wildcard = center_lookup.get(normalize_fa("*"))
-        if wildcard is not None:
-            return wildcard
     if isinstance(value, str):
+        if not value.strip():
+            raise ValueError("DATA_MISSING")
         normalized = normalize_fa(value)
+        normalized_star = normalize_fa("*")
         mapped = center_lookup.get(normalized)
-        if mapped is not None:
+        if mapped is not None and normalized:
             return mapped
+        if normalized == normalized_star:
+            mapped_star = center_lookup.get(normalized_star)
+            if mapped_star is not None:
+                return mapped_star
     return _canonicalize_numeric_value(value, allow_zero_from_empty=False)
 
 
@@ -209,7 +212,7 @@ def matches_center_with_wildcard(
 ) -> bool:
     """Compare center with wildcard support."""
 
-    wildcard_values: set[int] = {wildcard_center} if wildcard_center is not None else {0}
+    wildcard_values: set[int] = {int(wildcard_center)} if wildcard_center is not None else {0}
     if student_center in wildcard_values or mentor_center in wildcard_values:
         return True
     return mentor_center == student_center
