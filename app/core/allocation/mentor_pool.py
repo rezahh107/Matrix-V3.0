@@ -12,6 +12,7 @@ from collections.abc import Mapping
 import pandas as pd
 
 from app.core.common.columns import canonicalize_headers
+from app.core.common.types import CANONICAL_JOIN_KEYS
 from app.core.policy_loader import MentorPoolGovernanceConfig, MentorStatus
 
 __all__ = [
@@ -127,7 +128,12 @@ def compute_effective_status(
         override_status = mentor_ids.map(override_map)
         statuses = statuses.where(override_status.isna(), override_status)
 
-    statuses = statuses.where(statuses.isin(governance.allowed_statuses), governance.default_status)
+    invalid_statuses = statuses[~statuses.isin(governance.allowed_statuses)]
+    if not invalid_statuses.empty:
+        raise ValueError(
+            "mentor_status contains values outside governance.allowed_statuses: "
+            f"{invalid_statuses.tolist()}"
+        )
 
     return statuses
 
@@ -229,12 +235,34 @@ def apply_mentor_pool_governance(
         }
         return result
 
+    canonical = canonicalize_headers(result, header_mode="en")
+
+    subset_columns = ["mentor_id"] + [
+        key for key in CANONICAL_JOIN_KEYS if key in canonical.columns
+    ]
+    duplicate_mask = canonical.duplicated(subset=subset_columns, keep=False)
+    if duplicate_mask.any():
+        duplicate_rows = canonical.loc[
+            duplicate_mask, [col for col in subset_columns if col in canonical.columns]
+        ]
+        raise ValueError(
+            "Duplicate mentor rows detected after governance canonicalization: "
+            f"{duplicate_rows.to_dict(orient='list')}"
+        )
+
     statuses = compute_effective_status(result, governance, normalized_overrides)
     active_mask = statuses == MentorStatus.ACTIVE
-    filtered = result.loc[active_mask].copy()
+
+    capacity_mask = pd.Series(True, index=result.index)
+    if "remaining_capacity" in canonical.columns:
+        capacity_numeric = pd.to_numeric(canonical["remaining_capacity"], errors="coerce")
+        capacity_mask = capacity_numeric > 0
+
+    filtered_mask = active_mask & capacity_mask
+    filtered = result.loc[filtered_mask].copy()
     filtered.attrs["mentor_pool_governance"] = {
         "total": len(result),
-        "removed": int((~active_mask).sum()),
+        "removed": int((~filtered_mask).sum()),
         "overrides_count": len(normalized_overrides),
     }
     return filtered
