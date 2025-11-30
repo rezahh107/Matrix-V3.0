@@ -72,11 +72,33 @@ def compute_effective_status(
     if "mentor_id" not in mentors_df.columns:
         raise KeyError("mentors_df must contain 'mentor_id' column")
 
-    mentor_ids = pd.to_numeric(mentors_df["mentor_id"], errors="coerce")
-    statuses = pd.Series(governance.default_status, index=mentors_df.index, dtype=object)
+    canonical = canonicalize_headers(mentors_df, header_mode="en")
+
+    def _as_series(values: pd.Series | pd.DataFrame, column: str) -> pd.Series:
+        if isinstance(values, pd.DataFrame):
+            return values.iloc[:, 0]
+        return values.rename(column)
+
+    mentor_id_values = canonical["mentor_id"]
+    mentor_ids = pd.to_numeric(_as_series(mentor_id_values, "mentor_id"), errors="coerce")
+    allowed_statuses = set(governance.allowed_statuses)
+
+    base_statuses = pd.Series(governance.default_status, index=canonical.index, dtype=object)
+
+    def _parse_status(value: object) -> MentorStatus | None:
+        try:
+            status = MentorStatus.from_value(value)
+        except ValueError:
+            return None
+        return status if status in allowed_statuses else None
+
+    if "mentor_status" in canonical.columns:
+        parsed_statuses = _as_series(canonical["mentor_status"], "mentor_status").map(_parse_status)
+        base_statuses = base_statuses.where(parsed_statuses.isna(), parsed_statuses)
 
     policy_status = mentor_ids.map(governance.mentor_status_map)
-    statuses = statuses.where(policy_status.isna(), policy_status)
+    policy_status = policy_status.where(policy_status.isin(allowed_statuses), pd.NA)
+    statuses = base_statuses.where(policy_status.isna(), policy_status)
 
     override_map: dict[int, MentorStatus] = {}
     if overrides:
@@ -92,6 +114,8 @@ def compute_effective_status(
     if override_map:
         override_status = mentor_ids.map(override_map)
         statuses = statuses.where(override_status.isna(), override_status)
+
+    statuses = statuses.where(statuses.isin(governance.allowed_statuses), governance.default_status)
 
     return statuses
 
@@ -129,9 +153,17 @@ def filter_active_mentors(
     1        20   ب         active
     """
 
-    statuses = compute_effective_status(mentors_df, governance, overrides)
+    canonical = canonicalize_headers(mentors_df, header_mode="en")
+    statuses = compute_effective_status(canonical, governance, overrides)
     active_mask = statuses == MentorStatus.ACTIVE
-    filtered = mentors_df.loc[active_mask].copy()
+
+    capacity_mask = pd.Series(True, index=canonical.index)
+    if "remaining_capacity" in canonical.columns:
+        capacity_numeric = pd.to_numeric(canonical["remaining_capacity"], errors="coerce")
+        capacity_mask = capacity_numeric > 0
+
+    filtered_mask = active_mask & capacity_mask
+    filtered = mentors_df.loc[filtered_mask].copy()
 
     if attach_status:
         filtered.loc[:, status_column] = statuses.loc[filtered.index].map(lambda s: s.value)

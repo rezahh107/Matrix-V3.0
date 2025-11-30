@@ -21,6 +21,7 @@ from .types import natural_key
 __all__ = [
     "natural_key",
     "build_mentor_state",
+    "compute_remaining_capacity",
     "apply_ranking_policy",
     "consume_capacity",
     "ensure_ranking_columns",
@@ -85,6 +86,16 @@ def _safe_capacity(value: CapacityScalar) -> int:
     else:
         raise TypeError(f"Unsupported capacity value: {value!r}")
     return max(numeric, 0)
+
+
+def compute_remaining_capacity(
+    row: pd.Series, *, capacity_column: str = "remaining_capacity"
+) -> int:
+    """محاسبهٔ ظرفیت باقی‌ماندهٔ امن برای یک ردیف استخر."""
+
+    if capacity_column not in row:
+        return 0
+    return _safe_capacity(row.get(capacity_column))
 
 
 def build_mentor_state(
