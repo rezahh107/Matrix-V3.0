@@ -634,9 +634,7 @@ def check_ALLOC_01(  # noqa: N802
     )
 
 
-def check_HISTORY_CHANNEL_01(  # noqa: N802
-    *, history_info: pd.DataFrame | None
-) -> QaRuleResult:
+def check_HISTORY_CHANNEL_01(*, history_info: pd.DataFrame | None) -> QaRuleResult:  # noqa: N802
     """QA_RULE_HISTORY_CHANNEL_01 — کلید تاریخچه باید کاننیکال و یکتا باشد."""
 
     if history_info is None or history_info.empty:
