@@ -1,4 +1,5 @@
 """لایهٔ مرکزی QA برای اینورینت‌های ماتریس و تخصیص."""
+
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
