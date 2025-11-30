@@ -26,6 +26,11 @@ def test_canonicalize_national_code_normalizes_and_pads() -> None:
     assert canonicalize_national_code("abc") is None
 
 
+def test_canonicalize_national_code_trims_to_last_ten_digits() -> None:
+    assert canonicalize_national_code("12345678901") == "2345678901"
+    assert canonicalize_national_code("۰۰۱۲۳۴۵۶۷۸۹۰") == "1234567890"
+
+
 def test_log_allocation_run_handles_db_failure(tmp_path) -> None:
     db = _FailingDatabase(tmp_path / "history.db")
     now = datetime.now(UTC)
@@ -46,7 +51,9 @@ def test_log_allocation_run_handles_db_failure(tmp_path) -> None:
         allocated_students=None,
         unallocated_students=None,
     )
-    history_info = pd.DataFrame({"کد ملی": ["1234567890"], "allocation_channel": ["school"]})
+    history_info = pd.DataFrame(
+        {"کد ملی": ["12345678901", "۰۰۱۲۳۴۵۶۷۸۹۰"], "allocation_channel": ["school", "SADRA"]}
+    )
     trace_df = pd.DataFrame({"student_id": [1]})
     trace_df.attrs["history_info_df"] = history_info
 
@@ -63,4 +70,5 @@ def test_log_allocation_run_handles_db_failure(tmp_path) -> None:
 
     # No exception should propagate; data normalization should occur even when DB fails
     normalized = trace_df.attrs["history_info_df"]
-    assert normalized.equals(history_info)
+    assert normalized.loc[0, "کد ملی"] == "2345678901"
+    assert normalized.loc[1, "کد ملی"] == "1234567890"

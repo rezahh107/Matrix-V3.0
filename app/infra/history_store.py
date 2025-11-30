@@ -18,6 +18,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from app.core.common.national_id import canonical_national_code
 from app.core.qa.invariants import QaReport
 from app.infra.local_database import LocalDatabase, QaSummaryRow, RunMetricRow, RunRecord
 
@@ -31,14 +32,7 @@ def canonicalize_national_code(value: object) -> str | None:
     در صورت فقدان عدد معتبر، ``None`` بازگردانده می‌شود.
     """
 
-    if value is None:
-        return None
-    text = str(value).strip()
-    digits = "".join(ch for ch in text if ch.isdigit())
-    if not digits:
-        return None
-    trimmed = digits[-10:]
-    return trimmed.zfill(10)
+    return canonical_national_code(value)
 
 
 def _normalize_history_info(history_info_df: pd.DataFrame) -> pd.DataFrame:
@@ -228,6 +222,11 @@ def log_allocation_run(
         logger.info("Local DB logging disabled; skipping run_uuid=%s", run_uuid)
         return
 
+    if trace_snapshot is not None:
+        history_info_df = trace_snapshot.attrs.get("history_info_df")
+        if isinstance(history_info_df, pd.DataFrame):
+            trace_snapshot.attrs["history_info_df"] = _normalize_history_info(history_info_df)
+
     try:
         db.initialize()
         run_record = _build_run_record(
@@ -268,15 +267,15 @@ def _maybe_store_snapshots(
     if trace_snapshot is not None:
         summary_df = trace_snapshot.attrs.get("summary_df")
         history_info_df = trace_snapshot.attrs.get("history_info_df")
+        normalized_history: pd.DataFrame | None = None
+        if isinstance(history_info_df, pd.DataFrame):
+            normalized_history = _normalize_history_info(history_info_df)
+            trace_snapshot.attrs["history_info_df"] = normalized_history
         db.insert_trace_snapshot(
             run_id=run_id,
             trace_df=trace_snapshot,
             summary_df=summary_df if isinstance(summary_df, pd.DataFrame) else None,
-            history_info_df=(
-                _normalize_history_info(history_info_df)
-                if isinstance(history_info_df, pd.DataFrame)
-                else None
-            ),
+            history_info_df=normalized_history,
         )
     if qa_report is not None or qa_extras:
         qa_summary_df, qa_details_df, qa_extra_frames = _extract_qa_frames(qa_report)
