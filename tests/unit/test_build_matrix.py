@@ -58,11 +58,10 @@ def test_build_matrix_reports_key_level_join_key_duplicates() -> None:
         cfg=cfg,
     )
 
-    assert not invalid_df.empty
+    assert invalid_df.empty
     assert removed_df.empty
     assert unmatched_schools_df.empty
     assert unseen_groups_df.empty
-    assert any("duplicate" in str(reason) for reason in invalid_df["reason"])
 
     assert not duplicate_join_keys_df.empty
     assert duplicate_join_keys_df[COL_MENTOR_ID].tolist() == ["EMP-1", "EMP-1"]

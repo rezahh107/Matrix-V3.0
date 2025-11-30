@@ -222,15 +222,18 @@ def apply_mentor_pool_governance(
         result.attrs["mentor_pool_governance"] = {
             "total": 0,
             "removed": 0,
+            "removed_duplicates": 0,
             "overrides_count": len(normalized_overrides),
         }
         return result
 
     result = mentors_df.copy(deep=True)
+    total_rows = len(result)
     if result.empty or "mentor_id" not in result.columns:
         result.attrs["mentor_pool_governance"] = {
-            "total": len(result),
+            "total": total_rows,
             "removed": 0,
+            "removed_duplicates": 0,
             "overrides_count": len(normalized_overrides),
         }
         return result
@@ -241,8 +244,10 @@ def apply_mentor_pool_governance(
         key for key in CANONICAL_JOIN_KEYS if key in canonical.columns
     ]
     duplicate_mask = canonical.duplicated(subset=subset_columns, keep=False)
+    duplicates_removed = 0
     if duplicate_mask.any():
         keep_mask = ~canonical.duplicated(subset=subset_columns, keep="first")
+        duplicates_removed = int(total_rows - keep_mask.sum())
         result = result.loc[keep_mask].copy()
         canonical = canonical.loc[keep_mask].copy()
 
@@ -257,8 +262,9 @@ def apply_mentor_pool_governance(
     filtered_mask = active_mask & capacity_mask
     filtered = result.loc[filtered_mask].copy()
     filtered.attrs["mentor_pool_governance"] = {
-        "total": len(result),
-        "removed": int((~filtered_mask).sum()),
+        "total": total_rows,
+        "removed": duplicates_removed + int((~filtered_mask).sum()),
+        "removed_duplicates": duplicates_removed,
         "overrides_count": len(normalized_overrides),
     }
     return filtered

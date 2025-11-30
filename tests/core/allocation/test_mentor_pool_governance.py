@@ -248,6 +248,7 @@ def test_all_frozen_mentors_result_in_empty_pool() -> None:
     assert governed.attrs["mentor_pool_governance"] == {
         "total": 2,
         "removed": 2,
+        "removed_duplicates": 0,
         "overrides_count": 0,
     }
 
@@ -310,6 +311,7 @@ def test_apply_mentor_pool_governance_delegates_to_effective_status() -> None:
     assert filtered.attrs["mentor_pool_governance"] == {
         "total": 3,
         "removed": 1,
+        "removed_duplicates": 0,
         "overrides_count": 2,
     }
 
@@ -336,11 +338,12 @@ def test_apply_mentor_pool_governance_filters_zero_capacity() -> None:
     assert governed.attrs["mentor_pool_governance"] == {
         "total": 3,
         "removed": 2,
+        "removed_duplicates": 0,
         "overrides_count": 0,
     }
 
 
-def test_apply_mentor_pool_governance_detects_duplicate_rows() -> None:
+def test_apply_mentor_pool_governance_deduplicates_duplicate_rows() -> None:
     policy = _policy_with_governance(
         _base_policy_payload(),
         {
@@ -357,8 +360,15 @@ def test_apply_mentor_pool_governance_detects_duplicate_rows() -> None:
         }
     )
 
-    with pytest.raises(ValueError):
-        apply_mentor_pool_governance(mentors, policy.mentor_pool_governance)
+    governed = apply_mentor_pool_governance(mentors, policy.mentor_pool_governance)
+
+    assert governed["mentor_id"].tolist() == [21]
+    assert governed.attrs["mentor_pool_governance"] == {
+        "total": 2,
+        "removed": 1,
+        "removed_duplicates": 1,
+        "overrides_count": 0,
+    }
 
 
 def test_apply_mentor_pool_without_identifier_is_noop_with_attrs() -> None:
@@ -378,5 +388,6 @@ def test_apply_mentor_pool_without_identifier_is_noop_with_attrs() -> None:
     assert filtered.attrs["mentor_pool_governance"] == {
         "total": 2,
         "removed": 0,
+        "removed_duplicates": 0,
         "overrides_count": 0,
     }
