@@ -74,10 +74,7 @@ def import_mentor_pool_from_excel(
     mentor_id_present = False
     for col in mentor_columns:
         candidate = raw_df[col]
-        if isinstance(candidate, pd.DataFrame):
-            series = candidate.iloc[:, -1]
-        else:
-            series = candidate
+        series = candidate.iloc[:, -1] if isinstance(candidate, pd.DataFrame) else candidate
         series = series.astype("string").str.strip()
         if not series.eq("").all():
             mentor_id_present = True
