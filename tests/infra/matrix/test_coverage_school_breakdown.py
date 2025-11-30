@@ -25,7 +25,7 @@ def test_coverage_counts_dual_variants_separately() -> None:
             "mentor_id": ["EMP-1"],
         }
     )
-    base.attrs["mentor_pool_governance"] = {"total": len(base)}
+    base.attrs["mentor_pool_governance"] = {"total": len(base), "removed": 0}
 
     matrix_rows = pd.DataFrame(
         {
