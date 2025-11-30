@@ -150,9 +150,7 @@ def validate_allocation_join_keys(
 
     mentor_keys = policy.join_keys
     mentor_subset = pool[[col for col in mentor_keys if col in pool.columns]].copy()
-    mentor_subset, mentor_duplicates = _prepare_join_keys(
-        mentor_subset, mentor_keys, policy=policy
-    )
+    mentor_subset, mentor_duplicates = _prepare_join_keys(mentor_subset, mentor_keys, policy=policy)
     if mentor_id_column:
         mentor_subset["mentor_id"] = (
             ensure_series(pool[mentor_id_column]).astype("string").str.strip()

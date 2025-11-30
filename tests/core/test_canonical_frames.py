@@ -27,9 +27,7 @@ def test_canonicalize_students_frame_normalizes_localized_join_keys() -> None:
     for column in policy.join_keys:
         assert pd.api.types.is_integer_dtype(canonical[column])
         assert canonical[column].isna().sum() == 0
-    assert canonical[policy.stage_column("gender")].iloc[0] == int(
-        policy.gender_codes.male.value
-    )
+    assert canonical[policy.stage_column("gender")].iloc[0] == int(policy.gender_codes.male.value)
     assert canonical[policy.stage_column("center")].iloc[0] == 3
     assert canonical[policy.stage_column("finance")].iloc[0] == 3
 
