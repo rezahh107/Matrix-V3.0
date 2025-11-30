@@ -1,6 +1,7 @@
+from dataclasses import replace
+
 import pandas as pd
 import pytest
-from dataclasses import replace
 
 from app.core.canonical_frames import canonicalize_pool_frame, canonicalize_students_frame
 from app.core.common.join_keys import JoinKeyCanonicalizationError
