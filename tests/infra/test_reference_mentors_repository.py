@@ -198,7 +198,7 @@ def test_import_pool_deduplicates_exact_rows(tmp_path: Path) -> None:
         {
             "نام پشتیبان": ["پشتیبان A", "پشتیبان A"],
             "نام مدیر": ["مرکز", "مرکز"],
-            "کد کارمندی پشتیبان": ["2", "2"],
+            "کد کارمندی پشتیبان": ["", ""],
             "گروه آزمایشی": ["تجربی", "تجربی"],
             "جنسیت": ["پسر", "پسر"],
             "نام مدرسه 1": ["نمونه", "نمونه"],
@@ -210,7 +210,7 @@ def test_import_pool_deduplicates_exact_rows(tmp_path: Path) -> None:
     normalized = import_mentor_pool_from_excel(insp_path, db=db, policy=policy)
 
     assert len(normalized) == 1
-    assert normalized["کد کارمندی پشتیبان"].iloc[0] == "2"
+    assert normalized["کد کارمندی پشتیبان"].iloc[0] == ""
 
 
 def test_import_pool_respects_existing_join_keys(tmp_path: Path) -> None:
