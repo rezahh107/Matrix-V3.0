@@ -15,7 +15,7 @@ def _build_students_df() -> pd.DataFrame:
         [
             {"student_id": 1, "name": "allocated", "national_code": "0012345678"},
             {"student_id": 2, "name": "fresh", "national_code": "9876543210"},
-            {"student_id": 3, "name": "invalid", "national_code": "123"},
+            {"student_id": 3, "name": "invalid", "national_code": None},
         ]
     )
 
