@@ -140,6 +140,49 @@ def test_initialize_is_idempotent_when_student_id_already_exists(tmp_path: Path)
     assert columns == canonical_columns
 
 
+def test_migrate_v10_to_v11_adds_exam_group_column(tmp_path: Path) -> None:
+    db_path = tmp_path / "mentor_pool_missing_exam_group.sqlite"
+
+    with sqlite3.connect(db_path) as conn:
+        LocalDatabase._ensure_schema_meta_table(conn)
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO schema_meta(id, schema_version, policy_version, ssot_version, created_at)
+            VALUES (1, 10, '1.0.3', '1.0.2', ?)
+            """,
+            (datetime.utcnow().isoformat() + "Z",),
+        )
+        conn.execute(
+            """
+            CREATE TABLE mentor_pool_cache (
+                mentor_id TEXT,
+                "کد کارمندی پشتیبان" TEXT,
+                "کدرشته" INTEGER,
+                "جنسیت" INTEGER,
+                "دانش آموز فارغ" INTEGER,
+                "مرکز گلستان صدرا" INTEGER,
+                "مالی حکمت بنیاد" INTEGER,
+                "کد مدرسه" INTEGER,
+                remaining_capacity REAL,
+                allocations_new INTEGER,
+                occupancy_ratio REAL
+            )
+            """
+        )
+        conn.commit()
+
+    db = LocalDatabase(db_path)
+    db.initialize()
+
+    with db.connect() as conn:
+        version = conn.execute("SELECT schema_version FROM schema_meta WHERE id = 1").fetchone()[0]
+        columns = {row[1] for row in conn.execute("PRAGMA table_info('mentor_pool_cache')")}
+
+    assert int(version) == _SCHEMA_VERSION
+    assert "گروه آزمایشی" in columns
+    assert {"policy_version", "ssot_version", "pool_hash"}.issubset(columns)
+
+
 def test_migrate_from_v8_to_v10_when_students_cache_is_missing(tmp_path: Path) -> None:
     canonical_path = tmp_path / "canonical.sqlite"
     canonical = LocalDatabase(canonical_path)
