@@ -2,8 +2,7 @@ import pandas as pd
 import pytest
 
 import app.core.build_matrix as build_matrix
-from app.core.build_matrix import BuildConfig  # type: ignore[attr-defined]
-from app.core.common.domain import COL_SCHOOL
+from app.core.common.domain import COL_SCHOOL, BuildConfig
 from app.core.matrix.coverage import CoveragePolicyConfig, compute_coverage_metrics
 from app.core.qa.coverage_validation import build_coverage_validation_fields
 
@@ -48,13 +47,20 @@ def _base_row(
     }
 
 
+def _with_pool_attrs(df: pd.DataFrame) -> pd.DataFrame:
+    df.attrs["mentor_pool_governance"] = {"total": len(df)}
+    return df
+
+
 def test_compute_coverage_metrics_excludes_blocked_candidates() -> None:
-    base_df = pd.DataFrame(
-        [
-            _base_row(group_code=101, can_generate=True, mentor_id="m1"),
-            _base_row(group_code=102, can_generate=False, mentor_id="m2"),
-            _base_row(group_code=103, can_generate=True, mentor_id="m3"),
-        ]
+    base_df = _with_pool_attrs(
+        pd.DataFrame(
+            [
+                _base_row(group_code=101, can_generate=True, mentor_id="m1"),
+                _base_row(group_code=102, can_generate=False, mentor_id="m2"),
+                _base_row(group_code=103, can_generate=True, mentor_id="m3"),
+            ]
+        )
     )
     matrix_df = pd.DataFrame(
         [
@@ -96,12 +102,47 @@ def test_compute_coverage_metrics_excludes_blocked_candidates() -> None:
     assert coverage_df.loc[coverage_df["is_unseen_viable"], "کدرشته"].iat[0] == 103
 
 
-def test_compute_coverage_metrics_intersects_with_students_when_requested() -> None:
-    base_df = pd.DataFrame(
+def test_compute_coverage_metrics_requires_governed_pool_attr() -> None:
+    base_df = pd.DataFrame([_base_row(group_code=150, can_generate=True)])
+    matrix_df = pd.DataFrame(
         [
-            _base_row(group_code=201, can_generate=True, mentor_id="m1"),
-            _base_row(group_code=202, can_generate=True, mentor_id="m2"),
+            {
+                "کدرشته": 150,
+                "جنسیت": 1,
+                "دانش آموز فارغ": 1,
+                "مرکز گلستان صدرا": 1,
+                "مالی حکمت بنیاد": 0,
+                "کد مدرسه": 0,
+                "کد کارمندی پشتیبان": "m1",
+            }
         ]
+    )
+
+    policy = CoveragePolicyConfig()
+
+    with pytest.raises(ValueError):
+        compute_coverage_metrics(
+            matrix_df=matrix_df,
+            base_df=base_df,
+            students_df=None,
+            join_keys=JOIN_KEYS,
+            policy=policy,
+            unmatched_school_count=0,
+            invalid_group_token_count=0,
+            center_column="مرکز گلستان صدرا",
+            finance_column="مالی حکمت بنیاد",
+            school_code_column="کد مدرسه",
+        )
+
+
+def test_compute_coverage_metrics_intersects_with_students_when_requested() -> None:
+    base_df = _with_pool_attrs(
+        pd.DataFrame(
+            [
+                _base_row(group_code=201, can_generate=True, mentor_id="m1"),
+                _base_row(group_code=202, can_generate=True, mentor_id="m2"),
+            ]
+        )
     )
     students_df = pd.DataFrame(
         [
@@ -153,7 +194,7 @@ def test_compute_coverage_metrics_intersects_with_students_when_requested() -> N
 
 
 def test_compute_coverage_metrics_includes_student_only_groups_in_union() -> None:
-    base_df = pd.DataFrame(columns=JOIN_KEYS)
+    base_df = _with_pool_attrs(pd.DataFrame(columns=JOIN_KEYS))
     students_df = pd.DataFrame(
         [
             {
@@ -194,7 +235,7 @@ def test_compute_coverage_metrics_includes_student_only_groups_in_union() -> Non
 
 
 def test_build_coverage_validation_fields_aligns_with_metrics() -> None:
-    base_df = pd.DataFrame([_base_row(group_code=301)])
+    base_df = _with_pool_attrs(pd.DataFrame([_base_row(group_code=301)]))
     matrix_df = pd.DataFrame(
         [
             {
@@ -282,7 +323,7 @@ def test_coverage_metrics_regression_many_invalid_tokens_all_viable_groups_cover
 
     invalid_token_count = 50
 
-    base_df = pd.DataFrame(valid_rows + [blocked_row])
+    base_df = _with_pool_attrs(pd.DataFrame(valid_rows + [blocked_row]))
 
     matrix_df = pd.DataFrame(
         [
@@ -350,6 +391,7 @@ def test_coverage_metrics_normalizes_blank_gender_and_status_to_zero() -> None:
             }
         ]
     )
+    base_df.attrs["mentor_pool_governance"] = {"total": len(base_df)}
 
     cap_current_col = cfg.capacity_current_column or build_matrix.CAPACITY_CURRENT_COL
     cap_special_col = cfg.capacity_special_column or build_matrix.CAPACITY_SPECIAL_COL
@@ -428,6 +470,7 @@ def test_coverage_metrics_normalizes_missing_join_keys_to_zero_int64() -> None:
             }
         ]
     )
+    base_df.attrs["mentor_pool_governance"] = {"total": len(base_df)}
 
     cap_current_col = cfg.capacity_current_column or build_matrix.CAPACITY_CURRENT_COL
     cap_special_col = cfg.capacity_special_column or build_matrix.CAPACITY_SPECIAL_COL

@@ -44,7 +44,7 @@ from app.infra.sqlite_types import (
     coerce_int_like as _sqlite_coerce_int_like,
 )
 
-_SCHEMA_VERSION = 10
+_SCHEMA_VERSION = 11
 _POLICY_VERSION = "1.0.3"
 _SSOT_VERSION = "1.0.2"
 _ISO_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
@@ -169,6 +169,9 @@ class LocalDatabase:
                 "remaining_capacity",
                 "allocations_new",
                 "occupancy_ratio",
+                "policy_version",
+                "ssot_version",
+                "pool_hash",
             ],
         }
 
@@ -452,6 +455,18 @@ class LocalDatabase:
                 definition="TEXT",
             )
             repaired = True
+
+        if table == "mentor_pool_cache":
+            for column, definition in (
+                ("policy_version", "TEXT"),
+                ("ssot_version", "TEXT"),
+                ("pool_hash", "TEXT"),
+            ):
+                if column in missing_columns:
+                    _ensure_column_exists(
+                        conn, table="mentor_pool_cache", column=column, definition=definition
+                    )
+                    repaired = True
 
         return repaired
 
@@ -1073,7 +1088,10 @@ class LocalDatabase:
                 "کد مدرسه" INTEGER,
                 remaining_capacity REAL,
                 allocations_new INTEGER,
-                occupancy_ratio REAL
+                occupancy_ratio REAL,
+                policy_version TEXT NOT NULL,
+                ssot_version TEXT NOT NULL,
+                pool_hash TEXT
             );
 
             CREATE TABLE IF NOT EXISTS forms_entries (
@@ -1285,6 +1303,10 @@ class LocalDatabase:
                 self._migrate_v9_to_v10(conn, allow_autofix=start_version >= 9)
                 version = 10
                 continue
+            if version == 10:
+                self._migrate_v10_to_v11(conn)
+                version = 11
+                continue
             raise SchemaVersionMismatchError(
                 expected_version=_SCHEMA_VERSION,
                 actual_version=version,
@@ -1419,6 +1441,30 @@ class LocalDatabase:
             "UPDATE schema_meta SET schema_version = ? WHERE id = 1",
             (10,),
         )
+
+    def _migrate_v10_to_v11(self, conn: sqlite3.Connection) -> None:
+        """افزودن ستون‌های نسخه برای کش استخر منتورها در نسخهٔ ۱۱."""
+
+        if not _table_exists(conn, "mentor_pool_cache"):
+            conn.execute("UPDATE schema_meta SET schema_version = ? WHERE id = 1", (11,))
+            return
+
+        columns = _get_table_columns(conn, "mentor_pool_cache")
+        if "policy_version" not in columns:
+            conn.execute(
+                "ALTER TABLE mentor_pool_cache ADD COLUMN policy_version TEXT NOT NULL DEFAULT ''"
+            )
+        if "ssot_version" not in columns:
+            conn.execute(
+                "ALTER TABLE mentor_pool_cache ADD COLUMN ssot_version TEXT NOT NULL DEFAULT ''"
+            )
+        if "pool_hash" not in columns:
+            conn.execute("ALTER TABLE mentor_pool_cache ADD COLUMN pool_hash TEXT")
+        conn.execute(
+            "UPDATE mentor_pool_cache SET policy_version = ?, ssot_version = ?, pool_hash = COALESCE(pool_hash, '')",
+            (_POLICY_VERSION, _SSOT_VERSION),
+        )
+        conn.execute("UPDATE schema_meta SET schema_version = ? WHERE id = 1", (11,))
 
     @staticmethod
     def _ensure_year_tables(conn: sqlite3.Connection) -> None:
@@ -1611,7 +1657,15 @@ class LocalDatabase:
         except sqlite3.Error as exc:
             raise DatabaseOperationError("خواندن کش دانش‌آموزان با خطا مواجه شد.") from exc
 
-    def upsert_mentor_pool_cache(self, df: pd.DataFrame, *, join_keys: Sequence[str]) -> None:
+    def upsert_mentor_pool_cache(
+        self,
+        df: pd.DataFrame,
+        *,
+        join_keys: Sequence[str],
+        policy_version: str = _POLICY_VERSION,
+        ssot_version: str = _SSOT_VERSION,
+        pool_hash: str | None = None,
+    ) -> None:
         """جایگزینی دیتافریم استخر منتورها در جدول ``mentor_pool_cache``."""
 
         if df is None:
@@ -1630,12 +1684,17 @@ class LocalDatabase:
             composite_unique_candidates=[("mentor_id", *join_keys)],
             join_keys=join_keys,
         )
+        enriched = df.copy()
+        enriched["policy_version"] = policy_version
+        enriched["ssot_version"] = ssot_version
+        enriched["pool_hash"] = pool_hash if pool_hash is not None else ""
+
         try:
             with self._open_connection() as conn:
                 self._replace_table_atomic(
                     conn,
                     table_name="mentor_pool_cache",
-                    df=df,
+                    df=enriched,
                     index_statements=index_statements,
                 )
         except sqlite3.Error as exc:
@@ -1657,6 +1716,39 @@ class LocalDatabase:
                         table="mentor_pool_cache",
                         message="کش استخر منتورها خالی است؛ ابتدا import-mentors را اجرا کنید.",
                     )
+            required_meta = {"policy_version", "ssot_version", "pool_hash"}
+            missing_meta = required_meta.difference(df.columns)
+            if missing_meta:
+                raise DatabaseSchemaMismatchError(
+                    path=str(self.path),
+                    reason=(
+                        "کش استخر منتورها فاقد ستون‌های نسخه است: "
+                        f"{', '.join(sorted(missing_meta))}"
+                    ),
+                    hint="فایل کش را با اجرای مجدد import-mentors بازسازی کنید.",
+                    diagnostics={"mentor_pool_cache": sorted(missing_meta)},
+                )
+            policy_versions = set(df["policy_version"].dropna().astype(str))
+            ssot_versions = set(df["ssot_version"].dropna().astype(str))
+            if policy_versions != {_POLICY_VERSION} or ssot_versions != {_SSOT_VERSION}:
+                raise DatabaseSchemaMismatchError(
+                    path=str(self.path),
+                    reason="کش استخر منتورها با Policy/SSoT جاری همخوان نیست.",
+                    hint="کش را با اجرای import-mentors یا بازنشانی پایگاه داده هماهنگ کنید.",
+                    diagnostics={
+                        "mentor_pool_cache": [
+                            "policy_version",
+                            "ssot_version",
+                        ]
+                    },
+                )
+            if df["pool_hash"].nunique(dropna=False) > 1:
+                raise DatabaseSchemaMismatchError(
+                    path=str(self.path),
+                    reason="کش استخر منتورها شامل pool_hash ناهمخوان است.",
+                    hint="کش را پاک و دوباره وارد کنید تا همسان شود.",
+                    diagnostics={"mentor_pool_cache": ["pool_hash"]},
+                )
             return _coerce_int_columns(df, join_keys)
         except sqlite3.OperationalError as exc:
             if "no such table" in str(exc).lower():

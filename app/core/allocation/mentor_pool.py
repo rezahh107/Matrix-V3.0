@@ -72,6 +72,16 @@ def compute_effective_status(
     if "mentor_id" not in mentors_df.columns:
         raise KeyError("mentors_df must contain 'mentor_id' column")
 
+    allowed_statuses = set(governance.allowed_statuses)
+    if not allowed_statuses:
+        raise ValueError("MentorPoolGovernanceConfig.allowed_statuses must not be empty")
+    if governance.default_status not in allowed_statuses:
+        raise ValueError("default_status must be part of allowed_statuses")
+
+    for status in governance.mentor_status_map.values():
+        if status not in allowed_statuses:
+            raise ValueError("mentor_status_map contains status outside allowed_statuses")
+
     canonical = canonicalize_headers(mentors_df, header_mode="en")
 
     def _as_series(values: pd.Series | pd.DataFrame, column: str) -> pd.Series:
@@ -81,16 +91,18 @@ def compute_effective_status(
 
     mentor_id_values = canonical["mentor_id"]
     mentor_ids = pd.to_numeric(_as_series(mentor_id_values, "mentor_id"), errors="coerce")
-    allowed_statuses = set(governance.allowed_statuses)
-
     base_statuses = pd.Series(governance.default_status, index=canonical.index, dtype=object)
 
     def _parse_status(value: object) -> MentorStatus | None:
+        if pd.isna(value):
+            return None
         try:
             status = MentorStatus.from_value(value)
         except ValueError:
-            return None
-        return status if status in allowed_statuses else None
+            raise ValueError(f"Unknown mentor_status value '{value}'")
+        if status not in allowed_statuses:
+            raise ValueError("mentor_status value is not allowed by governance.allowed_statuses")
+        return status
 
     if "mentor_status" in canonical.columns:
         parsed_statuses = _as_series(canonical["mentor_status"], "mentor_status").map(_parse_status)

@@ -27,6 +27,7 @@ from typing import Any, Literal, TypeVar
 import numpy as np
 import pandas as pd
 
+from app.core.allocation.mentor_pool import apply_mentor_pool_governance
 from app.core.canonical_frames import (
     POOL_DUPLICATE_SUMMARY_ATTR,
     POOL_JOIN_KEY_DUPLICATES_ATTR,
@@ -2047,6 +2048,10 @@ def build_matrix(
         school_cols=school_cols,
         gender_col=gender_col,
         included_col=included_col,
+    )
+    base_df = apply_mentor_pool_governance(
+        base_df,
+        cfg.policy.mentor_pool_governance,
     )
     if not school_lookup_invalid.empty and "raw_school_value" in school_lookup_invalid.columns:
         derived_unmatched = [

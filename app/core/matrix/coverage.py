@@ -98,6 +98,7 @@ def compute_group_coverage_debug(
     center_column: str,
     finance_column: str,
     school_code_column: str,
+    require_governed_pool: bool = True,
 ) -> tuple[pd.DataFrame, CoverageSummary]:
     """محاسبهٔ پوشش گروهی ماتریس و خلاصهٔ دیباگ آن.
 
@@ -114,6 +115,9 @@ def compute_group_coverage_debug(
 
     خلاصهٔ عددی نیز برای لاگ و شیت متادیتا بازگردانده می‌شود.
     """
+
+    if require_governed_pool and "mentor_pool_governance" not in base_df.attrs:
+        raise ValueError("base_df must be the governed mentor pool (apply_mentor_pool_governance)")
 
     candidate_keys = build_candidate_group_keys(
         base_df,
@@ -363,6 +367,7 @@ def compute_coverage_metrics(
         center_column=center_column,
         finance_column=finance_column,
         school_code_column=school_code_column,
+        require_governed_pool=True,
     )
 
     student_groups = _student_group_keys(
