@@ -160,6 +160,14 @@ def test_matches_center_with_wildcard_requires_mentor_side_global_or_match() -> 
     assert not matches_center_with_wildcard(3, 4, wildcard)
 
 
+def test_matches_center_with_wildcard_keeps_zero_wildcard_when_policy_set() -> None:
+    policy = replace(load_policy(), center_map={"*": 99})
+    wildcard = policy.center_map.get("*")
+
+    assert wildcard == 99
+    assert matches_center_with_wildcard(5, 0, wildcard)
+
+
 def test_validate_policy_join_keys_flags_missing_center() -> None:
     policy = load_policy()
     join_map = {normalize_join_key_name(column): 1 for column in policy.join_keys}
