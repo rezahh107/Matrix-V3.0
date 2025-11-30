@@ -1,5 +1,4 @@
 """لایهٔ مرکزی QA برای اینورینت‌های ماتریس و تخصیص."""
-
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
@@ -9,8 +8,8 @@ import pandas as pd
 from pandas.api import types as ptypes
 
 from app.core.allocation.mentor_pool import compute_effective_status
-from app.core.common.national_id import canonical_national_code
 from app.core.canonical_frames import POOL_JOIN_KEY_DUPLICATES_ATTR
+from app.core.common.national_id import canonical_national_code
 from app.core.policy_loader import MentorStatus, PolicyConfig
 
 RuleId = str
