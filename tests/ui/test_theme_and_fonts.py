@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-pytest.importorskip("PySide6.QtWidgets", reason="PySide6 not available in test environment")
+pytest.importorskip(
+    "PySide6.QtWidgets",
+    exc_type=ImportError,
+    reason="PySide6 not available in test environment",
+)
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QFont
 from PySide6.QtWidgets import QApplication, QLabel

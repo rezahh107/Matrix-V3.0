@@ -282,3 +282,70 @@ def test_validate_allocation_join_keys_with_center_and_school_mismatch() -> None
     )
 
     assert wildcard.invalid_count == 1
+
+
+def test_validate_allocation_join_keys_handles_farsi_tokens_and_localized_digits() -> None:
+    policy = load_policy()
+    allocations = pd.DataFrame({"student_id": ["s1"], "mentor_id": ["m1"]})
+    students = pd.DataFrame(
+        {
+            "student_id": ["s1"],
+            policy.stage_column("group"): ["۹۱۰۰"],
+            policy.stage_column("gender"): ["پسر"],
+            policy.stage_column("graduation_status"): ["۰"],
+            policy.stage_column("center"): ["۰۳"],
+            policy.stage_column("finance"): ["۳"],
+            policy.columns.school_code: ["۰"],
+        }
+    )
+    mentors = pd.DataFrame(
+        {
+            "mentor_id": ["m1"],
+            policy.stage_column("group"): [9100],
+            policy.stage_column("gender"): [1],
+            policy.stage_column("graduation_status"): [0],
+            policy.stage_column("center"): [3],
+            policy.stage_column("finance"): [3],
+            policy.columns.school_code: [0],
+        }
+    )
+
+    audit = validate_allocation_join_keys_with_wildcard(
+        allocations, students, mentors, policy=policy
+    )
+
+    assert audit.invalid_count == 0
+
+
+def test_validate_allocation_join_keys_flags_mismatch_after_canonicalization() -> None:
+    policy = load_policy()
+    allocations = pd.DataFrame({"student_id": ["s1"], "mentor_id": ["m1"]})
+    students = pd.DataFrame(
+        {
+            "student_id": ["s1"],
+            policy.stage_column("group"): ["۹۱۰۰"],
+            policy.stage_column("gender"): ["پسر"],
+            policy.stage_column("graduation_status"): ["۰"],
+            policy.stage_column("center"): ["۰۳"],
+            policy.stage_column("finance"): ["۳"],
+            policy.columns.school_code: ["۰"],
+        }
+    )
+    mentors = pd.DataFrame(
+        {
+            "mentor_id": ["m1"],
+            policy.stage_column("group"): [9100],
+            policy.stage_column("gender"): [1],
+            policy.stage_column("graduation_status"): [0],
+            policy.stage_column("center"): [4],
+            policy.stage_column("finance"): [3],
+            policy.columns.school_code: [0],
+        }
+    )
+
+    audit = validate_allocation_join_keys_with_wildcard(
+        allocations, students, mentors, policy=policy
+    )
+
+    assert audit.invalid_count == 1
+    assert "مرکز گلستان صدرا" in audit.audit_frame.loc[0, "mismatch_summary"]

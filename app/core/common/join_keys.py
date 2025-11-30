@@ -120,13 +120,18 @@ def _canonicalize_numeric_value(value: object, *, allow_zero_from_empty: bool) -
     last_error: ValueError | None = None
     for candidate in _iterable_values(value):
         try:
-            return coerce_join_int(candidate)
+            coerced = coerce_join_int(candidate)
+            if coerced < 0:
+                raise ValueError("DATA_MISSING")
+            return coerced
         except ValueError as exc:  # pragma: no cover - loop handles next candidate
             last_error = exc
             continue
+    if last_error is not None:
+        raise last_error
     if allow_zero_from_empty:
         return 0
-    raise last_error if last_error is not None else ValueError("DATA_MISSING")
+    raise ValueError("DATA_MISSING")
 
 
 def canonicalize_join_key_value(column: str, value: object, *, policy: PolicyConfig) -> int:
@@ -159,13 +164,19 @@ def _canonicalize_center_value(value: object, policy: PolicyConfig) -> int:
             mapped_star = center_lookup.get(normalized_star)
             if mapped_star is not None:
                 return mapped_star
-    return _canonicalize_numeric_value(value, allow_zero_from_empty=False)
+    coerced = _canonicalize_numeric_value(value, allow_zero_from_empty=False)
+    if coerced < 0:
+        raise ValueError("DATA_MISSING")
+    return coerced
 
 
 def _canonicalize_school_value(value: object, policy: PolicyConfig) -> int:
-    return _canonicalize_numeric_value(
+    coerced = _canonicalize_numeric_value(
         value, allow_zero_from_empty=policy.school_code_empty_as_zero
     )
+    if coerced < 0:
+        raise ValueError("DATA_MISSING")
+    return coerced
 
 
 def normalize_join_key_name(column: str) -> str:

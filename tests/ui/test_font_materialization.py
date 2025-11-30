@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-pytest.importorskip("PySide6.QtGui", reason="PySide6 not available in test environment")
+pytest.importorskip(
+    "PySide6.QtGui",
+    exc_type=ImportError,
+    reason="PySide6 not available in test environment",
+)
 
 from PySide6.QtGui import QFont
 

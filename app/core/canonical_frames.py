@@ -112,7 +112,11 @@ def _safe_canonical_join_value(column: str, raw: object, *, policy: PolicyConfig
 
 
 def _canonicalize_join_key_columns(
-    frame: pd.DataFrame, join_keys: Sequence[str], policy: PolicyConfig
+    frame: pd.DataFrame,
+    join_keys: Sequence[str],
+    policy: PolicyConfig,
+    *,
+    raise_on_invalid: bool,
 ) -> pd.DataFrame:
     """Apply join-key canonicalization and enforce integer dtype with nullable support."""
 
@@ -124,9 +128,18 @@ def _canonicalize_join_key_columns(
         canonical_series = series.map(
             lambda raw: _safe_canonical_join_value(column, raw, policy=policy)
         )
-        canonicalized[column] = pd.Series(
-            canonical_series, index=canonicalized.index, dtype="Int64"
-        )
+        values = pd.Series(canonical_series, index=canonicalized.index, dtype="Int64")
+        negative_mask = values.notna() & (values < 0)
+        if negative_mask.any():
+            if raise_on_invalid:
+                invalid_index = canonicalized.index[negative_mask.argmax()]
+                raise JoinKeyCanonicalizationError(column, series.loc[invalid_index])
+            values.loc[negative_mask] = pd.NA
+        if raise_on_invalid and values.isna().any():
+            first_invalid = values.isna()
+            invalid_index = canonicalized.index[first_invalid.argmax()]
+            raise JoinKeyCanonicalizationError(column, series.loc[invalid_index])
+        canonicalized[column] = values
     return canonicalized
 
 
@@ -631,7 +644,9 @@ def canonicalize_students_frame(
             group_code_crosswalk,
             column_name=group_column,
         )
-    students = _canonicalize_join_key_columns(students, policy.join_keys, policy)
+    students = _canonicalize_join_key_columns(
+        students, policy.join_keys, policy, raise_on_invalid=False
+    )
     for column in policy.join_keys:
         if column in students.columns and not ensure_series(students[column]).isna().any():
             students[column] = ensure_series(students[column]).astype("int64")
@@ -767,7 +782,9 @@ def canonicalize_pool_frame(
 
     present_join_keys = [column for column in policy.join_keys if column in pool.columns]
     if present_join_keys:
-        pool = _canonicalize_join_key_columns(pool, present_join_keys, policy)
+        pool = _canonicalize_join_key_columns(
+            pool, present_join_keys, policy, raise_on_invalid=True
+        )
     duplicate_scope = "per_key" if include_distinct_mentor_duplicates else "per_mentor"
     duplicate_report = _build_join_key_duplicate_report(
         pool,

@@ -144,6 +144,13 @@ def test_canonicalize_center_na_rejected() -> None:
         canonicalize_join_key_value(policy.stage_column("center"), pd.NA, policy=policy)
 
 
+def test_canonicalize_center_rejects_negative_values() -> None:
+    policy = load_policy()
+
+    with pytest.raises(JoinKeyCanonicalizationError):
+        canonicalize_join_key_value(policy.stage_column("center"), -1, policy=policy)
+
+
 def test_matches_center_with_wildcard_requires_mentor_side_global_or_match() -> None:
     policy = load_policy()
     wildcard = policy.center_map.get("*")

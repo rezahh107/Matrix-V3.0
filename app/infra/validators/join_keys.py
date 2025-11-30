@@ -13,6 +13,7 @@ from dataclasses import dataclass
 import pandas as pd
 
 from app.core.common.columns import canonicalize_headers, dedupe_columns, ensure_series
+from app.core.common.join_keys import JoinKeyCanonicalizationError, canonicalize_join_key_value
 from app.core.policy_loader import PolicyConfig
 
 __all__ = [
@@ -79,7 +80,7 @@ def _dedupe_join_key_columns(
 
 
 def _prepare_join_keys(
-    df: pd.DataFrame, columns: Sequence[str]
+    df: pd.DataFrame, columns: Sequence[str], *, policy: PolicyConfig
 ) -> tuple[pd.DataFrame, dict[str, int]]:
     prepared, duplicate_counts = _dedupe_join_key_columns(df, columns)
     coerced = prepared.copy()
@@ -87,7 +88,16 @@ def _prepare_join_keys(
         if column not in coerced.columns:
             coerced[column] = pd.Series([pd.NA] * len(coerced), index=coerced.index)
         series = ensure_series(coerced[column])
-        coerced[column] = pd.to_numeric(series, errors="coerce").astype("Int64")
+
+        def _safe_canon(raw: object) -> object:
+            try:
+                return canonicalize_join_key_value(column, raw, policy=policy)
+            except JoinKeyCanonicalizationError:
+                return pd.NA
+
+        coerced[column] = pd.Series(
+            (_safe_canon(raw) for raw in series), index=series.index, dtype="Int64"
+        )
     return coerced, duplicate_counts
 
 
@@ -134,11 +144,13 @@ def validate_allocation_join_keys(
     student_subset = students.loc[
         :, [col for col in student_columns if col in students.columns]
     ].copy()
-    student_subset, student_duplicates = _prepare_join_keys(student_subset, policy.join_keys)
+    student_subset, student_duplicates = _prepare_join_keys(
+        student_subset, policy.join_keys, policy=policy
+    )
 
     mentor_keys = policy.join_keys
     mentor_subset = pool[[col for col in mentor_keys if col in pool.columns]].copy()
-    mentor_subset, mentor_duplicates = _prepare_join_keys(mentor_subset, mentor_keys)
+    mentor_subset, mentor_duplicates = _prepare_join_keys(mentor_subset, mentor_keys, policy=policy)
     if mentor_id_column:
         mentor_subset["mentor_id"] = (
             ensure_series(pool[mentor_id_column]).astype("string").str.strip()

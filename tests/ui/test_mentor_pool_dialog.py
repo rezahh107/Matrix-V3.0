@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 
-pytest.importorskip("PySide6")
+pytest.importorskip("PySide6", exc_type=ImportError)
 pytest.importorskip("PySide6.QtCore", exc_type=ImportError)
 pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
 from PySide6.QtCore import Qt
