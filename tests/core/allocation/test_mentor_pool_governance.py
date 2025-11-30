@@ -1,5 +1,7 @@
 import copy
 import json
+from collections.abc import Mapping
+from typing import Any, cast
 
 import pandas as pd
 
@@ -8,21 +10,26 @@ from app.core.allocation.mentor_pool import (
     compute_effective_status,
     filter_active_mentors,
 )
-from app.core.policy_loader import MentorStatus, parse_policy_dict
+from app.core.policy_loader import MentorStatus, PolicyConfig, parse_policy_dict
 
 
-def _policy_with_governance(base_payload: dict, governance: dict):
-    payload = copy.deepcopy(base_payload)
-    payload["mentor_pool_governance"] = governance
+def _policy_with_governance(
+    base_payload: Mapping[str, object], governance: Mapping[str, object]
+) -> PolicyConfig:
+    payload = cast(dict[str, object], copy.deepcopy(base_payload))
+    payload["mentor_pool_governance"] = dict(governance)
     return parse_policy_dict(payload)
 
 
-def _base_policy_payload() -> dict:
+def _base_policy_payload() -> dict[str, object]:
     with open("config/policy.json", encoding="utf-8") as handle:
-        return json.load(handle)
+        data: Any = json.load(handle)
+    if not isinstance(data, dict):
+        raise TypeError("Policy payload must be a mapping")
+    return cast(dict[str, object], data)
 
 
-def test_filter_retains_all_when_policy_active():
+def test_filter_retains_all_when_policy_active() -> None:
     policy = _policy_with_governance(
         _base_policy_payload(),
         {
@@ -47,7 +54,7 @@ def test_filter_retains_all_when_policy_active():
     pd.testing.assert_frame_equal(mentors, baseline)
 
 
-def test_policy_disables_specific_mentor():
+def test_policy_disables_specific_mentor() -> None:
     policy = _policy_with_governance(
         _base_policy_payload(),
         {
@@ -67,7 +74,7 @@ def test_policy_disables_specific_mentor():
     assert filtered["mentor_id"].tolist() == [10]
 
 
-def test_override_enables_disabled_and_attaches_status():
+def test_override_enables_disabled_and_attaches_status() -> None:
     governance_payload = {
         "default_status": "active",
         "allowed_statuses": ["active", "inactive"],
@@ -89,7 +96,7 @@ def test_override_enables_disabled_and_attaches_status():
     assert filtered["mentor_status"].tolist() == ["active", "active"]
 
 
-def test_override_disables_active_idempotent():
+def test_override_disables_active_idempotent() -> None:
     policy = _policy_with_governance(
         _base_policy_payload(),
         {
@@ -107,7 +114,7 @@ def test_override_disables_active_idempotent():
     assert first["mentor_id"].tolist() == [31, 33]
 
 
-def test_default_inactive_requires_override():
+def test_default_inactive_requires_override() -> None:
     policy = _policy_with_governance(
         _base_policy_payload(),
         {
@@ -169,7 +176,7 @@ def test_capacity_gate_removes_non_positive_capacity() -> None:
     assert filtered["mentor_id"].tolist() == [60]
 
 
-def test_apply_mentor_pool_governance_delegates_to_effective_status():
+def test_apply_mentor_pool_governance_delegates_to_effective_status() -> None:
     policy = _policy_with_governance(
         _base_policy_payload(),
         {
@@ -196,7 +203,7 @@ def test_apply_mentor_pool_governance_delegates_to_effective_status():
     }
 
 
-def test_apply_mentor_pool_without_identifier_is_noop_with_attrs():
+def test_apply_mentor_pool_without_identifier_is_noop_with_attrs() -> None:
     policy = _policy_with_governance(
         _base_policy_payload(),
         {

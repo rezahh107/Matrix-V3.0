@@ -1,13 +1,8 @@
 import pandas as pd
 import pytest
 
-from app.core.build_matrix import (
-    CAPACITY_CURRENT_COL,
-    CAPACITY_SPECIAL_COL,
-    BuildConfig,
-    _explode_rows,
-    center_text,
-)
+import app.core.build_matrix as build_matrix
+from app.core.build_matrix import BuildConfig  # type: ignore[attr-defined]
 from app.core.common.domain import COL_SCHOOL
 from app.core.matrix.coverage import CoveragePolicyConfig, compute_coverage_metrics
 from app.core.qa.coverage_validation import build_coverage_validation_fields
@@ -27,7 +22,7 @@ def _base_row(
     group_code: int,
     can_generate: bool = True,
     mentor_id: str = "m1",
-) -> dict:
+) -> dict[str, object]:
     return {
         "supporter": "پشتیبان",
         "manager": "مدیر",
@@ -336,7 +331,7 @@ def test_coverage_metrics_normalizes_blank_gender_and_status_to_zero() -> None:
                 "mentor_id": "EMP-1",
                 "mentor_row_id": 1,
                 "center_code": 1,
-                "center_text": center_text(1),
+                "center_text": build_matrix.center_text(1),
                 "group_pairs": [("رشته", 401)],
                 "genders": [""],
                 "statuses_normal": [""],
@@ -356,12 +351,12 @@ def test_coverage_metrics_normalizes_blank_gender_and_status_to_zero() -> None:
         ]
     )
 
-    cap_current_col = cfg.capacity_current_column or CAPACITY_CURRENT_COL
-    cap_special_col = cfg.capacity_special_column or CAPACITY_SPECIAL_COL
+    cap_current_col = cfg.capacity_current_column or build_matrix.CAPACITY_CURRENT_COL
+    cap_special_col = cfg.capacity_special_column or build_matrix.CAPACITY_SPECIAL_COL
     remaining_col = cfg.remaining_capacity_column or "remaining_capacity"
     school_code_col = cfg.school_code_column or COL_SCHOOL
 
-    matrix_df = _explode_rows(
+    matrix_df = build_matrix._explode_rows(
         base_df.loc[base_df["can_normal"]],
         alias_col="alias_normal",
         status_col="statuses_normal",
@@ -434,12 +429,12 @@ def test_coverage_metrics_normalizes_missing_join_keys_to_zero_int64() -> None:
         ]
     )
 
-    cap_current_col = cfg.capacity_current_column or CAPACITY_CURRENT_COL
-    cap_special_col = cfg.capacity_special_column or CAPACITY_SPECIAL_COL
+    cap_current_col = cfg.capacity_current_column or build_matrix.CAPACITY_CURRENT_COL
+    cap_special_col = cfg.capacity_special_column or build_matrix.CAPACITY_SPECIAL_COL
     remaining_col = cfg.remaining_capacity_column or "remaining_capacity"
     school_code_col = cfg.school_code_column or COL_SCHOOL
 
-    matrix_df = _explode_rows(
+    matrix_df = build_matrix._explode_rows(
         base_df.loc[base_df["can_normal"]],
         alias_col="alias_normal",
         status_col="statuses_normal",
