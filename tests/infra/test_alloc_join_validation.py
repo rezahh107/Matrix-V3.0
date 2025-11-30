@@ -115,6 +115,40 @@ def test_validate_allocation_join_keys_with_center_wildcard() -> None:
     assert wildcard.invalid_count == 0
 
 
+def test_validate_allocation_join_keys_accepts_global_center_with_policy_wildcard() -> None:
+    policy = replace(load_policy(), center_map={"*": 99})
+    center_col = policy.stage_column("center")
+    allocations = pd.DataFrame({"student_id": ["s1"], "mentor_id": ["m1"]})
+    students = pd.DataFrame(
+        {
+            "student_id": ["s1"],
+            policy.stage_column("group"): [1],
+            policy.stage_column("gender"): [1],
+            policy.stage_column("graduation_status"): [0],
+            center_col: [5],
+            policy.stage_column("finance"): [0],
+            policy.columns.school_code: [0],
+        }
+    )
+    mentors = pd.DataFrame(
+        {
+            "mentor_id": ["m1"],
+            policy.stage_column("group"): [1],
+            policy.stage_column("gender"): [1],
+            policy.stage_column("graduation_status"): [0],
+            center_col: [0],
+            policy.stage_column("finance"): [0],
+            policy.columns.school_code: [0],
+        }
+    )
+
+    wildcard = validate_allocation_join_keys_with_wildcard(
+        allocations, students, mentors, policy=policy
+    )
+
+    assert wildcard.invalid_count == 0
+
+
 def test_validate_allocation_join_keys_flags_student_center_zero_without_policy_wildcard() -> None:
     policy = replace(load_policy(), center_map={})
     center_col = policy.stage_column("center")
