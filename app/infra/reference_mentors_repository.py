@@ -62,6 +62,25 @@ def import_mentor_pool_from_excel(
     """
 
     raw_df = read_inspactor_workbook(path)
+    # حذف ردیف‌های کاملاً تکراری تنها زمانی که ستون mentor_id در ورودی
+    # موجود نیست (فرمت خام Inspactor). برای ورودی‌های دارای mentor_id،
+    # تکرار روی کلیدهای ترکیبی باید منجر به خطای QA شود و نباید با
+    # dedupe پنهان گردد.
+    mentor_columns = [
+        col
+        for col in raw_df.columns
+        if col.strip().lower() == "mentor_id" or str(col).strip() == COL_MENTOR_ID
+    ]
+    mentor_id_present = False
+    for col in mentor_columns:
+        candidate = raw_df[col]
+        series = candidate.iloc[:, -1] if isinstance(candidate, pd.DataFrame) else candidate
+        series = series.astype("string").str.strip()
+        if not series.eq("").all():
+            mentor_id_present = True
+            break
+    if not mentor_id_present:
+        raw_df = raw_df.drop_duplicates(keep="first")
     raw_employee = None
     if "کد کارمندی پشتیبان" in raw_df.columns:
         candidate = raw_df.loc[:, "کد کارمندی پشتیبان"]
