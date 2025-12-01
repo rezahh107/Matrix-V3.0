@@ -10,6 +10,7 @@ from pandas.api import types as ptypes
 
 from app.core.allocation.mentor_pool import compute_effective_status
 from app.core.canonical_frames import POOL_JOIN_KEY_DUPLICATES_ATTR
+from app.core.common.domain import BuildConfig, StudentBindingKind, classify_student_binding
 from app.core.common.national_id import canonical_national_code
 from app.core.policy_loader import MentorStatus, PolicyConfig
 
@@ -22,6 +23,7 @@ __all__ = [
     "run_all_invariants",
     "check_STU_01",
     "check_STU_02",
+    "check_STU_BINDING_01",
     "check_JOIN_01",
     "check_POOL_JOIN_01",
     "check_SCHOOL_01",
@@ -185,6 +187,7 @@ def run_all_invariants(
             student_report=student_report,
         ),
         check_STU_02(allocation=allocation, inspactor=inspactor),
+        check_STU_BINDING_01(student_report=student_report, policy=policy),
         check_JOIN_01(matrix=matrix, policy=policy),
         check_SCHOOL_01(matrix=matrix, invalid_mentors=invalid_mentors, policy=policy),
         check_GOV_01(
@@ -321,6 +324,70 @@ def check_STU_02(  # noqa: N802
 
     return QaRuleResult(
         rule_id="QA_RULE_STU_02",
+        passed=not violations,
+        violations=violations,
+    )
+
+
+def check_STU_BINDING_01(  # noqa: N802
+    *, student_report: pd.DataFrame | None, policy: PolicyConfig
+) -> QaRuleResult:
+    """QA_RULE_STU_BINDING_01 — هم‌خوانی Rule STUDENT-TYPE-01 با دادهٔ دانش‌آموز."""
+
+    violations: list[QaViolation] = []
+    if student_report is None:
+        return QaRuleResult("QA_RULE_STU_BINDING_01", True, violations)
+
+    try:
+        status_column = policy.stage_column("graduation_status")
+    except KeyError:
+        return QaRuleResult("QA_RULE_STU_BINDING_01", True, violations)
+
+    school_column = policy.columns.school_code
+    missing_columns = [
+        column for column in (status_column, school_column) if column not in student_report.columns
+    ]
+    if missing_columns:
+        violations.append(
+            QaViolation(
+                rule_id="QA_RULE_STU_BINDING_01",
+                level="error",
+                message="ستون‌های لازم برای قانون STUDENT-TYPE-01 موجود نیست",
+                details={"missing_columns": tuple(sorted(missing_columns))},
+            )
+        )
+        return QaRuleResult("QA_RULE_STU_BINDING_01", False, violations)
+
+    cfg = BuildConfig(policy=policy)
+    bindings = student_report.apply(
+        lambda row: classify_student_binding(row, cfg=cfg), axis=1
+    ).reset_index(drop=True)
+
+    allowed_bindings = {StudentBindingKind.NORMAL, StudentBindingKind.SCHOOL}
+    legacy_mask = bindings == StudentBindingKind.MENTOR_BASED
+    unexpected_mask = ~bindings.isin(allowed_bindings | {StudentBindingKind.MENTOR_BASED})
+    if bool(legacy_mask.any()):
+        violations.append(
+            QaViolation(
+                rule_id="QA_RULE_STU_BINDING_01",
+                level="error",
+                message="وضعیت legacy برای student binding مشاهده شد",
+                details={"legacy_rows": tuple(student_report.index[legacy_mask].tolist())},
+            )
+        )
+
+    if bool(unexpected_mask.any()):
+        violations.append(
+            QaViolation(
+                rule_id="QA_RULE_STU_BINDING_01",
+                level="error",
+                message="مقدار نامعتبر برای student binding مشاهده شد",
+                details={"invalid_rows": tuple(student_report.index[unexpected_mask].tolist())},
+            )
+        )
+
+    return QaRuleResult(
+        rule_id="QA_RULE_STU_BINDING_01",
         passed=not violations,
         violations=violations,
     )

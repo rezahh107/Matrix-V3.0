@@ -42,7 +42,7 @@ class MentorType(Enum):
 
 @final
 class StudentBindingKind(Enum):
-    """Binding classification for students based on postal code presence."""
+    """Binding classification for students based on school membership."""
 
     NORMAL = "normal"
     SCHOOL = "school"
@@ -636,23 +636,38 @@ def school_code_norm(value: Any, *, cfg: BuildConfig) -> int:
     return max(code, 0)
 
 
-def classify_student_binding_from_postal(
-    postal_code: Any, *, cfg: BuildConfig
-) -> StudentBindingKind:
-    """Classify student binding based on postal code presence and range."""
+def classify_student_binding(student: Mapping[str, Any], *, cfg: BuildConfig) -> StudentBindingKind:
+    """Classify student binding based on school code and graduation status.
 
-    postal_str = to_numlike_str(postal_code)
-    if not postal_str.isdigit():
-        return StudentBindingKind.MENTOR_BASED
+    The rule is deterministic and policy-driven:
 
-    postal_num = _num_to_int_safe(postal_str)
-    if postal_num <= 0:
-        return StudentBindingKind.MENTOR_BASED
-    if postal_num < 1000:
+    - If the student's school code belongs to ``policy.allocation_channels.school_codes``
+      **and** graduation status equals ``Status.STUDENT`` → ``SCHOOL``.
+    - Otherwise → ``NORMAL``.
+
+    Postal code is intentionally ignored; school membership is defined solely by
+    configured school codes plus graduation status.
+    """
+
+    policy = cfg.policy
+    school_codes = policy.allocation_channels.school_codes
+    school_column = policy.columns.school_code
+
+    try:
+        status_column = policy.stage_column("graduation_status")
+    except KeyError:
+        status_column = COL_STATUS
+
+    school_value = student.get(school_column, 0)
+    school_code = _num_to_int_safe(school_value)
+    status_value = student.get(status_column, cfg.default_status)
+    if status_value is None or (isinstance(status_value, float) and math.isnan(status_value)):
+        status_value = cfg.default_status
+    graduation_status = _num_to_int_safe(status_value)
+
+    if graduation_status == Status.STUDENT and school_code > 0 and school_code in school_codes:
         return StudentBindingKind.SCHOOL
-    if _postal_valid(postal_str, cfg=cfg):
-        return StudentBindingKind.NORMAL
-    return StudentBindingKind.MENTOR_BASED
+    return StudentBindingKind.NORMAL
 
 
 def finance_cross(values: Iterable[int] | None, *, cfg: BuildConfig) -> tuple[int, ...]:
@@ -972,7 +987,7 @@ __all__ = [
     "enforce_alias_school_invariant",
     "compute_mentor_type_str",
     "classify_mentor_mode",
-    "classify_student_binding_from_postal",
+    "classify_student_binding",
     "school_code_norm",
     "finance_cross",
     "DecisionReason",

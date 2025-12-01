@@ -47,9 +47,11 @@ from app.core.common.columns import (
 from app.core.common.domain import (
     BuildConfig,
     MentorType,
+    StudentBindingKind,
     _num_to_int_safe,
     center_from_manager as domain_center_from_manager,
     classify_mentor_mode,
+    classify_student_binding,
     compute_alias,
     finance_cross,
     school_code_norm,
@@ -2492,17 +2494,23 @@ def validate_with_students(
         axis=1,
     )
 
+    school_code_series = None
+    school_column = cfg.policy.columns.school_code
+    if school_column in stud_raw.columns:
+        school_code_series = stud_raw[school_column]
+
+    if school_code_series is None and COL_SCHOOL1 in stud_raw.columns:
+        school_code_series = stud_raw[COL_SCHOOL1].apply(
+            lambda x: school_name_to_code.get(normalize_fa(x), "")
+        )
+
     stud = pd.DataFrame(
         {
             "student_postal": postal_series,
             "alias_norm": postal_series,
             "mentor_name": ensure_series(stud_raw["نام پشتیبان"]).astype(str).str.strip(),
             "manager": ensure_series(stud_raw["مدیر"]).astype(str).str.strip(),
-            "school_code": (
-                stud_raw[COL_SCHOOL1].apply(lambda x: school_name_to_code.get(normalize_fa(x), ""))
-                if COL_SCHOOL1 in stud_raw.columns
-                else ""
-            ),
+            "school_code": school_code_series if school_code_series is not None else "",
         }
     )
     stud["group_code"] = pd.Series(pd.array(group_codes, dtype="Int64"), index=stud.index)
@@ -2527,32 +2535,34 @@ def validate_with_students(
     mat["alias_norm"] = ensure_series(mat["جایگزین"]).apply(to_numlike_str)
     mat["school_code"] = ensure_series(mat[school_code_col]).astype(str).str.strip()
 
-    def _student_type_from_postal(v: str) -> str:
-        if not v:
-            return "normal_by_alias"
-        try:
-            iv = int(v)
-            postal_min, postal_max = cfg.postal_valid_range or (1000, 9999)
-            if iv < postal_min:
-                return "school_by_schoolcode"
-            if postal_min <= iv <= postal_max:
-                return "normal_by_alias"
-            return "school_by_mentorid"
-        except (ValueError, TypeError, OverflowError):
-            return "school_by_mentorid"
+    status_column = cfg.policy.stage_column("graduation_status")
+    school_column = cfg.policy.columns.school_code
+    stud["student_binding"] = stud.apply(
+        lambda row: classify_student_binding(
+            {status_column: row["status_code"], school_column: row["school_code"]}, cfg=cfg
+        ),
+        axis=1,
+    )
 
     def _sub_by_type(row: pd.Series) -> tuple[pd.DataFrame, str | None]:
-        stype = _student_type_from_postal(row["student_postal"])
-        if stype == "normal_by_alias":
+        binding = row["student_binding"]
+        if binding is StudentBindingKind.NORMAL:
             sub = mat[(mat["عادی مدرسه"] == "عادی") & (mat["alias_norm"] == row["alias_norm"])]
-            return (sub, None if not sub.empty else "no normal alias match")
-        if stype == "school_by_mentorid":
-            sub = mat[(mat["عادی مدرسه"] == "مدرسه‌ای") & (mat["alias_norm"] == row["alias_norm"])]
-            return (sub, None if not sub.empty else "no mentor-id school match")
-        sub = mat[(mat["عادی مدرسه"] == "مدرسه‌ای")]
-        if row["school_code"]:
-            sub = sub[sub["school_code"].astype(str) == str(row["school_code"])]
-        return (sub, None if not sub.empty else "no school-code match")
+            if not sub.empty:
+                return (sub, None)
+            if row["school_code"]:
+                school_sub = mat[(mat["عادی مدرسه"] == "مدرسه‌ای")]
+                school_sub = school_sub[
+                    school_sub["school_code"].astype(str) == str(row["school_code"])
+                ]
+                return (school_sub, None if not school_sub.empty else "no school-code match")
+            return (sub, "no normal alias match")
+        if binding is StudentBindingKind.SCHOOL:
+            sub = mat[(mat["عادی مدرسه"] == "مدرسه‌ای")]
+            if row["school_code"]:
+                sub = sub[sub["school_code"].astype(str) == str(row["school_code"])]
+            return (sub, None if not sub.empty else "no school-code match")
+        return (mat.iloc[0:0], "legacy binding kind")
 
     def _check_gender(row: pd.Series, sub: pd.DataFrame) -> tuple[pd.DataFrame, str | None]:
         sub2 = sub[sub["جنسیت"] == row["gender_code"]]
