@@ -10,7 +10,12 @@ from pandas.api import types as ptypes
 
 from app.core.allocation.mentor_pool import compute_effective_status
 from app.core.canonical_frames import POOL_JOIN_KEY_DUPLICATES_ATTR
-from app.core.common.domain import BuildConfig, StudentBindingKind, classify_student_binding
+from app.core.common.domain import (
+    BuildConfig,
+    StudentBindingKind,
+    _postal_valid,
+    classify_student_binding,
+)
 from app.core.common.national_id import canonical_national_code
 from app.core.policy_loader import MentorStatus, PolicyConfig
 
@@ -461,11 +466,9 @@ def check_MENTOR_TYPE_01(  # noqa: N802
         return QaRuleResult("QA_RULE_MENTOR_TYPE_01", True, violations)
 
     mentor_col = _resolve_mentor_column(matrix)
-    required_columns = {
-        "جایگزین",
-        policy.columns.school_code,
-        "عادی مدرسه",
-    }
+    type_col = "عادی مدرسه"
+    school_col = policy.columns.school_code
+    required_columns = {"جایگزین", type_col, school_col}
     missing_columns = [col for col in required_columns if col not in matrix.columns]
     if mentor_col is None:
         missing_columns.append("mentor_id")
@@ -480,9 +483,14 @@ def check_MENTOR_TYPE_01(  # noqa: N802
         )
         return QaRuleResult("QA_RULE_MENTOR_TYPE_01", False, violations)
 
-    type_col = "عادی مدرسه"
+    cfg = BuildConfig(policy=policy)
+    type_series = matrix[type_col].astype("string").str.strip()
+    mentor_series = matrix[mentor_col].astype("string").str.strip()
+    alias_series = matrix["جایگزین"].astype("string").str.strip()
+    school_series = pd.to_numeric(matrix[school_col], errors="coerce").fillna(0).astype(int)
+
     allowed_types = {"عادی", "مدرسه‌ای"}
-    invalid_types = matrix.loc[~matrix[type_col].isin(allowed_types)]
+    invalid_types = type_series[~type_series.isin(allowed_types)]
     if not invalid_types.empty:
         violations.append(
             QaViolation(
@@ -493,10 +501,9 @@ def check_MENTOR_TYPE_01(  # noqa: N802
             )
         )
 
-    mentor_values = matrix[mentor_col].astype("string").str.strip()
     type_counts = (
-        matrix.assign(_mentor=mentor_values)
-        .groupby("_mentor", dropna=True)[type_col]
+        pd.DataFrame({"_mentor": mentor_series, "_type": type_series})
+        .groupby("_mentor", dropna=True)["_type"]
         .nunique(dropna=True)
     )
     dual_ids = [mentor for mentor, count in type_counts.items() if mentor and count > 1]
@@ -506,15 +513,16 @@ def check_MENTOR_TYPE_01(  # noqa: N802
                 rule_id="QA_RULE_MENTOR_TYPE_01",
                 level="error",
                 message="منتور نباید همزمان عادی و مدرسه‌ای باشد",
-                details={"mentor_ids": tuple(dual_ids)},
+                details={"mentor_ids": tuple(_normalize_str(v) for v in dual_ids)},
             )
         )
 
-    school_col = policy.columns.school_code
-    normal_rows = matrix[type_col] == "عادی"
-    normal_with_school = matrix.loc[normal_rows, school_col].fillna(0).astype(int) != 0
-    if bool(normal_with_school.any()):
-        offenders = matrix.loc[normal_rows & normal_with_school, mentor_col].tolist()
+    normal_mask = type_series.eq("عادی")
+    school_mask = type_series.eq("مدرسه‌ای")
+
+    normal_school_nonzero = school_series[normal_mask] != 0
+    if bool(normal_school_nonzero.any()):
+        offenders = mentor_series[normal_mask & normal_school_nonzero]
         violations.append(
             QaViolation(
                 rule_id="QA_RULE_MENTOR_TYPE_01",
@@ -524,10 +532,9 @@ def check_MENTOR_TYPE_01(  # noqa: N802
             )
         )
 
-    school_rows = matrix[type_col] == "مدرسه‌ای"
-    school_with_zero = matrix.loc[school_rows, school_col].fillna(0).astype(int) == 0
-    if bool(school_with_zero.any()):
-        offenders = matrix.loc[school_rows & school_with_zero, mentor_col].tolist()
+    school_zero = school_series[school_mask] == 0
+    if bool(school_zero.any()):
+        offenders = mentor_series[school_mask & school_zero]
         violations.append(
             QaViolation(
                 rule_id="QA_RULE_MENTOR_TYPE_01",
@@ -537,11 +544,9 @@ def check_MENTOR_TYPE_01(  # noqa: N802
             )
         )
 
-    alias_series = matrix.loc[school_rows, "جایگزین"].astype("string").str.strip()
-    mentor_series = matrix.loc[school_rows, mentor_col].astype("string").str.strip()
-    alias_mismatch_mask = alias_series.ne(mentor_series)
-    if bool(alias_mismatch_mask.any()):
-        offenders = matrix.loc[school_rows, :].loc[alias_mismatch_mask, mentor_col].tolist()
+    school_alias_mismatch = alias_series[school_mask] != mentor_series[school_mask]
+    if bool(school_alias_mismatch.any()):
+        offenders = mentor_series[school_mask & school_alias_mismatch]
         violations.append(
             QaViolation(
                 rule_id="QA_RULE_MENTOR_TYPE_01",
@@ -551,14 +556,29 @@ def check_MENTOR_TYPE_01(  # noqa: N802
             )
         )
 
-    normal_alias_missing = matrix.loc[normal_rows, "جایگزین"].astype("string").str.strip() == ""
+    def _valid_postal(value: str) -> bool:
+        return value.isdigit() and _postal_valid(value, cfg=cfg)
+
+    normal_alias_missing = alias_series[normal_mask].eq("")
     if bool(normal_alias_missing.any()):
-        offenders = matrix.loc[normal_rows & normal_alias_missing, mentor_col].tolist()
+        offenders = mentor_series[normal_mask & normal_alias_missing]
         violations.append(
             QaViolation(
                 rule_id="QA_RULE_MENTOR_TYPE_01",
                 level="error",
                 message="سطر عادی بدون alias معتبر",
+                details={"mentor_ids": tuple(_normalize_str(v) for v in offenders)},
+            )
+        )
+
+    invalid_normal_alias = alias_series[normal_mask][~alias_series[normal_mask].map(_valid_postal)]
+    if not invalid_normal_alias.empty:
+        offenders = mentor_series[normal_mask].loc[invalid_normal_alias.index]
+        violations.append(
+            QaViolation(
+                rule_id="QA_RULE_MENTOR_TYPE_01",
+                level="error",
+                message="alias عادی باید کدپستی معتبر باشد",
                 details={"mentor_ids": tuple(_normalize_str(v) for v in offenders)},
             )
         )

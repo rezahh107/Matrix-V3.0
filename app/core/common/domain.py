@@ -211,22 +211,21 @@ def _compute_school_alias(mentor_id: Any) -> str:
     return text
 
 
-def _compute_normal_alias(postal_code: Any, cfg: BuildConfig) -> str:
-    """کد جایگزین برای ردیف‌های عادی (کدپستی چهارنمری معتبر)."""
+def _normalize_normal_alias(postal_code: Any, cfg: BuildConfig) -> str:
+    """Normalize postal code for NORMAL mentors using configured range."""
 
     postal_str = to_numlike_str(postal_code).strip()
-    if not postal_str.isdigit():
+    if not postal_str:
         return ""
-    if len(postal_str) != 4:
+    if not any(ch.isdigit() for ch in postal_str):
         return ""
-    value = int(postal_str)
-    postal_range = cfg.postal_valid_range
-    if postal_range is None:
+    numeric_value = _num_to_int_safe(postal_str)
+    alias = str(numeric_value)
+    if not alias.isdigit():
         return ""
-    min_val, max_val = postal_range
-    if not (min_val <= value <= max_val):
+    if not _postal_valid(alias, cfg=cfg):
         return ""
-    return postal_str
+    return alias
 
 
 # ---------------------------------------------------------------------------
@@ -524,9 +523,8 @@ def center_from_manager(name: Any, *, cfg: BuildConfig) -> int:
 def classify_mentor_type_from_school_count(school_count: int | None) -> MentorType:
     """Derive mentor type solely from Inspactor school coverage count."""
 
-    if school_count is None:
-        return MentorType.NORMAL
-    return MentorType.SCHOOL if school_count > 0 else MentorType.NORMAL
+    count = 0 if school_count is None else int(school_count)
+    return MentorType.SCHOOL if count > 0 else MentorType.NORMAL
 
 
 def mentor_alias_for_type(
@@ -542,7 +540,7 @@ def mentor_alias_for_type(
 
     if mentor_type is MentorType.SCHOOL:
         return _compute_school_alias(mentor_id)
-    return _compute_normal_alias(postal_code, cfg)
+    return _normalize_normal_alias(postal_code, cfg)
 
 
 def compute_alias(

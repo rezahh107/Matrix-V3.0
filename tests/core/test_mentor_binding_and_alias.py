@@ -13,9 +13,10 @@ from app.core.common.domain import (
 @pytest.mark.parametrize(
     "school_count, expected",
     [
-        (0, MentorType.NORMAL),
         (None, MentorType.NORMAL),
-        (2, MentorType.SCHOOL),
+        (0, MentorType.NORMAL),
+        (1, MentorType.SCHOOL),
+        (5, MentorType.SCHOOL),
     ],
 )
 def test_classify_mentor_type_from_school_count(
@@ -24,21 +25,19 @@ def test_classify_mentor_type_from_school_count(
     assert classify_mentor_type_from_school_count(school_count) is expected
 
 
-def test_compute_alias_normal_requires_postal() -> None:
+def test_compute_alias_normal_with_valid_postal() -> None:
     cfg = BuildConfig()
-    alias = mentor_alias_for_type(MentorType.NORMAL, "1234", "EMP-1", cfg=cfg)
-    assert alias == "1234"
+    alias = mentor_alias_for_type(MentorType.NORMAL, "5000", "EMP-1", cfg=cfg)
+    assert alias == "5000"
 
 
-def test_compute_alias_school_uses_mentor_id() -> None:
+def test_compute_alias_normal_with_invalid_postal_returns_empty() -> None:
     cfg = BuildConfig()
-    alias = mentor_alias_for_type(MentorType.SCHOOL, "", "EMP-42", cfg=cfg)
-    assert alias == "EMP-42"
-
-
-def test_alias_value_does_not_change_mentor_type() -> None:
-    cfg = BuildConfig()
-    alias = mentor_alias_for_type(MentorType.NORMAL, "999", "EMP-1", cfg=cfg)
-    # Even if alias is unusable, type detection is independent
+    alias = mentor_alias_for_type(MentorType.NORMAL, "invalid", "EMP-2", cfg=cfg)
     assert alias == ""
-    assert classify_mentor_type_from_school_count(0) is MentorType.NORMAL
+
+
+def test_compute_alias_school_ignores_postal() -> None:
+    cfg = BuildConfig()
+    alias = mentor_alias_for_type(MentorType.SCHOOL, "12345", "EMP-42", cfg=cfg)
+    assert alias == "EMP-42"
