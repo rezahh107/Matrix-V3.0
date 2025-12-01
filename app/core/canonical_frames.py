@@ -382,14 +382,6 @@ def sanitize_pool_for_allocation(
     if regex and "mentor_name" in frame.columns:
         mask_virtual |= frame["mentor_name"].astype(str).map(lambda text: bool(regex.search(text)))
 
-    alias_ranges = policy.virtual_alias_ranges
-    for column_name in ("alias", "mentor_id"):
-        if column_name not in frame.columns:
-            continue
-        alias_numeric = pd.to_numeric(ensure_series(frame[column_name]), errors="coerce")
-        for start, end in alias_ranges:
-            mask_virtual |= alias_numeric.between(start, end, inclusive="both")
-
     sanitized = frame.loc[~mask_virtual].copy()
     stats.virtual_filtered += int(mask_virtual.sum())
 

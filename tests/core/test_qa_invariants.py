@@ -68,7 +68,7 @@ def test_student_binding_invariant_blocks_invalid_value(monkeypatch: Any) -> Non
 
     monkeypatch.setattr(
         "app.core.qa.invariants.classify_student_binding",
-        lambda row, cfg: "unexpected",  # type: ignore[return-value]
+        lambda row, cfg: "unexpected",
     )
 
     result = check_STU_BINDING_01(student_report=student_report, policy=policy)
@@ -149,3 +149,21 @@ def test_mentor_type_invariant_detects_school_alias_or_code_errors() -> None:
 
     assert not result.passed
     assert result.violations
+
+
+def test_mentor_type_invariant_accepts_small_postal_within_policy_range() -> None:
+    policy = replace(_policy_with_school_codes(), postal_valid_range=(1, 9999))
+    school_col = policy.columns.school_code
+    matrix = pd.DataFrame(
+        {
+            "کد کارمندی پشتیبان": ["M1"],
+            "جایگزین": ["999"],
+            "عادی مدرسه": ["عادی"],
+            school_col: [0],
+        }
+    )
+
+    result = check_MENTOR_TYPE_01(matrix=matrix, policy=policy)
+
+    assert result.passed
+    assert not result.violations
