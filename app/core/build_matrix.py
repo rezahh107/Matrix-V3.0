@@ -4,7 +4,9 @@ build_matrix.py — Eligibility Matrix Builder (SSoT v1.0.2, script v1.0.4)
 
 Summary
 -------
-- Normal mentors: build BOTH statuses → student=1 AND graduate=0
+- Normal mentors: build graduation_status per Policy v1.0.3
+  - Dual-status groups `{1, 3, 5, 7, 8, 9, 11, 12, 14, 17, 18}` → {1, 0}
+  - Student-only groups (22 codes) → {1}
 - School mentors: build ONLY student=1
 - Everything else as per SSoT v1.0.2 (capacity gate, crosswalk+synonyms,
   finance 0/1/3, center mapping, atomic writes)
@@ -22,7 +24,7 @@ from enum import Enum, IntEnum, auto
 from functools import lru_cache
 from itertools import product
 from logging import getLogger
-from typing import Any, Literal, TypeVar
+from typing import Any, Final, Literal, TypeVar
 
 import numpy as np
 import pandas as pd
@@ -142,6 +144,25 @@ BUILTIN_SYNONYMS = {
     "کل کنکوری": "__BUCKET__کنکوری",
     "کنکوریها": "__BUCKET__کنکوری",
 }
+
+# Policy v1.0.3: only these 11 groups support both student (1) and graduate (0).
+DUAL_STATUS_GROUPS: Final[frozenset[int]] = frozenset({1, 3, 5, 7, 8, 9, 11, 12, 14, 17, 18})
+
+
+def allowed_statuses_for_group(group_code: int, *, is_school_branch: bool) -> tuple[int, ...]:
+    """Return graduation_status domain for the given group and mentor branch.
+
+    School-branch mentors are student-only. Normal mentors may expose both
+    statuses only for the Policy-approved dual-status groups; all other groups
+    are constrained to the student status (1).
+    """
+
+    if is_school_branch:
+        return (1,)
+    if group_code in DUAL_STATUS_GROUPS:
+        return (1, 0)
+    return (1,)
+
 
 # =============================================================================
 # PROGRESS API
@@ -1584,7 +1605,27 @@ def _explode_rows(
         index=df.index,
     )
     df = df.join(gp)
-    df = df.explode("genders").explode(status_col).explode("school_list").explode("finance_list")
+
+    def _statuses_for_row(row: pd.Series) -> tuple[int, ...]:
+        configured_raw = row.get(status_col, [])
+        configured_iterable: Iterable[Any]
+        if isinstance(configured_raw, Iterable) and not isinstance(configured_raw, (str, bytes)):
+            configured_iterable = configured_raw
+        else:
+            configured_iterable = ()
+
+        configured = tuple(
+            int(value) for value in configured_iterable if _coerce_int_like(value) is not None
+        )
+
+        group_value = _coerce_int_like(row.get("group_code"))
+        group_int = int(group_value) if group_value is not None else 0
+        allowed = allowed_statuses_for_group(group_int, is_school_branch=type_label == "مدرسه‌ای")
+        filtered = tuple(status for status in configured if status in allowed)
+        return filtered if filtered else allowed
+
+    df["status_seq"] = df.apply(_statuses_for_row, axis=1)
+    df = df.explode("genders").explode("status_seq").explode("school_list").explode("finance_list")
 
     if df.empty:
         return pd.DataFrame()
@@ -1616,7 +1657,7 @@ def _explode_rows(
     gender_series = df["genders"]
     df["gender_code"] = _normalize_demographic_key(gender_series)
 
-    status_series = df[status_col]
+    status_series = df["status_seq"]
     df["status_code"] = _normalize_demographic_key(status_series)
 
     blank_school_mask = df["school_list"].map(
@@ -1635,7 +1676,7 @@ def _explode_rows(
     alias_series = df[alias_col]
     df["جایگزین"] = alias_series.map(to_numlike_str)
 
-    df = df.drop(columns=["genders", status_col, "school_list", alias_col])
+    df = df.drop(columns=["genders", status_col, "status_seq", "school_list", alias_col])
     df["عادی مدرسه"] = type_label
 
     df = df.rename(

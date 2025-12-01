@@ -2,21 +2,50 @@ from __future__ import annotations
 
 import pandas as pd
 
-from app.infra.matrix.build_matrix_v1_0_2 import (
-    DUAL_STATUS_GROUPS,
-    allowed_statuses_for_group,
-    build_matrix_v1_0_2,
-)
+from app.infra.matrix import build_matrix_v1_0_2 as matrix_builder
 
 
 def test_allowed_statuses_for_group_dual_and_student_only() -> None:
-    for code in (1, 3, 5, 7, 8, 9, 11, 12, 14, 17, 18):
-        assert list(allowed_statuses_for_group(code, is_school_branch=False)) == [1, 0]
+    expected_dual = {1, 3, 5, 7, 8, 9, 11, 12, 14, 17, 18}
+    expected_student_only = {
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        29,
+        30,
+        31,
+        33,
+        35,
+        41,
+        43,
+        45,
+        46,
+        53,
+        55,
+        66,
+        69,
+        83,
+        89,
+    }
 
-    for code in (21, 22, 23, 29, 35, 41, 43, 45, 46, 53, 55, 66, 69, 83, 89):
-        assert list(allowed_statuses_for_group(code, is_school_branch=False)) == [1]
+    assert expected_dual == matrix_builder.DUAL_STATUS_GROUPS
 
-    assert list(allowed_statuses_for_group(1, is_school_branch=True)) == [1]
+    for code in expected_dual:
+        assert list(matrix_builder.allowed_statuses_for_group(code, is_school_branch=False)) == [
+            1,
+            0,
+        ]
+
+    for code in expected_student_only:
+        assert list(matrix_builder.allowed_statuses_for_group(code, is_school_branch=False)) == [
+            1,
+        ]
+
+    assert list(matrix_builder.allowed_statuses_for_group(1, is_school_branch=True)) == [1]
 
 
 def test_matrix_respects_group_specific_statuses() -> None:
@@ -31,7 +60,7 @@ def test_matrix_respects_group_specific_statuses() -> None:
         }
     )
 
-    matrix = build_matrix_v1_0_2(base)
+    matrix = matrix_builder.build_matrix_v1_0_2(base)
 
     normal_dual = matrix["کدرشته"].eq(1) & matrix["عادی مدرسه"].eq("عادی")
     school_rows = matrix["عادی مدرسه"].eq("مدرسه‌ای")
@@ -56,7 +85,7 @@ def test_matrix_respects_group_specific_statuses() -> None:
     for code in unique_codes:
         statuses = set(matrix.loc[matrix["کدرشته"].eq(code), "دانش آموز فارغ"].unique())
         assert statuses <= {0, 1}
-        if code in DUAL_STATUS_GROUPS:
+        if code in matrix_builder.DUAL_STATUS_GROUPS:
             assert statuses == {0, 1}
         else:
             assert statuses == {1}
