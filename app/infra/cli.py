@@ -140,6 +140,58 @@ _DEFAULT_LOCAL_DB_PATH = Path("smart_alloc.db")
 logger = logging.getLogger(__name__)
 
 
+class AllocationConsistencyError(ValueError):
+    """Raised when allocation counters and produced outputs diverge."""
+
+
+def _sync_counter_summary_with_allocations(
+    *,
+    counter_summary: Mapping[str, int],
+    allocations_df: pd.DataFrame,
+    students_df: pd.DataFrame,
+    policy: PolicyConfig,
+) -> dict[str, int]:
+    """Align counter summary with actual allocations and genders.
+
+    ``_inject_student_ids`` می‌تواند شمارنده‌ها را بر اساس ورودی روستر محاسبه
+    کند، اما این تابع بعد از تخصیص فراخوانی می‌شود تا تعداد واقعی دانش‌آموزان
+    تخصیص‌گرفته (به تفکیک جنسیت) در summary ثبت شود و از بروز ناسازگاری بین
+    شمارنده‌ها و دیتافریم خروجی جلوگیری کند.
+    """
+
+    synced = dict(counter_summary)
+    if allocations_df.empty:
+        synced["new_male_count"] = 0
+        synced["new_female_count"] = 0
+        return synced
+
+    alloc_en = canonicalize_headers(allocations_df, header_mode="en")
+    students_en = canonicalize_headers(students_df, header_mode="en")
+    gender_col = "gender"
+    merged = alloc_en
+    if "student_id" in alloc_en.columns and "student_id" in students_en.columns:
+        student_gender = students_en.loc[:, ["student_id"]].copy()
+        if gender_col in students_en.columns:
+            student_gender[gender_col] = students_en[gender_col]
+        merged = alloc_en.merge(student_gender, on="student_id", how="left")
+
+    male_value = int(policy.gender_codes.male.value)
+    female_value = int(policy.gender_codes.female.value)
+    genders = pd.to_numeric(merged.get(gender_col), errors="coerce")
+    male_count = int((genders == male_value).sum())
+    female_count = int((genders == female_value).sum())
+
+    synced["new_male_count"] = male_count
+    synced["new_female_count"] = female_count
+
+    next_male_start = int(counter_summary.get("next_male_start", 1))
+    next_female_start = int(counter_summary.get("next_female_start", 1))
+    synced["next_male_start"] = max(next_male_start, male_count + 1)
+    synced["next_female_start"] = max(next_female_start, female_count + 1)
+
+    return synced
+
+
 def _coerce_header_mode(value: str | None) -> HeaderMode:
     """Validate and narrow header mode strings to the HeaderMode literal type.
 
@@ -423,6 +475,43 @@ def _log_history_metrics(
             float(row["same_history_mentor_ratio"] or 0.0),
         )
     return history_metrics_df
+
+
+def _validate_allocation_consistency(
+    *,
+    counter_summary: Mapping[str, int],
+    allocations_df: pd.DataFrame,
+    updated_pool_df: pd.DataFrame,
+    selection_reasons_df: pd.DataFrame,
+    sabt_allocations_df: pd.DataFrame | None,
+) -> None:
+    """Ensure counters and allocation outputs remain aligned."""
+
+    new_male = int(counter_summary.get("new_male_count", 0))
+    new_female = int(counter_summary.get("new_female_count", 0))
+    expected_allocations = new_male + new_female
+    if expected_allocations <= 0:
+        return
+
+    actual_allocations = len(allocations_df)
+    if actual_allocations != expected_allocations:
+        raise AllocationConsistencyError(
+            "Allocation count mismatch: counters report "
+            f"{expected_allocations} new allocations but allocations_df has "
+            f"{actual_allocations} rows."
+        )
+
+    def _assert_non_empty(df: pd.DataFrame, name: str) -> None:
+        if df.empty:
+            raise AllocationConsistencyError(
+                f"Expected non-empty DataFrame for {name} when allocations exist."
+            )
+
+    _assert_non_empty(allocations_df, "allocations")
+    _assert_non_empty(updated_pool_df, "updated_pool")
+    _assert_non_empty(selection_reasons_df, "selection_reasons")
+    if sabt_allocations_df is not None:
+        _assert_non_empty(sabt_allocations_df, "allocations_sabt")
 
 
 def _load_forms_repository(args: argparse.Namespace, db: LocalDatabase) -> FormsRepository:
@@ -1951,6 +2040,20 @@ def _allocate_and_write(
             trace=trace_df,
         )
         selection_reasons_df = _ensure_valid_dataframe(selection_reasons_df, "selection_reasons")
+        counter_summary = _sync_counter_summary_with_allocations(
+            counter_summary=counter_summary,
+            allocations_df=allocations_df,
+            students_df=students_base,
+            policy=policy,
+        )
+        _validate_allocation_consistency(
+            counter_summary=counter_summary,
+            allocations_df=allocations_df,
+            updated_pool_df=updated_pool_df,
+            selection_reasons_df=selection_reasons_df,
+            sabt_allocations_df=sabt_allocations_df,
+        )
+        setattr(args, "_counter_summary", counter_summary)
         sheet_name, selection_reasons_df = write_selection_reasons_sheet(
             selection_reasons_df,
             writer=None,
