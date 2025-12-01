@@ -10,6 +10,7 @@ from app.core.allocate_students import (
     _filter_candidates_by_join_map,
     _merge_join_mismatches,
     allocate_student,
+    allocate_batch,
 )
 from app.core.common.filters import apply_join_filters
 from app.core.common.join_keys import normalize_join_key_name
@@ -182,6 +183,89 @@ def test_filter_candidates_respects_school_constraints_without_excluding_matches
     filtered, _ = _filter_candidates_by_join_map(pool, join_map=join_map, policy=policy)
 
     assert filtered["mentor_id"].tolist() == ["global", "restricted"]
+
+
+def test_allocate_batch_outputs_match_counters() -> None:
+    policy = load_policy()
+    students = pd.DataFrame(
+        {
+            policy.stage_column("group"): [1],
+            policy.stage_column("gender"): [int(policy.gender_codes.male.value)],
+            policy.stage_column("graduation_status"): [0],
+            policy.stage_column("center"): [1],
+            policy.stage_column("finance"): [0],
+            policy.columns.school_code: [0],
+            "student_id": ["1"],
+        }
+    )
+
+    pool = pd.DataFrame(
+        {
+            "mentor_id": ["m1"],
+            "mentor_alias_code": [111],
+            "mentor_name": ["mentor m1"],
+            policy.stage_column("group"): [1],
+            policy.stage_column("gender"): [int(policy.gender_codes.male.value)],
+            policy.stage_column("graduation_status"): [0],
+            policy.stage_column("center"): [1],
+            policy.stage_column("finance"): [0],
+            policy.columns.school_code: [0],
+            policy.columns.remaining_capacity: [1],
+            "کد کارمندی پشتیبان": ["m1"],
+            "allocations_new": [0],
+            "occupancy_ratio": [0.0],
+        }
+    )
+
+    allocations_df, updated_pool_df, logs_df, trace_df = allocate_batch(
+        students, pool, policy=policy, frames_already_canonical=True
+    )
+
+    assert len(allocations_df) == 1
+    assert not updated_pool_df.empty
+    assert not logs_df.empty
+    assert not trace_df.empty
+
+
+def test_allocate_batch_zero_capacity_produces_no_allocations() -> None:
+    policy = load_policy()
+    students = pd.DataFrame(
+        {
+            policy.stage_column("group"): [1],
+            policy.stage_column("gender"): [int(policy.gender_codes.male.value)],
+            policy.stage_column("graduation_status"): [0],
+            policy.stage_column("center"): [1],
+            policy.stage_column("finance"): [0],
+            policy.columns.school_code: [0],
+            "student_id": ["1"],
+        }
+    )
+
+    pool = pd.DataFrame(
+        {
+            "mentor_id": ["m1"],
+            "mentor_alias_code": [111],
+            "mentor_name": ["mentor m1"],
+            policy.stage_column("group"): [1],
+            policy.stage_column("gender"): [int(policy.gender_codes.male.value)],
+            policy.stage_column("graduation_status"): [0],
+            policy.stage_column("center"): [1],
+            policy.stage_column("finance"): [0],
+            policy.columns.school_code: [0],
+            policy.columns.remaining_capacity: [0],
+            "کد کارمندی پشتیبان": ["m1"],
+            "allocations_new": [0],
+            "occupancy_ratio": [0.0],
+        }
+    )
+
+    allocations_df, updated_pool_df, logs_df, trace_df = allocate_batch(
+        students, pool, policy=policy, frames_already_canonical=True
+    )
+
+    assert allocations_df.empty
+    assert logs_df.empty or len(logs_df) == 1
+    assert trace_df.attrs.get("summary_df") is None or trace_df.attrs.get("summary_df").empty
 
 
 def test_filter_candidates_respects_center_wildcard_zero_and_rejects_missing() -> None:
