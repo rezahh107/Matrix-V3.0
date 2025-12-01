@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dataclasses import replace
 from typing import Any
 
@@ -82,7 +84,7 @@ def test_mentor_type_invariant_blocks_dual_rows() -> None:
     matrix = pd.DataFrame(
         {
             "کد کارمندی پشتیبان": ["M1", "M1"],
-            "جایگزین": ["1234", "M1"],
+            "جایگزین": ["5000", "M1"],
             "عادی مدرسه": ["عادی", "مدرسه‌ای"],
             school_col: [0, 10],
         }
@@ -101,7 +103,7 @@ def test_mentor_type_invariant_validates_alias_and_school_code() -> None:
     matrix = pd.DataFrame(
         {
             "کد کارمندی پشتیبان": ["M1", "S1"],
-            "جایگزین": ["1234", "S1"],
+            "جایگزین": ["5000", "S1"],
             "عادی مدرسه": ["عادی", "مدرسه‌ای"],
             school_col: [0, 10],
         }
@@ -111,3 +113,39 @@ def test_mentor_type_invariant_validates_alias_and_school_code() -> None:
 
     assert result.passed
     assert not result.violations
+
+
+def test_mentor_type_invariant_detects_normal_with_school_code() -> None:
+    policy = _policy_with_school_codes()
+    school_col = policy.columns.school_code
+    matrix = pd.DataFrame(
+        {
+            "کد کارمندی پشتیبان": ["M1"],
+            "جایگزین": ["5000"],
+            "عادی مدرسه": ["عادی"],
+            school_col: [10],
+        }
+    )
+
+    result = check_MENTOR_TYPE_01(matrix=matrix, policy=policy)
+
+    assert not result.passed
+    assert result.violations
+
+
+def test_mentor_type_invariant_detects_school_alias_or_code_errors() -> None:
+    policy = _policy_with_school_codes()
+    school_col = policy.columns.school_code
+    matrix = pd.DataFrame(
+        {
+            "کد کارمندی پشتیبان": ["S1", "S2"],
+            "جایگزین": ["S1", "wrong"],
+            "عادی مدرسه": ["مدرسه‌ای", "مدرسه‌ای"],
+            school_col: [0, 10],
+        }
+    )
+
+    result = check_MENTOR_TYPE_01(matrix=matrix, policy=policy)
+
+    assert not result.passed
+    assert result.violations

@@ -17,7 +17,7 @@ def test_build_matrix_uses_mentor_type_rules() -> None:
             "نام پشتیبان": ["عادی", "مدرسه"],
             "نام مدیر": ["مدیر1", "مدیر2"],
             "کد کارمندی پشتیبان": ["M1", "S1"],
-            "کدپستی": ["1234", ""],
+            "کدپستی": ["5000", ""],
             "تعداد مدارس تحت پوشش": [0, 1],
             "تعداد داوطلبان تحت پوشش": [5, 5],
             "تعداد تحت پوشش خاص": [0, 0],
@@ -43,7 +43,7 @@ def test_build_matrix_uses_mentor_type_rules() -> None:
     assert not normal_rows.empty
     assert (normal_rows["عادی مدرسه"] == "عادی").all()
     assert set(normal_rows[cfg.policy.columns.school_code].unique()) == {0}
-    assert set(normal_rows["جایگزین"].unique()) == {"1234"}
+    assert set(normal_rows["جایگزین"].unique()) == {"5000"}
 
     school_rows = matrix.loc[matrix["کد کارمندی پشتیبان"] == "S1"]
     assert not school_rows.empty

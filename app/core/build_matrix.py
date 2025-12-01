@@ -50,6 +50,7 @@ from app.core.common.domain import (
     BuildConfig,
     MentorType,
     StudentBindingKind,
+    _postal_valid,
     center_from_manager as domain_center_from_manager,
     classify_mentor_type_from_school_count,
     classify_student_binding,
@@ -683,18 +684,15 @@ def _validate_alias_contract(matrix: pd.DataFrame, *, cfg: BuildConfig) -> None:
 
     normal_mask = row_types == "عادی"
     alias_normal = alias_series[normal_mask]
-    invalid_pattern = alias_normal[~alias_normal.str.fullmatch(r"\d{4}")]
-    if not invalid_pattern.empty:
-        raise AssertionError("Normal rows must use 4-digit postal alias")
+    if alias_normal.eq("").any():
+        raise AssertionError("Normal rows must have postal alias")
 
-    postal_range = cfg.postal_valid_range
-    if postal_range is None:
-        raise ValueError("postal_valid_range is required for alias validation")
-    min_postal, max_postal = postal_range
-    alias_numeric = alias_normal.map(lambda v: safe_int_value(v, default=0))
-    invalid_range = alias_numeric[(alias_numeric < min_postal) | (alias_numeric > max_postal)]
-    if not invalid_range.empty:
-        raise AssertionError("Postal alias out of configured range")
+    def _valid_postal(value: str) -> bool:
+        return value.isdigit() and _postal_valid(value, cfg=cfg)
+
+    invalid_values = alias_normal[~alias_normal.map(_valid_postal)]
+    if not invalid_values.empty:
+        raise AssertionError("Postal alias must be within configured range")
 
 
 def _validate_school_code_contract(matrix: pd.DataFrame, *, school_code_col: str) -> None:
@@ -1358,12 +1356,9 @@ def _prepare_base_rows(
             continue
 
         mentor_mode = classify_mentor_type_from_school_count(school_count)
-        alias_value = mentor_alias_for_type(mentor_mode, postal_raw, mentor_id, cfg=cfg) or None
+        alias_value = mentor_alias_for_type(mentor_mode, postal_raw, mentor_id, cfg=cfg) or ""
 
         center = domain_center_from_manager(manager_name, cfg=cfg)
-
-        alias_normal = alias_value if mentor_mode is MentorType.NORMAL else None
-        alias_school = alias_value if mentor_mode is MentorType.SCHOOL else None
 
         base = {
             "supporter": mentor_name,
@@ -1380,12 +1375,12 @@ def _prepare_base_rows(
             "statuses_normal": normal_statuses,
             "statuses_school": school_statuses,
             "alias": alias_value,
-            "alias_normal": alias_normal,
-            "alias_school": alias_school,
+            "alias_normal": alias_value if mentor_mode is MentorType.NORMAL else "",
+            "alias_school": alias_value if mentor_mode is MentorType.SCHOOL else "",
             "mentor_school_binding_mode": school_binding.binding_mode,
             "has_school_constraint": has_school_constraint,
-            "can_normal": mentor_mode is MentorType.NORMAL and bool(alias_normal),
-            "can_school": mentor_mode is MentorType.SCHOOL and bool(alias_school),
+            "can_normal": mentor_mode is MentorType.NORMAL,
+            "can_school": mentor_mode is MentorType.SCHOOL,
             "capacity_current": covered_now,
             "capacity_special": special_limit,
             "capacity_remaining": remaining_capacity,
@@ -1405,8 +1400,6 @@ def _prepare_base_rows(
     required_flags = {
         "mentor_school_binding_mode": binding_policy.global_mode,
         "has_school_constraint": False,
-        "can_normal": False,
-        "can_school": False,
     }
     for col, default in required_flags.items():
         if col not in base_df.columns:
