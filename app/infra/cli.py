@@ -708,11 +708,25 @@ def _safe_json_dumps(x: object) -> str:
         return str(x)
 
 
+def _copy_with_attrs(df: pd.DataFrame, template: pd.DataFrame) -> pd.DataFrame:
+    """کپی دیتافریم با حفظ attrs دترمینیستیک.
+
+    pandas ``copy`` به‌صورت پیش‌فرض ``attrs`` را منتقل نمی‌کند؛ این تابع
+    اطمینان می‌دهد متادیتای تزریق‌شده (مانند ``history_info_df`` روی trace)
+    پس از عملیات پاک‌سازی از بین نرود.
+    """
+
+    copied = df.copy()
+    if template.attrs:
+        copied.attrs = template.attrs.copy()
+    return copied
+
+
 def _coalesce_duplicate_columns(df: pd.DataFrame) -> pd.DataFrame:
     """ادغام امن ستون‌های تکراری حتی با نام‌های تهی/NaN."""
 
     if df.empty or not any(df.columns.duplicated()):
-        return df.copy()
+        return _copy_with_attrs(df, df)
 
     result_df = pd.DataFrame(index=df.index)
 
@@ -742,7 +756,7 @@ def _coalesce_duplicate_columns(df: pd.DataFrame) -> pd.DataFrame:
         filled = subset.bfill(axis=1)
         result_df[representatives[key]] = filled.iloc[:, 0]
 
-    return result_df
+    return _copy_with_attrs(result_df, df)
 
 
 def _is_complex_safe(x: object) -> bool:
@@ -762,7 +776,7 @@ def _make_excel_safe(df: pd.DataFrame) -> pd.DataFrame:
     با روش‌هایی که کاملاً در برابر ستون‌های تکراری و آرایه‌های خالی مقاوم هستند.
     """
     if df.empty:
-        return df.copy()
+        return _copy_with_attrs(df, df)
 
     # ابتدا ستون‌های تکراری را ادغام می‌کنیم
     df = _coalesce_duplicate_columns(df)
