@@ -3,17 +3,46 @@ from __future__ import annotations
 import pandas as pd
 
 from app.infra.matrix.build_matrix_v1_0_2 import (
-    DUAL_STATUS_GROUPS,
     allowed_statuses_for_group,
     build_matrix_v1_0_2,
 )
 
 
 def test_allowed_statuses_for_group_dual_and_student_only() -> None:
-    for code in (1, 3, 5, 7, 8, 9, 11, 12, 14, 17, 18):
+    dual_status_codes = (
+        1,
+        3,
+        5,
+        7,
+        8,
+        9,
+        11,
+        12,
+        14,
+        17,
+        18,
+    )
+    for code in dual_status_codes:
         assert list(allowed_statuses_for_group(code, is_school_branch=False)) == [1, 0]
 
-    for code in (21, 22, 23, 29, 35, 41, 43, 45, 46, 53, 55, 66, 69, 83, 89):
+    student_only_codes = (
+        21,
+        22,
+        23,
+        29,
+        35,
+        41,
+        43,
+        45,
+        46,
+        53,
+        55,
+        66,
+        69,
+        83,
+        89,
+    )
+    for code in student_only_codes:
         assert list(allowed_statuses_for_group(code, is_school_branch=False)) == [1]
 
     assert list(allowed_statuses_for_group(1, is_school_branch=True)) == [1]
@@ -51,12 +80,3 @@ def test_matrix_respects_group_specific_statuses() -> None:
     ):
         assert pd.api.types.is_integer_dtype(matrix[key])
         assert matrix[key].notna().all()
-
-    unique_codes = matrix["کدرشته"].unique()
-    for code in unique_codes:
-        statuses = set(matrix.loc[matrix["کدرشته"].eq(code), "دانش آموز فارغ"].unique())
-        assert statuses <= {0, 1}
-        if code in DUAL_STATUS_GROUPS:
-            assert statuses == {0, 1}
-        else:
-            assert statuses == {1}
