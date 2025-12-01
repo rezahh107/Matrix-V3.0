@@ -3,7 +3,6 @@ from __future__ import annotations
 import pandas as pd
 
 from app.infra.matrix.build_matrix_v1_0_2 import (
-    DUAL_STATUS_GROUPS,
     allowed_statuses_for_group,
     build_matrix_v1_0_2,
 )
