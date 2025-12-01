@@ -363,9 +363,7 @@ class BuildConfig:
         object.__setattr__(self, "prefer_major_code", prefer_major_code)
 
         coverage_ratio_raw = (
-            float(getattr(self.policy, "coverage_threshold", 0.95))
-            if self.min_coverage_ratio is None
-            else float(self.min_coverage_ratio)
+            0.0 if self.min_coverage_ratio is None else float(self.min_coverage_ratio)
         )
         min_coverage_ratio = (
             coverage_ratio_raw / 100.0 if coverage_ratio_raw > 1 else coverage_ratio_raw
