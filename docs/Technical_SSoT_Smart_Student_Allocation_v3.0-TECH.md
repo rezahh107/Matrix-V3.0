@@ -457,13 +457,62 @@ Technical SSoT اینجا فقط **نام شیت‌ها و نقش‌شان** ر�
 
 ---
 
-### 8.3. QADebugContext و LAW Mapping مرکزی
+### 8.3. Lineage حداقلی برای QA Debug
 
-- هر قانون QA با شناسهٔ `QA_RULE_*` باید در Core دارای دو آبجکت باشد:
-  - `LawMapping(rule_id, law_refs: tuple[str, ...], description: str)` در `app/core/qa/law_mapping.py` (منبع مرکزی و غیرتکراری).
-  - `QADebugContext(important_columns, source_tables, lineage_keys, diagnosis_hints, canary_thresholds)` در `app/core/debug/models.py` که در `QaRuleDefinition` نگهداری می‌شود.
-- Registry واحد `get_rule_definitions()` در `app/core/qa/rules.py` باید تمام قوانین QA را پوشش دهد و در تست‌ها چک شود؛ نبود law_refs یا debug_context ⇒ شکست تست.
-- Core هیچ I/O یا logging در این زمینه ندارد؛ Infra/UI از این متادیتا برای توضیح و دیباگ استفاده می‌کنند.
+- همهٔ خروجی‌های QA/Trace باید حداقل این ستون‌های lineage را حمل کنند (type-safe, non-null مگر در legacy ورودی):
+  - `_src_insp_row_id: int` — شناسهٔ سطر خام InspactorReport
+  - `_src_mentor_id: int` — mentor_id خام قبل از canonicalization
+  - `_src_school_idx: int` — ایندکس مدرسه‌ی منبع در Inspactor (۱..۴ یا ۰)
+  - `mentor_id: int` — کلید canonical پس از پاک‌سازی
+- Core این فیلدها را **نمی‌سازد**؛ Infra/QA آن را به خروجی‌های Core اضافه می‌کند، بدون تغییر در منطق تخصیص.
+- ترتیب و معنی ستون‌ها **ثابت** است تا QA Debug Engine بتواند نقض‌ها را تکرارپذیر توضیح دهد.
+
+---
+
+### 8.4. DebugReport (v0) — شکل و معنا
+
+- ساختار پیشنهادی و ثابت‌شدنی برای QA Debug Engine (observe-only):
+  - `rule_id: str` — شناسه QA Rule (مثلاً `QA_RULE_MENTOR_TYPE_01`).
+  - `law_refs: list[str]` — بندهای LAW مرتبط (مانند `LAW/MENTOR-TYPE-01`).
+  - `severity: str` — یکی از `error`, `warning`, `info` که با ایموجی ساده نگاشت می‌شود: `🔴`/`❌`=error، `🟡`=warning، `🟢/✅`=ok.
+  - `context: Mapping[str, str|int]` — کلید/مقدارهای مرتبط (مثلاً lineage columns، stage name، hash ورودی).
+  - `evidence: str` — خلاصهٔ قابل خواندن انسان با ارجاع به ستون‌های lineage/trace.
+  - `story: list[str]` — ۵ جمله/بخش برای Debug Story v0 به ترتیب: Severity، Rule/Clause، Evidence، Cause (Why)، Next Action.
+- DebugReport باید **pure و قابل بازتولید** باشد؛ Debug Engine **هیچ تخصیصی را تغییر نمی‌دهد** و فقط بر روی خروجی Core/Infra کار می‌کند.
+
+---
+
+### 8.5. ExecutionTracer و Snapshots
+
+- ExecutionTracer فقط breadcrumb فراهم می‌کند و در هستهٔ تخصیص دخالتی ندارد:
+  - Breadcrumb: لیست stageها و شمارش candidate قبل/بعد (مطابق TRACE-CORE).
+  - Snapshot: خروجی میانی پس از هر مرحله (اختیاری، فقط برای QA/دیباگ؛ حجم کنترل‌شده).
+- Tracer باید دترمینیستیک باشد، بدون randomness یا sleep؛ فعال/غیرفعال‌سازی آن از طریق flag در Infra انجام می‌شود.
+- Snapshots فقط **خواندنی** هستند؛ هیچ mutation روی DataFrame اصلی Core ایجاد نمی‌شود.
+
+---
+
+### 8.6. QA Debug Engine (observe-only)
+
+- وظایف:
+  - مصرف Trace، lineage و خروجی‌های QA برای تولید DebugReportهای تکرارپذیر.
+  - نگاشت QA Rule → LAW Clause و درج آن در `law_refs`.
+  - حفظ purity: Engine **نباید** Join/Ranking/Trace را override کند و **نباید** خروجی تخصیص را دستکاری کند.
+- خروجی باید با CLI/UI قابل نمایش باشد و با Policy/SSoT نسخه‌گذاری شود (`policy_version`, `ssot_version`).
+- اگر Engine خاموش باشد، باید در meta/QA ثبت شود؛ حالت پیش‌فرض Production «فعال و observe-only» است.
+
+---
+
+### 8.7. CLI/Presenter Debug Story v0
+
+- قالب روایت انسانی برای هر DebugReport:
+  1. **Severity ایموجی** (`🔴`, `🟡`, `🟢/✅`, `❌`).
+  2. **Rule/Clause** (QA Rule + LAW ref).
+  3. **Evidence** (ستون lineage یا stage عددی Trace).
+  4. **Why** (علت دترمینیستیک؛ بدون حدس).
+  5. **Next Action** (گام بعدی پیشنهادی برای اپراتور یا اصلاح داده).
+- Presenter باید خروجی را بدون رنگ ANSI (صرفاً متن + ایموجی) نمایش دهد تا در محیط‌های CLI ساده نیز قابل خواندن باشد.
+- Story v0 فقط خواندنی است؛ هیچ دکمه/اکشنی در Core/Infra را تحریک نمی‌کند و با فعال/غیرفعال‌شدن feature flag تغییری در تخصیص ایجاد نمی‌کند.
 
 ---
 

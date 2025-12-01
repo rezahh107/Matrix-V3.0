@@ -289,6 +289,21 @@ remaining_capacity = capacity_limit - (assigned_baseline + allocations_new)
 
 ---
 
+### 6.3. قانون QA-DEBUG-ENGINE-01 — دیباگ مبتنی بر Lineage و Explainability
+
+- یک **QA Debug Engine** باید به‌صورت **غیرمداخله‌گر (observe-only)** روی خروجی‌های Core/Infra عمل کند؛ این موتور **نباید** تخصیص را تغییر دهد یا جایگزین Ranking/Join شود.
+- برای QA دیباگ، حداقل ستون‌های lineage در هر رکورد QA/Trace باید وجود داشته باشد و به‌صورت type-safe حفظ شود: `_src_insp_row_id`, `_src_mentor_id`, `_src_school_idx`, `mentor_id`.
+- هر نقض QA باید با یک «داستان دیباگ ۵‌بخشی (v0)» قابل توضیح باشد؛ قالب اجباری:
+  1. **Severity** با ایموجی ساده: `🔴` (خطای QA)، `🟡` (near-miss/هشدار)، `🟢/✅` (اوکی)، `❌` (تخصیص مردود/rollback).
+  2. **Rule/Clause**: ارجاع به QA Rule و LAW ID مرتبط.
+  3. **Evidence**: اشاره‌ی صریح به ستون‌های lineage یا Trace stage که mismatch را نشان می‌دهد.
+  4. **Cause (Why)**: خلاصهٔ دترمینیستیک از دلیل نقض.
+  5. **Next Action**: راهنمای رفع (مثلاً اصلاح ورودی، بازبینی استخر، یا Governance).
+- دیباگ باید **خطی و دترمینیستیک** باشد؛ ترتیب trace ثابت و story باید بتواند به‌صورت repeatable از روی همان ورودی‌ها تولید شود.
+- نگاشت LAW↔QA Rule (نمونه الزامی): `QA_RULE_MENTOR_TYPE_01` ⇒ `LAW/MENTOR-TYPE-01` و `LAW/MATRIX-BRANCH-01`; هر گزارش این Rule باید حداقل یکی از این بندهای LAW را cite کند و نشان دهد که lineage سطر Inspactor با شاخه‌ی ماتریس ناسازگار بوده است.
+
+---
+
 ## 7. حاکمیت استخر پشتیبان‌ها (Mentor Governance)
 
 ### 7.1. قانون MENTOR-STATUS-01 — وضعیت پشتیبان
