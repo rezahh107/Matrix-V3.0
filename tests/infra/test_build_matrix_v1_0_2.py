@@ -2,10 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from app.infra.matrix.build_matrix_v1_0_2 import (
-    allowed_statuses_for_group,
-    build_matrix_v1_0_2,
-)
+from app.infra.matrix.build_matrix_v1_0_2 import allowed_statuses_for_group, build_matrix_v1_0_2
 
 
 def test_allowed_statuses_for_group_dual_and_student_only() -> None:
@@ -45,18 +42,7 @@ def test_allowed_statuses_for_group_dual_and_student_only() -> None:
     for code in student_only_codes:
         assert list(allowed_statuses_for_group(code, is_school_branch=False)) == [1]
 
-    for code in expected_dual:
-        assert list(matrix_builder.allowed_statuses_for_group(code, is_school_branch=False)) == [
-            1,
-            0,
-        ]
-
-    for code in expected_student_only:
-        assert list(matrix_builder.allowed_statuses_for_group(code, is_school_branch=False)) == [
-            1,
-        ]
-
-    assert list(matrix_builder.allowed_statuses_for_group(1, is_school_branch=True)) == [1]
+    assert list(allowed_statuses_for_group(1, is_school_branch=True)) == [1]
 
 
 def test_matrix_respects_group_specific_statuses() -> None:
@@ -71,7 +57,7 @@ def test_matrix_respects_group_specific_statuses() -> None:
         }
     )
 
-    matrix = matrix_builder.build_matrix_v1_0_2(base)
+    matrix = build_matrix_v1_0_2(base)
 
     normal_dual = matrix["کدرشته"].eq(1) & matrix["عادی مدرسه"].eq("عادی")
     school_rows = matrix["عادی مدرسه"].eq("مدرسه‌ای")

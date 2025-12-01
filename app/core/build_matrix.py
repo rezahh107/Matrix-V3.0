@@ -1614,15 +1614,19 @@ def _explode_rows(
         else:
             configured_iterable = ()
 
-        configured = tuple(
-            int(value) for value in configured_iterable if _coerce_int_like(value) is not None
-        )
+        normalized_values: list[int] = []
+        for value in configured_iterable:
+            coerced = _coerce_int_like(value)
+            normalized_values.append(int(coerced) if coerced is not None else 0)
+        normalized: tuple[int, ...] = tuple(normalized_values)
+
+        if normalized:
+            return normalized
 
         group_value = _coerce_int_like(row.get("group_code"))
         group_int = int(group_value) if group_value is not None else 0
         allowed = allowed_statuses_for_group(group_int, is_school_branch=type_label == "مدرسه‌ای")
-        filtered = tuple(status for status in configured if status in allowed)
-        return filtered if filtered else allowed
+        return allowed
 
     df["status_seq"] = df.apply(_statuses_for_row, axis=1)
     df = df.explode("genders").explode("status_seq").explode("school_list").explode("finance_list")
