@@ -62,31 +62,24 @@ def build_matrix_v1_0_2(base_rows: pd.DataFrame) -> pd.DataFrame:
     if base_rows.empty:
         return pd.DataFrame(columns=[*required_cols, "دانش آموز فارغ"])
 
-    records: list[dict[str, int | str]] = []
-    for record in base_rows.to_dict(orient="records"):
-        group_code = int(record["کدرشته"])
-        gender = int(record["جنسیت"])
-        center = int(record["مرکز گلستان صدرا"])
-        finance = int(record["مالی حکمت بنیاد"])
-        school_code = int(record["کد مدرسه"])
-        branch_label = str(record.get("عادی مدرسه", "")).strip() or "عادی"
-        is_school_branch = branch_label == "مدرسه‌ای"
+    matrix = base_rows.copy()
 
-        statuses = allowed_statuses_for_group(group_code, is_school_branch=is_school_branch)
-        for status in statuses:
-            records.append(
-                {
-                    "کدرشته": group_code,
-                    "جنسیت": gender,
-                    "دانش آموز فارغ": int(status),
-                    "مرکز گلستان صدرا": center,
-                    "مالی حکمت بنیاد": finance,
-                    "کد مدرسه": school_code,
-                    "عادی مدرسه": branch_label,
-                }
-            )
+    matrix["عادی مدرسه"] = matrix["عادی مدرسه"].fillna("").astype(str).str.strip()
+    matrix.loc[matrix["عادی مدرسه"] == "", "عادی مدرسه"] = "عادی"
 
-    matrix = pd.DataFrame.from_records(records, columns=[*required_cols, "دانش آموز فارغ"])
+    matrix["statuses"] = matrix.apply(
+        lambda row: allowed_statuses_for_group(
+            row["کدرشته"], is_school_branch=(row["عادی مدرسه"] == "مدرسه‌ای")
+        ),
+        axis=1,
+    )
+
+    matrix = matrix.explode("statuses").rename(columns={"statuses": "دانش آموز فارغ"})
+
+    final_cols = [*required_cols, "دانش آموز فارغ"]
+    matrix = matrix[final_cols]
     for key in JOIN_KEYS:
-        matrix[key] = matrix[key].astype("Int64")
+        if key in matrix.columns:
+            matrix[key] = matrix[key].astype("Int64")
+
     return matrix

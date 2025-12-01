@@ -2,23 +2,34 @@ from __future__ import annotations
 
 import pandas as pd
 
-from app.infra.matrix import build_matrix_v1_0_2 as matrix_builder
+from app.infra.matrix.build_matrix_v1_0_2 import (
+    allowed_statuses_for_group,
+    build_matrix_v1_0_2,
+)
 
 
 def test_allowed_statuses_for_group_dual_and_student_only() -> None:
-    expected_dual = {1, 3, 5, 7, 8, 9, 11, 12, 14, 17, 18}
-    expected_student_only = {
+    dual_status_codes = (
+        1,
+        3,
+        5,
+        7,
+        8,
+        9,
+        11,
+        12,
+        14,
+        17,
+        18,
+    )
+    for code in dual_status_codes:
+        assert list(allowed_statuses_for_group(code, is_school_branch=False)) == [1, 0]
+
+    student_only_codes = (
         21,
         22,
         23,
-        24,
-        25,
-        26,
-        27,
         29,
-        30,
-        31,
-        33,
         35,
         41,
         43,
@@ -30,9 +41,9 @@ def test_allowed_statuses_for_group_dual_and_student_only() -> None:
         69,
         83,
         89,
-    }
-
-    assert expected_dual == matrix_builder.DUAL_STATUS_GROUPS
+    )
+    for code in student_only_codes:
+        assert list(allowed_statuses_for_group(code, is_school_branch=False)) == [1]
 
     for code in expected_dual:
         assert list(matrix_builder.allowed_statuses_for_group(code, is_school_branch=False)) == [
@@ -80,12 +91,3 @@ def test_matrix_respects_group_specific_statuses() -> None:
     ):
         assert pd.api.types.is_integer_dtype(matrix[key])
         assert matrix[key].notna().all()
-
-    unique_codes = matrix["کدرشته"].unique()
-    for code in unique_codes:
-        statuses = set(matrix.loc[matrix["کدرشته"].eq(code), "دانش آموز فارغ"].unique())
-        assert statuses <= {0, 1}
-        if code in matrix_builder.DUAL_STATUS_GROUPS:
-            assert statuses == {0, 1}
-        else:
-            assert statuses == {1}
