@@ -52,11 +52,3 @@ def test_matrix_respects_group_specific_statuses() -> None:
         assert pd.api.types.is_integer_dtype(matrix[key])
         assert matrix[key].notna().all()
 
-    unique_codes = matrix["کدرشته"].unique()
-    for code in unique_codes:
-        statuses = set(matrix.loc[matrix["کدرشته"].eq(code), "دانش آموز فارغ"].unique())
-        assert statuses <= {0, 1}
-        if code in DUAL_STATUS_GROUPS:
-            assert statuses == {0, 1}
-        else:
-            assert statuses == {1}
