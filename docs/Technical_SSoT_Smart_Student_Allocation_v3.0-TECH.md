@@ -457,6 +457,16 @@ Technical SSoT اینجا فقط **نام شیت‌ها و نقش‌شان** ر�
 
 ---
 
+### 8.3. QADebugContext و LAW Mapping مرکزی
+
+- هر قانون QA با شناسهٔ `QA_RULE_*` باید در Core دارای دو آبجکت باشد:
+  - `LawMapping(rule_id, law_refs: tuple[str, ...], description: str)` در `app/core/qa/law_mapping.py` (منبع مرکزی و غیرتکراری).
+  - `QADebugContext(important_columns, source_tables, lineage_keys, diagnosis_hints, canary_thresholds)` در `app/core/debug/models.py` که در `QaRuleDefinition` نگهداری می‌شود.
+- Registry واحد `get_rule_definitions()` در `app/core/qa/rules.py` باید تمام قوانین QA را پوشش دهد و در تست‌ها چک شود؛ نبود law_refs یا debug_context ⇒ شکست تست.
+- Core هیچ I/O یا logging در این زمینه ندارد؛ Infra/UI از این متادیتا برای توضیح و دیباگ استفاده می‌کنند.
+
+---
+
 ## 9. نگرانی‌های Production-Grade
 
 ### 9.1. Observability & Logging

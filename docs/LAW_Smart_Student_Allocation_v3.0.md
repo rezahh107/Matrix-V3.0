@@ -365,6 +365,23 @@ HistoryStore باید:
 
 ---
 
+## 10. نگاشت قوانین QA به LAW (نسخه 3.0)
+
+| rule_id | LAW refs | شرح |
+| --- | --- | --- |
+| QA_RULE_STU_01 | LAW-STU-COUNT-01 | تعداد دانش‌آموز باید بین ماتریس، تخصیص و گزارش یکسان باشد. |
+| QA_RULE_STU_02 | LAW-STU-COUNT-02 | شمار دانش‌آموز به ازای هر منتور باید با مقدار Inspactor برابر باشد. |
+| QA_RULE_STU_BINDING_01 | LAW-STU-BINDING-01 | نوع دانش‌آموز و مسیر مالی/مرکز باید با سیاست binding هم‌سو باشد. |
+| QA_RULE_JOIN_01 | LAW-JOIN-KEYS-01 | هر ۶ کلید join باید کامل، غیرخالی و integer باشند. |
+| QA_RULE_MENTOR_TYPE_01 | LAW-MENTOR-TYPE-01 | تمایز منتور عادی/مدرسه‌ای و alias بر پایهٔ school code. |
+| QA_RULE_POOL_JOIN_01 | LAW-POOL-UNIQUE-01 | رکوردهای استخر منتور روی کلید mentor+join یکتا هستند. |
+| QA_RULE_SCHOOL_01 | LAW-SCHOOL-ASSIGNMENT-01 | منتور مدرسه‌ای فقط در همان مدرسه تخصیص می‌گیرد و منتور آزاد constraint ندارد. |
+| QA_RULE_GOV_01 | LAW-GOV-STATUS-01 | منتور غیرفعال یا ردشده از کانال حاکمیتی کنار گذاشته می‌شود. |
+| QA_RULE_ALLOC_01 | LAW-ALLOC-CAPACITY-01 | سقف ظرفیت منتور نباید نقض شود. |
+| QA_RULE_HISTORY_CHANNEL_01 | LAW-HISTORY-CHANNEL-01 | کلید تاریخچه باید کاننیکال، یکتا و traceable باشد. |
+
+---
+
 این سند باید به‌عنوان:
 
 `docs/LAW_Smart_Student_Allocation_v3.0.md`
