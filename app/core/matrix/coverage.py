@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 
 from app.core.common.columns import enforce_join_key_types
+from app.core.common.domain import BuildConfig
 from app.core.matrix.grouping import build_candidate_group_keys
 
 __all__ = [
@@ -98,6 +99,7 @@ def compute_group_coverage_debug(
     center_column: str,
     finance_column: str,
     school_code_column: str,
+    cfg: BuildConfig | None = None,
     require_governed_pool: bool = True,
 ) -> tuple[pd.DataFrame, CoverageSummary]:
     """محاسبهٔ پوشش گروهی ماتریس و خلاصهٔ دیباگ آن.
@@ -138,6 +140,7 @@ def compute_group_coverage_debug(
         center_column=center_column,
         finance_column=finance_column,
         school_code_column=school_code_column,
+        cfg=cfg,
     )
     matrix_keys = enforce_join_key_types(matrix_df, join_keys)
 

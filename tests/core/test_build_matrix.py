@@ -50,3 +50,37 @@ def test_build_matrix_uses_mentor_type_rules() -> None:
     assert (school_rows["عادی مدرسه"] == "مدرسه‌ای").all()
     assert set(school_rows[cfg.policy.columns.school_code].unique()) == {5001}
     assert set(school_rows["جایگزین"].unique()) == {"S1"}
+
+
+def test_build_matrix_accepts_policy_override_for_small_postal_alias() -> None:
+    cfg = BuildConfig(enable_capacity_gate=False, postal_valid_range=(1, 9999))
+    inspactor_df = pd.DataFrame(
+        {
+            "نام پشتیبان": ["عادی"],
+            "نام مدیر": ["مدیر1"],
+            "کد کارمندی پشتیبان": ["M1"],
+            "کدپستی": ["999"],
+            "تعداد مدارس تحت پوشش": [0],
+            "تعداد داوطلبان تحت پوشش": [5],
+            "تعداد تحت پوشش خاص": [0],
+            "گروه آزمایشی": ["تجربی"],
+            "جنسیت": [1],
+            "وضعیت تحصیلی": [1],
+            "کد مدرسه": [0],
+            "کد مدرسه 1": [0],
+            "نام مدرسه 1": [""],
+            "امکان جذب دانش آموز": ["Yes"],
+        }
+    )
+
+    schools_df = pd.DataFrame({"کد مدرسه": [0], "نام مدرسه 1": [""]})
+    matrix, *_ = build_matrix(
+        inspactor_df,
+        schools_df,
+        _minimal_crosswalk(),
+        cfg=cfg,
+    )
+
+    alias_values = set(matrix["جایگزین"].unique())
+    assert alias_values == {"999"}
+    assert (matrix["عادی مدرسه"] == "عادی").all()

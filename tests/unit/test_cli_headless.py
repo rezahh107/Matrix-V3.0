@@ -69,7 +69,7 @@ def policy_file(tmp_path: Path) -> Path:
             {"stage": "capacity_gate", "column": "remaining_capacity"},
         ],
         "virtual_alias_ranges": [[7000, 7999]],
-        "virtual_name_patterns": ["در\\s+انتظار\\s+تخصیص"],
+        "virtual_name_patterns": ["در\\s+انتظار\\s+تخصیص", "مجازی"],
         "excel": {
             "rtl": True,
             "font_name": "Tahoma",

@@ -5,7 +5,7 @@ from collections.abc import Mapping, Sequence
 import pandas as pd
 
 from app.core.common.columns import enforce_join_key_types
-from app.core.common.domain import COL_GENDER, COL_GROUP, COL_STATUS
+from app.core.common.domain import COL_GENDER, COL_GROUP, COL_STATUS, BuildConfig, _postal_valid
 
 __all__ = ["build_candidate_group_keys"]
 
@@ -52,6 +52,7 @@ def build_candidate_group_keys(
     center_column: str,
     finance_column: str,
     school_code_column: str,
+    cfg: BuildConfig | None = None,
 ) -> pd.DataFrame:
     """استخراج فضای گروه‌های بالقوه از `base_df` بر اساس کلیدهای join.
 
@@ -92,13 +93,18 @@ def build_candidate_group_keys(
 
         alias_normal = row.get("alias_normal")
         alias_school = row.get("alias_school")
+        alias_normal_text = "" if pd.isna(alias_normal) else str(alias_normal).strip()
+        alias_school_text = "" if pd.isna(alias_school) else str(alias_school).strip()
+
         alias_normal_present = False
-        if not pd.isna(alias_normal):
-            alias_text = str(alias_normal).strip()
-            if alias_text:
-                alias_num = _safe_int(alias_text)
-                alias_normal_present = alias_num >= 1000
-        alias_school_present = not pd.isna(alias_school) and str(alias_school).strip() != ""
+        if alias_normal_text:
+            if cfg is None:
+                alias_normal_present = True
+            else:
+                alias_normal_present = alias_normal_text.isdigit() and _postal_valid(
+                    alias_normal_text, cfg=cfg
+                )
+        alias_school_present = bool(alias_school_text)
         can_normal = bool(row.get("can_normal", False)) and alias_normal_present
         can_school = bool(row.get("can_school", False)) and alias_school_present
 

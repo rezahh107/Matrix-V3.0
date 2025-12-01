@@ -49,3 +49,29 @@ def test_canonicalize_pool_frame_rejects_invalid_school_code() -> None:
 
     with pytest.raises(JoinKeyCanonicalizationError):
         canonicalize_pool_frame(pool, policy=policy)
+
+
+def test_sanitize_pool_does_not_drop_alias_by_virtual_range() -> None:
+    policy = replace(
+        load_policy(),
+        virtual_alias_ranges=((7000, 8000),),
+    )
+    pool = pd.DataFrame(
+        {
+            "mentor_name": ["مجازی"],
+            "alias": [7501],
+            "remaining_capacity": [1],
+            "کدرشته": [101],
+            "جنسیت": [1],
+            "دانش آموز فارغ": [1],
+            "مرکز گلستان صدرا": [1],
+            "مالی حکمت بنیاد": [0],
+            "کد مدرسه": [0],
+        }
+    )
+
+    sanitized = canonicalize_pool_frame(
+        pool, policy=policy, sanitize_pool=True, pool_source="inspactor"
+    )
+
+    assert len(sanitized) == 1
