@@ -28,7 +28,7 @@
 این سند، نسخهٔ فنی و نهایی (Technical SSoT) برای **هستهٔ تخصیص دانش‌آموزان به پشتیبانان** است.  
 Focus آن روی این است که:
 
-- اینورینت‌های ثابت LAW (به‌خصوص **۶ Join Key، Ranking بر اساس ظرفیت، Trace ۸ مرحله‌ای، انواع Normal/School/Dual، Alias، گیت ظرفیت R0 و Governance استخر**) را به قراردادهای فنی تبدیل کند.
+- اینورینت‌های ثابت LAW (به‌خصوص **۶ Join Key، Ranking بر اساس ظرفیت، Trace ۸ مرحله‌ای، انواع Normal/School، Alias، گیت ظرفیت R0 و Governance استخر**) را به قراردادهای فنی تبدیل کند.
 - برای ۵ سال آینده، زبان مشترک بین Core، Infra، UI، QA، History و ابزارهای AI (مثل Codex/CodeSurgeon) باشد.
 - هر تغییر کدی که این قراردادها را نقض کند، **به‌صورت خودکار در تست/QA/Trace قابل شناسایی** باشد.
 
@@ -75,7 +75,7 @@ Focus آن روی این است که:
 **مسئولیت:**
 
 - پیاده‌سازی دقیق قوانین LAW برای:
-  - Student/Mentor type (Normal/School/Dual)
+  - Student/Mentor type (Normal/School)
   - Join Keys شش‌تایی (JOIN-CORE)
   - ظرفیت و Ranking (RANK-CORE)
   - Trace ۸ مرحله‌ای (TRACE-CORE)
@@ -379,22 +379,23 @@ QA و Export باید دقیقا همین semantics را replicate کنند؛ ن
 
 ### 6.4. MENTOR-TYPE-01 — بازتاب در ماتریس
 
-Core/Infra باید انواع Normal/School/Dual را که در LAW تعریف شده‌اند، به یک سری **tag** یا flag تبدیل کنند:
+Core/Infra باید نوع منتور را **فقط** از روی `تعداد مدارس تحت پوشش` استخراج کنند:
 
-- `is_school_limited: bool`
-- `has_school_branch: bool`
-- `has_normal_branch: bool`
+- `school_count > 0` ⇒ MentorType.SCHOOL
+- `school_count <= 0` یا تهی ⇒ MentorType.NORMAL
 
-و بر این اساس، expand ماتریس را انجام دهند. هر سطر ماتریس باید قابل ردیابی به یکی از سه حالت LAW باشد.
+Dual تولید نمی‌شود. expand ماتریس نیز بر همین مبناست:
+
+- MentorType.NORMAL ⇒ تنها شاخهٔ عادی با `school_code = 0` و `alias = postal_code` (معتبر و غیرتهی)
+- MentorType.SCHOOL ⇒ تنها شاخهٔ مدرسه‌ای با `school_code > 0` و `alias = mentor_id`
 
 ---
 
 ### 6.5. ALIAS-01 — سازگاری alias در پیاده‌سازی
 
-برای هر `mentor_id` که در ماتریس ظاهر می‌شود:
-
-- تمام سطرهایش باید Join Profile یکسان داشته باشند (به‌جز school_code/alias_code).
-- هر conflict باید در QA (مثلاً در sheet `invalid_mentors`) ظاهر شود.
+- شاخهٔ عادی: `alias_code = postal_code` (اگر خالی/نامعتبر باشد، ردیف منتور باید به QA/invalid منتقل شود).
+- شاخهٔ مدرسه‌ای: `alias_code = mentor_id` و باید دقیقاً با آن برابر باشد.
+- هیچ inference از روی `alias < 1000` یا pattern عددی مجاز نیست؛ alias صرفاً بر اساس نوع منتور تنظیم می‌شود.
 
 ---
 

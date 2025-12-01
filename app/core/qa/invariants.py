@@ -27,6 +27,7 @@ __all__ = [
     "check_JOIN_01",
     "check_POOL_JOIN_01",
     "check_SCHOOL_01",
+    "check_MENTOR_TYPE_01",
     "check_GOV_01",
     "check_ALLOC_01",
     "check_HISTORY_CHANNEL_01",
@@ -189,6 +190,7 @@ def run_all_invariants(
         check_STU_02(allocation=allocation, inspactor=inspactor),
         check_STU_BINDING_01(student_report=student_report, policy=policy),
         check_JOIN_01(matrix=matrix, policy=policy),
+        check_MENTOR_TYPE_01(matrix=matrix, policy=policy),
         check_SCHOOL_01(matrix=matrix, invalid_mentors=invalid_mentors, policy=policy),
         check_GOV_01(
             allocation=allocation,
@@ -437,6 +439,132 @@ def check_JOIN_01(  # noqa: N802
 
     return QaRuleResult(
         rule_id="QA_RULE_JOIN_01",
+        passed=not violations,
+        violations=violations,
+    )
+
+
+def _normalize_str(value: object) -> str:
+    if value is None or value is pd.NA:
+        return ""
+    text = str(value).strip()
+    return text
+
+
+def check_MENTOR_TYPE_01(  # noqa: N802
+    *, matrix: pd.DataFrame | None, policy: PolicyConfig
+) -> QaRuleResult:
+    """QA_RULE_MENTOR_TYPE_01 — اعتبارسنجی نوع منتور و alias."""
+
+    violations: list[QaViolation] = []
+    if matrix is None:
+        return QaRuleResult("QA_RULE_MENTOR_TYPE_01", True, violations)
+
+    mentor_col = _resolve_mentor_column(matrix)
+    required_columns = {
+        "جایگزین",
+        policy.columns.school_code,
+        "عادی مدرسه",
+    }
+    missing_columns = [col for col in required_columns if col not in matrix.columns]
+    if mentor_col is None:
+        missing_columns.append("mentor_id")
+    if missing_columns:
+        violations.append(
+            QaViolation(
+                rule_id="QA_RULE_MENTOR_TYPE_01",
+                level="error",
+                message="ستون‌های لازم برای قانون منتور نوع موجود نیست",
+                details={"missing_columns": tuple(sorted(missing_columns))},
+            )
+        )
+        return QaRuleResult("QA_RULE_MENTOR_TYPE_01", False, violations)
+
+    type_col = "عادی مدرسه"
+    allowed_types = {"عادی", "مدرسه‌ای"}
+    invalid_types = matrix.loc[~matrix[type_col].isin(allowed_types)]
+    if not invalid_types.empty:
+        violations.append(
+            QaViolation(
+                rule_id="QA_RULE_MENTOR_TYPE_01",
+                level="error",
+                message="مقدار نامعتبر در ستون نوع منتور",
+                details={"rows": tuple(invalid_types.index.tolist())},
+            )
+        )
+
+    mentor_values = matrix[mentor_col].astype("string").str.strip()
+    type_counts = (
+        matrix.assign(_mentor=mentor_values)
+        .groupby("_mentor", dropna=True)[type_col]
+        .nunique(dropna=True)
+    )
+    dual_ids = [mentor for mentor, count in type_counts.items() if mentor and count > 1]
+    if dual_ids:
+        violations.append(
+            QaViolation(
+                rule_id="QA_RULE_MENTOR_TYPE_01",
+                level="error",
+                message="منتور نباید همزمان عادی و مدرسه‌ای باشد",
+                details={"mentor_ids": tuple(dual_ids)},
+            )
+        )
+
+    school_col = policy.columns.school_code
+    normal_rows = matrix[type_col] == "عادی"
+    normal_with_school = matrix.loc[normal_rows, school_col].fillna(0).astype(int) != 0
+    if bool(normal_with_school.any()):
+        offenders = matrix.loc[normal_rows & normal_with_school, mentor_col].tolist()
+        violations.append(
+            QaViolation(
+                rule_id="QA_RULE_MENTOR_TYPE_01",
+                level="error",
+                message="سطر عادی نباید کد مدرسه غیرصفر داشته باشد",
+                details={"mentor_ids": tuple(_normalize_str(v) for v in offenders)},
+            )
+        )
+
+    school_rows = matrix[type_col] == "مدرسه‌ای"
+    school_with_zero = matrix.loc[school_rows, school_col].fillna(0).astype(int) == 0
+    if bool(school_with_zero.any()):
+        offenders = matrix.loc[school_rows & school_with_zero, mentor_col].tolist()
+        violations.append(
+            QaViolation(
+                rule_id="QA_RULE_MENTOR_TYPE_01",
+                level="error",
+                message="سطر مدرسه‌ای بدون کد مدرسه معتبر",
+                details={"mentor_ids": tuple(_normalize_str(v) for v in offenders)},
+            )
+        )
+
+    alias_series = matrix.loc[school_rows, "جایگزین"].astype("string").str.strip()
+    mentor_series = matrix.loc[school_rows, mentor_col].astype("string").str.strip()
+    alias_mismatch_mask = alias_series.ne(mentor_series)
+    if bool(alias_mismatch_mask.any()):
+        offenders = matrix.loc[school_rows, :].loc[alias_mismatch_mask, mentor_col].tolist()
+        violations.append(
+            QaViolation(
+                rule_id="QA_RULE_MENTOR_TYPE_01",
+                level="error",
+                message="alias مدرسه‌ای باید برابر mentor_id باشد",
+                details={"mentor_ids": tuple(_normalize_str(v) for v in offenders)},
+            )
+        )
+
+    normal_alias_missing = matrix.loc[normal_rows, "جایگزین"].astype("string").str.strip() == ""
+    if bool(normal_alias_missing.any()):
+        offenders = matrix.loc[normal_rows & normal_alias_missing, mentor_col].tolist()
+        violations.append(
+            QaViolation(
+                rule_id="QA_RULE_MENTOR_TYPE_01",
+                level="error",
+                message="سطر عادی بدون alias معتبر",
+                details={"mentor_ids": tuple(_normalize_str(v) for v in offenders)},
+            )
+        )
+
+    return QaRuleResult(
+        rule_id="QA_RULE_MENTOR_TYPE_01",
         passed=not violations,
         violations=violations,
     )
