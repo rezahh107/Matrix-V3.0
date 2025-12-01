@@ -265,7 +265,11 @@ def test_allocate_batch_zero_capacity_produces_no_allocations() -> None:
 
     assert allocations_df.empty
     assert logs_df.empty or len(logs_df) == 1
-    assert trace_df.attrs.get("summary_df") is None or trace_df.attrs.get("summary_df").empty
+
+    summary_df = trace_df.attrs.get("summary_df")
+    assert summary_df is not None
+    assert len(summary_df) == 1
+    assert summary_df.iloc[0]["final_status"] == "NO_CAPACITY"
 
 
 def test_filter_candidates_respects_center_wildcard_zero_and_rejects_missing() -> None:
