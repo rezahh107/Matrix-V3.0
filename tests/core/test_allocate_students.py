@@ -9,8 +9,8 @@ from app.core.allocate_students import (
     _detect_pool_mismatch,
     _filter_candidates_by_join_map,
     _merge_join_mismatches,
-    allocate_student,
     allocate_batch,
+    allocate_student,
 )
 from app.core.common.filters import apply_join_filters
 from app.core.common.join_keys import normalize_join_key_name
