@@ -201,6 +201,17 @@ Core باید از این دو به‌صورت type-safe استفاده کند. 
 دترمینیستیک dedupe شود یا به QA (`duplicate mentor join profile`) گزارش گردد. اختلاف پروفایل‌ها
 conflict محسوب نمی‌شود.
 
+### 4.4. STUDENT-TYPE-01 — قانون فنی تشخیص نوع دانش‌آموز
+
+- **ورودی‌ها:**
+  - ستون Policy برای وضعیت تحصیلی (`graduation_status`)،
+  - ستون Policy برای کد مدرسه (`school_code`)،
+  - مجموعهٔ پیکربندی‌شدهٔ ``allocation_channels.school_codes``.
+- **قانون:**
+  - اگر ``graduation_status == 1`` و ``school_code`` در ``allocation_channels.school_codes`` باشد ⇒ `student_type = "school"`.
+  - در سایر حالات ⇒ `student_type = "normal"`.
+- **وابستگی‌ها:** کدپستی دانش‌آموز در این قانون نقشی ندارد و هر کد دیگری (مثلاً mentor_id) نباید مسیر جداگانه‌ای بسازد.
+
 ---
 
 ## 5. اینورینت‌های هستهٔ Core

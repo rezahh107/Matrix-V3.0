@@ -6,6 +6,12 @@ from typing import SupportsInt, cast
 
 import pandas as pd
 
+from app.core.common.domain import (
+    BuildConfig,
+    Status,
+    StudentBindingKind,
+    classify_student_binding,
+)
 from app.core.policy.config import AllocationChannelConfig
 from app.core.policy_loader import PolicyConfig
 
@@ -42,6 +48,14 @@ def _column_as_int(df: pd.DataFrame, column: str | None) -> pd.Series | None:
         return None
     numeric = pd.to_numeric(df[column], errors="coerce")
     return numeric.astype("Int64")
+
+
+def _graduation_status_series(students_df: pd.DataFrame, policy: PolicyConfig) -> pd.Series | None:
+    try:
+        status_column = policy.stage_column("graduation_status")
+    except KeyError:
+        return None
+    return _column_as_int(students_df, status_column)
 
 
 def _active_student_mask(students_df: pd.DataFrame, policy: PolicyConfig) -> pd.Series:
@@ -100,6 +114,30 @@ def _is_active_student(student: pd.Series, policy: PolicyConfig) -> bool:
     return status_value is None or status_value in rules.active_status_values
 
 
+def _student_binding(student: pd.Series, policy: PolicyConfig) -> StudentBindingKind:
+    try:
+        cfg = BuildConfig(policy=policy)
+    except ValueError:
+        cfg = None
+    if cfg is not None:
+        return classify_student_binding(student, cfg=cfg)
+
+    school_code = _to_int_safe(student.get(policy.columns.school_code))
+    try:
+        status_column = policy.stage_column("graduation_status")
+    except KeyError:
+        status_column = None
+    status_value = _to_int_safe(student.get(status_column)) if status_column else None
+    is_student = status_value == Status.STUDENT if status_value is not None else True
+    if (
+        school_code is not None
+        and school_code in policy.allocation_channels.school_codes
+        and is_student
+    ):
+        return StudentBindingKind.SCHOOL
+    return StudentBindingKind.NORMAL
+
+
 def derive_allocation_channel(student: pd.Series, policy: PolicyConfig) -> AllocationChannel:
     """کانال تخصیص دانش‌آموز را طبق Policy برمی‌گرداند.
 
@@ -117,12 +155,8 @@ def derive_allocation_channel(student: pd.Series, policy: PolicyConfig) -> Alloc
     """
 
     rules = policy.allocation_channels
-    school_code = _to_int_safe(student.get(policy.columns.school_code))
-    if (
-        school_code is not None
-        and school_code in rules.school_codes
-        and _is_active_student(student, policy)
-    ):
+    binding = _student_binding(student, policy)
+    if binding is StudentBindingKind.SCHOOL and _is_active_student(student, policy):
         return AllocationChannel.SCHOOL
 
     try:
@@ -154,12 +188,11 @@ def derive_channels_for_students(students_df: pd.DataFrame, policy: PolicyConfig
     )
     rules = policy.allocation_channels
 
-    school_column = policy.columns.school_code
-    if rules.school_codes and school_column in students_df.columns:
-        school_series = _column_as_int(students_df, school_column)
-        if school_series is not None:
+    if not students_df.empty:
+        bindings = students_df.apply(lambda row: _student_binding(row, policy), axis=1)
+        if rules.school_codes:
             active_mask = _active_student_mask(students_df, policy)
-            school_mask = school_series.isin(rules.school_codes) & active_mask
+            school_mask = bindings.eq(StudentBindingKind.SCHOOL) & active_mask
             result.loc[school_mask] = AllocationChannel.SCHOOL
 
     try:
