@@ -50,12 +50,11 @@ from app.core.common.domain import (
     BuildConfig,
     MentorType,
     StudentBindingKind,
-    _num_to_int_safe,
     center_from_manager as domain_center_from_manager,
-    classify_mentor_mode,
+    classify_mentor_type_from_school_count,
     classify_student_binding,
-    compute_alias,
     finance_cross,
+    mentor_alias_for_type,
     school_code_norm,
 )
 from app.core.common.normalization import normalize_header, resolve_group_code
@@ -1358,24 +1357,13 @@ def _prepare_base_rows(
                 )
             continue
 
-        alias_normal_raw = compute_alias(MentorType.NORMAL, postal_raw, mentor_id, cfg=cfg)
-        alias_school_raw = compute_alias(MentorType.SCHOOL, postal_raw, mentor_id, cfg=cfg)
-        alias_normal_num = _num_to_int_safe(alias_normal_raw)
-        alias_normal_valid = alias_normal_num is None or alias_normal_num >= 1000
-        alias_normal = alias_normal_raw if alias_normal_valid else None
-        alias_school = alias_school_raw or None
-
-        mentor_mode = classify_mentor_mode(
-            postal_code=postal_raw,
-            school_codes=school_codes,
-            cfg=cfg,
-            has_school_constraint=has_school_constraint,
-            school_count=school_count,
-            binding_policy=binding_policy,
-            aliases=(alias_normal_raw, alias_school_raw),
-        )
+        mentor_mode = classify_mentor_type_from_school_count(school_count)
+        alias_value = mentor_alias_for_type(mentor_mode, postal_raw, mentor_id, cfg=cfg) or None
 
         center = domain_center_from_manager(manager_name, cfg=cfg)
+
+        alias_normal = alias_value if mentor_mode is MentorType.NORMAL else None
+        alias_school = alias_value if mentor_mode is MentorType.SCHOOL else None
 
         base = {
             "supporter": mentor_name,
@@ -1391,18 +1379,18 @@ def _prepare_base_rows(
             "finance": finance_variants,
             "statuses_normal": normal_statuses,
             "statuses_school": school_statuses,
+            "alias": alias_value,
             "alias_normal": alias_normal,
             "alias_school": alias_school,
             "mentor_school_binding_mode": school_binding.binding_mode,
             "has_school_constraint": has_school_constraint,
-            "can_normal": mentor_mode in (MentorType.NORMAL, MentorType.DUAL)
-            and bool(alias_normal),
-            "can_school": mentor_mode in (MentorType.SCHOOL, MentorType.DUAL)
-            and bool(alias_school),
+            "can_normal": mentor_mode is MentorType.NORMAL and bool(alias_normal),
+            "can_school": mentor_mode is MentorType.SCHOOL and bool(alias_school),
             "capacity_current": covered_now,
             "capacity_special": special_limit,
             "capacity_remaining": remaining_capacity,
             "school_count": school_count,
+            "mentor_type": mentor_mode,
         }
 
         for sc in school_codes:
@@ -2076,8 +2064,8 @@ def build_matrix(
     remaining_col = cfg.remaining_capacity_column or "remaining_capacity"
     school_code_col = cfg.school_code_column or COL_SCHOOL_CODE
     normal_df = _explode_rows(
-        base_df.loc[base_df["can_normal"]],
-        alias_col="alias_normal",
+        base_df.loc[base_df["mentor_type"] == MentorType.NORMAL],
+        alias_col="alias",
         status_col="statuses_normal",
         school_col="schools_normal",
         type_label="عادی",
@@ -2089,8 +2077,8 @@ def build_matrix(
         school_code_col=school_code_col,
     )
     school_df = _explode_rows(
-        base_df.loc[base_df["can_school"]],
-        alias_col="alias_school",
+        base_df.loc[base_df["mentor_type"] == MentorType.SCHOOL],
+        alias_col="alias",
         status_col="statuses_school",
         school_col="school_codes",
         type_label="مدرسه‌ای",

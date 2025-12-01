@@ -5,7 +5,7 @@ import pandas as pd
 
 from app.core.common.domain import StudentBindingKind
 from app.core.policy_loader import PolicyConfig, load_policy
-from app.core.qa.invariants import QaRuleResult, check_STU_BINDING_01
+from app.core.qa.invariants import QaRuleResult, check_MENTOR_TYPE_01, check_STU_BINDING_01
 
 
 def _policy_with_school_codes() -> PolicyConfig:
@@ -74,3 +74,40 @@ def test_student_binding_invariant_blocks_invalid_value(monkeypatch: Any) -> Non
     assert not result.passed
     assert result.violations
     assert result.violations[0].rule_id == "QA_RULE_STU_BINDING_01"
+
+
+def test_mentor_type_invariant_blocks_dual_rows() -> None:
+    policy = _policy_with_school_codes()
+    school_col = policy.columns.school_code
+    matrix = pd.DataFrame(
+        {
+            "کد کارمندی پشتیبان": ["M1", "M1"],
+            "جایگزین": ["1234", "M1"],
+            "عادی مدرسه": ["عادی", "مدرسه‌ای"],
+            school_col: [0, 10],
+        }
+    )
+
+    result = check_MENTOR_TYPE_01(matrix=matrix, policy=policy)
+
+    assert not result.passed
+    assert result.violations
+    assert result.violations[0].rule_id == "QA_RULE_MENTOR_TYPE_01"
+
+
+def test_mentor_type_invariant_validates_alias_and_school_code() -> None:
+    policy = _policy_with_school_codes()
+    school_col = policy.columns.school_code
+    matrix = pd.DataFrame(
+        {
+            "کد کارمندی پشتیبان": ["M1", "S1"],
+            "جایگزین": ["1234", "S1"],
+            "عادی مدرسه": ["عادی", "مدرسه‌ای"],
+            school_col: [0, 10],
+        }
+    )
+
+    result = check_MENTOR_TYPE_01(matrix=matrix, policy=policy)
+
+    assert result.passed
+    assert not result.violations
