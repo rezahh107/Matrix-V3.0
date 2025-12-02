@@ -9,7 +9,7 @@ def test_coverage_counts_dual_variants_separately() -> None:
     join_keys = ["کدرشته", "جنسیت", "دانش آموز فارغ", "center_code", "مالی حکمت بنیاد", "کد مدرسه"]
     base = pd.DataFrame(
         {
-            "group_pairs": [[("ریاضی", 1201)]],
+            "group_pairs": [[("ریاضی", 1)]],
             "genders": [[1]],
             "statuses_normal": [[1]],
             "statuses_school": [[1]],
@@ -29,7 +29,7 @@ def test_coverage_counts_dual_variants_separately() -> None:
 
     matrix_rows = pd.DataFrame(
         {
-            "کدرشته": [1201, 1201],
+            "کدرشته": [1, 1],
             "جنسیت": [1, 1],
             "دانش آموز فارغ": [1, 1],
             "center_code": [1, 1],

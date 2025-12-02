@@ -935,7 +935,7 @@ def _collect_join_key_map(
                 value = canonicalize_join_key_value(column, value, policy=policy)
             join_map[normalized] = value
         except JoinKeyCanonicalizationError as exc:
-            join_map[normalized] = 0 if allow_zero else -1
+            join_map[normalized] = -2
             invalid_map[column] = exc.value
             continue
 

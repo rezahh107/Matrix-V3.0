@@ -7,7 +7,7 @@ from app.core.qa.invariants import check_JOIN_01, check_SCHOOL_01
 
 
 def _sample_matrix(policy) -> pd.DataFrame:
-    data = {key: [1201] for key in policy.join_keys}
+    data = {key: [1] for key in policy.join_keys}
     data["has_school_constraint"] = [False]
     data[policy.columns.school_code] = [1010]
     data["mentor_id"] = [1]

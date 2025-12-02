@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -22,7 +22,11 @@ from .common.columns import (
     resolve_aliases,
 )
 from .common.ids import build_mentor_alias_map, extract_alias_code_series
-from .common.join_keys import JoinKeyCanonicalizationError, canonicalize_join_key_value
+from .common.join_keys import (
+    JoinKeyCanonicalizationError,
+    _is_missing_value,
+    canonicalize_join_key_value,
+)
 from .common.normalization import normalize_fa, parse_int_safe
 from .common.types import HeaderMode, parse_header_mode
 from .policy_loader import PolicyConfig
@@ -102,12 +106,21 @@ def _coerce_capacity_series(series: pd.Series, stats: PoolCanonicalizationStats)
     return clipped.astype("Int64")
 
 
-def _safe_canonical_join_value(column: str, raw: object, *, policy: PolicyConfig) -> int | NAType:
+def _safe_canonical_join_value(
+    column: str,
+    raw: object,
+    *,
+    policy: PolicyConfig,
+    raise_on_invalid: bool,
+    allow_missing_when_strict: bool,
+) -> int | NAType:
     """Canonicalize a join value while preserving NA on failure."""
 
     try:
         return canonicalize_join_key_value(column, raw, policy=policy)
-    except JoinKeyCanonicalizationError:
+    except JoinKeyCanonicalizationError as exc:
+        if raise_on_invalid and not (allow_missing_when_strict and _is_missing_value(exc.value)):
+            raise
         return pd.NA
 
 
@@ -117,25 +130,35 @@ def _canonicalize_join_key_columns(
     policy: PolicyConfig,
     *,
     raise_on_invalid: bool,
+    strict_columns: Collection[str] | None = None,
+    allow_missing_when_strict: bool = False,
 ) -> pd.DataFrame:
     """Apply join-key canonicalization and enforce integer dtype with nullable support."""
 
     canonicalized = frame.copy()
+    strict_set = set(strict_columns or [])
     for column in join_keys:
         if column not in canonicalized.columns:
             raise KeyError(f"Missing join key column: {column}")
         series = ensure_series(canonicalized[column])
+        column_raise = raise_on_invalid or column in strict_set
         canonical_series = series.map(
-            lambda raw: _safe_canonical_join_value(column, raw, policy=policy)
+            lambda raw: _safe_canonical_join_value(
+                column,
+                raw,
+                policy=policy,
+                raise_on_invalid=column_raise,
+                allow_missing_when_strict=allow_missing_when_strict,
+            )
         )
         values = pd.Series(canonical_series, index=canonicalized.index, dtype="Int64")
         negative_mask = values.notna() & (values < 0)
         if negative_mask.any():
-            if raise_on_invalid:
+            if column_raise:
                 invalid_index = canonicalized.index[negative_mask.argmax()]
                 raise JoinKeyCanonicalizationError(column, series.loc[invalid_index])
             values.loc[negative_mask] = pd.NA
-        if raise_on_invalid and values.isna().any():
+        if column_raise and values.isna().any() and not allow_missing_when_strict:
             first_invalid = values.isna()
             invalid_index = canonicalized.index[first_invalid.argmax()]
             raise JoinKeyCanonicalizationError(column, series.loc[invalid_index])
@@ -238,7 +261,7 @@ def _build_join_key_duplicate_report(
 
         >>> import pandas as pd
         >>> df = pd.DataFrame({
-        ...     "کدرشته": [1201, 1201, 1201],
+        ...     "کدرشته": [1, 1, 1],
         ...     "جنسیت": [1, 1, 1],
         ...     "دانش آموز فارغ": [0, 0, 0],
         ...     "مرکز گلستان صدرا": [1, 1, 1],
@@ -662,8 +685,14 @@ def canonicalize_students_frame(
             group_code_crosswalk,
             column_name=group_column,
         )
+    group_column = policy.stage_column("group")
     students = _canonicalize_join_key_columns(
-        students, policy.join_keys, policy, raise_on_invalid=False
+        students,
+        policy.join_keys,
+        policy,
+        raise_on_invalid=False,
+        strict_columns={group_column},
+        allow_missing_when_strict=True,
     )
     for column in policy.join_keys:
         if column in students.columns and not ensure_series(students[column]).isna().any():
@@ -802,7 +831,11 @@ def canonicalize_pool_frame(
     present_join_keys = [column for column in policy.join_keys if column in pool.columns]
     if present_join_keys:
         pool = _canonicalize_join_key_columns(
-            pool, present_join_keys, policy, raise_on_invalid=True
+            pool,
+            present_join_keys,
+            policy,
+            raise_on_invalid=True,
+            allow_missing_when_strict=False,
         )
     duplicate_scope = "per_key" if include_distinct_mentor_duplicates else "per_mentor"
     duplicate_report = _build_join_key_duplicate_report(

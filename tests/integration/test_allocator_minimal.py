@@ -12,7 +12,7 @@ def test_allocator_respects_capacity_and_filters_virtual() -> None:
         [
             {
                 "student_id": "STD-1",
-                "کدرشته": 1201,
+                "کدرشته": 1,
                 "گروه آزمایشی": "تجربی",
                 "جنسیت": 1,
                 "دانش آموز فارغ": 0,
@@ -22,7 +22,7 @@ def test_allocator_respects_capacity_and_filters_virtual() -> None:
             },
             {
                 "student_id": "STD-2",
-                "کدرشته": 1201,
+                "کدرشته": 1,
                 "گروه آزمایشی": "تجربی",
                 "جنسیت": 1,
                 "دانش آموز فارغ": 0,
@@ -32,7 +32,7 @@ def test_allocator_respects_capacity_and_filters_virtual() -> None:
             },
             {
                 "student_id": "STD-3",
-                "کدرشته": 1201,
+                "کدرشته": 1,
                 "گروه آزمایشی": "تجربی",
                 "جنسیت": 1,
                 "دانش آموز فارغ": 0,
@@ -49,7 +49,7 @@ def test_allocator_respects_capacity_and_filters_virtual() -> None:
                 "mentor_name": "منتور الف",
                 "alias": 101,
                 "remaining_capacity": 2,
-                "کدرشته": 1201,
+                "کدرشته": 1,
                 "گروه آزمایشی": "تجربی",
                 "جنسیت": 1,
                 "دانش آموز فارغ": 0,
@@ -62,7 +62,7 @@ def test_allocator_respects_capacity_and_filters_virtual() -> None:
                 "mentor_name": "منتور ب",
                 "alias": 102,
                 "remaining_capacity": 1,
-                "کدرشته": 1201,
+                "کدرشته": 1,
                 "گروه آزمایشی": "تجربی",
                 "جنسیت": 1,
                 "دانش آموز فارغ": 0,
@@ -75,7 +75,7 @@ def test_allocator_respects_capacity_and_filters_virtual() -> None:
                 "mentor_name": "در انتظار تخصیص",
                 "alias": 7501,
                 "remaining_capacity": 5,
-                "کدرشته": 1201,
+                "کدرشته": 1,
                 "گروه آزمایشی": "تجربی",
                 "جنسیت": 1,
                 "دانش آموز فارغ": 0,

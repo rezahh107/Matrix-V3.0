@@ -50,16 +50,16 @@ def _base_row(
 def test_compute_group_coverage_flags_candidate_and_matrix_states() -> None:
     base_df = pd.DataFrame(
         [
-            _base_row(group_code=101, mentor_id="m1", alias_normal="1101"),
-            _base_row(group_code=102, mentor_id="m2", alias_normal=None, can_normal=False),
-            _base_row(group_code=104, mentor_id="m3", alias_normal="1104"),
+            _base_row(group_code=21, mentor_id="m1", alias_normal="1101"),
+            _base_row(group_code=22, mentor_id="m2", alias_normal=None, can_normal=False),
+            _base_row(group_code=23, mentor_id="m3", alias_normal="1104"),
         ]
     )
     base_df.attrs["mentor_pool_governance"] = {"total": len(base_df), "removed": 0}
     matrix_df = pd.DataFrame(
         [
             {
-                "کدرشته": 101,
+                "کدرشته": 21,
                 "جنسیت": 1,
                 "دانش آموز فارغ": 1,
                 "مرکز گلستان صدرا": 1,
@@ -68,7 +68,7 @@ def test_compute_group_coverage_flags_candidate_and_matrix_states() -> None:
                 "کد کارمندی پشتیبان": "m1",
             },
             {
-                "کدرشته": 103,
+                "کدرشته": 24,
                 "جنسیت": 1,
                 "دانش آموز فارغ": 1,
                 "مرکز گلستان صدرا": 1,
@@ -90,10 +90,10 @@ def test_compute_group_coverage_flags_candidate_and_matrix_states() -> None:
 
     status_map = coverage_df.set_index(JOIN_KEYS)["status"].to_dict()
 
-    assert status_map[(101, 1, 1, 1, 0, 0)] == "covered"
-    assert status_map[(102, 1, 1, 1, 0, 0)] == "blocked_candidate"
-    assert status_map[(104, 1, 1, 1, 0, 0)] == "candidate_only"
-    assert status_map[(103, 1, 1, 1, 0, 0)] == "matrix_only"
+    assert status_map[(21, 1, 1, 1, 0, 0)] == "covered"
+    assert status_map[(22, 1, 1, 1, 0, 0)] == "blocked_candidate"
+    assert status_map[(23, 1, 1, 1, 0, 0)] == "candidate_only"
+    assert status_map[(24, 1, 1, 1, 0, 0)] == "matrix_only"
 
     assert summary["covered_groups"] == 1
     assert summary["blocked_candidate_groups"] == 1

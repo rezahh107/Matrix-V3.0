@@ -13,7 +13,7 @@ def test_canonicalize_students_frame_normalizes_localized_join_keys() -> None:
     students = pd.DataFrame(
         {
             "student_id": ["s1"],
-            policy.stage_column("group"): ["۹۱۰۰"],
+            policy.stage_column("group"): ["۲۱"],
             policy.stage_column("gender"): ["پسر"],
             policy.stage_column("graduation_status"): ["۰"],
             policy.stage_column("center"): ["۰۳"],
@@ -36,7 +36,7 @@ def test_canonicalize_pool_frame_rejects_invalid_school_code() -> None:
     policy = replace(load_policy(), school_code_empty_as_zero=False)
     pool = pd.DataFrame(
         {
-            policy.stage_column("group"): [1201],
+            policy.stage_column("group"): [1],
             policy.stage_column("gender"): [1],
             policy.stage_column("graduation_status"): [0],
             policy.stage_column("center"): [1],
@@ -61,7 +61,7 @@ def test_sanitize_pool_does_not_drop_alias_by_virtual_range() -> None:
             "mentor_name": ["مجازی"],
             "alias": [7501],
             "remaining_capacity": [1],
-            "کدرشته": [101],
+            "کدرشته": [21],
             "جنسیت": [1],
             "دانش آموز فارغ": [1],
             "مرکز گلستان صدرا": [1],

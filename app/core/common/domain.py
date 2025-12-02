@@ -699,7 +699,7 @@ class JoinKey:
         مثال::
 
             >>> row = {
-            ...     "کدرشته": 1201,
+            ...     "کدرشته": 1,
             ...     "جنسیت": 1,
             ...     "دانش آموز فارغ": 0,
             ...     "مرکز گلستان صدرا": 1,
@@ -707,7 +707,7 @@ class JoinKey:
             ...     "کد مدرسه": 3581,
             ... }
             >>> JoinKey.from_student_row(row, cfg=BuildConfig())
-            JoinKey(major=1201, gender=1, status=1, center=1, finance=0, school_code=3581)
+            JoinKey(major=1, gender=1, status=1, center=1, finance=0, school_code=3581)
 
         """
 

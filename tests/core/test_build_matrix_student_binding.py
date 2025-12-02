@@ -31,7 +31,7 @@ def test_validate_with_students_uses_school_binding_over_postal() -> None:
             center_col: [0, 0],
             "مالی حکمت بنیاد": [0, 0],
             "کد مدرسه": [0, 10],
-            group_col: [101, 101],
+            group_col: [21, 21],
         }
     )
 
@@ -40,7 +40,7 @@ def test_validate_with_students_uses_school_binding_over_postal() -> None:
             "نام پشتیبان": ["mentor"],
             "مدیر": ["manager"],
             "کد پستی": ["1234"],
-            "کد رشته": [101],
+            "کد رشته": [21],
             "کد مدرسه 1": ["مدرسه تست"],
             school_col: [10],
         }
@@ -48,7 +48,7 @@ def test_validate_with_students_uses_school_binding_over_postal() -> None:
 
     schools_df = pd.DataFrame({"کد مدرسه": [10], "نام مدرسه 1": ["مدرسه تست"]})
     crosswalk_groups_df = pd.DataFrame(
-        {"گروه آزمایشی": ["گروه"], "کد گروه": [101], "مقطع تحصیلی": ["پایه"]}
+        {"گروه آزمایشی": ["گروه"], "کد گروه": [21], "مقطع تحصیلی": ["پایه"]}
     )
 
     stud, breakdown, summary = validate_with_students(

@@ -23,7 +23,7 @@ def test_students_cache_roundtrip(tmp_path: Path) -> None:
     raw = pd.DataFrame(
         {
             "student_id": ["S1", "S2"],
-            "کدرشته": [1201, 1201],
+            "کدرشته": [1, 1],
             "گروه آزمایشی": ["تجربی", "تجربی"],
             "جنسیت": [1, 0],
             "دانش آموز فارغ": [0, 0],

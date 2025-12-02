@@ -14,7 +14,7 @@ def test_policy_join_keys_unique_and_int_enforced() -> None:
     assert len(policy.join_keys) == 6
     student = {
         "student_id": "ST-100",
-        "کدرشته": "1201",
+        "کدرشته": "1",
         "جنسیت": "1",
         "دانش_آموز_فارغ": "0",
         "مرکز_گلستان_صدرا": "2",
@@ -52,7 +52,7 @@ def test_ranking_policy_respects_capacity_order_and_natural_sort() -> None:
     candidate_pool = pd.DataFrame(
         {
             "کد کارمندی پشتیبان": ["EMP-2", "EMP-010", "EMP-3", "EMP-11"],
-            "کدرشته": [1201, 1201, 1201, 1201],
+            "کدرشته": [1, 1, 1, 1],
             "جنسیت": [1, 1, 1, 1],
             "دانش آموز فارغ": [1, 1, 1, 1],
             "مرکز گلستان صدرا": [2, 2, 2, 2],

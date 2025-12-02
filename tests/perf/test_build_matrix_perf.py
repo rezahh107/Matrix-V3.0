@@ -44,7 +44,7 @@ def _synthetic_inputs(size: int) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFra
     crosswalk = pd.DataFrame(
         {
             "گروه آزمایشی": ["تجربی", "ریاضی", "انسانی"],
-            "کد گروه": [1201, 2201, 3201],
+            "کد گروه": [1, 9, 12],
             "مقطع تحصیلی": ["دهم", "دهم", "دهم"],
         }
     )

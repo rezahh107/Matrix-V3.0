@@ -75,16 +75,16 @@ def test_compute_coverage_metrics_excludes_blocked_candidates() -> None:
     base_df = _with_pool_attrs(
         pd.DataFrame(
             [
-                _base_row(group_code=101, can_generate=True, mentor_id="m1"),
-                _base_row(group_code=102, can_generate=False, mentor_id="m2"),
-                _base_row(group_code=103, can_generate=True, mentor_id="m3"),
+                _base_row(group_code=21, can_generate=True, mentor_id="m1"),
+                _base_row(group_code=22, can_generate=False, mentor_id="m2"),
+                _base_row(group_code=23, can_generate=True, mentor_id="m3"),
             ]
         )
     )
     matrix_df = pd.DataFrame(
         [
             {
-                "کدرشته": 101,
+                "کدرشته": 21,
                 "جنسیت": 1,
                 "دانش آموز فارغ": 1,
                 "مرکز گلستان صدرا": 1,
@@ -118,15 +118,15 @@ def test_compute_coverage_metrics_excludes_blocked_candidates() -> None:
     assert metrics.unseen_viable_groups == 1
     assert metrics.invalid_group_token_count == 2
     assert metrics.blocked_groups == 1  # recorded for debug even if excluded
-    assert coverage_df.loc[coverage_df["is_unseen_viable"], "کدرشته"].iat[0] == 103
+    assert coverage_df.loc[coverage_df["is_unseen_viable"], "کدرشته"].iat[0] == 23
 
 
 def test_compute_coverage_metrics_requires_governed_pool_attr() -> None:
-    base_df = pd.DataFrame([_base_row(group_code=150, can_generate=True)])
+    base_df = pd.DataFrame([_base_row(group_code=24, can_generate=True)])
     matrix_df = pd.DataFrame(
         [
             {
-                "کدرشته": 150,
+                "کدرشته": 24,
                 "جنسیت": 1,
                 "دانش آموز فارغ": 1,
                 "مرکز گلستان صدرا": 1,
@@ -158,15 +158,15 @@ def test_compute_coverage_metrics_intersects_with_students_when_requested() -> N
     base_df = _with_pool_attrs(
         pd.DataFrame(
             [
-                _base_row(group_code=201, can_generate=True, mentor_id="m1"),
-                _base_row(group_code=202, can_generate=True, mentor_id="m2"),
+                _base_row(group_code=25, can_generate=True, mentor_id="m1"),
+                _base_row(group_code=26, can_generate=True, mentor_id="m2"),
             ]
         )
     )
     students_df = pd.DataFrame(
         [
             {
-                "کدرشته": 202,
+                "کدرشته": 26,
                 "جنسیت": 1,
                 "دانش آموز فارغ": 1,
                 "مرکز گلستان صدرا": 1,
@@ -178,7 +178,7 @@ def test_compute_coverage_metrics_intersects_with_students_when_requested() -> N
     matrix_df = pd.DataFrame(
         [
             {
-                "کدرشته": 202,
+                "کدرشته": 26,
                 "جنسیت": 1,
                 "دانش آموز فارغ": 1,
                 "مرکز گلستان صدرا": 1,
@@ -217,7 +217,7 @@ def test_compute_coverage_metrics_includes_student_only_groups_in_union() -> Non
     students_df = pd.DataFrame(
         [
             {
-                "کدرشته": 501,
+                "کدرشته": 27,
                 "جنسیت": 1,
                 "دانش آموز فارغ": 0,
                 "مرکز گلستان صدرا": 1,
@@ -254,11 +254,11 @@ def test_compute_coverage_metrics_includes_student_only_groups_in_union() -> Non
 
 
 def test_build_coverage_validation_fields_aligns_with_metrics() -> None:
-    base_df = _with_pool_attrs(pd.DataFrame([_base_row(group_code=301)]))
+    base_df = _with_pool_attrs(pd.DataFrame([_base_row(group_code=29)]))
     matrix_df = pd.DataFrame(
         [
             {
-                "کدرشته": 301,
+                "کدرشته": 29,
                 "جنسیت": 1,
                 "دانش آموز فارغ": 1,
                 "مرکز گلستان صدرا": 1,
@@ -313,9 +313,9 @@ def test_build_coverage_validation_fields_aligns_with_metrics() -> None:
 
 def test_coverage_metrics_regression_many_invalid_tokens_all_viable_groups_covered() -> None:
     valid_groups = [
-        (101, 1, 1, 10, 1, 1001),
-        (101, 2, 1, 10, 1, 1001),
-        (102, 1, 1, 11, 2, 1002),
+        (1, 1, 1, 10, 1, 1001),
+        (3, 2, 1, 10, 1, 1001),
+        (5, 1, 1, 11, 2, 1002),
     ]
 
     valid_rows = [
@@ -331,7 +331,7 @@ def test_coverage_metrics_regression_many_invalid_tokens_all_viable_groups_cover
         for i, group_vals in enumerate(valid_groups, start=1)
     ]
 
-    blocked_row = _base_row(group_code=103, can_generate=False, mentor_id="BLOCKED") | {
+    blocked_row = _base_row(group_code=7, can_generate=False, mentor_id="BLOCKED") | {
         "genders": [1],
         "statuses_normal": [1],
         "center_code": 12,
@@ -392,7 +392,7 @@ def test_coverage_metrics_normalizes_blank_gender_and_status_to_zero() -> None:
                 "mentor_row_id": 1,
                 "center_code": 1,
                 "center_text": build_matrix.center_text(1),
-                "group_pairs": [("رشته", 401)],
+                "group_pairs": [("رشته", 30)],
                 "genders": [""],
                 "statuses_normal": [""],
                 "statuses_school": [""],
@@ -471,7 +471,7 @@ def test_coverage_metrics_normalizes_missing_join_keys_to_zero_int64() -> None:
                 "mentor_row_id": 1,
                 "center_code": pd.NA,
                 "center_text": "",
-                "group_pairs": [("رشته", 402)],
+                "group_pairs": [("رشته", 31)],
                 "genders": [1],
                 "statuses_normal": [1],
                 "statuses_school": [1],

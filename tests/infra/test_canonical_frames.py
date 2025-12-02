@@ -11,7 +11,7 @@ def test_student_crosswalk_merges_raw_group_codes() -> None:
     crosswalk = pd.DataFrame(
         {
             "گروه آزمایشی": ["علوم پایه", "علوم پایه"],
-            "کد گروه": [9100, 9100],
+            "کد گروه": [5, 5],
             "کدرشته خام": [9110, 9120],
             "مقطع تحصیلی": ["دهم", "یازدهم"],
         }
@@ -33,7 +33,7 @@ def test_student_crosswalk_merges_raw_group_codes() -> None:
 
     normalized = canonicalize_students_frame(students, policy=policy, group_code_crosswalk=mapping)
 
-    assert normalized["کدرشته"].tolist() == [9100, 9100]
+    assert normalized["کدرشته"].tolist() == [5, 5]
     assert normalized["group_code_raw"].tolist() == ["9110", "9120"]
 
 
@@ -42,7 +42,7 @@ def test_student_crosswalk_supports_group_names() -> None:
     crosswalk = pd.DataFrame(
         {
             "گروه آزمایشی": ["علوم پایه"],
-            "کد گروه": [9100],
+            "کد گروه": [5],
             "کدرشته خام": [pd.NA],
             "مقطع تحصیلی": ["دهم"],
         }
@@ -64,7 +64,7 @@ def test_student_crosswalk_supports_group_names() -> None:
 
     normalized = canonicalize_students_frame(students, policy=policy, group_code_crosswalk=mapping)
 
-    assert normalized["کدرشته"].tolist() == [9100]
+    assert normalized["کدرشته"].tolist() == [5]
 
 
 def test_student_crosswalk_unknown_group_fails_loudly() -> None:
@@ -101,7 +101,7 @@ def test_canonicalize_students_frame_handles_localized_join_keys() -> None:
     students = pd.DataFrame(
         {
             "student_id": ["s1"],
-            "کدرشته": ["۹۱۰۰"],
+            "کدرشته": ["۲۱"],
             "جنسیت": ["پسر"],
             "دانش آموز فارغ": ["۰"],
             "مرکز گلستان صدرا": ["۰"],
@@ -121,7 +121,7 @@ def test_canonicalize_students_frame_aligns_with_core_canonicalization() -> None
     students = pd.DataFrame(
         {
             "student_id": ["s1", "s2"],
-            policy.stage_column("group"): ["۹۱۰۰", "۹۱۰۰"],
+            policy.stage_column("group"): ["۲۱", "۲۱"],
             policy.stage_column("gender"): ["پسر", "دختر"],
             policy.stage_column("graduation_status"): [0, 1],
             policy.stage_column("center"): ["۰", "1"],

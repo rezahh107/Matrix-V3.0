@@ -13,7 +13,7 @@ def test_cli_sanitize_pool_keeps_alias_from_virtual_range() -> None:
             "mentor_name": ["مجازی"],
             "alias": [7501],
             "remaining_capacity": [1],
-            "کدرشته": [101],
+            "کدرشته": [21],
             "جنسیت": [1],
             "دانش آموز فارغ": [1],
             "مرکز گلستان صدرا": [1],

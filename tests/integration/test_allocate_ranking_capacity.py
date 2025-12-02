@@ -12,7 +12,7 @@ def test_allocate_prefers_mentor_with_larger_remaining_capacity() -> None:
         [
             {
                 "student_id": "STD-1",
-                "کدرشته": 1201,
+                "کدرشته": 1,
                 "گروه آزمایشی": "تجربی",
                 "جنسیت": 1,
                 "دانش آموز فارغ": 0,
@@ -30,7 +30,7 @@ def test_allocate_prefers_mentor_with_larger_remaining_capacity() -> None:
                 "remaining_capacity": 5,
                 "allocations_new": 0,
                 "occupancy_ratio": 0.0,
-                "کدرشته": 1201,
+                "کدرشته": 1,
                 "گروه آزمایشی": "تجربی",
                 "جنسیت": 1,
                 "دانش آموز فارغ": 0,
@@ -44,7 +44,7 @@ def test_allocate_prefers_mentor_with_larger_remaining_capacity() -> None:
                 "remaining_capacity": 1,
                 "allocations_new": 0,
                 "occupancy_ratio": 0.0,
-                "کدرشته": 1201,
+                "کدرشته": 1,
                 "گروه آزمایشی": "تجربی",
                 "جنسیت": 1,
                 "دانش آموز فارغ": 0,

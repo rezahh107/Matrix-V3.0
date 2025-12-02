@@ -14,7 +14,7 @@ def _student_df(code: str | None) -> pd.DataFrame:
     return pd.DataFrame(
         {
             "مدرسه نهایی": [code],
-            "کدرشته": [101],
+            "کدرشته": [21],
             "گروه آزمایشی": ["تجربی"],
             "جنسیت": [1],
             "دانش آموز فارغ": [0],
@@ -27,7 +27,7 @@ def _student_df(code: str | None) -> pd.DataFrame:
 def _pool_df(school_code: int) -> pd.DataFrame:
     return pd.DataFrame(
         {
-            "کدرشته": [101],
+            "کدرشته": [21],
             "گروه آزمایشی": ["تجربی"],
             "جنسیت": [1],
             "دانش آموز فارغ": [0],

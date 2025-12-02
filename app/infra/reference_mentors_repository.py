@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Final
 
 import pandas as pd
+from pandas._libs.missing import NAType
 
 from app.core.build_matrix import (  # type: ignore[attr-defined]
     COL_GENDER,
@@ -146,7 +147,7 @@ def _derive_pool_join_keys(
       `مرکز گلستان صدرا`، `مالی حکمت بنیاد`، `کد مدرسه`) را مشتق و به نوع int
       تبدیل می‌کند.
     - برای مپینگ‌های ناموفق یا مبهم QA issue می‌سازد؛ reason code های فعلی شامل
-      UNKNOWN_CENTER، CENTER_FALLBACK_WILDCARD، FINANCE_UNKNOWN، MISSING_GROUP_CODE،
+      UNKNOWN_CENTER، CENTER_FALLBACK_WILDCARD، FINANCE_UNKNOWN، INVALID_GROUP_CODE،
       INVALID_GENDER، DEFAULT_GRADUATION_STATUS، SCHOOL_NOT_FOUND هستند.
     - نتیجه را به‌صورت (DataFrame نرمال‌شده، لیست QA) بازمی‌گرداند تا Infra بتواند
       هشدارها را در کش/لاگ نگه دارد بدون تغییر منطق Core.
@@ -182,7 +183,7 @@ def _derive_pool_join_keys(
     school_cols = [
         col for col in (COL_SCHOOL1, COL_SCHOOL2, COL_SCHOOL3, COL_SCHOOL4) if col in pool.columns
     ]
-    derived: dict[str, list[int]] = {
+    derived: dict[str, list[int | NAType]] = {
         group_key: [],
         gender_key: [],
         grad_key: [],
@@ -197,12 +198,17 @@ def _derive_pool_join_keys(
 
     for idx, row in pool.iterrows():
         manager_name = str(row.get(COL_MANAGER_NAME, ""))
-        group_codes = parse_group_codes(row.get(COL_GROUP, ""), valid_codes=VALID_GROUP_CODES)
-        group_code = int(group_codes[0]) if group_codes else 0
-        if group_code == 0:
+        invalid_group_tokens: list[int] = []
+        group_codes = parse_group_codes(
+            row.get(COL_GROUP, ""),
+            valid_codes=VALID_GROUP_CODES,
+            invalid_collector=invalid_group_tokens,
+        )
+        group_code: int | NAType = pd.NA if not group_codes else int(group_codes[0])
+        if not group_codes:
             _append_issue(
                 qa_issues,
-                reason="MISSING_GROUP_CODE",
+                reason="INVALID_GROUP_CODE",
                 column=COL_GROUP,
                 raw_value=row.get(COL_GROUP, ""),
                 row_index=idx,
@@ -351,7 +357,7 @@ def _raise_on_duplicate_mentor_ids(
         >>> df = pd.DataFrame({
         ...     "mentor_id": ["m1", "m1"],
         ...     "کد کارمندی پشتیبان": ["E1", "E1"],
-        ...     "کدرشته": [1201, 1201],
+        ...     "کدرشته": [1, 1],
         ...     "جنسیت": [1, 1],
         ...     "دانش آموز فارغ": [0, 0],
         ...     "مرکز گلستان صدرا": [1, 1],
@@ -361,7 +367,7 @@ def _raise_on_duplicate_mentor_ids(
         >>> _raise_on_duplicate_mentor_ids(df, policy=policy, pool_source="inspactor")
         Traceback (most recent call last):
             ...
-        DatabaseOperationError: استخر «inspactor» دارای ردیف تکراری بر اساس کلید ترکیبی mentor_id و کلیدهای اتصال است؛ نمونه‌ها: [{'mentor_id': 'm1', 'کدرشته': 1201, 'جنسیت': 1, 'دانش آموز فارغ': 0, 'مرکز گلستان صدرا': 1, 'مالی حکمت بنیاد': 0, 'کد مدرسه': 3581}]; نمونهٔ ردیف‌ها: [{'mentor_id': 'm1', 'کد کارمندی پشتیبان': 'E1', 'کدرشته': 1201, 'جنسیت': 1, 'دانش آموز فارغ': 0, 'مرکز گلستان صدرا': 1, 'مالی حکمت بنیاد': 0, 'کد مدرسه': 3581}]
+        DatabaseOperationError: استخر «inspactor» دارای ردیف تکراری بر اساس کلید ترکیبی mentor_id و کلیدهای اتصال است؛ نمونه‌ها: [{'mentor_id': 'm1', 'کدرشته': 1, 'جنسیت': 1, 'دانش آموز فارغ': 0, 'مرکز گلستان صدرا': 1, 'مالی حکمت بنیاد': 0, 'کد مدرسه': 3581}]; نمونهٔ ردیف‌ها: [{'mentor_id': 'm1', 'کد کارمندی پشتیبان': 'E1', 'کدرشته': 1, 'جنسیت': 1, 'دانش آموز فارغ': 0, 'مرکز گلستان صدرا': 1, 'مالی حکمت بنیاد': 0, 'کد مدرسه': 3581}]
     """
 
     if pool is None or "mentor_id" not in pool.columns:

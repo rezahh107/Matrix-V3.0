@@ -9,7 +9,7 @@ def _sample_students() -> pd.DataFrame:
         [
             {
                 "student_id": "STD-1",
-                "کدرشته": 1201,
+                "کدرشته": 1,
                 "گروه آزمایشی": "تجربی",
                 "جنسیت": 1,
                 "دانش آموز فارغ": 0,
@@ -30,7 +30,7 @@ def _sample_pool() -> pd.DataFrame:
                 "alias": 101,
                 "remaining_capacity": 2,
                 "allocations_new": 0,
-                "کدرشته": 1201,
+                "کدرشته": 1,
                 "گروه آزمایشی": "تجربی",
                 "جنسیت": 1,
                 "دانش آموز فارغ": 0,

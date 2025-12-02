@@ -16,7 +16,7 @@ from app.core.policy_loader import load_policy
 
 
 def _generate_students(size: int) -> pd.DataFrame:
-    majors = np.random.choice([1201, 1202, 1300], size=size)
+    majors = np.random.choice([1, 3, 1300], size=size)
     student_ids = [f"STD-{i:05d}" for i in range(size)]
     payload = {
         "student_id": student_ids,
@@ -41,7 +41,7 @@ def _generate_pool(size: int, *, policy_capacity: int) -> pd.DataFrame:
                 "mentor_name": f"منتور {idx}",
                 "alias": 1000 + idx,
                 "remaining_capacity": remaining,
-                "کدرشته": random.choice([1201, 1202, 1300]),
+                "کدرشته": random.choice([1, 3, 1300]),
                 "گروه آزمایشی": random.choice(["تجربی", "ریاضی", "انسانی"]),
                 "جنسیت": random.choice([0, 1]),
                 "دانش آموز فارغ": random.choice([0, 1]),
