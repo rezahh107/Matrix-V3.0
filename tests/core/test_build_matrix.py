@@ -5,8 +5,27 @@ from dataclasses import replace
 import pandas as pd
 
 from app.core.build_matrix import DUAL_STATUS_GROUPS, build_matrix
-from app.core.common.domain import BuildConfig
+from app.core.common.domain import (
+    STUDENT_ONLY_GROUPS,
+    BuildConfig,
+    allowed_statuses_for_group,
+)
 from app.core.policy_loader import load_policy
+
+
+def test_status_domain_sets_follow_policy_codes() -> None:
+    assert DUAL_STATUS_GROUPS == frozenset({1, 3, 5, 7, 8, 9, 11, 12, 14, 17, 18})
+    assert STUDENT_ONLY_GROUPS == frozenset({33, 31, 27})
+    # هنر (7) is dual-status; پایه هفتم (33) is student-only
+    assert 7 in DUAL_STATUS_GROUPS
+    assert 33 not in DUAL_STATUS_GROUPS
+
+
+def test_grade_seven_code_is_not_art_code() -> None:
+    # کدرشته 7 (هنر کنکوری) می‌تواند فارغ‌التحصیل باشد؛ کدرشته 33 (پایه هفتم) نمی‌تواند
+    assert allowed_statuses_for_group(7, is_school_branch=False) == (1, 0)
+    assert allowed_statuses_for_group(33, is_school_branch=False) == (1,)
+    assert allowed_statuses_for_group(33, is_school_branch=True) == (1,)
 
 
 def _minimal_crosswalk() -> pd.DataFrame:
@@ -157,6 +176,29 @@ def test_non_dual_group_is_student_only() -> None:
     )
 
     normal_rows = matrix.loc[matrix["کد کارمندی پشتیبان"] == "nondual-id"]
+    assert set(normal_rows[cfg.policy.stage_column("graduation_status")].unique()) == {1}
+
+
+def test_policy_override_blocks_graduate_for_restricted_groups() -> None:
+    cfg = _policy_with_statuses([1, 0], [1, 0])
+    restricted_group = next(iter(STUDENT_ONLY_GROUPS))
+    inspactor_df = _mentor_frame_for_group("restricted")
+    schools_df = pd.DataFrame({"کد مدرسه": [0], "نام مدرسه 1": [""]})
+
+    matrix, *_ = build_matrix(
+        inspactor_df,
+        schools_df,
+        pd.DataFrame(
+            {
+                "گروه آزمایشی": ["restricted"],
+                "کد گروه": [restricted_group],
+                "مقطع تحصیلی": ["پایه"],
+            }
+        ),
+        cfg=cfg,
+    )
+
+    normal_rows = matrix.loc[matrix["کد کارمندی پشتیبان"] == "restricted-id"]
     assert set(normal_rows[cfg.policy.stage_column("graduation_status")].unique()) == {1}
 
 

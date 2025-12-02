@@ -15,7 +15,9 @@ JOIN_KEYS: Final[list[str]] = [
 ]
 
 # Policy v1.0.3: only these 11 groups support both student (1) and graduate (0).
+# دقت شود کدرشتهٔ 7 (هنر کنکوری) با کدرشتهٔ 33 (پایه هفتم) متفاوت است.
 DUAL_STATUS_GROUPS: Final[frozenset[int]] = frozenset({1, 3, 5, 7, 8, 9, 11, 12, 14, 17, 18})
+STUDENT_ONLY_GROUPS: Final[frozenset[int]] = frozenset({33, 31, 27})
 
 
 def allowed_statuses_for_group(group_code: int, *, is_school_branch: bool) -> Sequence[int]:
@@ -27,6 +29,8 @@ def allowed_statuses_for_group(group_code: int, *, is_school_branch: bool) -> Se
     """
 
     if is_school_branch:
+        return (1,)
+    if group_code in STUDENT_ONLY_GROUPS:
         return (1,)
     if group_code in DUAL_STATUS_GROUPS:
         return (1, 0)

@@ -6,6 +6,7 @@ from typing import Any
 import pandas as pd
 
 from app.core.build_matrix import DUAL_STATUS_GROUPS
+from app.core.common.domain import STUDENT_ONLY_GROUPS
 from app.core.common.domain import COL_MENTOR_TYPE, StudentBindingKind
 from app.core.policy_loader import PolicyConfig, load_policy
 from app.core.qa.invariants import (
@@ -203,6 +204,27 @@ def test_status_domain_invariant_blocks_non_dual_graduate() -> None:
     matrix = pd.DataFrame(
         {
             group_col: [27],
+            status_col: [0],
+            COL_MENTOR_TYPE: ["عادی"],
+        }
+    )
+
+    result = check_STATUS_DOMAIN_01(matrix=matrix, policy=policy)
+
+    assert not result.passed
+    assert result.violations
+    assert result.violations[0].rule_id == "QA_RULE_STATUS_DOMAIN_01"
+
+
+def test_status_domain_invariant_blocks_restricted_graduate() -> None:
+    policy = _policy_with_school_codes()
+    group_col = policy.stage_column("type")
+    status_col = policy.stage_column("graduation_status")
+
+    restricted_group = next(iter(STUDENT_ONLY_GROUPS))
+    matrix = pd.DataFrame(
+        {
+            group_col: [restricted_group],
             status_col: [0],
             COL_MENTOR_TYPE: ["عادی"],
         }

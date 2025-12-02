@@ -56,7 +56,9 @@ class Status(IntEnum):
     GRADUATE = 0
 
 
-# Policy v1.0.3: only these groups support both student and graduate statuses.
+# Policy v1.0.3: only these کدرشته‌ها support both student and graduate statuses.
+# توجه: «گروه آزمایشی هفتم/پایه هفتم» با کد 33 است و نباید با کدرشتهٔ 7
+# (هنر کنکوری) اشتباه گرفته شود؛ منطق دامنه بر اساس کدرشته اعمال می‌شود.
 DUAL_STATUS_GROUPS: frozenset[int] = frozenset(
     {
         1,
@@ -73,6 +75,124 @@ DUAL_STATUS_GROUPS: frozenset[int] = frozenset(
     }
 )
 
+# Student-only overrides for groups که حتی در صورت سابقهٔ دوحالته بودن، وضعیت
+# فارغ‌التحصیل نباید داشته باشند (پایه‌های هفتم، هشتم و نهم با کدرشته‌های 33، 31،
+# 27). سایر کدرشته‌ها به صورت پیش‌فرض دانش‌آموزی هستند مگر این‌که در دامنهٔ بالا
+# باشند.
+STUDENT_ONLY_GROUPS: frozenset[int] = frozenset({33, 31, 27})
+
+
+@dataclass(frozen=True, slots=True)
+class EducationalRecord:
+    """Canonical triple for educational level, experimental group/grade, and code."""
+
+    educational_level: str
+    experimental_group: str
+    field_code: int
+
+
+EDUCATIONAL_STRUCTURE: tuple[EducationalRecord, ...] = (
+    # کنکوری (University Entrance)
+    EducationalRecord("کنکوری", "دوازدهم ریاضی", 1),
+    EducationalRecord("کنکوری", "دوازدهم تجربی", 3),
+    EducationalRecord("کنکوری", "دوازدهم انسانی", 5),
+    EducationalRecord("کنکوری", "هنر", 7),
+    EducationalRecord("کنکوری", "دوازدهم علوم و معارف اسلامی", 8),
+    EducationalRecord("کنکوری", "منحصرا زبان", 9),
+    # متوسطه دوم (High School)
+    EducationalRecord("متوسطه دوم", "دهم ریاضی", 24),
+    EducationalRecord("متوسطه دوم", "دهم تجربی", 25),
+    EducationalRecord("متوسطه دوم", "دهم انسانی", 26),
+    EducationalRecord("متوسطه دوم", "دهم علوم و معارف اسلامی", 30),
+    EducationalRecord("متوسطه دوم", "یازدهم ریاضی", 21),
+    EducationalRecord("متوسطه دوم", "یازدهم تجربی", 22),
+    EducationalRecord("متوسطه دوم", "یازدهم علوم انسانی", 23),
+    EducationalRecord("متوسطه دوم", "یازدهم علوم و معارف اسلامی", 29),
+    # متوسطه اول (Middle School)
+    EducationalRecord("متوسطه اول", "نهم", 27),
+    EducationalRecord("متوسطه اول", "هشتم", 31),
+    EducationalRecord("متوسطه اول", "هفتم", 33),
+    # دبستان (Elementary)
+    EducationalRecord("دبستان", "دوم دبستان", 46),
+    EducationalRecord("دبستان", "سوم دبستان", 45),
+    EducationalRecord("دبستان", "چهارم دبستان", 43),
+    EducationalRecord("دبستان", "پنجم دبستان", 41),
+    EducationalRecord("دبستان", "ششم دبستان", 35),
+    # هنرستان (Technical School)
+    EducationalRecord("هنرستان", "دوازدهم الکتروتکنیک", 11),
+    EducationalRecord("هنرستان", "دوازدهم شبکه و نرم‌افزار رایانه", 12),
+    EducationalRecord("هنرستان", "دوازدهم تربیت بدنی", 14),
+    EducationalRecord("هنرستان", "دوازدهم حسابداری", 17),
+    EducationalRecord("هنرستان", "دوازدهم مکانیک خودرو", 18),
+    EducationalRecord("هنرستان", "یازدهم الکتروتکنیک", 53),
+    EducationalRecord("هنرستان", "یازدهم شبکه و نرم افزار", 55),
+    EducationalRecord("هنرستان", "یازدهم تربیت بدنی", 66),
+    EducationalRecord("هنرستان", "یازدهم حسابداری", 69),
+    EducationalRecord("هنرستان", "دهم شبکه و نرم‌افزار رایانه", 83),
+    EducationalRecord("هنرستان", "دهم حسابداری", 89),
+)
+
+_CODE_TO_RECORD: dict[int, EducationalRecord] = {
+    record.field_code: record for record in EDUCATIONAL_STRUCTURE
+}
+
+_GROUP_TO_CODES: dict[tuple[str, str], int] = {
+    (record.educational_level, record.experimental_group): record.field_code
+    for record in EDUCATIONAL_STRUCTURE
+}
+
+if len(_CODE_TO_RECORD) != len(EDUCATIONAL_STRUCTURE):
+    raise ValueError("Duplicate field_code detected in EDUCATIONAL_STRUCTURE")
+
+if len(_GROUP_TO_CODES) != len(EDUCATIONAL_STRUCTURE):
+    raise ValueError(
+        "Duplicate (educational_level, experimental_group) detected in EDUCATIONAL_STRUCTURE"
+    )
+
+
+def get_info_from_code(field_code: int) -> tuple[str, str, int]:
+    """Return (educational_level, experimental_group, field_code) for the code."""
+
+    record = _CODE_TO_RECORD.get(field_code)
+    if record is None:
+        raise DataMissingError(func="get_info_from_code", column="کدرشته", value=field_code)
+    return (record.educational_level, record.experimental_group, record.field_code)
+
+
+def get_code_from_group(
+    experimental_group_name: str, educational_level: str | None = None
+) -> int:
+    """Return the unique code for the given group name, optionally narrowed by level."""
+
+    matches: list[int] = []
+    if educational_level is not None:
+        code = _GROUP_TO_CODES.get((educational_level, experimental_group_name))
+        if code is not None:
+            return code
+    else:
+        matches = [
+            code
+            for (level, group), code in _GROUP_TO_CODES.items()
+            if group == experimental_group_name
+        ]
+        if len(matches) == 1:
+            return matches[0]
+    raise DataMissingError(
+        func="get_code_from_group",
+        column="گروه آزمایشی",
+        value={
+            "experimental_group": experimental_group_name,
+            "educational_level": educational_level,
+            "candidates": matches,
+        },
+    )
+
+
+def is_dual_status_code(field_code: int) -> bool:
+    """Return True if the code supports dual graduation statuses."""
+
+    return field_code in DUAL_STATUS_GROUPS
+
 
 def allowed_statuses_for_group(group_code: int, *, is_school_branch: bool) -> tuple[int, ...]:
     """Return graduation_status domain for the given group and mentor branch.
@@ -83,6 +203,8 @@ def allowed_statuses_for_group(group_code: int, *, is_school_branch: bool) -> tu
     """
 
     if is_school_branch:
+        return (Status.STUDENT,)
+    if group_code in STUDENT_ONLY_GROUPS:
         return (Status.STUDENT,)
     if group_code in DUAL_STATUS_GROUPS:
         return (Status.STUDENT, Status.GRADUATE)
