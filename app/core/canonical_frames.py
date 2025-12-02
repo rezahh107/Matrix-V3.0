@@ -161,6 +161,31 @@ def _make_unique_columns(columns: Sequence[str]) -> list[str]:
     return result
 
 
+def _ensure_type_group_columns(frame: pd.DataFrame, policy: PolicyConfig) -> pd.DataFrame:
+    """Align ``type`` and ``group`` columns when one is missing.
+
+    Pre-v1.0.4 payloads duplicated the stage header, so some fixtures only
+    contain one of the two columns. To retain backward compatibility while
+    enforcing the canonical join keys, we copy whichever column is present to
+    the missing one. The input frame is copied only when augmentation is
+    required.
+    """
+
+    type_column = policy.stage_column("type")
+    group_column = policy.stage_column("group")
+    needs_type = type_column not in frame.columns and group_column in frame.columns
+    needs_group = group_column not in frame.columns and type_column in frame.columns
+    if not needs_type and not needs_group:
+        return frame
+
+    aligned = frame.copy()
+    if needs_type:
+        aligned[type_column] = ensure_series(aligned[group_column]).reindex(aligned.index)
+    if needs_group:
+        aligned[group_column] = ensure_series(aligned[type_column]).reindex(aligned.index)
+    return aligned
+
+
 def _empty_join_key_report(
     join_keys: Sequence[str],
     mentor_column: str,
@@ -597,6 +622,7 @@ def canonicalize_students_frame(
     )
     students_en = _ensure_exam_group_column(students_en)
     students = canonicalize_headers(students_en, header_mode="fa")
+    students = _ensure_type_group_columns(students, policy)
     default_index = students_en.index
     students["center_raw"] = center_raw.reindex(default_index)
     school_code_raw = students_en.get(
@@ -764,6 +790,7 @@ def canonicalize_pool_frame(
         stats.mentor_id_autofill += int(missing_mask.sum())
     pool["mentor_id"] = mentor_id_series
 
+    pool = _ensure_type_group_columns(pool, policy)
     required = set(policy.join_keys) | {"کد کارمندی پشتیبان"}
     missing = [column for column in required if column not in pool.columns]
     if missing and require_join_keys:

@@ -135,6 +135,8 @@ def _normalize_reason_payload(
 ) -> tuple[str | None, str | None]:
     """نرمال‌سازی کد/پیام دلیل برای استفاده در selection_reason."""
 
+    if isinstance(code_value, ReasonCode):
+        code_value = code_value.value
     code_text = str(code_value).strip() if code_value not in (None, "") else None
     message_text = str(message_value).strip() if message_value not in (None, "") else None
     if code_text:

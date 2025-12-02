@@ -22,7 +22,7 @@ _HAS_OPENPYXL = importlib.util.find_spec("openpyxl") is not None
 @pytest.fixture()
 def policy_file(tmp_path: Path) -> Path:
     payload = {
-        "version": "1.0.3",
+        "version": "1.0.4",
         "normal_statuses": [1, 0],
         "school_statuses": [1],
         "postal_valid_range": [1000, 9999],
@@ -34,7 +34,7 @@ def policy_file(tmp_path: Path) -> Path:
         "dedup_removed_ratio_threshold": 0.05,
         "school_lookup_mismatch_threshold": 0.0,
         "join_key_duplicate_threshold": 0,
-        "alias_rule": {"normal": "postal_or_fallback_mentor_id", "school": "mentor_id"},
+        "alias_rule": {"normal": "postal_code", "school": "mentor_id"},
         "join_keys": JOIN_KEYS_6,
         "gender_codes": {
             "male": {"value": 1, "counter_code": "357"},
@@ -49,12 +49,7 @@ def policy_file(tmp_path: Path) -> Path:
             "remaining_capacity": "remaining_capacity",
         },
         "ranking_rules": [
-            {"name": "min_occupancy_ratio", "column": "occupancy_ratio", "ascending": True},
-            {
-                "name": "max_remaining_capacity",
-                "column": "remaining_capacity_desc",
-                "ascending": True,
-            },
+            {"name": "max_remaining_capacity", "column": "remaining_capacity", "ascending": False},
             {"name": "min_allocations_new", "column": "allocations_new", "ascending": True},
             {"name": "min_mentor_id", "column": "mentor_sort_key", "ascending": True},
         ],
@@ -116,7 +111,7 @@ def test_build_matrix_command_uses_progress(
     assert "  5% | start" in captured.out
     assert "100% | done" in captured.out
     assert exit_code == 0
-    assert called["policy_version"] == "1.0.3"
+    assert called["policy_version"] == "1.0.4"
 
 
 def test_cli_reports_coverage_threshold_error(
@@ -620,8 +615,8 @@ def test_load_matrix_candidate_pool_filters_virtual(tmp_path: Path, policy_file:
             "remaining_capacity": [0, 5],
             "allocations_new": [0, 0],
             "mentor_id": [1, 2],
-            "کدرشته": [1201, 1201],
-            "گروه آزمایشی": ["تجربی", "تجربی"],
+            "کدرشته": [27, 27],
+            "گروه آزمایشی": ["27", "27"],
             "جنسیت": [1, 1],
             "دانش آموز فارغ": [0, 0],
             "مرکز گلستان صدرا": [0, 0],
@@ -639,8 +634,8 @@ def test_load_matrix_candidate_pool_filters_virtual(tmp_path: Path, policy_file:
     students = pd.DataFrame(
         {
             "student_id": ["STD-1"],
-            "کدرشته": [1201],
-            "گروه آزمایشی": ["تجربی"],
+            "کدرشته": [27],
+            "گروه آزمایشی": ["27"],
             "جنسیت": [1],
             "دانش آموز فارغ": [0],
             "مرکز گلستان صدرا": [0],

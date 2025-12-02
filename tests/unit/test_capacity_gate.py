@@ -23,7 +23,7 @@ def _capacity_gate_pool() -> pd.DataFrame:
         {
             COL_MENTOR_NAME: ["منتور الف", "منتور ب", "منتور پ"],
             COL_MANAGER_NAME: ["مدیر 1", "مدیر 2", "مدیر 3"],
-            COL_GROUP: ["ریاضی", "ریاضی", "تجربی"],
+            COL_GROUP: ["27", "27", "33"],
             COL_SCHOOL1: ["مدرسه 1", "مدرسه 2", "مدرسه 3"],
             CAPACITY_CURRENT_COL: [7, 3, 1],
             CAPACITY_SPECIAL_COL: [5, 3, 4],

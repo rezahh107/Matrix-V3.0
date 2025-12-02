@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable, Mapping, Sequence
 from numbers import Number
 from typing import Literal, TypedDict, cast
@@ -23,6 +24,8 @@ __all__ = [
     "matches_center_with_wildcard",
     "matches_school_with_wildcard",
     "normalize_join_key_name",
+    "parse_group_codes",
+    "VALID_GROUP_CODES",
     "finance_variants_from_cell",
     "resolve_finance_variants",
     "validate_policy_join_keys",
@@ -94,6 +97,10 @@ def _is_school_key(column: JoinKeyName, policy: PolicyConfig) -> bool:
     return normalize_fa(column) == normalize_fa(policy.columns.school_code)
 
 
+def _is_group_key(column: JoinKeyName, policy: PolicyConfig) -> bool:
+    return normalize_fa(column) == normalize_fa(policy.stage_column("group"))
+
+
 def _is_missing_value(value: object) -> bool:
     if value is None:
         return True
@@ -145,6 +152,8 @@ def canonicalize_join_key_value(column: str, value: object, *, policy: PolicyCon
             return _canonicalize_center_value(value, policy)
         if _is_school_key(join_key, policy):
             return _canonicalize_school_value(value, policy)
+        if _is_group_key(join_key, policy):
+            return _canonicalize_group_value(value)
         return _canonicalize_numeric_value(value, allow_zero_from_empty=False)
     except ValueError as exc:
         raise JoinKeyCanonicalizationError(column, value) from exc
@@ -170,6 +179,13 @@ def _canonicalize_center_value(value: object, policy: PolicyConfig) -> int:
     return coerced
 
 
+def _canonicalize_group_value(value: object) -> int:
+    coerced = _canonicalize_numeric_value(value, allow_zero_from_empty=False)
+    if coerced not in VALID_GROUP_CODES:
+        raise ValueError("DATA_MISSING")
+    return coerced
+
+
 def _canonicalize_school_value(value: object, policy: PolicyConfig) -> int:
     coerced = _canonicalize_numeric_value(
         value, allow_zero_from_empty=policy.school_code_empty_as_zero
@@ -183,6 +199,58 @@ def normalize_join_key_name(column: str) -> str:
     """Normalize join-key names to the underscore form used in join_map."""
 
     return column.replace(" ", "_")
+
+
+def parse_group_codes(
+    raw: object,
+    *,
+    valid_codes: Iterable[int] | None = None,
+    invalid_collector: list[int] | None = None,
+) -> list[int]:
+    """Parse ``شامل گروه های آزمایشی`` style specs into validated group codes."""
+
+    if raw is None or (isinstance(raw, float) and pd.isna(raw)):
+        return []
+    text = normalize_digits(str(raw)).strip()
+    if not text:
+        return []
+    tokens = _RE_SPLIT_ITEMS.split(text.replace("-", ":"))
+    effective_valid = (
+        VALID_GROUP_CODES if valid_codes is None else tuple(int(v) for v in valid_codes)
+    )
+    valid_set = set(int(v) for v in effective_valid)
+    seen: set[int] = set()
+    invalid_seen: set[int] = set()
+    parsed: list[int] = []
+
+    def _register(value: int) -> None:
+        nonlocal parsed
+        if value in valid_set:
+            if value not in seen:
+                parsed.append(value)
+                seen.add(value)
+        elif invalid_collector is not None and value not in invalid_seen:
+            invalid_collector.append(value)
+            invalid_seen.add(value)
+
+    for token in tokens:
+        token = token.strip()
+        if not token:
+            continue
+        if ":" in token:
+            try:
+                start, end = token.split(":", 1)
+                a, b = int(start), int(end)
+            except ValueError:
+                continue
+            if a > b:
+                a, b = b, a
+            for value in range(a, b + 1):
+                _register(value)
+            continue
+        if token.isdigit():
+            _register(int(token))
+    return parsed
 
 
 _JOIN_KEY_LOOKUP: dict[str, JoinKeyName] = {
@@ -204,6 +272,46 @@ for en_key in (
     if normalized not in _JOIN_KEY_LOOKUP:
         _JOIN_KEY_LOOKUP[normalized] = canonical_name
     _JOIN_KEY_LOOKUP.setdefault(normalize_fa(en_key), canonical_name)
+
+VALID_GROUP_CODES: tuple[int, ...] = (
+    1,
+    3,
+    5,
+    7,
+    8,
+    9,
+    11,
+    12,
+    14,
+    17,
+    18,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    29,
+    30,
+    31,
+    33,
+    35,
+    41,
+    43,
+    45,
+    46,
+    53,
+    55,
+    66,
+    69,
+    83,
+    89,
+)
+
+_RE_SPLIT_ITEMS = re.compile(r"[,\u060C\s]+")
+
+_RE_SPLIT_ITEMS = re.compile(r"[,\u060C\s]+")
 
 
 def center_wildcard_value(policy: PolicyConfig) -> int | None:

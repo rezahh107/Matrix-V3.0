@@ -27,10 +27,8 @@ from app.core.build_matrix import (  # type: ignore[attr-defined]
     build_school_maps,
     collect_school_codes_from_row,
     domain_center_from_manager,
-    expand_group_token,
     norm_gender,
     norm_status,
-    prepare_crosswalk_mappings,
 )
 from app.core.canonical_frames import (  # type: ignore[attr-defined]
     canonicalize_headers,
@@ -38,6 +36,7 @@ from app.core.canonical_frames import (  # type: ignore[attr-defined]
 )
 from app.core.common.domain import _coerce_finance, _num_to_int_safe
 from app.core.common.errors import InvalidCenterMappingError
+from app.core.common.join_keys import VALID_GROUP_CODES, parse_group_codes
 from app.core.common.normalization import normalize_fa
 from app.core.policy_loader import PolicyConfig
 from app.infra.errors import DatabaseOperationError
@@ -164,16 +163,11 @@ def _derive_pool_join_keys(
         coerced.attrs[_POOL_JOIN_KEY_QA_ATTR] = []
         return coerced, []
 
-    schools_df, crosswalk_groups_df, crosswalk_synonyms_df = get_school_reference_frames(db)
+    schools_df, crosswalk_groups_df, _ = get_school_reference_frames(db)
     if crosswalk_groups_df is None:
         raise ValueError("Crosswalk schools/groups data is required for mentor pool normalization")
     if schools_df is None:
         raise ValueError("School reference data is required for mentor pool normalization")
-
-    name_to_code, code_to_name, buckets, synonyms = prepare_crosswalk_mappings(
-        canonicalize_headers(crosswalk_groups_df, header_mode="fa"),
-        crosswalk_synonyms_df,
-    )
     code_to_name_school, school_name_to_code = build_school_maps(
         canonicalize_headers(schools_df, header_mode="fa"), cfg=cfg
     )
@@ -203,14 +197,8 @@ def _derive_pool_join_keys(
 
     for idx, row in pool.iterrows():
         manager_name = str(row.get(COL_MANAGER_NAME, ""))
-        group_tokens = expand_group_token(
-            str(row.get(COL_GROUP, "")),
-            name_to_code,
-            code_to_name,
-            buckets,
-            synonyms,
-        )
-        group_code = int(group_tokens[0][1]) if group_tokens else 0
+        group_codes = parse_group_codes(row.get(COL_GROUP, ""), valid_codes=VALID_GROUP_CODES)
+        group_code = int(group_codes[0]) if group_codes else 0
         if group_code == 0:
             _append_issue(
                 qa_issues,

@@ -29,8 +29,8 @@ def _build_focused_fixture() -> tuple[PolicyConfig, pd.DataFrame, dict[str, dict
     pool = pd.DataFrame(
         {
             "پشتیبان": ["مهسا", "علیرضا", "طاها"],
-            "کدرشته": [1201, 1201, 5000],
-            "گروه آزمایشی": ["تجربی", "تجربی", "ریاضی"],
+            "کدرشته": [27, 27, 83],
+            "گروه آزمایشی": [27, 27, 83],
             "جنسیت": [
                 policy.gender_codes.female.value,
                 policy.gender_codes.female.value,
@@ -46,8 +46,8 @@ def _build_focused_fixture() -> tuple[PolicyConfig, pd.DataFrame, dict[str, dict
     students = {
         "pass": {
             "student_id": "STD-PASS",
-            "کدرشته": 1201,
-            "گروه آزمایشی": "تجربی",
+            "کدرشته": 27,
+            "گروه آزمایشی": 27,
             "جنسیت": policy.gender_codes.female.value,
             "دانش آموز فارغ": 0,
             "مرکز گلستان صدرا": 1,
@@ -57,8 +57,8 @@ def _build_focused_fixture() -> tuple[PolicyConfig, pd.DataFrame, dict[str, dict
         },
         "fail": {
             "student_id": "STD-FAIL",
-            "کدرشته": 9999,
-            "گروه آزمایشی": "ریاضی",
+            "کدرشته": 89,
+            "گروه آزمایشی": 89,
             "جنسیت": policy.gender_codes.male.value,
             "دانش آموز فارغ": 1,
             "مرکز گلستان صدرا": 3,

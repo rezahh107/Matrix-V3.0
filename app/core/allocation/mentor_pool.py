@@ -114,15 +114,14 @@ def compute_effective_status(
     statuses = base_statuses.where(policy_status.isna(), policy_status)
 
     override_map: dict[int, MentorStatus] = {}
+    disabled_status = governance.disabled_status
     if overrides:
         for raw_id, enabled in overrides.items():
             try:
                 mentor_id = int(raw_id)
             except (TypeError, ValueError):
                 continue
-            override_map[mentor_id] = (
-                MentorStatus.ACTIVE if bool(enabled) else MentorStatus.INACTIVE
-            )
+            override_map[mentor_id] = MentorStatus.ACTIVE if bool(enabled) else disabled_status
 
     if override_map:
         override_status = mentor_ids.map(override_map)

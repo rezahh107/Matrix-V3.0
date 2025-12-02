@@ -24,7 +24,7 @@ from app.core.policy_loader import PolicyConfig, parse_policy_dict
 
 def _base_policy_payload() -> dict[str, object]:
     return {
-        "version": "1.0.3",
+        "version": "1.0.4",
         "normal_statuses": [1, 0],
         "school_statuses": [1],
         "postal_valid_range": [1000, 9999],
@@ -35,7 +35,7 @@ def _base_policy_payload() -> dict[str, object]:
         "coverage_threshold": 0.95,
         "dedup_removed_ratio_threshold": 0.05,
         "school_lookup_mismatch_threshold": 0.0,
-        "alias_rule": {"normal": "postal_or_fallback_mentor_id", "school": "mentor_id"},
+        "alias_rule": {"normal": "postal_code", "school": "mentor_id"},
         "join_keys": [
             "کدرشته",
             "جنسیت",
@@ -57,12 +57,7 @@ def _base_policy_payload() -> dict[str, object]:
             "remaining_capacity": "remaining_capacity",
         },
         "ranking_rules": [
-            {"name": "min_occupancy_ratio", "column": "occupancy_ratio", "ascending": True},
-            {
-                "name": "max_remaining_capacity",
-                "column": "remaining_capacity_desc",
-                "ascending": True,
-            },
+            {"name": "max_remaining_capacity", "column": "remaining_capacity", "ascending": False},
             {"name": "min_allocations_new", "column": "allocations_new", "ascending": True},
             {"name": "min_mentor_id", "column": "mentor_sort_key", "ascending": True},
         ],
@@ -90,7 +85,7 @@ def _base_policy_payload() -> dict[str, object]:
 
 @pytest.fixture()
 def _policy() -> PolicyConfig:
-    """سیاست نمونه مطابق نسخهٔ 1.0.3 برای تست‌های رتبه‌بندی."""
+    """سیاست نمونه مطابق نسخهٔ 1.0.4 برای تست‌های رتبه‌بندی."""
 
     return parse_policy_dict(_base_policy_payload())
 
@@ -134,6 +129,7 @@ def test_inject_mentor_id_preserves_original_dataframe() -> None:
             "پشتیبان": ["زهرا", "علی"],
             "کد کارمندی پشتیبان": ["", "EMP-010"],
             "occupancy_ratio": [0.3, 0.2],
+            "remaining_capacity": [3, 2],
             "allocations_new": [1, 2],
         }
     )
@@ -172,6 +168,7 @@ def test_apply_ranking_policy_natural_tie_break(_policy: PolicyConfig) -> None:
             "پشتیبان": ["الف", "ب", "ج"],
             "کد کارمندی پشتیبان": ["EMP-010", "EMP-002", "EMP-001"],
             "occupancy_ratio": [0.4, 0.4, 0.4],
+            "remaining_capacity": [4, 4, 4],
             "allocations_new": [2, 2, 2],
         }
     )

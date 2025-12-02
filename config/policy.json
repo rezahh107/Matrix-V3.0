@@ -1,5 +1,9 @@
 {
-  "version": "1.0.3",
+  "version": "1.0.4",
+  "meta": {
+    "law_version": "3.0-LAW",
+    "tech_ssot_version": "3.0-TECH"
+  },
   "normal_statuses": [
     1,
     0
@@ -66,7 +70,7 @@
   "school_code_empty_as_zero": true,
   "prefer_major_code": true,
   "alias_rule": {
-    "normal": "postal_or_fallback_mentor_id",
+    "normal": "postal_code",
     "school": "mentor_id"
   },
   "virtual_alias_ranges": [
@@ -98,10 +102,10 @@
     "کد مدرسه"
   ],
   "mentor_pool_governance": {
-    "default_status": "active",
+    "default_status": "ACTIVE",
     "allowed_statuses": [
-      "active",
-      "inactive"
+      "ACTIVE",
+      "FROZEN"
     ],
     "mentors": []
   },
@@ -116,14 +120,9 @@
   ],
   "ranking_rules": [
     {
-      "name": "min_occupancy_ratio",
-      "column": "occupancy_ratio",
-      "ascending": true
-    },
-    {
       "name": "max_remaining_capacity",
-      "column": "remaining_capacity_desc",
-      "ascending": true
+      "column": "remaining_capacity",
+      "ascending": false
     },
     {
       "name": "min_allocations_new",
@@ -141,10 +140,10 @@
       "stage": "type",
       "column": "کدرشته"
     },
-    {
-      "stage": "group",
-      "column": "کدرشته"
-    },
+  {
+    "stage": "group",
+    "column": "کدرشته"
+  },
     {
       "stage": "gender",
       "column": "جنسیت"

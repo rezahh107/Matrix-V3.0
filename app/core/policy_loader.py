@@ -23,7 +23,7 @@ from app.core.policy.loader import compute_schema_hash, validate_policy_columns
 
 VersionMismatchMode = Literal["raise", "warn", "migrate"]
 
-DEFAULT_POLICY_VERSION = "1.0.3"
+DEFAULT_POLICY_VERSION = "1.0.4"
 _EXPECTED_JOIN_KEYS_COUNT = 6
 _EXPECTED_RANKING_ITEMS_COUNT = 3
 
@@ -101,10 +101,16 @@ _LEGACY_TRACE_DEFAULTS: Mapping[str, str] = {
 }
 
 _RANKING_RULE_LIBRARY: Mapping[str, tuple[str, bool]] = {
-    "max_remaining_capacity": ("remaining_capacity_desc", True),
+    "max_remaining_capacity": ("remaining_capacity", False),
     "min_allocations_new": ("allocations_new", True),
     "min_mentor_id": ("mentor_sort_key", True),
-    "min_occupancy_ratio": ("occupancy_ratio", True),
+}
+
+_LEGACY_RANKING_ALIAS: Mapping[str, str] = {
+    "min_occupancy_ratio": "max_remaining_capacity",
+    "max_remaining_capacity": "max_remaining_capacity",
+    "min_allocations_new": "min_allocations_new",
+    "min_mentor_id": "min_mentor_id",
 }
 
 _CANONICAL_RANKING_ORDER: tuple[str, ...] = (
@@ -142,6 +148,14 @@ class PolicyColumns:
     capacity_current: str
     capacity_special: str
     remaining_capacity: str
+
+
+@dataclass(frozen=True)
+class PolicyMeta:
+    """Metadata for policy provenance and governing documents."""
+
+    law_version: str
+    tech_ssot_version: str
 
 
 @dataclass(frozen=True)
@@ -358,6 +372,16 @@ class MentorPoolGovernanceConfig:
             return self.default_status
         return self.mentor_status_map.get(normalized_id, self.default_status)
 
+    @property
+    def disabled_status(self) -> MentorStatus:
+        """وضعیت استاندارد برای منتورهای غیرفعال/منجمد."""
+
+        return (
+            MentorStatus.FROZEN
+            if MentorStatus.FROZEN in self.allowed_statuses
+            else MentorStatus.INACTIVE
+        )
+
 
 @dataclass(frozen=True)
 class PolicyConfig:
@@ -406,8 +430,11 @@ class PolicyConfig:
         default_factory=lambda: MentorPoolGovernanceConfig(
             default_status=MentorStatus.ACTIVE,
             mentor_status_map={},
-            allowed_statuses=(MentorStatus.ACTIVE, MentorStatus.INACTIVE),
+            allowed_statuses=(MentorStatus.ACTIVE, MentorStatus.FROZEN),
         )
+    )
+    meta: PolicyMeta = field(
+        default_factory=lambda: PolicyMeta(law_version="3.0-LAW", tech_ssot_version="3.0-TECH")
     )
 
     @property
@@ -511,6 +538,7 @@ def _normalize_policy_payload(data: RawPolicy) -> Mapping[str, object]:
         "school_code_empty_as_zero", data["school_code_empty_as_zero"]
     )
     prefer_major_code = _ensure_bool("prefer_major_code", data["prefer_major_code"])
+    meta = _normalize_meta(data.get("meta"))
     coverage_threshold = _normalize_coverage_threshold(
         data.get("coverage_threshold", _DEFAULT_COVERAGE_THRESHOLD)
     )
@@ -604,6 +632,7 @@ def _normalize_policy_payload(data: RawPolicy) -> Mapping[str, object]:
         "coverage_options": coverage_options,
         "mentor_pool_governance": mentor_pool_governance,
         "allocation_channels": allocation_channels,
+        "meta": meta,
     }
 
 
@@ -1082,6 +1111,16 @@ def _normalize_required_student_fields(raw: object | None, join_keys: Sequence[s
     return normalized
 
 
+def _normalize_meta(raw: object) -> Mapping[str, str]:
+    if raw is None:
+        return {"law_version": "3.0-LAW", "tech_ssot_version": "3.0-TECH"}
+    if not isinstance(raw, Mapping):
+        raise TypeError("meta must be a mapping with law_version and tech_ssot_version")
+    law_version = str(raw.get("law_version", "")).strip() or "3.0-LAW"
+    tech_ssot_version = str(raw.get("tech_ssot_version", "")).strip() or "3.0-TECH"
+    return {"law_version": law_version, "tech_ssot_version": tech_ssot_version}
+
+
 def _normalize_ranking_rules(raw: Sequence[RankingRuleRaw]) -> list[Mapping[str, object]]:
     if isinstance(raw, (str, bytes)):
         raise TypeError("ranking must be a sequence of rules")
@@ -1092,6 +1131,7 @@ def _normalize_ranking_rules(raw: Sequence[RankingRuleRaw]) -> list[Mapping[str,
     seen_names: set[str] = set()
     parsed: dict[str, Mapping[str, object]] = {}
     for index, item in enumerate(ranking_items):
+        is_string_rule = False
         if isinstance(item, Mapping):
             name_value = item.get("name")
             column_value = item.get("column")
@@ -1111,22 +1151,40 @@ def _normalize_ranking_rules(raw: Sequence[RankingRuleRaw]) -> list[Mapping[str,
             name = item.strip()
             if not name:
                 raise ValueError("ranking rule names must be non-empty")
-            if name not in _RANKING_RULE_LIBRARY:
+            canonical_name = _LEGACY_RANKING_ALIAS.get(name, name)
+            if canonical_name not in _RANKING_RULE_LIBRARY:
                 raise ValueError(f"Unknown ranking rule '{name}'")
-            column, ascending = _RANKING_RULE_LIBRARY[name]
+            column, ascending = _RANKING_RULE_LIBRARY[canonical_name]
+            name = canonical_name
+            is_string_rule = True
         else:
             raise TypeError(f"ranking rule at position {index} must be a mapping or string")
 
-        if name in seen_names:
+        canonical_name = _LEGACY_RANKING_ALIAS.get(name, name)
+
+        if canonical_name in seen_names:
+            if is_string_rule:
+                continue
             raise ValueError("ranking items must be unique")
-        seen_names.add(name)
+        seen_names.add(canonical_name)
 
-        if name not in _RANKING_RULE_LIBRARY:
+        if canonical_name not in _RANKING_RULE_LIBRARY:
             raise ValueError(f"Unknown ranking rule '{name}'")
-        parsed[name] = {"name": name, "column": column, "ascending": ascending}
+        expected_column, expected_ascending = _RANKING_RULE_LIBRARY[canonical_name]
+        if "ratio" in column or "occupancy" in column:
+            if canonical_name != "max_remaining_capacity":
+                raise ValueError("ranking must not reference ratio-based metrics")
+            column = expected_column
+        if column != expected_column or ascending != expected_ascending:
+            column = expected_column
+            ascending = expected_ascending
 
-    # میراث: اگر قانون min_occupancy_ratio ارائه شود، صرفاً برای متن استفاده می‌شود
-    # و در ترتیب رسمی capacity-based نقشی ندارد.
+        parsed[canonical_name] = {
+            "name": canonical_name,
+            "column": expected_column,
+            "ascending": expected_ascending,
+        }
+
     normalized: list[Mapping[str, object]] = []
     for name in _CANONICAL_RANKING_ORDER:
         column, ascending = _RANKING_RULE_LIBRARY[name]
@@ -1242,6 +1300,7 @@ def _to_config(data: RawPolicy) -> PolicyConfig:
     mentor_pool_governance_raw = data.get("mentor_pool_governance", {})
     mentor_school_binding_raw = data.get("mentor_school_binding", {})
     emission_raw = data.get("emission", {})
+    meta_raw = data.get("meta", {})
 
     if not isinstance(normal_statuses_raw, Sequence) or isinstance(
         normal_statuses_raw, (str, bytes)
@@ -1356,6 +1415,7 @@ def _to_config(data: RawPolicy) -> PolicyConfig:
         mentor_pool_governance=_to_mentor_pool_governance(mentor_pool_governance_raw),
         mentor_school_binding=_to_mentor_school_binding(mentor_school_binding_raw),
         allocation_channels=allocation_channels_obj,
+        meta=_to_meta(meta_raw),
     )
 
 
@@ -1369,6 +1429,14 @@ def _to_ranking_rule(item: Mapping[str, object]) -> RankingRule:
 
 def _to_trace_stage(item: Mapping[str, object]) -> TraceStageDefinition:
     return TraceStageDefinition(stage=str(item["stage"]), column=str(item["column"]))
+
+
+def _to_meta(raw: object) -> PolicyMeta:
+    normalized = _normalize_meta(raw)
+    return PolicyMeta(
+        law_version=str(normalized["law_version"]),
+        tech_ssot_version=str(normalized["tech_ssot_version"]),
+    )
 
 
 def _to_center_management_config(data: RawCenterManagement) -> CenterManagementConfig:
@@ -1434,9 +1502,7 @@ def _to_mentor_pool_governance(data: RawMentorPoolGovernance) -> MentorPoolGover
 
     allowed_raw = data.get("allowed_statuses") or (
         MentorStatus.ACTIVE.value,
-        MentorStatus.INACTIVE.value,
         MentorStatus.FROZEN.value,
-        MentorStatus.RESTRICTED.value,
     )
     if not isinstance(allowed_raw, Sequence):
         raise TypeError("allowed_statuses must be a sequence")
@@ -1444,6 +1510,8 @@ def _to_mentor_pool_governance(data: RawMentorPoolGovernance) -> MentorPoolGover
     default_status = MentorStatus.from_value(data.get("default_status", MentorStatus.ACTIVE.value))
     if default_status not in allowed:
         raise ValueError("default_status must be included in allowed_statuses")
+    if MentorStatus.ACTIVE not in allowed:
+        raise ValueError("allowed_statuses must include ACTIVE")
 
     status_map_raw = data.get("mentor_status_map") or {}
     if not isinstance(status_map_raw, Mapping):
@@ -1519,6 +1587,16 @@ def _apply_schema_defaults(data: dict[str, object]) -> dict[str, object]:
 
     data.setdefault("virtual_alias_ranges", list(_DEFAULT_VIRTUAL_ALIAS_RANGES))
     data.setdefault("virtual_name_patterns", list(_DEFAULT_VIRTUAL_NAME_PATTERNS))
+
+    meta_raw = data.get("meta")
+    if not isinstance(meta_raw, Mapping):
+        meta_raw = {}
+    law_version = str(meta_raw.get("law_version", "3.0-LAW")).strip() or "3.0-LAW"
+    tech_version = str(meta_raw.get("tech_ssot_version", "3.0-TECH")).strip() or "3.0-TECH"
+    data["meta"] = {
+        "law_version": law_version,
+        "tech_ssot_version": tech_version,
+    }
 
     excel_options = data.get("excel") or {}
     if not isinstance(excel_options, Mapping):
@@ -1653,7 +1731,7 @@ def _normalize_mentor_pool_governance(raw: RawMentorPoolGovernance | None) -> Ma
 
     allowed_raw = raw.get("allowed_statuses") or (
         MentorStatus.ACTIVE.value,
-        MentorStatus.INACTIVE.value,
+        MentorStatus.FROZEN.value,
     )
     if not isinstance(allowed_raw, Sequence) or isinstance(allowed_raw, (str, bytes)):
         raise TypeError("allowed_statuses must be a sequence of strings")
@@ -1668,6 +1746,8 @@ def _normalize_mentor_pool_governance(raw: RawMentorPoolGovernance | None) -> Ma
     default_status = _parse_status_value(raw.get("default_status", MentorStatus.ACTIVE.value))
     if default_status not in seen:
         raise ValueError("default_status must be part of allowed_statuses")
+    if MentorStatus.ACTIVE.value not in seen:
+        raise ValueError("allowed_statuses must include ACTIVE")
 
     mentors_raw = raw.get("mentors") or []
     if not isinstance(mentors_raw, Sequence) or isinstance(mentors_raw, (str, bytes)):

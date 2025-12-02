@@ -236,8 +236,13 @@ def apply_ranking_policy(
     ranked["mentor_sort_key"] = mentor_ids.map(natural_key)
     ranked["mentor_id_en"] = mentor_ids
 
-    sort_columns: list[str] = ["remaining_capacity", "allocations_new", "mentor_sort_key"]
-    ascending_flags: list[bool] = [False, True, True]
+    if len(policy.ranking_rules) != 3:
+        raise ValueError("policy.ranking_rules must define exactly three ranking rules")
+
+    sort_columns = [rule.column for rule in policy.ranking_rules]
+    ascending_flags = [rule.ascending for rule in policy.ranking_rules]
+    if any("ratio" in column or "occupancy" in column for column in sort_columns):
+        raise ValueError("Ranking columns must not include ratio-based metrics")
 
     ranked = ranked.sort_values(
         by=sort_columns,

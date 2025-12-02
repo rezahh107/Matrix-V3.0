@@ -26,7 +26,7 @@ def _clear_policy_cache() -> None:
 
 def _valid_payload() -> dict[str, object]:
     return {
-        "version": "1.0.3",
+        "version": "1.0.4",
         "normal_statuses": [1, 0],
         "school_statuses": [1],
         "postal_valid_range": [1000, 9999],
@@ -37,7 +37,7 @@ def _valid_payload() -> dict[str, object]:
         "coverage_threshold": 0.95,
         "dedup_removed_ratio_threshold": 0.05,
         "school_lookup_mismatch_threshold": 0.0,
-        "alias_rule": {"normal": "postal_or_fallback_mentor_id", "school": "mentor_id"},
+        "alias_rule": {"normal": "postal_code", "school": "mentor_id"},
         "join_keys": [
             "کدرشته",
             "جنسیت",
@@ -51,12 +51,7 @@ def _valid_payload() -> dict[str, object]:
             "female": {"value": 0, "counter_code": "373"},
         },
         "ranking_rules": [
-            {"name": "min_occupancy_ratio", "column": "occupancy_ratio", "ascending": True},
-            {
-                "name": "max_remaining_capacity",
-                "column": "remaining_capacity_desc",
-                "ascending": True,
-            },
+            {"name": "max_remaining_capacity", "column": "remaining_capacity", "ascending": False},
             {"name": "min_allocations_new", "column": "allocations_new", "ascending": True},
             {"name": "min_mentor_id", "column": "mentor_sort_key", "ascending": True},
         ],
@@ -241,7 +236,7 @@ def test_version_mismatch_raise() -> None:
     payload = _valid_payload()
     payload["version"] = "1.0.2"
     with pytest.raises(ValueError, match="Policy version mismatch"):
-        parse_policy_dict(payload, expected_version="1.0.3", on_version_mismatch="raise")
+        parse_policy_dict(payload, expected_version="1.0.4", on_version_mismatch="raise")
 
 
 def test_version_mismatch_warn() -> None:
@@ -251,7 +246,7 @@ def test_version_mismatch_warn() -> None:
         warnings.simplefilter("always")
         config = parse_policy_dict(
             payload,
-            expected_version="1.0.3",
+            expected_version="1.0.4",
             on_version_mismatch="warn",
         )
         assert isinstance(config, PolicyConfig)
@@ -262,7 +257,7 @@ def test_version_major_mismatch_always_raises() -> None:
     payload = _valid_payload()
     payload["version"] = "2.0.0"
     with pytest.raises(ValueError, match="major incompatible"):
-        parse_policy_dict(payload, expected_version="1.0.3", on_version_mismatch="warn")
+        parse_policy_dict(payload, expected_version="1.0.4", on_version_mismatch="warn")
 
 
 def test_ranking_legacy_strings_supported() -> None:

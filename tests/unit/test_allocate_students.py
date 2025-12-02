@@ -38,9 +38,9 @@ def _base_pool() -> pd.DataFrame:
         {
             "پشتیبان": ["زهرا", "علی"],
             "کد کارمندی پشتیبان": ["EMP-001", "EMP-002"],
-            "کدرشته": [1201, 1201],
-            "کدرشته | group_code": [1201, 1201],
-            "گروه آزمایشی": ["تجربی", "تجربی"],
+            "کدرشته": [27, 27],
+            "کدرشته | group_code": [27, 27],
+            "گروه آزمایشی": [27, 27],
             "جنسیت": [1, 1],
             "جنسیت | gender": [1, 1],
             "دانش آموز فارغ": [0, 0],
@@ -61,8 +61,8 @@ def _base_pool() -> pd.DataFrame:
 def _single_student(**overrides: object) -> pd.DataFrame:
     base = {
         "student_id": "STD-001",
-        "کدرشته": 1201,
-        "گروه_آزمایشی": "تجربی",
+        "کدرشته": 27,
+        "گروه_آزمایشی": 27,
         "جنسیت": 1,
         "دانش_آموز_فارغ": 0,
         "مرکز_گلستان_صدرا": 1,
@@ -78,7 +78,7 @@ def test_canonicalize_students_frame_infers_missing_exam_group() -> None:
     students = pd.DataFrame(
         {
             "student_id": ["STD-001"],
-            "کدرشته": [1201],
+            "کدرشته": [27],
             "جنسیت": [1],
             "دانش آموز فارغ": [0],
             "مرکز گلستان صدرا": [1],
@@ -99,7 +99,7 @@ def test_canonicalize_students_frame_handles_duplicate_school_columns() -> None:
     students = pd.DataFrame(
         {
             "student_id": ["STD-001"],
-            "کدرشته": [1201],
+            "کدرشته": [27],
             "جنسیت": [1],
             "دانش آموز فارغ": [0],
             "مرکز گلستان صدرا": [1],
@@ -121,7 +121,7 @@ def test_canonicalize_students_frame_promotes_final_exam_column_variants() -> No
     students = pd.DataFrame(
         {
             "student_id": ["STD-001"],
-            "گروه آزمایشی نهایی (کد رشته)": [3201],
+            "گروه آزمایشی نهایی (کد رشته)": [27],
             "جنسیت": [1],
             "دانش آموز فارغ": [0],
             "مرکز گلستان صدرا": [1],
@@ -134,7 +134,7 @@ def test_canonicalize_students_frame_promotes_final_exam_column_variants() -> No
 
     group_col = columns.CANON_EN_TO_FA["group_code"]
     assert group_col in normalized.columns
-    assert normalized[group_col].iloc[0] == 3201
+    assert normalized[group_col].iloc[0] == 27
 
 
 def test_canonicalize_students_frame_flattens_multiindex_school_columns() -> None:
@@ -156,8 +156,8 @@ def test_canonicalize_students_frame_flattens_multiindex_school_columns() -> Non
         [
             [
                 "STD-001",
-                1201,
-                "تجربی",
+                27,
+                27,
                 1,
                 0,
                 1,
@@ -198,8 +198,8 @@ def test_allocate_batch_respects_center_priority_ordering() -> None:
         [
             {
                 "student_id": "S-A",
-                "کدرشته": 1201,
-                "گروه_آزمایشی": "تجربی",
+                "کدرشته": 27,
+                "گروه_آزمایشی": 27,
                 "جنسیت": 1,
                 "دانش_آموز_فارغ": 0,
                 "مرکز_گلستان_صدرا": 0,
@@ -208,8 +208,8 @@ def test_allocate_batch_respects_center_priority_ordering() -> None:
             },
             {
                 "student_id": "S-B",
-                "کدرشته": 1201,
-                "گروه_آزمایشی": "تجربی",
+                "کدرشته": 27,
+                "گروه_آزمایشی": 27,
                 "جنسیت": 1,
                 "دانش_آموز_فارغ": 0,
                 "مرکز_گلستان_صدرا": 2,
@@ -218,8 +218,8 @@ def test_allocate_batch_respects_center_priority_ordering() -> None:
             },
             {
                 "student_id": "S-C",
-                "کدرشته": 1201,
-                "گروه_آزمایشی": "تجربی",
+                "کدرشته": 27,
+                "گروه_آزمایشی": 27,
                 "جنسیت": 1,
                 "دانش_آموز_فارغ": 0,
                 "مرکز_گلستان_صدرا": 1,
@@ -232,10 +232,10 @@ def test_allocate_batch_respects_center_priority_ordering() -> None:
         {
             "پشتیبان": ["M1", "M2", "M3"],
             "کد کارمندی پشتیبان": ["EMP-1", "EMP-2", "EMP-3"],
-            "کدرشته": [1201, 1201, 1201],
-            "کدرشته | group_code": [1201, 1201, 1201],
-            "گروه آزمایشی": ["تجربی", "تجربی", "تجربی"],
-            "گروه آزمایشی | exam_group": ["تجربی", "تجربی", "تجربی"],
+            "کدرشته": [27, 27, 27],
+            "کدرشته | group_code": [27, 27, 27],
+            "گروه آزمایشی": [27, 27, 27],
+            "گروه آزمایشی | exam_group": [27, 27, 27],
             "جنسیت": [1, 1, 1],
             "جنسیت | gender": [1, 1, 1],
             "دانش آموز فارغ": [0, 0, 0],
@@ -330,10 +330,10 @@ def test_allocate_batch_filters_by_center_manager() -> None:
         {
             "پشتیبان": ["هدف", "دیگر"],
             "کد کارمندی پشتیبان": ["EMP-10", "EMP-20"],
-            "کدرشته": [1201, 1201],
-            "کدرشته | group_code": [1201, 1201],
-            "گروه آزمایشی": ["تجربی", "تجربی"],
-            "گروه آزمایشی | exam_group": ["تجربی", "تجربی"],
+            "کدرشته": [27, 27],
+            "کدرشته | group_code": [27, 27],
+            "گروه آزمایشی": [27, 27],
+            "گروه آزمایشی | exam_group": [27, 27],
             "جنسیت": [1, 1],
             "جنسیت | gender": [1, 1],
             "دانش آموز فارغ": [0, 0],
@@ -371,9 +371,9 @@ def test_school_students_processed_first() -> None:
         {
             "پشتیبان": ["A", "B"],
             "کد کارمندی پشتیبان": ["EMP-1", "EMP-2"],
-            "کدرشته": [1201, 1201],
-            "کدرشته | group_code": [1201, 1201],
-            "گروه آزمایشی": ["تجربی", "تجربی"],
+            "کدرشته": [27, 27],
+            "کدرشته | group_code": [27, 27],
+            "گروه آزمایشی": [27, 27],
             "جنسیت": [1, 1],
             "دانش آموز فارغ": [0, 0],
             "مرکز گلستان صدرا": [1, 0],
@@ -436,9 +436,9 @@ def test_missing_manager_validation_strict() -> None:
         {
             "پشتیبان": ["X"],
             "کد کارمندی پشتیبان": ["EMP-10"],
-            "کدرشته": [1201],
-            "کدرشته | group_code": [1201],
-            "گروه آزمایشی": ["تجربی"],
+            "کدرشته": [27],
+            "کدرشته | group_code": [27],
+            "گروه آزمایشی": [27],
             "جنسیت": [1],
             "دانش آموز فارغ": [0],
             "مرکز گلستان صدرا": [1],
@@ -571,7 +571,7 @@ def test_build_join_key_duplicate_report_counts_only_repeated_mentor_rows(
         ignore_index=True,
     )
     repeated.loc[len(repeated)] = {
-        "کدرشته": 1201,
+        "کدرشته": 27,
         "جنسیت": 1,
         "دانش آموز فارغ": 0,
         "مرکز گلستان صدرا": 1,
@@ -662,7 +662,7 @@ def test_build_join_key_duplicate_report_missing_columns_returns_empty() -> None
     mentor_column = "کد کارمندی پشتیبان"
     frame = pd.DataFrame(
         {
-            "کدرشته": [1201],
+            "کدرشته": [27],
             "جنسیت": [1],
             "دانش آموز فارغ": [0],
             "مرکز گلستان صدرا": [1],
@@ -853,7 +853,7 @@ def test_normalize_pool_appends_pipe_alias_columns() -> None:
         {
             "پشتیبان": ["زهرا"],
             "کد کارمندی پشتیبان": ["EMP-001"],
-            "کدرشته": [1201],
+            "کدرشته": [27],
             "جنسیت": [1],
             "دانش آموز فارغ": [0],
             "مرکز گلستان صدرا": [1],
@@ -918,7 +918,7 @@ def test_canonicalize_allocation_frames_accepts_english_join_keys() -> None:
         {
             "mentor_name": ["زهرا"],
             "mentor_id": ["EMP-01"],
-            "group_code": [1201],
+            "group_code": [27],
             "gender": [1],
             "graduation_status": [0],
             "center": [1],
@@ -937,7 +937,7 @@ def test_canonicalize_allocation_frames_accepts_english_join_keys() -> None:
     )
 
     expected_values = {
-        "کدرشته": 1201,
+        "کدرشته": 27,
         "جنسیت": 1,
         "دانش آموز فارغ": 0,
         "مرکز گلستان صدرا": 1,
@@ -1322,8 +1322,8 @@ def test_school_students_have_priority_without_center_manager_filter() -> None:
         [
             {
                 "student_id": "STD-SCHOOL",
-                "کدرشته": 1201,
-                "گروه_آزمایشی": "تجربی",
+                "کدرشته": 27,
+                "گروه_آزمایشی": 27,
                 "جنسیت": 1,
                 "دانش_آموز_فارغ": 0,
                 "مرکز_گلستان_صدرا": 1,
@@ -1333,8 +1333,8 @@ def test_school_students_have_priority_without_center_manager_filter() -> None:
             },
             {
                 "student_id": "STD-CENTER",
-                "کدرشته": 1201,
-                "گروه_آزمایشی": "تجربی",
+                "کدرشته": 27,
+                "گروه_آزمایشی": 27,
                 "جنسیت": 1,
                 "دانش_آموز_فارغ": 0,
                 "مرکز_گلستان_صدرا": 1,
@@ -1349,8 +1349,8 @@ def test_school_students_have_priority_without_center_manager_filter() -> None:
             {
                 "پشتیبان": "منتور آلفا",
                 "کد کارمندی پشتیبان": "EMP-001",
-                "کدرشته": 1201,
-                "گروه آزمایشی": "تجربی",
+                "کدرشته": 27,
+                "گروه آزمایشی": 27,
                 "جنسیت": 1,
                 "دانش آموز فارغ": 0,
                 "مرکز گلستان صدرا": 1,
@@ -1364,8 +1364,8 @@ def test_school_students_have_priority_without_center_manager_filter() -> None:
             {
                 "پشتیبان": "منتور بتا",
                 "کد کارمندی پشتیبان": "EMP-002",
-                "کدرشته": 1201,
-                "گروه آزمایشی": "تجربی",
+                "کدرشته": 27,
+                "گروه آزمایشی": 27,
                 "جنسیت": 1,
                 "دانش آموز فارغ": 0,
                 "مرکز گلستان صدرا": 1,
@@ -1411,10 +1411,10 @@ def test_phase_rule_trace_records_school_and_center_events() -> None:
             {
                 "پشتیبان": "منتور مدرسه",
                 "کد کارمندی پشتیبان": "EMP-900",
-                "کدرشته": 1201,
-                "کدرشته | group_code": 1201,
-                "گروه آزمایشی": "تجربی",
-                "گروه آزمایشی | exam_group": "تجربی",
+                "کدرشته": 27,
+                "کدرشته | group_code": 27,
+                "گروه آزمایشی": 27,
+                "گروه آزمایشی | exam_group": 27,
                 "جنسیت": 1,
                 "جنسیت | gender": 1,
                 "دانش آموز فارغ": 0,
@@ -1513,8 +1513,8 @@ def test_cli_capacity_column_default_from_policy(tmp_path: Path) -> None:
             {
                 "student_id": "S1",
                 "national_id": "0012345678",
-                "کدرشته": 1201,
-                "گروه_آزمایشی": "تجربی",
+                "کدرشته": 27,
+                "گروه_آزمایشی": 27,
                 "جنسیت": 1,
                 "دانش_آموز_فارغ": 0,
                 "مرکز_گلستان_صدرا": 1,
@@ -1529,8 +1529,8 @@ def test_cli_capacity_column_default_from_policy(tmp_path: Path) -> None:
             {
                 "پشتیبان": "زهرا",
                 "کد کارمندی پشتیبان": "EMP-1",
-                "کدرشته": 1201,
-                "گروه آزمایشی": "تجربی",
+                "کدرشته": 27,
+                "گروه آزمایشی": 27,
                 "جنسیت": 1,
                 "دانش آموز فارغ": 0,
                 "مرکز گلستان صدرا": 1,

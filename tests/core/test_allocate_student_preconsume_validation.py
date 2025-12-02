@@ -10,7 +10,10 @@ from app.core.policy_loader import load_policy
 
 def _base_join_keys(policy: object) -> dict[str, int]:
     config = load_policy() if not hasattr(policy, "join_keys") else policy
-    return {key: 1 for key in config.join_keys}
+    base = {key: 1 for key in config.join_keys}
+    group_code_col = config.stage_column("type")
+    base[group_code_col] = 27
+    return base
 
 
 def test_allocate_student_preconsume_validation_success() -> None:
@@ -18,6 +21,7 @@ def test_allocate_student_preconsume_validation_success() -> None:
     student = {"student_id": 1}
     student.update(_base_join_keys(policy))
     student[policy.columns.school_code] = 101
+    student[policy.stage_column("group")] = 27
 
     candidate_pool = pd.DataFrame(
         {
@@ -31,6 +35,7 @@ def test_allocate_student_preconsume_validation_success() -> None:
     for key, value in student.items():
         if key in policy.join_keys:
             candidate_pool[key] = value
+    candidate_pool[policy.stage_column("group")] = student[policy.stage_column("group")]
 
     result: AllocationResult = allocate_student(
         student, candidate_pool, policy=policy, pool_state_view=candidate_pool
@@ -47,6 +52,7 @@ def test_allocate_student_preconsume_validation_catches_conflict(
     student = {"student_id": 2}
     student.update(_base_join_keys(policy))
     student[policy.columns.school_code] = 202
+    student[policy.stage_column("group")] = 27
 
     conflicting_pool = pd.DataFrame(
         {
@@ -59,6 +65,7 @@ def test_allocate_student_preconsume_validation_catches_conflict(
     )
     for key in policy.join_keys:
         conflicting_pool[key] = 0
+    conflicting_pool[policy.stage_column("group")] = 27
 
     monkeypatch.setattr(alloc_mod, "apply_join_filters", lambda pool, *_args, **_kwargs: pool)
     monkeypatch.setattr(
