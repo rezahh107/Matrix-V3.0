@@ -51,7 +51,5 @@ def test_mentor_rule_explainer_uses_runner_matrix() -> None:
     assert story.context["matrix_marker"] == "runner-matrix"
     assert "alias" in story.evidence
 
-    report_story = explain_report(
-        QaReport(results=[result]), matrix=matrix, policy=policy
-    )
+    report_story = explain_report(QaReport(results=[result]), matrix=matrix, policy=policy)
     assert [item.rule_id for item in report_story] == [QA_RULE_MENTOR_TYPE_01]
