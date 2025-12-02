@@ -104,7 +104,7 @@ def get_rule_definitions() -> dict[RuleId, QaRuleDefinition]:
                 diagnosis_hints=(
                     "مقادیر ستون expected_student_count یا student_count در Inspactor را با تخصیص مقایسه کنید.",
                 ),
-                canary_thresholds=_frozen_thresholds({"mentor_student_delta": 0.0}),
+                canary_thresholds=_frozen_thresholds({}),
             ),
         ),
         QA_RULE_STU_BINDING_01: QaRuleDefinition(
@@ -214,7 +214,7 @@ def get_rule_definitions() -> dict[RuleId, QaRuleDefinition]:
                 diagnosis_hints=(
                     "remaining_capacity و allocations_new را نسبت به سقف policy بررسی کنید.",
                 ),
-                canary_thresholds=_frozen_thresholds({"over_capacity": 0.0}),
+                canary_thresholds=_frozen_thresholds({}),
             ),
         ),
         QA_RULE_HISTORY_CHANNEL_01: QaRuleDefinition(

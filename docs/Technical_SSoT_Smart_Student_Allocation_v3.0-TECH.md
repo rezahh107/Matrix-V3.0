@@ -500,6 +500,8 @@ Technical SSoT اینجا فقط **نام شیت‌ها و نقش‌شان** ر�
   - حفظ purity: Engine **نباید** Join/Ranking/Trace را override کند و **نباید** خروجی تخصیص را دستکاری کند.
 - خروجی باید با CLI/UI قابل نمایش باشد و با Policy/SSoT نسخه‌گذاری شود (`policy_version`, `ssot_version`).
 - اگر Engine خاموش باشد، باید در meta/QA ثبت شود؛ حالت پیش‌فرض Production «فعال و observe-only» است.
+- نسخهٔ v0 حداقلی باقی می‌ماند: تنها `QA_RULE_MENTOR_TYPE_01` یک explainer عملیاتی دارد؛ سایر قوانین
+  صرفاً meta/summary دریافت می‌کنند و near-miss/canary برای نسخهٔ فعلی غیرفعال است.
 
 ---
 
