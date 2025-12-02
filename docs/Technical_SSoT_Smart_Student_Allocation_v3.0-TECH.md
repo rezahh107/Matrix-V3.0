@@ -514,6 +514,29 @@ Technical SSoT اینجا فقط **نام شیت‌ها و نقش‌شان** ر�
 - Presenter باید خروجی را بدون رنگ ANSI (صرفاً متن + ایموجی) نمایش دهد تا در محیط‌های CLI ساده نیز قابل خواندن باشد.
 - Story v0 فقط خواندنی است؛ هیچ دکمه/اکشنی در Core/Infra را تحریک نمی‌کند و با فعال/غیرفعال‌شدن feature flag تغییری در تخصیص ایجاد نمی‌کند.
 
+### 8.8. QA Debug Governance (v0) — عملیاتی‌سازی ترمزها
+
+- **قرارداد QADebugStory (v0 mentor rule):**
+  - فقط برای `QA_RULE_MENTOR_TYPE_01` یک `story: list[str]` ارائه می‌شود که دقیقاً سه پرسش 3Q را پوشش دهد: «چه شد؟»، «از کجا شروع شد؟»، «اولین اقدام چیست؟».
+  - `context: Mapping[str, str|int|float|list|dict]` باید سبک‌وزن بماند؛ شامل کلیدهای ساده، شمارش‌ها یا breadcrumbهای کوچک، نه DataFrame کامل یا محاسبات جدید.
+- **کدگذاری breadcrumb:**
+  - اگر breadcrumb وجود داشته باشد، به‌صورت اختیاری در `matrix.attrs["qa_debug_breadcrumbs"]` ذخیره می‌شود به‌شکل `list[dict]` با کلیدهای `step_id`, `label`, `row_count`, `key_stats` (دیکشنری کوچک از اعداد/کلیدهای متنی).
+  - Breadcrumb فقط برای مشاهده است؛ نبود آن نباید correctness QA را تغییر دهد.
+- **بدون محاسبهٔ مجدد در explainer:**
+  - Engine دیباگ Infra باید همان ماتریس و نتایج QA را مصرف کند؛ اجازهٔ rerun تخصیص یا QA، یا بارگذاری کپی مستقل از داده‌ها را ندارد. context افزوده باید از metadata/attributes تزریق‌شده توسط runner بیاید.
+- **چرخهٔ عمر قابلیت‌ها:**
+  - هر قابلیت دیباگ جدید باید به یک رخداد واقعی QA و درد مستند (زمان/گام‌های از دست رفته) ارجاع دهد.
+  - در بازبینی دوره‌ای، قابلیت‌های کم‌استفاده باید یا ساده/ادغام شوند، یا به کانال آزمایشی منتقل شوند، یا حذف شوند.
+  - حذف/ادغام باید در changelog QA/Infra ثبت شود تا تعمد در کوچک‌سازی سطح دیباگ شفاف بماند.
+- **محدوده v0 (observe-only):**
+  - explainer کامل و story فقط برای `QA_RULE_MENTOR_TYPE_01` پیاده‌سازی می‌شود؛ سایر Ruleها صرفاً metadata (`law_refs`, `debug context`) دارند و story ندارند.
+  - گسترش به Ruleهای دیگر نیازمند به‌روزرسانی LAW/Technical SSoT و رعایت همان ترمزها (🕒 30-Second Rule، 3Q، Pain-First، Prune-Usage).
+- **جایگاه Core vs Infra:**
+  - Core تنها metadata ثابت (مانند `QADebugContext`, `law_refs`) را نگه می‌دارد؛ هیچ قالب‌بندی، I/O یا جریان تعاملی دیباگ در Core مجاز نیست.
+  - Infra تنها محل engine/story/CLI/GUI و استفاده از ایموجی است؛ lineage/breadcrumb باید مینیمال و کلیدمحور باقی بماند و به tracing framework سنگین تبدیل نشود مگر با مصوبهٔ جدید.
+- **Near-miss/Canary:**
+  - برای v0، near-miss/canary پیش‌فرض خاموش است؛ در صورت نیاز باید با flag/تصمیم رسمی فعال شود و همچنان observe-only بماند.
+
 ---
 
 ## 9. نگرانی‌های Production-Grade
