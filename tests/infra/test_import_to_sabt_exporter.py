@@ -36,7 +36,7 @@ def _sample_alloc_frame() -> pd.DataFrame:
                 "student_graduation_status": 0,
                 "student_center": 1,
                 "student_finance": 3,
-                "student_group_code": 1201,
+                "student_group_code": 1,
                 "student_exam_group": "ریاضی",
                 "student_school_code": 10101,
                 "student_school_name": "دبیرستان بعثت",

@@ -102,12 +102,16 @@ def _coerce_capacity_series(series: pd.Series, stats: PoolCanonicalizationStats)
     return clipped.astype("Int64")
 
 
-def _safe_canonical_join_value(column: str, raw: object, *, policy: PolicyConfig) -> int | NAType:
+def _safe_canonical_join_value(
+    column: str, raw: object, *, policy: PolicyConfig, raise_on_invalid: bool
+) -> int | NAType:
     """Canonicalize a join value while preserving NA on failure."""
 
     try:
         return canonicalize_join_key_value(column, raw, policy=policy)
     except JoinKeyCanonicalizationError:
+        if raise_on_invalid:
+            raise
         return pd.NA
 
 
@@ -126,7 +130,9 @@ def _canonicalize_join_key_columns(
             raise KeyError(f"Missing join key column: {column}")
         series = ensure_series(canonicalized[column])
         canonical_series = series.map(
-            lambda raw: _safe_canonical_join_value(column, raw, policy=policy)
+            lambda raw: _safe_canonical_join_value(
+                column, raw, policy=policy, raise_on_invalid=raise_on_invalid
+            )
         )
         values = pd.Series(canonical_series, index=canonicalized.index, dtype="Int64")
         negative_mask = values.notna() & (values < 0)
@@ -238,7 +244,7 @@ def _build_join_key_duplicate_report(
 
         >>> import pandas as pd
         >>> df = pd.DataFrame({
-        ...     "کدرشته": [1201, 1201, 1201],
+        ...     "کدرشته": [1, 1, 1],
         ...     "جنسیت": [1, 1, 1],
         ...     "دانش آموز فارغ": [0, 0, 0],
         ...     "مرکز گلستان صدرا": [1, 1, 1],
@@ -663,7 +669,7 @@ def canonicalize_students_frame(
             column_name=group_column,
         )
     students = _canonicalize_join_key_columns(
-        students, policy.join_keys, policy, raise_on_invalid=False
+        students, policy.join_keys, policy, raise_on_invalid=True
     )
     for column in policy.join_keys:
         if column in students.columns and not ensure_series(students[column]).isna().any():

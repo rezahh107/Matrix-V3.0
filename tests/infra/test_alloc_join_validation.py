@@ -335,7 +335,7 @@ def test_validate_allocation_join_keys_handles_farsi_tokens_and_localized_digits
     mentors = pd.DataFrame(
         {
             "mentor_id": ["m1"],
-            policy.stage_column("group"): [9100],
+            policy.stage_column("group"): [5],
             policy.stage_column("gender"): [1],
             policy.stage_column("graduation_status"): [0],
             policy.stage_column("center"): [3],
@@ -368,7 +368,7 @@ def test_validate_allocation_join_keys_flags_mismatch_after_canonicalization() -
     mentors = pd.DataFrame(
         {
             "mentor_id": ["m1"],
-            policy.stage_column("group"): [9100],
+            policy.stage_column("group"): [5],
             policy.stage_column("gender"): [1],
             policy.stage_column("graduation_status"): [0],
             policy.stage_column("center"): [4],

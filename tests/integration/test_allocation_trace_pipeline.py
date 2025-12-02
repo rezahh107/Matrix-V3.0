@@ -8,7 +8,7 @@ from app.core.policy_loader import load_policy
 def test_trace_records_include_reason_codes() -> None:
     policy = load_policy()
     student = {
-        "کدرشته": 101,
+        "کدرشته": 21,
         "گروه آزمایشی": "ریاضی",
         "جنسیت": policy.gender_codes.male.value,
         "دانش آموز فارغ": 0,
@@ -18,7 +18,7 @@ def test_trace_records_include_reason_codes() -> None:
     }
     candidate_pool = pd.DataFrame(
         {
-            "کدرشته": [101],
+            "کدرشته": [21],
             "گروه آزمایشی": ["ریاضی"],
             "جنسیت": [policy.gender_codes.female.value],
             "دانش آموز فارغ": [0],

@@ -69,7 +69,7 @@ def test_upsert_mentor_pool_cache_rejects_duplicate_composite_key(tmp_path: Path
         {
             "mentor_id": ["m1", "m1"],
             "کد کارمندی پشتیبان": ["E1", "E1"],
-            "کدرشته": [1201, 1201],
+            "کدرشته": [1, 1],
             "گروه آزمایشی": ["A", "A"],
             "جنسیت": [1, 1],
             "دانش آموز فارغ": [0, 0],
@@ -97,7 +97,7 @@ def test_upsert_mentor_pool_cache_allows_same_mentor_distinct_join_keys(tmp_path
         {
             "mentor_id": ["m1", "m1"],
             "کد کارمندی پشتیبان": ["E1", "E1"],
-            "کدرشته": [1201, 1202],
+            "کدرشته": [1, 3],
             "گروه آزمایشی": ["A", "B"],
             "جنسیت": [1, 1],
             "دانش آموز فارغ": [0, 0],
@@ -118,7 +118,7 @@ def test_upsert_students_cache_rejects_duplicate_student_ids(tmp_path: Path) -> 
         {
             "student_id": ["s1", "s1"],
             "کد ملی": ["1", "2"],
-            "کدرشته": [1201, 1201],
+            "کدرشته": [1, 1],
             "گروه آزمایشی": ["A", "A"],
             "جنسیت": [1, 1],
             "دانش آموز فارغ": [0, 0],
@@ -148,7 +148,7 @@ def test_upsert_caches_allow_nulls_in_unique_columns(tmp_path: Path) -> None:
         {
             "mentor_id": [None, None, "m2"],
             "کد کارمندی پشتیبان": [None, "E1", "E2"],
-            "کدرشته": [1201, 1201, 1201],
+            "کدرشته": [1, 1, 1],
             "جنسیت": [1, 1, 1],
             "دانش آموز فارغ": [0, 0, 0],
             "مرکز گلستان صدرا": [1, 1, 1],
@@ -164,7 +164,7 @@ def test_upsert_caches_allow_nulls_in_unique_columns(tmp_path: Path) -> None:
         {
             "student_id": [None, None, "s3"],
             "کد ملی": ["1", "2", "3"],
-            "کدرشته": [1201, 1201, 1201],
+            "کدرشته": [1, 1, 1],
             "گروه آزمایشی": ["A", "A", "A"],
             "جنسیت": [1, 1, 1],
             "دانش آموز فارغ": [0, 0, 0],
@@ -190,7 +190,7 @@ def test_upsert_caches_create_unique_indexes(tmp_path: Path) -> None:
         {
             "mentor_id": ["m1", "m2"],
             "کد کارمندی پشتیبان": ["E1", "E2"],
-            "کدرشته": [1201, 1202],
+            "کدرشته": [1, 3],
             "گروه آزمایشی": ["A", "B"],
             "جنسیت": [1, 1],
             "دانش آموز فارغ": [0, 0],
@@ -207,7 +207,7 @@ def test_upsert_caches_create_unique_indexes(tmp_path: Path) -> None:
         {
             "student_id": ["s1", "s2"],
             "کد ملی": ["1", "2"],
-            "کدرشته": [1201, 1202],
+            "کدرشته": [1, 3],
             "گروه آزمایشی": ["A", "B"],
             "جنسیت": [1, 1],
             "دانش آموز فارغ": [0, 0],
@@ -252,7 +252,7 @@ def test_upsert_caches_create_unique_indexes(tmp_path: Path) -> None:
                 (
                     "m1",
                     "E1",
-                    1201,
+                    1,
                     "A",
                     1,
                     0,

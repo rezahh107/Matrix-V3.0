@@ -7,7 +7,7 @@
 مثال:
     >>> from app.core.common.types import JoinKeyValues
     >>> keys = JoinKeyValues({
-    ...   "کدرشته": 1201,
+    ...   "کدرشته": 1,
     ...   "گروه_آزمایشی": 1,
     ...   "جنسیت": 1,
     ...   "دانش_آموز_فارغ": 0,
@@ -15,7 +15,7 @@
     ...   "مالی_حکمت_بنیاد": 0,
     ... })
     >>> keys["کدرشته"]
-    1201
+    1
 """
 
 from __future__ import annotations
@@ -207,7 +207,7 @@ class JoinKeyValues(Mapping[str, int]):
     مثال کوتاه::
 
         >>> keys = JoinKeyValues({
-        ...     "کدرشته": 1201,
+        ...     "کدرشته": 1,
         ...     "جنسیت": 1,
         ...     "دانش آموز فارغ": 0,
         ...     "مرکز گلستان صدرا": 1,
@@ -215,7 +215,7 @@ class JoinKeyValues(Mapping[str, int]):
         ...     "کد مدرسه": 10,
         ... })
         >>> keys["کدرشته"]
-        1201
+        1
     """
 
     __slots__ = ("_items", "_mapping", "_lookup_map")

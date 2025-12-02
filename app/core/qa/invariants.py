@@ -182,7 +182,7 @@ def run_all_invariants(
     >>> import pandas as pd
     >>> from app.core.policy_loader import load_policy
     >>> policy = load_policy()
-    >>> matrix = pd.DataFrame({"کدرشته": [1201], "جنسیت": [1], "دانش آموز فارغ": [0],
+    >>> matrix = pd.DataFrame({"کدرشته": [1], "جنسیت": [1], "دانش آموز فارغ": [0],
     ... "مرکز گلستان صدرا": [0], "مالی حکمت بنیاد": [0], "کد مدرسه": [1010],
     ... "has_school_constraint": [False]})
     >>> report = run_all_invariants(policy=policy, matrix=matrix)

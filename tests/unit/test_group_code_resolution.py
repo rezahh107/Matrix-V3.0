@@ -11,7 +11,7 @@ from app.core.common.normalization import normalize_header, resolve_group_code
 
 @pytest.fixture()
 def _group_map() -> dict[str, int]:
-    return {"تجربی": 2, "انسانی": 1}
+    return {"تجربی": 3, "انسانی": 1}
 
 
 def test_normalize_header_handles_zwnj_and_arabic_variants() -> None:
@@ -71,7 +71,7 @@ def test_resolve_group_code_falls_back_to_crosswalk(_group_map: dict[str, int]) 
         group_column="گروه آزمایشی",
     )
 
-    assert code == 2
+    assert code == 3
 
 
 def test_resolve_group_code_logs_mismatch_warning(

@@ -36,7 +36,7 @@ def test_canonicalize_pool_frame_rejects_invalid_school_code() -> None:
     policy = replace(load_policy(), school_code_empty_as_zero=False)
     pool = pd.DataFrame(
         {
-            policy.stage_column("group"): [1201],
+            policy.stage_column("group"): [1],
             policy.stage_column("gender"): [1],
             policy.stage_column("graduation_status"): [0],
             policy.stage_column("center"): [1],

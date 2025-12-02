@@ -16,7 +16,7 @@ def _dual_base_frame(alias_normal: str | None) -> pd.DataFrame:
             "mentor_row_id": [1],
             "center_code": [1],
             "center_text": ["مرکز"],
-            "group_pairs": [[("ریاضی", 1201)]],
+            "group_pairs": [[("ریاضی", 1)]],
             "genders": [[1]],
             "school_codes": [[0]],
             "schools_normal": [[""]],

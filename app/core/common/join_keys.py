@@ -180,11 +180,11 @@ def _canonicalize_center_value(value: object, policy: PolicyConfig) -> int:
 
 
 def _canonicalize_group_value(value: object) -> int:
-    """Canonicalize group code allowing any non-negative numeric code."""
+    """Canonicalize group code enforcing LAW-valid set."""
 
     coerced = _canonicalize_numeric_value(value, allow_zero_from_empty=False)
-    if coerced <= 0:
-        raise ValueError("DATA_MISSING")
+    if coerced not in VALID_GROUP_CODES:
+        raise ValueError("DATA_INVALID")
     return coerced
 
 

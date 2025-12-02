@@ -28,7 +28,7 @@ def test_build_matrix_reports_key_level_join_key_duplicates() -> None:
             COL_SCHOOL_COUNT: [0, 0],
             CAPACITY_CURRENT_COL: [0, 0],
             CAPACITY_SPECIAL_COL: [1, 1],
-            "کدرشته": [1201, 1201],
+            "کدرشته": [1, 1],
             "جنسیت": [1, 1],
             "دانش آموز فارغ": [0, 0],
             "مرکز گلستان صدرا": [1, 1],
@@ -38,7 +38,7 @@ def test_build_matrix_reports_key_level_join_key_duplicates() -> None:
     )
     schools_df = pd.DataFrame({"کد مدرسه": [3581], "نام مدرسه 1": ["مدرسه"]})
     crosswalk_df = pd.DataFrame(
-        {"گروه آزمایشی": ["تجربی"], "کد گروه": [1201], "مقطع تحصیلی": ["دهم"]}
+        {"گروه آزمایشی": ["تجربی"], "کد گروه": [1], "مقطع تحصیلی": ["دهم"]}
     )
 
     cfg = BuildConfig(policy=policy)
@@ -95,7 +95,7 @@ def test_build_matrix_allows_distinct_mentors_on_same_join_key() -> None:
             COL_SCHOOL_COUNT: [0, 0],
             CAPACITY_CURRENT_COL: [0, 0],
             CAPACITY_SPECIAL_COL: [1, 1],
-            "کدرشته": [1201, 1201],
+            "کدرشته": [1, 1],
             "جنسیت": [1, 1],
             "دانش آموز فارغ": [0, 0],
             "مرکز گلستان صدرا": [1, 1],
@@ -105,7 +105,7 @@ def test_build_matrix_allows_distinct_mentors_on_same_join_key() -> None:
     )
     schools_df = pd.DataFrame({"کد مدرسه": [3581], "نام مدرسه 1": ["مدرسه"]})
     crosswalk_df = pd.DataFrame(
-        {"گروه آزمایشی": ["تجربی"], "کد گروه": [1201], "مقطع تحصیلی": ["دهم"]}
+        {"گروه آزمایشی": ["تجربی"], "کد گروه": [1], "مقطع تحصیلی": ["دهم"]}
     )
 
     cfg = BuildConfig(policy=policy)

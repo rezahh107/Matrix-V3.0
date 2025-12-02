@@ -17,12 +17,12 @@ def test_resolve_group_code_prefers_major_when_mismatch(caplog):
     row = pd.Series(
         {
             "student_id": "STD-1",
-            "کدرشته": "۱۲۳",
+            "کدرشته": "۲۱",
             "گروه آزمایشی": "ریاضی",
         }
     )
     stats: dict[str, int] = {}
-    group_map = _make_group_map({"ریاضی": 456})
+    group_map = _make_group_map({"ریاضی": 23})
     logger = logging.getLogger("group-test")
     with caplog.at_level("WARNING"):
         resolved = resolve_group_code(
@@ -34,14 +34,14 @@ def test_resolve_group_code_prefers_major_when_mismatch(caplog):
             stats=stats,
             logger=logger,
         )
-    assert resolved == 123
+    assert resolved == 21
     assert stats.get("resolved_by_major_code") == 1
     assert "mismatch" in caplog.text
 
 
 def test_resolve_group_code_uses_crosswalk_when_major_absent():
     row = pd.Series({"کدرشته": "", "گروه آزمایشی": "تجربی"})
-    group_map = _make_group_map({"تجربی": 789})
+    group_map = _make_group_map({"تجربی": 25})
     stats: dict[str, int] = {}
     resolved = resolve_group_code(
         row,
@@ -52,7 +52,7 @@ def test_resolve_group_code_uses_crosswalk_when_major_absent():
         stats=stats,
         logger=logging.getLogger("group-test"),
     )
-    assert resolved == 789
+    assert resolved == 25
     assert stats.get("resolved_by_crosswalk") == 1
 
 
@@ -95,7 +95,7 @@ def test_allocate_batch_uses_policy_capacity_column():
         [
             {
                 "student_id": "STD-777",
-                "کدرشته": 1201,
+                "کدرشته": 1,
                 "گروه آزمایشی": "تجربی",
                 "جنسیت": 1,
                 "دانش آموز فارغ": 0,
@@ -111,7 +111,7 @@ def test_allocate_batch_uses_policy_capacity_column():
             {
                 "پشتیبان": "Mentor A",
                 "کد کارمندی پشتیبان": "EMP-1",
-                "کدرشته": 1201,
+                "کدرشته": 1,
                 "گروه آزمایشی": "تجربی",
                 "جنسیت": 1,
                 "دانش آموز فارغ": 0,
@@ -147,7 +147,7 @@ def test_allocate_batch_includes_identity_columns():
         [
             {
                 "student_id": "STD-1",
-                "کدرشته": 101,
+                "کدرشته": 33,
                 "گروه آزمایشی": "تجربی",
                 "جنسیت": 1,
                 "دانش آموز فارغ": 0,
@@ -164,7 +164,7 @@ def test_allocate_batch_includes_identity_columns():
             {
                 "پشتیبان": "Mentor X",
                 "کد کارمندی پشتیبان": "EMP-9",
-                "کدرشته": 101,
+                "کدرشته": 33,
                 "گروه آزمایشی": "تجربی",
                 "جنسیت": 1,
                 "دانش آموز فارغ": 0,
@@ -202,7 +202,7 @@ def test_allocate_batch_uses_alias_column_from_pool():
         [
             {
                 "student_id": "STD-ALIAS",
-                "کدرشته": 606,
+                "کدرشته": 11,
                 "گروه آزمایشی": "تجربی",
                 "جنسیت": 1,
                 "دانش آموز فارغ": 0,
@@ -219,7 +219,7 @@ def test_allocate_batch_uses_alias_column_from_pool():
             {
                 "پشتیبان": "Mentor Alias",
                 "کد کارمندی پشتیبان": "EMP-ALIAS",
-                "کدرشته": 606,
+                "کدرشته": 11,
                 "گروه آزمایشی": "تجربی",
                 "جنسیت": 1,
                 "دانش آموز فارغ": 0,

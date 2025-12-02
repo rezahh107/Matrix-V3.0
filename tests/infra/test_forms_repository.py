@@ -24,13 +24,13 @@ def _sample_entries():
             "id": "11",
             "form_id": "1",
             "date_created": "2024-01-01T00:00:00Z",
-            "fields": {"student_id": "S1", "کدرشته": 1201, "جنسیت": 1},
+            "fields": {"student_id": "S1", "کدرشته": 1, "جنسیت": 1},
         },
         {
             "id": "12",
             "form_id": "1",
             "created_at": "2024-01-02T00:00:00Z",
-            "fields": {"student_id": "S2", "کدرشته": 1202, "جنسیت": 0},
+            "fields": {"student_id": "S2", "کدرشته": 3, "جنسیت": 0},
         },
     ]
 

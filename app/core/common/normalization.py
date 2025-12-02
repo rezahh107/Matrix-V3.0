@@ -520,20 +520,31 @@ def resolve_group_code(
 ) -> int | None:
     """تعیین کد رشتهٔ دانش‌آموز با اولویت «کد رشته» و سپس نگاشت Crosswalk."""
 
+    from app.core.common.join_keys import VALID_GROUP_CODES
+
     def _bump(key: str) -> None:
         if stats is None:
             return
         stats[key] = stats.get(key, 0) + 1
 
+    valid_groups = set(VALID_GROUP_CODES)
+
     major_raw = row.get(major_column)
     major_code = parse_int_safe(major_raw)
+    if major_code is not None and major_code not in valid_groups:
+        _bump("invalid_major_code")
+        major_code = None
 
     group_name_raw = row.get(group_column)
     group_code = None
     if group_name_raw is not None and not pd.isna(group_name_raw):
         normalized_name = normalize_fa(group_name_raw)
         if normalized_name:
-            group_code = group_map.get(normalized_name)
+            candidate = group_map.get(normalized_name)
+            if candidate in valid_groups:
+                group_code = candidate
+            elif candidate is not None:
+                _bump("invalid_group_code")
 
     if prefer_major_code and major_code is not None:
         if group_code is not None and group_code != major_code:

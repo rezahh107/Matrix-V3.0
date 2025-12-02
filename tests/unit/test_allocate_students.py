@@ -267,8 +267,8 @@ def test_allocate_batch_aligns_group_crosswalk_for_students_and_pool() -> None:
     crosswalk = pd.DataFrame(
         {
             "گروه آزمایشی": ["علوم پایه", "علوم پایه"],
-            "کد گروه": [9100, 9100],
-            "کدرشته خام": [9101, 9102],
+            "کد گروه": [5, 5],
+            "کدرشته خام": [7, 8],
             "مقطع تحصیلی": ["دهم", "یازدهم"],
         }
     )
@@ -276,7 +276,7 @@ def test_allocate_batch_aligns_group_crosswalk_for_students_and_pool() -> None:
     students = pd.DataFrame(
         {
             "student_id": ["S-X", "S-Y"],
-            "کدرشته": [9101, 9102],
+            "کدرشته": [7, 8],
             "گروه آزمایشی": ["علوم پایه", "علوم پایه"],
             "جنسیت": [1, 1],
             "دانش آموز فارغ": [0, 0],
@@ -289,8 +289,8 @@ def test_allocate_batch_aligns_group_crosswalk_for_students_and_pool() -> None:
         {
             "پشتیبان": ["M1", "M2"],
             "کد کارمندی پشتیبان": ["EMP-10", "EMP-20"],
-            "کدرشته": [9100, 9100],
-            "کدرشته | group_code": [9100, 9100],
+            "کدرشته": [5, 5],
+            "کدرشته | group_code": [5, 5],
             "گروه آزمایشی": ["علوم پایه", "علوم پایه"],
             "گروه آزمایشی | exam_group": ["علوم پایه", "علوم پایه"],
             "جنسیت": [1, 1],
@@ -319,7 +319,7 @@ def test_allocate_batch_aligns_group_crosswalk_for_students_and_pool() -> None:
     log_records = logs.to_dict("records") if hasattr(logs, "to_dict") else list(logs)
     for log in log_records:
         join_keys = log["join_keys"]
-        assert join_keys["کدرشته"] == 9100
+        assert join_keys["کدرشته"] == 5
         assert log["candidate_count"] == 2
 
 
@@ -596,7 +596,7 @@ def test_build_join_key_duplicate_report_handles_multiple_groups_per_mode() -> N
     mentor_column = "کد کارمندی پشتیبان"
     rows = [
         {
-            "کدرشته": 1101,
+            "کدرشته": 11,
             "جنسیت": 0,
             "دانش آموز فارغ": 0,
             "مرکز گلستان صدرا": 1,
@@ -605,7 +605,7 @@ def test_build_join_key_duplicate_report_handles_multiple_groups_per_mode() -> N
             mentor_column: "EMP-A",
         },
         {
-            "کدرشته": 1101,
+            "کدرشته": 11,
             "جنسیت": 0,
             "دانش آموز فارغ": 0,
             "مرکز گلستان صدرا": 1,
@@ -614,7 +614,7 @@ def test_build_join_key_duplicate_report_handles_multiple_groups_per_mode() -> N
             mentor_column: "EMP-B",
         },
         {
-            "کدرشته": 2201,
+            "کدرشته": 9,
             "جنسیت": 1,
             "دانش آموز فارغ": 0,
             "مرکز گلستان صدرا": 2,
@@ -623,7 +623,7 @@ def test_build_join_key_duplicate_report_handles_multiple_groups_per_mode() -> N
             mentor_column: "EMP-C",
         },
         {
-            "کدرشته": 2201,
+            "کدرشته": 9,
             "جنسیت": 1,
             "دانش آموز فارغ": 0,
             "مرکز گلستان صدرا": 2,
@@ -829,7 +829,7 @@ def test_allocate_batch_skips_canonicalization_when_frames_prepared(
 
 
 def test_allocate_batch_no_match_sets_error(_base_pool: pd.DataFrame) -> None:
-    students = _single_student(**{"کدرشته": 9999})
+    students = _single_student(**{"کدرشته": 33})
 
     allocations, updated_pool, logs, _ = allocate_batch(students, _base_pool)
 
