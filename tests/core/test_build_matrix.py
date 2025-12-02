@@ -14,8 +14,8 @@ from app.core.policy_loader import load_policy
 
 
 def test_status_domain_sets_follow_policy_codes() -> None:
-    assert DUAL_STATUS_GROUPS == frozenset({1, 3, 5, 7, 8, 9, 11, 12, 14, 17, 18})
-    assert STUDENT_ONLY_GROUPS == frozenset({33, 31, 27})
+    assert frozenset({1, 3, 5, 7, 8, 9, 11, 12, 14, 17, 18}) == DUAL_STATUS_GROUPS
+    assert frozenset({33, 31, 27}) == STUDENT_ONLY_GROUPS
     # هنر (7) is dual-status; پایه هفتم (33) is student-only
     assert 7 in DUAL_STATUS_GROUPS
     assert 33 not in DUAL_STATUS_GROUPS

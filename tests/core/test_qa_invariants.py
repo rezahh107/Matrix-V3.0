@@ -6,8 +6,7 @@ from typing import Any
 import pandas as pd
 
 from app.core.build_matrix import DUAL_STATUS_GROUPS
-from app.core.common.domain import STUDENT_ONLY_GROUPS
-from app.core.common.domain import COL_MENTOR_TYPE, StudentBindingKind
+from app.core.common.domain import COL_MENTOR_TYPE, STUDENT_ONLY_GROUPS, StudentBindingKind
 from app.core.policy_loader import PolicyConfig, load_policy
 from app.core.qa.invariants import (
     QaRuleResult,
