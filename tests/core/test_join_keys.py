@@ -295,7 +295,7 @@ def test_canonical_frames_enforce_canon01_join_key_ints() -> None:
     students = pd.DataFrame(
         {
             "student_id": ["s1"],
-            policy.stage_column("group"): ["۹۱۰۰"],
+            policy.stage_column("group"): ["۲۱"],
             policy.stage_column("gender"): ["پسر"],
             policy.stage_column("graduation_status"): [0],
             policy.stage_column("center"): ["۰"],
@@ -305,7 +305,7 @@ def test_canonical_frames_enforce_canon01_join_key_ints() -> None:
     )
     pool = pd.DataFrame(
         {
-            policy.stage_column("group"): ["۹۱۰۰"],
+            policy.stage_column("group"): ["۲۱"],
             policy.stage_column("gender"): ["دختر"],
             policy.stage_column("graduation_status"): ["0"],
             policy.stage_column("center"): [0],

@@ -17,7 +17,7 @@ def _base_student_frame(values: list[str | None]) -> pd.DataFrame:
     return pd.DataFrame(
         {
             "مدرسه نهايی": values,
-            "کدرشته": [101] * count,
+            "کدرشته": [21] * count,
             "گروه آزمایشی": ["تجربی"] * count,
             "جنسیت": [1] * count,
             "دانش آموز فارغ": [0] * count,

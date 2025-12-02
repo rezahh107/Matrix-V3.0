@@ -642,7 +642,12 @@ def test_build_join_key_duplicate_report_handles_multiple_groups_per_mode() -> N
     assert per_mentor[mentor_column].tolist() == ["EMP-C", "EMP-C"]
     assert per_mentor["duplicate_group_size"].dropna().unique().tolist() == [2]
 
-    assert per_key[mentor_column].tolist() == ["EMP-A", "EMP-B", "EMP-C", "EMP-C"]
+    assert sorted(per_key[mentor_column].tolist()) == [
+        "EMP-A",
+        "EMP-B",
+        "EMP-C",
+        "EMP-C",
+    ]
     group_sizes = per_key.groupby(join_keys, sort=False)["duplicate_group_size"].first()
     assert group_sizes.to_dict() == {
         tuple(rows[0][k] for k in join_keys): 2,

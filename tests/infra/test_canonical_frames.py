@@ -101,7 +101,7 @@ def test_canonicalize_students_frame_handles_localized_join_keys() -> None:
     students = pd.DataFrame(
         {
             "student_id": ["s1"],
-            "کدرشته": ["۹۱۰۰"],
+            "کدرشته": ["۲۱"],
             "جنسیت": ["پسر"],
             "دانش آموز فارغ": ["۰"],
             "مرکز گلستان صدرا": ["۰"],
@@ -121,7 +121,7 @@ def test_canonicalize_students_frame_aligns_with_core_canonicalization() -> None
     students = pd.DataFrame(
         {
             "student_id": ["s1", "s2"],
-            policy.stage_column("group"): ["۹۱۰۰", "۹۱۰۰"],
+            policy.stage_column("group"): ["۲۱", "۲۱"],
             policy.stage_column("gender"): ["پسر", "دختر"],
             policy.stage_column("graduation_status"): [0, 1],
             policy.stage_column("center"): ["۰", "1"],
