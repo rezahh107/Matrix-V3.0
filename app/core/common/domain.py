@@ -230,9 +230,9 @@ def get_academic_info(field_code: int) -> AcademicInfo:
         raise DataMissingError(func="get_academic_info", column="کدرشته", value=field_code)
 
     is_dual_status = field_code in DUAL_STATUS_GROUPS
-    allowed_status: set[int] = {int(Status.STUDENT)}
+    allowed_status: set[int] = {Status.STUDENT}
     if is_dual_status:
-        allowed_status.add(int(Status.GRADUATE))
+        allowed_status.add(Status.GRADUATE)
 
     return AcademicInfo(
         level=record.educational_level,
