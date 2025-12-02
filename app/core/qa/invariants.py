@@ -9,13 +9,13 @@ import pandas as pd
 from pandas.api import types as ptypes
 
 from app.core.allocation.mentor_pool import compute_effective_status
-from app.core.build_matrix import allowed_statuses_for_group
 from app.core.canonical_frames import POOL_JOIN_KEY_DUPLICATES_ATTR
 from app.core.common.domain import (
     COL_MENTOR_TYPE,
     BuildConfig,
     StudentBindingKind,
     _postal_valid,
+    allowed_statuses_for_group,
     classify_student_binding,
 )
 from app.core.common.national_id import canonical_national_code

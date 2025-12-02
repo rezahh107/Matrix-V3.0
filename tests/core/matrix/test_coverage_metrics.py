@@ -313,8 +313,8 @@ def test_build_coverage_validation_fields_aligns_with_metrics() -> None:
 
 def test_coverage_metrics_regression_many_invalid_tokens_all_viable_groups_covered() -> None:
     valid_groups = [
-        (101, 1, 0, 10, 1, 1001),
-        (101, 2, 0, 10, 1, 1001),
+        (101, 1, 1, 10, 1, 1001),
+        (101, 2, 1, 10, 1, 1001),
         (102, 1, 1, 11, 2, 1002),
     ]
 
@@ -333,7 +333,7 @@ def test_coverage_metrics_regression_many_invalid_tokens_all_viable_groups_cover
 
     blocked_row = _base_row(group_code=103, can_generate=False, mentor_id="BLOCKED") | {
         "genders": [1],
-        "statuses_normal": [0],
+        "statuses_normal": [1],
         "center_code": 12,
         "finance": [1],
         "school_codes": [1003],
@@ -455,7 +455,7 @@ def test_coverage_metrics_normalizes_blank_gender_and_status_to_zero() -> None:
     assert metrics.coverage_ratio == 1.0
     assert summary["candidate_only_groups"] == 0
     assert matrix_df["جنسیت"].iat[0] == 0
-    assert matrix_df["دانش آموز فارغ"].iat[0] == 0
+    assert matrix_df["دانش آموز فارغ"].iat[0] == 1
     assert coverage_df.loc[0, "status"] == "covered"
 
 
