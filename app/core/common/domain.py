@@ -140,6 +140,7 @@ class AcademicInfo(TypedDict):
     allowed_status: set[int]
     is_dual_status: bool
 
+
 _CODE_TO_RECORD: dict[int, EducationalRecord] = {
     record.field_code: record for record in EDUCATIONAL_STRUCTURE
 }
