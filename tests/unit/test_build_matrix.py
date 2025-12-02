@@ -37,9 +37,7 @@ def test_build_matrix_reports_key_level_join_key_duplicates() -> None:
         }
     )
     schools_df = pd.DataFrame({"کد مدرسه": [3581], "نام مدرسه 1": ["مدرسه"]})
-    crosswalk_df = pd.DataFrame(
-        {"گروه آزمایشی": ["تجربی"], "کد گروه": [1], "مقطع تحصیلی": ["دهم"]}
-    )
+    crosswalk_df = pd.DataFrame({"گروه آزمایشی": ["تجربی"], "کد گروه": [1], "مقطع تحصیلی": ["دهم"]})
 
     cfg = BuildConfig(policy=policy)
     (
@@ -104,9 +102,7 @@ def test_build_matrix_allows_distinct_mentors_on_same_join_key() -> None:
         }
     )
     schools_df = pd.DataFrame({"کد مدرسه": [3581], "نام مدرسه 1": ["مدرسه"]})
-    crosswalk_df = pd.DataFrame(
-        {"گروه آزمایشی": ["تجربی"], "کد گروه": [1], "مقطع تحصیلی": ["دهم"]}
-    )
+    crosswalk_df = pd.DataFrame({"گروه آزمایشی": ["تجربی"], "کد گروه": [1], "مقطع تحصیلی": ["دهم"]})
 
     cfg = BuildConfig(policy=policy)
     _, validation, *_rest, duplicate_join_keys_df, _ = build_matrix(

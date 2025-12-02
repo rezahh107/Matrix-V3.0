@@ -200,7 +200,9 @@ def _derive_pool_join_keys(
         manager_name = str(row.get(COL_MANAGER_NAME, ""))
         invalid_group_tokens: list[int] = []
         group_codes = parse_group_codes(
-            row.get(COL_GROUP, ""), valid_codes=VALID_GROUP_CODES, invalid_collector=invalid_group_tokens
+            row.get(COL_GROUP, ""),
+            valid_codes=VALID_GROUP_CODES,
+            invalid_collector=invalid_group_tokens,
         )
         group_code: int | NAType = pd.NA if not group_codes else int(group_codes[0])
         if not group_codes:
