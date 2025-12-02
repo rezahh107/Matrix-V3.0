@@ -93,14 +93,20 @@ def _explain_mentor_type(
     marker = matrix.attrs.get("qa_debug_marker")
     if marker is not None:
         combined_details["matrix_marker"] = marker
+    breadcrumbs = tuple(matrix.attrs.get("qa_debug_breadcrumbs", ()))
+    if breadcrumbs:
+        combined_details["breadcrumbs"] = breadcrumbs
 
     evidence_parts = tuple(violation.message for violation in violations)
     evidence = "; ".join(dict.fromkeys(evidence_parts)) if evidence_parts else ""
+    law_ref_display = ", ".join(law_refs) if law_refs else "LAW-MENTOR-TYPE-01"
+    breadcrumb_count = len(breadcrumbs)
     story_lines = (
-        f"🔴 {QA_RULE_MENTOR_TYPE_01} / {', '.join(law_refs) if law_refs else 'LAW-MENTOR-TYPE-01'}",
-        f"Evidence: {evidence}",
-        "Why: منتور باید دقیقا یکی از انواع عادی/مدرسه‌ای با alias هم‌راستا با school_code داشته باشد.",
-        "Next: سطرهای گزارش‌شده را در ماتریس اصلاح و دوباره QA را اجرا کنید.",
+        f"🔴 {QA_RULE_MENTOR_TYPE_01} / {law_ref_display}",
+        f"چه شد: {evidence}",
+        f"از کجا/مسیر: ماتریس منتورها (Inspactor → مدرسه)؛ {breadcrumb_count} گام در breadcrumbs.",
+        "چرا: منتور باید فقط یکی از انواع عادی یا مدرسه‌ای باشد و alias با school_code هم‌راستا بماند.",
+        "گام بعدی: سطرهای تخطی را در ماتریس اصلاح کنید و دوباره QA_RULE_MENTOR_TYPE_01 را اجرا کنید.",
     )
 
     return QADebugStory(

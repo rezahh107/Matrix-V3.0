@@ -59,6 +59,7 @@ from app.core.common.domain import (
     school_code_norm,
 )
 from app.core.common.normalization import normalize_header, resolve_group_code
+from app.core.debug.models import QABreadcrumb
 from app.core.inspactor_schema_helper import (
     InspactorDefaultConfig,
     missing_inspactor_columns,
@@ -1800,6 +1801,7 @@ def build_matrix(
         هشت‌تایی دیتافریم شامل ماتریس، گزارش QA، لاگ پیشرفت و جداول کنترلی.
     """
     progress_rows: list[dict[str, Any]] = []
+    qa_breadcrumbs: list[QABreadcrumb] = []
     normalization_meta: dict[str, dict[str, Any]] = {}
 
     def _append_progress_row(row: dict[str, Any]) -> None:
@@ -2039,6 +2041,17 @@ def build_matrix(
         base_df,
         cfg.policy.mentor_pool_governance,
     )
+    qa_breadcrumbs.append(
+        QABreadcrumb(
+            step_id="BUILD_BASE",
+            label="base rows",
+            row_count=int(len(base_df)),
+            key_stats={
+                "invalid_mentors": int(len(invalid_mentors_df)),
+                "school_lookup_mismatch": int(school_mismatch_count),
+            },
+        )
+    )
     if not school_lookup_invalid.empty and "raw_school_value" in school_lookup_invalid.columns:
         derived_unmatched = [
             {
@@ -2086,6 +2099,25 @@ def build_matrix(
     matrix = pd.concat([normal_df, school_df], ignore_index=True, sort=False)
     finance_col = cfg.policy.stage_column("finance")
     center_col = cfg.policy.stage_column("center")
+
+    if school_code_col in matrix.columns:
+        school_codes_numeric = pd.to_numeric(matrix[school_code_col], errors="coerce")
+        null_school_codes = int((school_codes_numeric.fillna(0) == 0).sum())
+    else:
+        null_school_codes = 0
+
+    qa_breadcrumbs.append(
+        QABreadcrumb(
+            step_id="EXPLODE_SCHOOLS",
+            label="exploded mentor rows",
+            row_count=int(len(matrix)),
+            key_stats={
+                "normal_rows": int(len(normal_df)),
+                "school_rows": int(len(school_df)),
+                "null_school_codes": null_school_codes,
+            },
+        )
+    )
 
     if matrix.empty:
         matrix = pd.DataFrame(
@@ -2424,6 +2456,10 @@ def build_matrix(
         setattr(error, "is_coverage_threshold_error", True)
         setattr(error, "coverage_unseen_preview", unseen_preview)
         raise error
+
+    matrix.attrs["qa_debug_breadcrumbs"] = [
+        breadcrumb.to_payload() for breadcrumb in qa_breadcrumbs
+    ]
 
     return (
         matrix,
