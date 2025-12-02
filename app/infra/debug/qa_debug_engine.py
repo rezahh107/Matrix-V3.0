@@ -12,7 +12,12 @@ from app.core.policy_loader import PolicyConfig
 from app.core.qa.invariants import QaReport, QaRuleResult
 from app.core.qa.rules import QA_RULE_MENTOR_TYPE_01, RuleId, get_rule_definitions
 
-__all__ = ["QADebugStory", "explain_rule", "explain_report"]
+__all__ = [
+    "QADebugStory",
+    "build_debug_stories",
+    "explain_rule",
+    "explain_report",
+]
 
 
 @dataclass(frozen=True)
@@ -25,6 +30,17 @@ class QADebugStory:
     evidence: str
     context: Mapping[str, object]
     story: tuple[str, ...]
+
+
+def build_debug_stories(
+    report: QaReport,
+    *,
+    matrix: pd.DataFrame | None,
+    policy: PolicyConfig,
+) -> list[QADebugStory]:
+    """Collect supported debug stories for a QA report without recomputation."""
+
+    return explain_report(report=report, matrix=matrix, policy=policy)
 
 
 def explain_rule(
