@@ -1600,14 +1600,14 @@ def _explode_rows(
         for value in configured_iterable:
             coerced = _coerce_int_like(value)
             normalized_values.append(int(coerced) if coerced is not None else 0)
-        normalized: tuple[int, ...] = tuple(normalized_values)
-
-        if normalized:
-            return normalized
-
         group_value = _coerce_int_like(row.get("group_code"))
         group_int = int(group_value) if group_value is not None else 0
         allowed = allowed_statuses_for_group(group_int, is_school_branch=type_label == "مدرسه‌ای")
+        normalized: tuple[int, ...] = tuple(normalized_values)
+        if normalized:
+            filtered = tuple(value for value in normalized if value in allowed)
+            if filtered:
+                return filtered
         return allowed
 
     df["status_seq"] = df.apply(_statuses_for_row, axis=1)
