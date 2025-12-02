@@ -158,11 +158,10 @@ def _canonicalize_join_key_columns(
                 invalid_index = canonicalized.index[negative_mask.argmax()]
                 raise JoinKeyCanonicalizationError(column, series.loc[invalid_index])
             values.loc[negative_mask] = pd.NA
-        if column_raise and values.isna().any():
-            if not allow_missing_when_strict:
-                first_invalid = values.isna()
-                invalid_index = canonicalized.index[first_invalid.argmax()]
-                raise JoinKeyCanonicalizationError(column, series.loc[invalid_index])
+        if column_raise and values.isna().any() and not allow_missing_when_strict:
+            first_invalid = values.isna()
+            invalid_index = canonicalized.index[first_invalid.argmax()]
+            raise JoinKeyCanonicalizationError(column, series.loc[invalid_index])
         canonicalized[column] = values
     return canonicalized
 
