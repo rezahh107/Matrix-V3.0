@@ -1,0 +1,26 @@
+validation_rules:
+  code_7_rules:
+    - if code == 7:
+        level_must_be: "کنکوری"
+        group_must_be: "هنر"
+        never_allow_levels:
+          - "متوسطه اول"
+  code_33_rules:
+    - if code == 33:
+        level_must_be: "متوسطه اول"
+        group_must_be: "هفتم"
+        is_experimental_group_must_be: false
+  code_confusion_matrix:
+    confusing_codes:
+      - code: 7
+        wrong_assumption: "پایه هفتم"
+        correct_meaning: "گروه هنر کنکوری"
+      - code: 5
+        wrong_assumption: "پایه پنجم"
+        correct_meaning: "دوازدهم انسانی کنکوری"
+      - code: 33
+        wrong_assumption: "گروه آزمایشی"
+        correct_meaning: "پایه هفتم متوسطه اول"
+      - code: 41
+        wrong_assumption: "کد گروه ۵"
+        correct_meaning: "پایه پنجم دبستان"
