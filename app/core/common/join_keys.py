@@ -180,9 +180,11 @@ def _canonicalize_center_value(value: object, policy: PolicyConfig) -> int:
 
 
 def _canonicalize_group_value(value: object) -> int:
+    """Canonicalize group code enforcing LAW-valid set."""
+
     coerced = _canonicalize_numeric_value(value, allow_zero_from_empty=False)
     if coerced not in VALID_GROUP_CODES:
-        raise ValueError("DATA_MISSING")
+        raise ValueError("DATA_INVALID")
     return coerced
 
 
@@ -308,8 +310,6 @@ VALID_GROUP_CODES: tuple[int, ...] = (
     83,
     89,
 )
-
-_RE_SPLIT_ITEMS = re.compile(r"[,\u060C\s]+")
 
 _RE_SPLIT_ITEMS = re.compile(r"[,\u060C\s]+")
 
