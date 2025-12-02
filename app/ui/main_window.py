@@ -1511,9 +1511,7 @@ class MainWindow(QMainWindow):
             )
         )
 
-        hint = QLabel(
-            "در این تب خروجی QA_RULE_MENTOR_TYPE_01 پس از اجرای QA نمایش داده می‌شود."
-        )
+        hint = QLabel("در این تب خروجی QA_RULE_MENTOR_TYPE_01 پس از اجرای QA نمایش داده می‌شود.")
         hint.setWordWrap(True)
         layout.addWidget(hint)
 
