@@ -51,9 +51,9 @@ from app.core.counter import (
 )
 from app.core.policy_loader import MentorStatus, PolicyConfig, load_policy
 from app.core.qa.invariants import QaReport, run_all_invariants
-from app.infra.debug.qa_debug_engine import build_debug_stories
 from app.infra import history_store
 from app.infra.audit_allocations import audit_allocations, summarize_report
+from app.infra.debug.qa_debug_engine import build_debug_stories
 from app.infra.errors import (
     DatabaseCorruptError,
     DatabasePreparationError,

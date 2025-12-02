@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-from typing import Optional
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
@@ -14,8 +13,8 @@ from PySide6.QtWidgets import (
     QLabel,
     QListWidget,
     QListWidgetItem,
-    QPushButton,
     QPlainTextEdit,
+    QPushButton,
     QSplitter,
     QVBoxLayout,
     QWidget,
@@ -122,7 +121,7 @@ class DebugDashboardWidget(QWidget):
         text = self._formatter(story)
         self._story_view.setPlainText(text)
 
-    def _current_story(self) -> Optional[QADebugStory]:
+    def _current_story(self) -> QADebugStory | None:
         item = self._story_list.currentItem()
         if item is None:
             return None
