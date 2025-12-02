@@ -159,9 +159,7 @@ def get_info_from_code(field_code: int) -> tuple[str, str, int]:
     return (record.educational_level, record.experimental_group, record.field_code)
 
 
-def get_code_from_group(
-    experimental_group_name: str, educational_level: str | None = None
-) -> int:
+def get_code_from_group(experimental_group_name: str, educational_level: str | None = None) -> int:
     """Return the unique code for the given group name, optionally narrowed by level."""
 
     matches: list[int] = []
