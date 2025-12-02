@@ -1,11 +1,19 @@
 from __future__ import annotations
 
 import pandas as pd
+import pytest
 
+import app.infra.debug.qa_debug_engine as qa_debug_engine
 from app.core.policy_loader import load_policy
 from app.core.qa.invariants import QaReport, QaRuleResult, QaViolation, check_MENTOR_TYPE_01
 from app.core.qa.rules import QA_RULE_MENTOR_TYPE_01, QA_RULE_STU_01
-from app.infra.debug.qa_debug_engine import QADebugStory, explain_report, explain_rule
+from app.infra.debug.qa_debug_engine import (
+    QADebugStory,
+    build_debug_stories,
+    explain_report,
+    explain_rule,
+)
+from app.infra.debug.qa_debug_presenter import format_story_for_text
 
 
 def test_only_mentor_rule_has_explainer() -> None:
@@ -110,3 +118,47 @@ def test_mentor_story_includes_path_and_next_steps() -> None:
     breadcrumbs = story.context.get("breadcrumbs")
     assert breadcrumbs is not None
     assert len(breadcrumbs) >= 3
+
+
+def test_build_debug_stories_delegates(monkeypatch: pytest.MonkeyPatch) -> None:
+    policy = load_policy()
+    report = QaReport(results=[])
+    captured: dict[str, object] = {}
+
+    def _fake_explain_report(*, report: QaReport, matrix: object, policy: object) -> list[str]:
+        captured["report"] = report
+        captured["matrix"] = matrix
+        captured["policy"] = policy
+        return ["story"]
+
+    monkeypatch.setattr(qa_debug_engine, "explain_report", _fake_explain_report)
+
+    stories = build_debug_stories(report=report, matrix=None, policy=policy)
+
+    assert stories == ["story"]
+    assert captured["report"] is report
+    assert captured["matrix"] is None
+    assert captured["policy"] is policy
+
+
+def test_format_story_for_text_includes_context() -> None:
+    story = QADebugStory(
+        rule_id=QA_RULE_MENTOR_TYPE_01,
+        law_refs=("LAW-01",),
+        severity="error",
+        evidence="alias mismatch",
+        context={"matrix_rows": 2, "breadcrumbs": ("A", "B")},
+        story=(
+            "🔴 QA_RULE_MENTOR_TYPE_01 / LAW-01",
+            "چه شد: two rows invalid",
+            "از کجا/مسیر: debug",
+            "چرا: mismatch",
+            "گام بعدی: fix",
+        ),
+    )
+
+    rendered = format_story_for_text(story)
+
+    assert "LAW-01" in rendered
+    assert "matrix_rows" in rendered
+    assert "گام بعدی" in rendered

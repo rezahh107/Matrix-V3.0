@@ -66,8 +66,10 @@ from app.core.common.columns import canonicalize_headers
 from app.core.counter import find_max_sequence_by_prefix, year_to_yy
 from app.core.policy_loader import get_policy
 from app.infra import cli
+from app.infra.debug import QADebugStory
 from app.infra.local_database import LocalDatabase
 from app.infra.year_database_manager import YearDatabaseInfo, YearDatabaseManager
+from app.ui.debug_dashboard import DebugDashboardWidget
 from app.ui.database_manager_dialog import DatabaseManagerDialog
 from app.ui.fonts import get_app_font
 from app.ui.helpers.counter_helpers import detect_year_candidates
@@ -121,6 +123,7 @@ _EN_TEXT_DEFAULTS: dict[str, str] = {
     "tabs.rule_engine": "Rule Engine",
     "tabs.validate": "Validate",
     "tabs.explain": "Explain",
+    "tabs.debug": "Debug",
     "hero.build.title": "Build Matrix",
     "hero.build.subtitle": "Select inputs and build the eligibility matrix.",
     "hero.build.badge": "Step 1 of 4",
@@ -331,6 +334,8 @@ class MainWindow(QMainWindow):
         self._database_status: DatabaseStatusWidget | None = None
         self._excel_loaders: set[ExcelLoader] = set()
         self._db_status_timer: QTimer | None = None
+        self._latest_debug_stories: list[QADebugStory] = []
+        self._debug_dashboard: DebugDashboardWidget | None = None
         policy_file = resource_path("config", "policy.json")
         self._default_policy_path = str(policy_file) if policy_file.exists() else ""
         exporter_config = resource_path("config", "SmartAlloc_Exporter_Config_v1.json")
@@ -363,6 +368,9 @@ class MainWindow(QMainWindow):
         )
         self._tabs.addTab(
             self._wrap_page(self._build_explain_page()), self._t("tabs.explain", "توضیحات")
+        )
+        self._tabs.addTab(
+            self._wrap_page(self._build_debug_page()), self._t("tabs.debug", "اشکال‌زدایی")
         )
         self._tabs.currentChanged.connect(self._animate_tab_change)
         top_layout.addWidget(self._tabs, 1)
@@ -681,6 +689,7 @@ class MainWindow(QMainWindow):
             (2, self._t("tabs.rule_engine", "موتور قواعد")),
             (3, self._t("tabs.validate", "اعتبارسنجی")),
             (4, self._t("tabs.explain", "توضیحات")),
+            (5, self._t("tabs.debug", "اشکال‌زدایی")),
         ]
         for index, text in labels:
             if index < self._tabs.count():
@@ -1484,6 +1493,33 @@ class MainWindow(QMainWindow):
         layout.addWidget(table)
         layout.addStretch(1)
 
+        return page
+
+    def _build_debug_page(self) -> QWidget:
+        """پنل اشکال‌زدایی QA برای داستان‌های منتور."""
+
+        page = QWidget(self)
+        page.setObjectName("pageDebug")
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(24, 24, 24, 24)
+        layout.setSpacing(12)
+        layout.addWidget(
+            self._create_page_hero(
+                "اشکال‌زدایی QA",
+                "مرور داستان‌های Mentor QA و اشتراک سریع با تیم پشتیبانی.",
+                "ضمیمه",
+            )
+        )
+
+        hint = QLabel(
+            "در این تب خروجی QA_RULE_MENTOR_TYPE_01 پس از اجرای QA نمایش داده می‌شود."
+        )
+        hint.setWordWrap(True)
+        layout.addWidget(hint)
+
+        self._debug_dashboard = DebugDashboardWidget(self)
+        layout.addWidget(self._debug_dashboard)
+        layout.addStretch(1)
         return page
 
     def _register_interactive_controls(self) -> None:
@@ -2375,9 +2411,15 @@ class MainWindow(QMainWindow):
     ) -> None:
         """اجرای فرمان CLI با Worker و رعایت قرارداد progress."""
 
+        self._latest_debug_stories = []
         override_payload = overrides or {}
         if self._local_db is not None:
             override_payload = {"local_db_path": str(self._local_db.path), **override_payload}
+
+        def _capture_debug_stories(stories: Sequence[QADebugStory]) -> None:
+            self._latest_debug_stories = list(stories)
+
+        override_payload = {**override_payload, "qa_debug_callback": _capture_debug_stories}
 
         def _task(*, progress: ProgressFn) -> None:
             exit_code = cli.main(
@@ -2513,6 +2555,12 @@ class MainWindow(QMainWindow):
         """تنظیم متن دکمهٔ انتخاب فایل برای ترجمهٔ جاری."""
 
         picker.set_button_text(self._t("action.browse", "انتخاب…"))
+
+    def _refresh_debug_dashboard(self) -> None:
+        """همگام‌سازی داستان‌های QA با تب اشکال‌زدایی."""
+
+        if self._debug_dashboard is not None:
+            self._debug_dashboard.set_stories(self._latest_debug_stories)
 
     def _save_log_to_file(self) -> None:
         """ذخیرهٔ محتوای لاگ در فایل متنی یا HTML."""
@@ -2653,6 +2701,7 @@ class MainWindow(QMainWindow):
         self._progress.setProperty("busy", False)
         self._worker = None
         hook, self._success_hook = self._success_hook, None
+        self._refresh_debug_dashboard()
 
         if error is not None:
             msg = str(error)
