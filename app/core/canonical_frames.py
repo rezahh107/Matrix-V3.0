@@ -835,7 +835,7 @@ def canonicalize_pool_frame(
             present_join_keys,
             policy,
             raise_on_invalid=True,
-            allow_missing_when_strict=True,
+            allow_missing_when_strict=False,
         )
     duplicate_scope = "per_key" if include_distinct_mentor_duplicates else "per_mentor"
     duplicate_report = _build_join_key_duplicate_report(
