@@ -2,7 +2,7 @@
 
 ## Breaking Changes
 1. **Conceptual Separation**: Educational Level, Group/Grade, and Field Code are explicitly distinct.
-2. **Complete Hierarchy Documented**: All 32 Level→Group→Code mappings are now canonical in `educational_master.ssot.yaml` and Policy §4.2.
+2. **Complete Hierarchy Documented**: All Level→Group→Code mappings now include **allowed academic status** ({0,1} dual vs {1} student-only) in `educational_master.ssot.yaml` and Policy §4.2.
 3. **Code Meanings Updated**:
    - Code 7 now exclusively means "Art Experimental Group" (کنکوری).
    - Code 33 now exclusively means "7th Grade" (متوسطه اول).
@@ -10,9 +10,9 @@
    - Code 41 now exclusively means "5th Grade Elementary" (دبستان).
 
 ## Migration Requirements
-- Use the 32-row mapping table from Policy §4.2 or `educational_master.ssot.yaml` for all imports/exports.
+- Use the status-aware mapping table from Policy §4.2 or `educational_master.ssot.yaml` for all imports/exports.
 - Update any legacy mapping that assumed Code 7 = Grade 7 or Code 5 = Grade 5.
-- Analytics/reporting must rely on the three-tier hierarchy (Level → Group → Code) and dual-status list {1,3,5,7,8,9,11,12,14,17,18}.
+- Analytics/reporting must rely on the four-dimensional hierarchy (Level → Group → Code → Allowed Status) and dual-status list {1,3,5,7,8,9,11,12,14,17,18}.
 
 ## Validation Rules Added
 1. Code 7 → Level = "کنکوری", Group = "هنر"; never valid for "متوسطه اول".
