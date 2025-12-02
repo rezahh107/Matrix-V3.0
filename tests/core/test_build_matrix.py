@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pandas as pd
 
-from app.core.build_matrix import build_matrix
+from app.core.build_matrix import DUAL_STATUS_GROUPS, build_matrix
 from app.core.common.domain import BuildConfig
+from app.core.policy_loader import load_policy
 
 
 def _minimal_crosswalk() -> pd.DataFrame:
@@ -84,3 +87,90 @@ def test_build_matrix_accepts_policy_override_for_small_postal_alias() -> None:
     alias_values = set(matrix["جایگزین"].unique())
     assert alias_values == {"999"}
     assert (matrix["عادی مدرسه"] == "عادی").all()
+
+
+def _policy_with_statuses(normal: list[int], school: list[int]) -> BuildConfig:
+    policy = load_policy()
+    return BuildConfig(
+        enable_capacity_gate=False,
+        policy=replace(policy, normal_statuses=normal, school_statuses=school),
+    )
+
+
+def _crosswalk_for_groups() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "گروه آزمایشی": ["dual", "nondual"],
+            "کد گروه": [next(iter(DUAL_STATUS_GROUPS)), 27],
+            "مقطع تحصیلی": ["پایه", "پایه"],
+        }
+    )
+
+
+def _mentor_frame_for_group(group_name: str, *, school_count: int = 0) -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "نام پشتیبان": [f"mentor-{group_name}"],
+            "نام مدیر": ["manager"],
+            "کد کارمندی پشتیبان": [f"{group_name}-id"],
+            "کدپستی": ["5000"],
+            "تعداد مدارس تحت پوشش": [school_count],
+            "تعداد داوطلبان تحت پوشش": [5],
+            "تعداد تحت پوشش خاص": [0],
+            "گروه آزمایشی": [group_name],
+            "جنسیت": [1],
+            "وضعیت تحصیلی": [1],
+            "کد مدرسه": [0 if school_count == 0 else 5001],
+            "کد مدرسه 1": [0 if school_count == 0 else 5001],
+            "نام مدرسه 1": ["" if school_count == 0 else "مدرسه"],
+            "امکان جذب دانش آموز": ["Yes"],
+        }
+    )
+
+
+def test_dual_status_group_allows_student_and_graduate() -> None:
+    cfg = _policy_with_statuses([1, 0], [1, 0])
+    inspactor_df = _mentor_frame_for_group("dual")
+    schools_df = pd.DataFrame({"کد مدرسه": [0], "نام مدرسه 1": [""]})
+
+    matrix, *_ = build_matrix(
+        inspactor_df,
+        schools_df,
+        _crosswalk_for_groups(),
+        cfg=cfg,
+    )
+
+    normal_rows = matrix.loc[matrix["کد کارمندی پشتیبان"] == "dual-id"]
+    assert set(normal_rows[cfg.policy.stage_column("graduation_status")].unique()) == {0, 1}
+
+
+def test_non_dual_group_is_student_only() -> None:
+    cfg = _policy_with_statuses([1, 0], [1, 0])
+    inspactor_df = _mentor_frame_for_group("nondual")
+    schools_df = pd.DataFrame({"کد مدرسه": [0], "نام مدرسه 1": [""]})
+
+    matrix, *_ = build_matrix(
+        inspactor_df,
+        schools_df,
+        _crosswalk_for_groups(),
+        cfg=cfg,
+    )
+
+    normal_rows = matrix.loc[matrix["کد کارمندی پشتیبان"] == "nondual-id"]
+    assert set(normal_rows[cfg.policy.stage_column("graduation_status")].unique()) == {1}
+
+
+def test_school_branch_is_always_student_only() -> None:
+    cfg = _policy_with_statuses([1, 0], [1, 0])
+    inspactor_df = _mentor_frame_for_group("dual", school_count=1)
+    schools_df = pd.DataFrame({"کد مدرسه": [5001], "نام مدرسه 1": ["مدرسه"]})
+
+    matrix, *_ = build_matrix(
+        inspactor_df,
+        schools_df,
+        _crosswalk_for_groups(),
+        cfg=cfg,
+    )
+
+    school_rows = matrix.loc[matrix["کد کارمندی پشتیبان"] == "dual-id"]
+    assert set(school_rows[cfg.policy.stage_column("graduation_status")].unique()) == {1}

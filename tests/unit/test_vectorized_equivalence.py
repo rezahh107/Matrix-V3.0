@@ -85,6 +85,7 @@ def _build_reference_matrix(
                     schools_raw=[""],
                     finance_variants=cfg.finance_variants,
                     code_to_name_school=code_to_name_school,
+                    is_school_branch=False,
                 )
             )
         if record.get("can_school") and record.get("school_codes"):
@@ -99,6 +100,7 @@ def _build_reference_matrix(
                     schools_raw=record["school_codes"],
                     finance_variants=cfg.finance_variants,
                     code_to_name_school=code_to_name_school,
+                    is_school_branch=True,
                 )
             )
     manual = pd.DataFrame(rows)
