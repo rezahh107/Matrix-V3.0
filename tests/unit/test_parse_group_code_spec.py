@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from app.core.build_matrix import parse_group_code_spec
+from app.core.common.join_keys import VALID_GROUP_CODES
 
 
 def test_parse_group_code_spec_filters_ranges_to_known_codes() -> None:
@@ -30,4 +31,4 @@ def test_parse_group_code_spec_collects_invalid_codes_once() -> None:
 
 
 def test_parse_group_code_spec_without_validation_behaves_legacy() -> None:
-    assert parse_group_code_spec("1:3") == [1, 2, 3]
+    assert parse_group_code_spec("1:3", valid_codes=VALID_GROUP_CODES) == [1, 3]

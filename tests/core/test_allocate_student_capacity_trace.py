@@ -13,6 +13,7 @@ def test_capacity_trace_uses_pool_state_view_counts() -> None:
     policy = load_policy()
     student = {
         "student_id": "s-trace",
+        policy.stage_column("type"): 1,
         policy.stage_column("group"): 1,
         policy.stage_column("gender"): int(policy.gender_codes.male.value),
         policy.stage_column("graduation_status"): 0,
@@ -24,6 +25,7 @@ def test_capacity_trace_uses_pool_state_view_counts() -> None:
     candidate_pool = pd.DataFrame(
         {
             "mentor_id": ["m1"],
+            policy.stage_column("type"): [1],
             policy.stage_column("group"): [1],
             policy.stage_column("gender"): [int(policy.gender_codes.male.value)],
             policy.stage_column("graduation_status"): [0],

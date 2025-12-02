@@ -13,7 +13,8 @@ def test_allocations_sabt_and_reasons_preserve_identity() -> None:
         [
             {
                 "student_id": 101,
-                policy.stage_column("group"): 10,
+                policy.stage_column("type"): 27,
+                policy.stage_column("group"): 27,
                 policy.stage_column("gender"): 0,
                 policy.stage_column("graduation_status"): 0,
                 policy.stage_column("center"): 1,
@@ -29,7 +30,8 @@ def test_allocations_sabt_and_reasons_preserve_identity() -> None:
     )
     pool = pd.DataFrame(
         {
-            policy.stage_column("group"): [10],
+            policy.stage_column("type"): [27],
+            policy.stage_column("group"): [27],
             policy.stage_column("gender"): [0],
             policy.stage_column("graduation_status"): [0],
             policy.stage_column("center"): [1],

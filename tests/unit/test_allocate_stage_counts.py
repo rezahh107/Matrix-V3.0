@@ -3,13 +3,16 @@ import pandas as pd
 from app.core.allocate_students import allocate_student
 from app.core.policy_loader import load_policy
 
+_GROUP_CODE = 27
+
 
 def _pool() -> pd.DataFrame:
     return pd.DataFrame(
         {
             "پشتیبان": ["Mentor-X", "Mentor-Y"],
             "کد کارمندی پشتیبان": ["EMP-900", "EMP-901"],
-            "کدرشته": [1201, 1201],
+            "کدرشته": [_GROUP_CODE, _GROUP_CODE],
+            "گروه آزمایشی": [_GROUP_CODE, _GROUP_CODE],
             "جنسیت": [1, 1],
             "دانش آموز فارغ": [1, 1],
             "مرکز گلستان صدرا": [2, 2],
@@ -25,7 +28,8 @@ def _pool() -> pd.DataFrame:
 def _student() -> dict[str, object]:
     return {
         "student_id": "ST-TRACE",
-        "کدرشته": 1201,
+        "کدرشته": _GROUP_CODE,
+        "گروه آزمایشی": _GROUP_CODE,
         "جنسیت": 1,
         "دانش آموز فارغ": 1,
         "مرکز گلستان صدرا": 2,

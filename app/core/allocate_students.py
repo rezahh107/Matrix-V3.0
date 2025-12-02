@@ -778,6 +778,44 @@ def _is_missing_join_value(value: object) -> bool:
     return False
 
 
+def _ensure_type_group_alignment_frame(frame: pd.DataFrame, policy: PolicyConfig) -> pd.DataFrame:
+    """افزودن ستون type یا group در صورت نبودن یکی از آن‌ها."""
+
+    type_column = policy.stage_column("type")
+    group_column = policy.stage_column("group")
+    needs_type = type_column not in frame.columns and group_column in frame.columns
+    needs_group = group_column not in frame.columns and type_column in frame.columns
+    if not needs_type and not needs_group:
+        return frame
+
+    aligned = frame.copy()
+    if needs_type:
+        aligned[type_column] = ensure_series(aligned[group_column]).reindex(aligned.index)
+    if needs_group:
+        aligned[group_column] = ensure_series(aligned[type_column]).reindex(aligned.index)
+    return aligned
+
+
+def _ensure_type_group_alignment_student(
+    student: Mapping[str, object], policy: PolicyConfig
+) -> Mapping[str, object]:
+    """تضمین حضور ستون‌های type و group در دادهٔ دانش‌آموز."""
+
+    type_column = policy.stage_column("type")
+    group_column = policy.stage_column("group")
+    has_type = type_column in student
+    has_group = group_column in student
+    if has_type and has_group:
+        return student
+
+    student_copy = dict(student)
+    if not has_type and has_group:
+        student_copy[type_column] = student[group_column]
+    if not has_group and has_type:
+        student_copy[group_column] = student[type_column]
+    return student_copy
+
+
 def _resolve_student_center_info(
     student: Mapping[str, object],
     policy: PolicyConfig,
@@ -1140,28 +1178,38 @@ def _normalize_rule_details(payload: object) -> Mapping[str, object] | None:
     return None
 
 
+def _reason_code_value(code: object | None) -> str | None:
+    """برگرداندن مقدار متنی کد دلیل (Enum → value)."""
+    if code is None:
+        return None
+    if isinstance(code, ReasonCode):
+        return code.value
+    return str(code)
+
+
 def _derive_rule_reason(
     trace: Sequence[TraceStageRecord],
 ) -> tuple[str, str, Mapping[str, object] | None]:
     """تعیین کد/متن دلیل بر اساس اولین مرحلهٔ رد."""
     fallback = build_reason(ReasonCode.OK)
+    fallback_code = fallback.code.value
     if not trace:
-        return fallback.code, fallback.message_fa, None
+        return fallback_code, fallback.message_fa, None
     for record in trace:
         extras = record.get("extras") or {}
-        code = extras.get("rule_reason_code")
+        code = _reason_code_value(extras.get("rule_reason_code"))
         message = extras.get("rule_reason_text")
         details = _normalize_rule_details(extras.get("rule_details"))
         after = int(record.get("total_after", 0))
         if code and (not record.get("matched") or after == 0):
-            return str(code), str(message or fallback.message_fa), details
+            return code, str(message or fallback.message_fa), details
     tail_extras = trace[-1].get("extras") or {}
-    code = tail_extras.get("rule_reason_code")
+    code = _reason_code_value(tail_extras.get("rule_reason_code"))
     message = tail_extras.get("rule_reason_text")
     details = _normalize_rule_details(tail_extras.get("rule_details"))
     if code:
-        return (str(code), str(message or fallback.message_fa), details)
-    return fallback.code, fallback.message_fa, None
+        return (code, str(message or fallback.message_fa), details)
+    return fallback_code, fallback.message_fa, None
 
 
 def _display_expected_value(value: object) -> str:
@@ -1457,7 +1505,11 @@ def allocate_student(
     if alert_progress is None:
         alert_progress = progress
 
-    student_row = cast(StudentRow, dict(student))
+    candidate_pool = _ensure_type_group_alignment_frame(candidate_pool, policy)
+    if pool_state_view is not None:
+        pool_state_view = _ensure_type_group_alignment_frame(pool_state_view, policy)
+
+    student_row = cast(StudentRow, _ensure_type_group_alignment_student(dict(student), policy))
 
     # پردازش مرکز دانش‌آموز
     center_info = _resolve_student_center_info(student, policy)

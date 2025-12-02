@@ -63,6 +63,44 @@ __all__ = [
 ]
 
 
+def _align_type_group_columns(frame: pd.DataFrame, policy: PolicyConfig) -> pd.DataFrame:
+    """Ensure both type and group columns exist using backward-compatible fill."""
+
+    type_column = policy.stage_column("type")
+    group_column = policy.stage_column("group")
+    needs_type = type_column not in frame.columns and group_column in frame.columns
+    needs_group = group_column not in frame.columns and type_column in frame.columns
+    if not needs_type and not needs_group:
+        return frame
+
+    aligned = frame.copy()
+    if needs_type:
+        aligned[type_column] = aligned[group_column].reindex(aligned.index)
+    if needs_group:
+        aligned[group_column] = aligned[type_column].reindex(aligned.index)
+    return aligned
+
+
+def _align_type_group_student(
+    student: Mapping[str, object], policy: PolicyConfig
+) -> Mapping[str, object]:
+    """Fill the missing type/group key on student dicts for legacy fixtures."""
+
+    type_column = policy.stage_column("type")
+    group_column = policy.stage_column("group")
+    has_type = type_column in student
+    has_group = group_column in student
+    if has_type and has_group:
+        return student
+
+    student_copy = dict(student)
+    if not has_type and has_group:
+        student_copy[type_column] = student[group_column]
+    if not has_group and has_type:
+        student_copy[group_column] = student[type_column]
+    return student_copy
+
+
 class FinalStatus(str, Enum):
     """وضعیت نهایی تخصیص با مجموعهٔ کوچک و مشخص."""
 
@@ -152,7 +190,7 @@ def _apply_stage_rule(
     context = RuleContext(stage_record=record, student=student)
     result = apply_rule(rule, context)
     extras = dict(record.get("extras") or {})
-    extras["rule_reason_code"] = result.reason.code
+    extras["rule_reason_code"] = result.reason.code.value
     extras["rule_reason_text"] = result.reason.message_fa
     extras["rule_passed"] = result.passed
     if result.details:
@@ -423,6 +461,8 @@ def build_allocation_trace(
     if capacity_stage is None:
         capacity_stage = TraceStagePlan(stage="capacity_gate", column=capacity_column)
 
+    candidate_pool = _align_type_group_columns(candidate_pool, policy)
+    student = cast(StudentRow, _align_type_group_student(student, policy))
     columns_needed = [plan.column for plan in non_capacity_plan] + [capacity_stage.column]
     _ensure_columns(candidate_pool, columns_needed)
 

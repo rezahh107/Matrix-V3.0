@@ -24,7 +24,7 @@ from app.core.policy_loader import (
 
 def _policy_payload() -> dict[str, object]:
     return {
-        "version": "1.0.3",
+        "version": "1.0.4",
         "normal_statuses": [1, 0],
         "school_statuses": [1],
         "postal_valid_range": [1000, 9999],
@@ -35,7 +35,7 @@ def _policy_payload() -> dict[str, object]:
         "coverage_threshold": 0.95,
         "dedup_removed_ratio_threshold": 0.05,
         "school_lookup_mismatch_threshold": 0.0,
-        "alias_rule": {"normal": "postal_or_fallback_mentor_id", "school": "mentor_id"},
+        "alias_rule": {"normal": "postal_code", "school": "mentor_id"},
         "join_keys": [
             "کدرشته",
             "جنسیت",
@@ -57,12 +57,7 @@ def _policy_payload() -> dict[str, object]:
             "remaining_capacity": "remaining_capacity",
         },
         "ranking_rules": [
-            {"name": "min_occupancy_ratio", "column": "occupancy_ratio", "ascending": True},
-            {
-                "name": "max_remaining_capacity",
-                "column": "remaining_capacity_desc",
-                "ascending": True,
-            },
+            {"name": "max_remaining_capacity", "column": "remaining_capacity", "ascending": False},
             {"name": "min_allocations_new", "column": "allocations_new", "ascending": True},
             {"name": "min_mentor_id", "column": "mentor_sort_key", "ascending": True},
         ],
@@ -101,8 +96,8 @@ def policy_config() -> PolicyConfig:
 def _sample_student() -> dict[str, object]:
     return {
         "student_id": "STD-1",
-        "کدرشته": 1201,
-        "گروه_آزمایشی": "تجربی",
+        "کدرشته": 27,
+        "گروه آزمایشی": "27",
         "جنسیت": 1,
         "دانش_آموز_فارغ": 0,
         "مرکز_گلستان_صدرا": 1,
@@ -115,8 +110,8 @@ def _sample_pool() -> pd.DataFrame:
     return pd.DataFrame(
         {
             "پشتیبان": ["زهرا", "علی", "زهرا"],
-            "کدرشته": [1201, 1201, 1201],
-            "گروه آزمایشی": ["تجربی", "تجربی", "ریاضی"],
+            "کدرشته": [27, 27, 27],
+            "گروه آزمایشی": ["27", "27", "33"],
             "جنسیت": [1, 1, 1],
             "دانش آموز فارغ": [0, 0, 0],
             "مرکز گلستان صدرا": [1, 2, 1],
@@ -176,7 +171,7 @@ def test_capacity_gate_handles_no_capacity(policy_config: PolicyConfig) -> None:
 
 def test_build_trace_plan_rejects_noncanonical_order() -> None:
     config = PolicyConfig(
-        version="1.0.3",
+        version="1.0.4",
         normal_statuses=[1, 0],
         school_statuses=[1],
         postal_valid_range=(1000, 9999),

@@ -23,7 +23,8 @@ def _create_sample_inputs() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
             "نام مدیر": ["شهدخت کشاورز", "آینا هوشمند"],
             "کد کارمندی پشتیبان": ["EMP-1", "EMP-2"],
             "ردیف پشتیبان": [1, 2],
-            "گروه آزمایشی": ["تجربی", "ریاضی"],
+            "گروه آزمایشی": ["27", "33"],
+            "کدرشته": [27, 33],
             "جنسیت": ["دختر", "پسر"],
             "دانش آموز فارغ": [0, 1],
             "کدپستی": ["1234", "5678"],
@@ -47,7 +48,7 @@ def _create_sample_inputs() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     crosswalk_df = pd.DataFrame(
         {
             "گروه آزمایشی": ["تجربی", "ریاضی"],
-            "کد گروه": [1201, 2201],
+            "کد گروه": [27, 33],
             "مقطع تحصیلی": ["دهم", "دهم"],
         }
     )
@@ -325,7 +326,7 @@ def test_school_lookup_threshold_can_warn_instead_of_raise() -> None:
 def test_build_matrix_reports_join_key_duplicates() -> None:
     insp_df, schools_df, crosswalk_df = _create_sample_inputs()
     first_row = insp_df.iloc[[0]].copy()
-    first_row.loc[:, "کدرشته"] = [1201]
+    first_row.loc[:, "کدرشته"] = [27]
     first_row.loc[:, "کد مدرسه"] = [0]
     duplicate = first_row.copy()
     duplicate.loc[:, "نام پشتیبان"] = ["زهرا تکراری"]

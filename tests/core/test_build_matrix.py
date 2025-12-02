@@ -10,7 +10,7 @@ from app.core.policy_loader import load_policy
 
 
 def _minimal_crosswalk() -> pd.DataFrame:
-    return pd.DataFrame({"گروه آزمایشی": ["تجربی"], "کد گروه": [101], "مقطع تحصیلی": ["پایه"]})
+    return pd.DataFrame({"گروه آزمایشی": [3], "کد گروه": [3], "مقطع تحصیلی": ["پایه"]})
 
 
 def test_build_matrix_uses_mentor_type_rules() -> None:
@@ -24,7 +24,7 @@ def test_build_matrix_uses_mentor_type_rules() -> None:
             "تعداد مدارس تحت پوشش": [0, 1],
             "تعداد داوطلبان تحت پوشش": [5, 5],
             "تعداد تحت پوشش خاص": [0, 0],
-            "گروه آزمایشی": ["تجربی", "تجربی"],
+            "گروه آزمایشی": [3, 3],
             "جنسیت": [1, 1],
             "وضعیت تحصیلی": [1, 1],
             "کد مدرسه": [0, 5001],
@@ -66,7 +66,7 @@ def test_build_matrix_accepts_policy_override_for_small_postal_alias() -> None:
             "تعداد مدارس تحت پوشش": [0],
             "تعداد داوطلبان تحت پوشش": [5],
             "تعداد تحت پوشش خاص": [0],
-            "گروه آزمایشی": ["تجربی"],
+            "گروه آزمایشی": [3],
             "جنسیت": [1],
             "وضعیت تحصیلی": [1],
             "کد مدرسه": [0],

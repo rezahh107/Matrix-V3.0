@@ -39,7 +39,7 @@ class _FakePolicy:
 
 def _policy_payload_with_channels() -> dict[str, object]:
     payload = {
-        "version": "1.0.3",
+        "version": "1.0.4",
         "normal_statuses": [0, 1],
         "school_statuses": [0],
         "postal_valid_range": [1000, 9999],
@@ -50,10 +50,7 @@ def _policy_payload_with_channels() -> dict[str, object]:
         "coverage_threshold": 0.95,
         "dedup_removed_ratio_threshold": 0.05,
         "school_lookup_mismatch_threshold": 0.0,
-        "alias_rule": {
-            "normal": "postal_or_fallback_mentor_id",
-            "school": "mentor_id",
-        },
+        "alias_rule": {"normal": "postal_code", "school": "mentor_id"},
         "join_keys": [
             "کدرشته",
             "جنسیت",
@@ -67,13 +64,9 @@ def _policy_payload_with_channels() -> dict[str, object]:
             "female": {"value": 0, "counter_code": "373"},
         },
         "ranking_rules": [
-            {"name": "min_occupancy_ratio", "column": "occupancy_ratio"},
-            {
-                "name": "max_remaining_capacity",
-                "column": "remaining_capacity_desc",
-            },
-            {"name": "min_allocations_new", "column": "allocations_new"},
-            {"name": "min_mentor_id", "column": "mentor_sort_key"},
+            {"name": "max_remaining_capacity", "column": "remaining_capacity", "ascending": False},
+            {"name": "min_allocations_new", "column": "allocations_new", "ascending": True},
+            {"name": "min_mentor_id", "column": "mentor_sort_key", "ascending": True},
         ],
         "trace_stages": [
             {"stage": "type", "column": "کدرشته"},

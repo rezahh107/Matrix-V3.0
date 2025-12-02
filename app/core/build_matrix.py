@@ -60,6 +60,7 @@ from app.core.common.domain import (
     mentor_alias_for_type,
     school_code_norm,
 )
+from app.core.common.join_keys import VALID_GROUP_CODES, parse_group_codes
 from app.core.common.normalization import normalize_header, resolve_group_code
 from app.core.debug.models import QABreadcrumb
 from app.core.inspactor_schema_helper import (
@@ -133,8 +134,6 @@ _RE_BIDI = re.compile("[\u200c-\u200f\u202a-\u202e]")
 _RE_NONWORD = re.compile(r"[^\w\u0600-\u06FF0-9\s]+", flags=re.UNICODE)
 _RE_WHITESPACE = re.compile(r"\s+")
 _TRANS_PERSIAN_DIGITS = str.maketrans("۰۱۲۳۴۵۶۷۸۹", "0123456789")
-_RE_SPLIT_ITEMS = re.compile(r"[,\u060C]\s*")
-_RE_RANGE = re.compile(r"^\s*(\d+)\s*[:\-–]\s*(\d+)\s*$")
 
 # Built-in synonyms (keys normalized later)
 BUILTIN_SYNONYMS = {
@@ -1098,62 +1097,11 @@ def parse_group_code_spec(
     valid_codes: Collection[int] | None = None,
     invalid_collector: list[int] | None = None,
 ) -> list[int]:
-    """تبدیل رشتهٔ ورودی به فهرست کد گروه‌های معتبر.
+    """تبدیل رشتهٔ ورودی به فهرست کد گروه‌های معتبر."""
 
-    مثال::
-
-        >>> parse_group_code_spec("27,31:35", valid_codes={27, 31, 33, 35})
-        [27, 31, 33, 35]
-
-    Args:
-        spec: ورودی خام از ستون «شامل گروه های آزمایشی».
-        valid_codes: مجموعهٔ کدهای مجاز برای فیلتر کردن خروجی.
-        invalid_collector: لیست اختیاری برای ثبت کدهای نامعتبر.
-
-    Returns:
-        لیست یکتا از کدهای معتبر به ترتیب مشاهده‌شده.
-    """
-
-    if spec is None or (isinstance(spec, float) and math.isnan(spec)):
-        return []
-
-    s = str(spec).strip()
-    if not s:
-        return []
-
-    s = s.translate(_TRANS_PERSIAN_DIGITS)
-    parts = _RE_SPLIT_ITEMS.split(s)
-    out: list[int] = []
-    seen: set[int] = set()
-    valid_set = set(valid_codes) if valid_codes is not None else None
-    invalid_seen: set[int] = set()
-
-    def _register(value: int) -> None:
-        if valid_set is not None and value not in valid_set:
-            if invalid_collector is not None and value not in invalid_seen:
-                invalid_collector.append(value)
-                invalid_seen.add(value)
-            return
-        if value not in seen:
-            out.append(value)
-            seen.add(value)
-
-    for tok in parts:
-        tok = tok.strip()
-        if not tok:
-            continue
-        m = _RE_RANGE.match(tok)
-        if m:
-            a, b = int(m.group(1)), int(m.group(2))
-            if a > b:
-                a, b = b, a
-            for value in range(a, b + 1):
-                _register(value)
-            continue
-        if tok.isdigit():
-            _register(int(tok))
-
-    return out
+    if valid_codes is None:
+        valid_codes = VALID_GROUP_CODES
+    return parse_group_codes(spec, valid_codes=valid_codes, invalid_collector=invalid_collector)
 
 
 # =============================================================================

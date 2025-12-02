@@ -5,6 +5,7 @@ import pytest
 from pandas.testing import assert_frame_equal
 
 from app.core.canonical_frames import canonicalize_pool_frame
+from app.core.common.join_keys import JoinKeyCanonicalizationError
 from app.core.policy_loader import load_policy
 from app.infra.errors import DatabaseOperationError
 from app.infra.local_database import LocalDatabase
@@ -32,8 +33,8 @@ def test_mentor_pool_cache_roundtrip(tmp_path: Path) -> None:
         {
             "پشتیبان": ["الف", "ب"],
             "کد کارمندی پشتیبان": ["M1", "M2"],
-            "کدرشته": [1201, 1201],
-            "گروه آزمایشی": ["تجربی", "تجربی"],
+            "کدرشته": [27, 27],
+            "گروه آزمایشی": ["27", "27"],
             "جنسیت": [1, 0],
             "دانش آموز فارغ": [0, 0],
             "مرکز گلستان صدرا": [1, 1],
@@ -73,8 +74,8 @@ def test_import_pool_derives_join_keys_from_alias_inputs(tmp_path: Path) -> None
     with pd.ExcelWriter(crosswalk_path, engine="openpyxl") as writer:
         pd.DataFrame(
             {
-                "گروه آزمایشی": ["تجربی"],
-                "کد گروه": [1201],
+                "گروه آزمایشی": [27],
+                "کد گروه": [27],
                 "مقطع تحصیلی": ["دوازدهم"],
             }
         ).to_excel(writer, sheet_name="پایه تحصیلی (گروه آزمایشی)", index=False)
@@ -85,7 +86,7 @@ def test_import_pool_derives_join_keys_from_alias_inputs(tmp_path: Path) -> None
             "نام پشتیبان": ["پشتیبان A"],
             "نام مدیر": ["مرکز"],
             "کد کارمندی پشتیبان": ["M-1"],
-            "گروه آزمایشی": ["تجربی"],
+            "گروه آزمایشی": ["27"],
             "جنسیت": ["پسر"],
             "نام مدرسه 1": ["دبیرستان نمونه"],
         }
@@ -100,7 +101,7 @@ def test_import_pool_derives_join_keys_from_alias_inputs(tmp_path: Path) -> None
     for join_key in policy.join_keys:
         assert join_key in normalized.columns
         assert str(normalized[join_key].dtype) == "Int64"
-    assert int(normalized["کدرشته"].iloc[0]) == 1201
+    assert int(normalized["کدرشته"].iloc[0]) == 27
     assert int(normalized["کد مدرسه"].iloc[0]) == 3581
 
 
@@ -115,9 +116,9 @@ def test_import_pool_reports_unmapped_group(tmp_path: Path) -> None:
 
     crosswalk_path = tmp_path / "crosswalk.xlsx"
     with pd.ExcelWriter(crosswalk_path, engine="openpyxl") as writer:
-        pd.DataFrame(
-            {"گروه آزمایشی": ["تجربی"], "کد گروه": [1201], "مقطع تحصیلی": ["دوازدهم"]}
-        ).to_excel(writer, sheet_name="پایه تحصیلی (گروه آزمایشی)", index=False)
+        pd.DataFrame({"گروه آزمایشی": [27], "کد گروه": [27], "مقطع تحصیلی": ["دوازدهم"]}).to_excel(
+            writer, sheet_name="پایه تحصیلی (گروه آزمایشی)", index=False
+        )
     import_school_crosswalk_from_excel(crosswalk_path, db=db)
 
     inspactor_df = pd.DataFrame(
@@ -133,12 +134,8 @@ def test_import_pool_reports_unmapped_group(tmp_path: Path) -> None:
     insp_path = tmp_path / "insp.xlsx"
     _write_pool_excel(inspactor_df, insp_path)
 
-    normalized = import_mentor_pool_from_excel(insp_path, db=db, policy=policy)
-
-    issues = normalized.attrs.get(_POOL_JOIN_KEY_QA_ATTR, [])
-    reasons = {item["reason"] for item in issues}
-    assert "MISSING_GROUP_CODE" in reasons
-    assert int(normalized["کدرشته"].iloc[0]) == 0
+    with pytest.raises(JoinKeyCanonicalizationError):
+        import_mentor_pool_from_excel(insp_path, db=db, policy=policy)
 
 
 def test_import_pool_reports_unmapped_school(tmp_path: Path) -> None:
@@ -153,7 +150,7 @@ def test_import_pool_reports_unmapped_school(tmp_path: Path) -> None:
     crosswalk_path = tmp_path / "crosswalk.xlsx"
     with pd.ExcelWriter(crosswalk_path, engine="openpyxl") as writer:
         pd.DataFrame(
-            {"گروه آزمایشی": ["تجربی"], "کد گروه": [1201], "مقطع تحصیلی": ["دوازدهم"]}
+            {"گروه آزمایشی": ["27"], "کد گروه": [27], "مقطع تحصیلی": ["دوازدهم"]}
         ).to_excel(writer, sheet_name="پایه تحصیلی (گروه آزمایشی)", index=False)
     import_school_crosswalk_from_excel(crosswalk_path, db=db)
 
@@ -162,7 +159,7 @@ def test_import_pool_reports_unmapped_school(tmp_path: Path) -> None:
             "نام پشتیبان": ["پشتیبان A"],
             "نام مدیر": ["مرکز"],
             "کد کارمندی پشتیبان": ["M-1"],
-            "گروه آزمایشی": ["تجربی"],
+            "گروه آزمایشی": ["27"],
             "جنسیت": ["پسر"],
             "نام مدرسه 1": ["مدرسه ناشناخته"],
         }
@@ -190,7 +187,7 @@ def test_import_pool_deduplicates_exact_rows(tmp_path: Path) -> None:
     crosswalk_path = tmp_path / "crosswalk.xlsx"
     with pd.ExcelWriter(crosswalk_path, engine="openpyxl") as writer:
         pd.DataFrame(
-            {"گروه آزمایشی": ["تجربی"], "کد گروه": [1201], "مقطع تحصیلی": ["دوازدهم"]}
+            {"گروه آزمایشی": ["27"], "کد گروه": [27], "مقطع تحصیلی": ["دوازدهم"]}
         ).to_excel(writer, sheet_name="پایه تحصیلی (گروه آزمایشی)", index=False)
     import_school_crosswalk_from_excel(crosswalk_path, db=db)
 
@@ -199,7 +196,7 @@ def test_import_pool_deduplicates_exact_rows(tmp_path: Path) -> None:
             "نام پشتیبان": ["پشتیبان A", "پشتیبان A"],
             "نام مدیر": ["مرکز", "مرکز"],
             "کد کارمندی پشتیبان": ["", ""],
-            "گروه آزمایشی": ["تجربی", "تجربی"],
+            "گروه آزمایشی": ["27", "27"],
             "جنسیت": ["پسر", "پسر"],
             "نام مدرسه 1": ["نمونه", "نمونه"],
         }
@@ -221,7 +218,7 @@ def test_import_pool_respects_existing_join_keys(tmp_path: Path) -> None:
         {
             "پشتیبان": ["الف"],
             "کد کارمندی پشتیبان": ["M1"],
-            "کدرشته": [1201],
+            "کدرشته": [27],
             "جنسیت": [1],
             "دانش آموز فارغ": [0],
             "مرکز گلستان صدرا": [2],
@@ -235,7 +232,7 @@ def test_import_pool_respects_existing_join_keys(tmp_path: Path) -> None:
     normalized = import_mentor_pool_from_excel(excel_path, db=db, policy=policy)
     issues = normalized.attrs.get(_POOL_JOIN_KEY_QA_ATTR, [])
     assert issues == []
-    assert int(normalized["کدرشته"].iloc[0]) == 1201
+    assert int(normalized["کدرشته"].iloc[0]) == 27
     assert int(normalized["کد مدرسه"].iloc[0]) == 3581
 
 
@@ -264,7 +261,7 @@ def test_import_pool_reports_unknown_center_and_finance(tmp_path: Path) -> None:
     crosswalk_path = tmp_path / "crosswalk.xlsx"
     with pd.ExcelWriter(crosswalk_path, engine="openpyxl") as writer:
         pd.DataFrame(
-            {"گروه آزمایشی": ["تجربی"], "کد گروه": [1201], "مقطع تحصیلی": ["دوازدهم"]}
+            {"گروه آزمایشی": ["27"], "کد گروه": [27], "مقطع تحصیلی": ["دوازدهم"]}
         ).to_excel(writer, sheet_name="پایه تحصیلی (گروه آزمایشی)", index=False)
     import_school_crosswalk_from_excel(crosswalk_path, db=db)
 
@@ -273,7 +270,7 @@ def test_import_pool_reports_unknown_center_and_finance(tmp_path: Path) -> None:
             "نام پشتیبان": ["پشتیبان A"],
             "نام مدیر": ["مدیر ناشناخته"],
             "کد کارمندی پشتیبان": ["M-1"],
-            "گروه آزمایشی": ["تجربی"],
+            "گروه آزمایشی": ["27"],
             "جنسیت": ["پسر"],
             "مالی حکمت بنیاد": [999],
             "نام مدرسه 1": ["نمونه"],
@@ -299,8 +296,8 @@ def test_import_pool_rejects_duplicate_composite_keys(tmp_path: Path) -> None:
         {
             "mentor_id": ["m1", "m1"],
             "کد کارمندی پشتیبان": ["E1", "E1"],
-            "کدرشته": [1201, 1201],
-            "گروه آزمایشی": ["تجربی", "تجربی"],
+            "کدرشته": [27, 27],
+            "گروه آزمایشی": ["27", "27"],
             "جنسیت": [1, 1],
             "دانش آموز فارغ": [0, 0],
             "مرکز گلستان صدرا": [1, 1],
@@ -328,8 +325,8 @@ def test_import_pool_allows_same_mentor_multiple_join_keys(tmp_path: Path) -> No
         {
             "mentor_id": ["m1", "m1"],
             "کد کارمندی پشتیبان": ["E1", "E1"],
-            "کدرشته": [1201, 1202],
-            "گروه آزمایشی": ["تجربی", "ریاضی"],
+            "کدرشته": [27, 33],
+            "گروه آزمایشی": ["27", "33"],
             "جنسیت": [1, 1],
             "دانش آموز فارغ": [0, 0],
             "مرکز گلستان صدرا": [1, 2],

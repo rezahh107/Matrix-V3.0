@@ -8,11 +8,13 @@ from app.core.policy_loader import load_policy
 
 
 def _basic_frames(policy):
+    group_code = 27
     students = pd.DataFrame(
         [
             {
                 "student_id": 1,
-                policy.stage_column("group"): 10,
+                policy.stage_column("type"): group_code,
+                policy.stage_column("group"): group_code,
                 policy.stage_column("gender"): 0,
                 policy.stage_column("graduation_status"): 0,
                 policy.stage_column("center"): 1,
@@ -23,7 +25,8 @@ def _basic_frames(policy):
     )
     pool = pd.DataFrame(
         {
-            policy.stage_column("group"): [10],
+            policy.stage_column("type"): [group_code],
+            policy.stage_column("group"): [group_code],
             policy.stage_column("gender"): [0],
             policy.stage_column("graduation_status"): [0],
             policy.stage_column("center"): [1],
@@ -50,11 +53,13 @@ def test_policy_violation_detector_is_empty_for_basic_run() -> None:
 
 def test_policy_violation_detector_flags_positive_capacity() -> None:
     policy = load_policy()
+    group_code = 27
     summary_df = pd.DataFrame(
         [
             {
                 "student_id": 1,
-                policy.stage_column("group"): 10,
+                policy.stage_column("type"): group_code,
+                policy.stage_column("group"): group_code,
                 policy.stage_column("gender"): 0,
                 policy.stage_column("graduation_status"): 0,
                 policy.stage_column("center"): 1,
@@ -66,7 +71,8 @@ def test_policy_violation_detector_flags_positive_capacity() -> None:
     )
     pool = pd.DataFrame(
         {
-            policy.stage_column("group"): [10],
+            policy.stage_column("type"): [group_code],
+            policy.stage_column("group"): [group_code],
             policy.stage_column("gender"): [0],
             policy.stage_column("graduation_status"): [0],
             policy.stage_column("center"): [1],
@@ -82,11 +88,13 @@ def test_policy_violation_detector_flags_positive_capacity() -> None:
 
 def test_rule_excluded_rows_are_not_flagged() -> None:
     policy = load_policy()
+    group_code = 27
     summary_df = pd.DataFrame(
         [
             {
                 "student_id": 2,
-                policy.stage_column("group"): 10,
+                policy.stage_column("type"): group_code,
+                policy.stage_column("group"): group_code,
                 policy.stage_column("gender"): 0,
                 policy.stage_column("graduation_status"): 0,
                 policy.stage_column("center"): 1,
@@ -98,7 +106,8 @@ def test_rule_excluded_rows_are_not_flagged() -> None:
     )
     pool = pd.DataFrame(
         {
-            policy.stage_column("group"): [10],
+            policy.stage_column("type"): [group_code],
+            policy.stage_column("group"): [group_code],
             policy.stage_column("gender"): [0],
             policy.stage_column("graduation_status"): [0],
             policy.stage_column("center"): [1],
