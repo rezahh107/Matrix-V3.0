@@ -4,7 +4,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType
 
-__all__ = ["QADebugContext"]
+__all__ = ["QADebugContext", "QABreadcrumb"]
 
 
 @dataclass(frozen=True)
@@ -51,3 +51,23 @@ class QADebugContext:
             diagnosis_hints=tuple(diagnosis_hints or ()),
             canary_thresholds=MappingProxyType(dict(canary_thresholds or {})),
         )
+
+
+@dataclass(frozen=True)
+class QABreadcrumb:
+    """Minimal breadcrumb for QA pipelines."""
+
+    step_id: str
+    label: str
+    row_count: int
+    key_stats: Mapping[str, object]
+
+    def to_payload(self) -> Mapping[str, object]:
+        """Return a dict-serializable payload for DataFrame attrs."""
+
+        return {
+            "step_id": self.step_id,
+            "label": self.label,
+            "row_count": int(self.row_count),
+            "key_stats": dict(self.key_stats),
+        }

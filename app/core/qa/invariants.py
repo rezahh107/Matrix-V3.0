@@ -17,6 +17,7 @@ from app.core.common.domain import (
     classify_student_binding,
 )
 from app.core.common.national_id import canonical_national_code
+from app.core.debug.models import QABreadcrumb
 from app.core.policy_loader import MentorStatus, PolicyConfig
 
 RuleId = str
@@ -520,7 +521,9 @@ def check_MENTOR_TYPE_01(  # noqa: N802
     normal_mask = type_series.eq("عادی")
     school_mask = type_series.eq("مدرسه‌ای")
 
-    normal_school_nonzero = school_series[normal_mask] != 0
+    normal_school_nonzero = (school_series[normal_mask] != 0).reindex(
+        matrix.index, fill_value=False
+    )
     if bool(normal_school_nonzero.any()):
         offenders = mentor_series[normal_mask & normal_school_nonzero]
         violations.append(
@@ -532,7 +535,7 @@ def check_MENTOR_TYPE_01(  # noqa: N802
             )
         )
 
-    school_zero = school_series[school_mask] == 0
+    school_zero = (school_series[school_mask] == 0).reindex(matrix.index, fill_value=False)
     if bool(school_zero.any()):
         offenders = mentor_series[school_mask & school_zero]
         violations.append(
@@ -544,7 +547,9 @@ def check_MENTOR_TYPE_01(  # noqa: N802
             )
         )
 
-    school_alias_mismatch = alias_series[school_mask] != mentor_series[school_mask]
+    school_alias_mismatch = (alias_series[school_mask] != mentor_series[school_mask]).reindex(
+        matrix.index, fill_value=False
+    )
     if bool(school_alias_mismatch.any()):
         offenders = mentor_series[school_mask & school_alias_mismatch]
         violations.append(
@@ -559,7 +564,7 @@ def check_MENTOR_TYPE_01(  # noqa: N802
     def _valid_postal(value: str) -> bool:
         return value.isdigit() and _postal_valid(value, cfg=cfg)
 
-    normal_alias_missing = alias_series[normal_mask].eq("")
+    normal_alias_missing = alias_series[normal_mask].eq("").reindex(matrix.index, fill_value=False)
     if bool(normal_alias_missing.any()):
         offenders = mentor_series[normal_mask & normal_alias_missing]
         violations.append(
@@ -582,6 +587,24 @@ def check_MENTOR_TYPE_01(  # noqa: N802
                 details={"mentor_ids": tuple(_normalize_str(v) for v in offenders)},
             )
         )
+
+    existing_breadcrumbs = matrix.attrs.get("qa_debug_breadcrumbs")
+    if isinstance(existing_breadcrumbs, (list, tuple)):
+        breadcrumbs_payload = list(existing_breadcrumbs)
+    else:
+        breadcrumbs_payload = []
+    qa_step = QABreadcrumb(
+        step_id="QA_RULE_MENTOR_TYPE_01",
+        label="QA mentor type",
+        row_count=int(len(matrix)),
+        key_stats={
+            "violation_count": int(len(violations)),
+            "normal_rows": int(normal_mask.sum()),
+            "school_rows": int(school_mask.sum()),
+        },
+    )
+    breadcrumbs_payload.append(qa_step.to_payload())
+    matrix.attrs["qa_debug_breadcrumbs"] = breadcrumbs_payload
 
     return QaRuleResult(
         rule_id="QA_RULE_MENTOR_TYPE_01",
