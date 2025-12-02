@@ -161,7 +161,7 @@
 ### 4.2) EDUCATIONAL STRUCTURE WITH ACADEMIC STATUS
 #### 4.2.1) ساختار چهاربعدی (Four-Dimensional Structure)
 1. **مقطع تحصیلی (Educational Level):** ۵ مقطع ثابت.
-2. **گروه آزمایشی/پایه (Experimental Group/Grade):** ۳۲ گروه/پایه منطبق با جدول مرجع.
+2. **گروه آزمایشی/پایه (Experimental Group/Grade):** ۳۳ گروه/پایه منطبق با جدول مرجع.
 3. **کد رشته (Field Code):** شناسهٔ یکتای عددی.
 4. **وضعیت تحصیلی مجاز (Allowed Academic Status):** تعیین می‌کند دانش‌آموز یا فارغ‌التحصیل بودن مجاز است یا نه.
 
