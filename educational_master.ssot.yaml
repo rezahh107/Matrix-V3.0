@@ -1,12 +1,23 @@
 # EDUCATIONAL STRUCTURE MASTER TABLE
-# Version: 2.0 (Updated with full 32-row hierarchy)
+# Version: 3.0 (Status-aware, full hierarchy)
 # Last Updated: 2024-01-15
-# Purpose: Canonical reference for educational levels, groups/grades, and field codes
+# Purpose: Canonical reference for educational levels, groups/grades, field codes, and allowed academic status
 
 educational_structure:
-  version: "2.0"
-  total_mappings: 32
+  version: "3.0"
+  total_mappings: 33
+  dimensions: 4
   last_updated: "2024-01-15"
+
+  status_definitions:
+    dual_status:
+      code: "{0,1}"
+      description: "دانش آموز یا فارغ التحصیل"
+      english: "Student or Graduate"
+    student_only:
+      code: "{1}"
+      description: "فقط دانش آموز"
+      english: "Student Only"
 
   levels:
     - id: "konkouri"
@@ -28,192 +39,291 @@ educational_structure:
     - id: "honarestan"
       name_fa: "هنرستان"
       name_en: "Technical School"
-      groups: 10
+      groups: 11
+
+  dual_status_codes: [1, 3, 5, 7, 8, 9, 11, 12, 14, 17, 18]
+  student_only_codes: [21, 22, 23, 24, 25, 26, 27, 29, 30, 31, 33, 35, 41, 43, 45, 46, 53, 55, 66, 69, 83, 89]
 
   mappings:
     - level: "کنکوری"
       group: "دوازدهم ریاضی"
       code: 1
-      dual_status: true
+      allowed_status: "{0,1}"
+      is_dual_status: true
+      status_type: "dual"
       is_experimental_group: true
     - level: "کنکوری"
       group: "دوازدهم تجربی"
       code: 3
-      dual_status: true
+      allowed_status: "{0,1}"
+      is_dual_status: true
+      status_type: "dual"
       is_experimental_group: true
     - level: "کنکوری"
       group: "دوازدهم انسانی"
       code: 5
-      dual_status: true
+      allowed_status: "{0,1}"
+      is_dual_status: true
+      status_type: "dual"
       is_experimental_group: true
       clarification: "کد ۵ برای دوازدهم انسانی است (نه پایه پنجم)"
     - level: "کنکوری"
       group: "هنر"
       code: 7
-      dual_status: true
+      allowed_status: "{0,1}"
+      is_dual_status: true
+      status_type: "dual"
       is_experimental_group: true
-      clarification: "کد ۷ مربوط به هنر است، نه پایه هفتم"
+      clarification: "کد ۷ مربوط به هنر است، نه پایه هفتم - وضعیت {0,1}"
     - level: "کنکوری"
       group: "دوازدهم علوم و معارف اسلامی"
       code: 8
-      dual_status: true
+      allowed_status: "{0,1}"
+      is_dual_status: true
+      status_type: "dual"
       is_experimental_group: true
     - level: "کنکوری"
       group: "منحصرا زبان"
       code: 9
-      dual_status: true
+      allowed_status: "{0,1}"
+      is_dual_status: true
+      status_type: "dual"
       is_experimental_group: true
 
     - level: "متوسطه دوم"
       group: "دهم ریاضی"
       code: 24
-      dual_status: false
+      allowed_status: "{1}"
+      is_dual_status: false
+      status_type: "student_only"
       is_experimental_group: false
     - level: "متوسطه دوم"
       group: "دهم تجربی"
       code: 25
-      dual_status: false
+      allowed_status: "{1}"
+      is_dual_status: false
+      status_type: "student_only"
       is_experimental_group: false
     - level: "متوسطه دوم"
       group: "دهم انسانی"
       code: 26
-      dual_status: false
+      allowed_status: "{1}"
+      is_dual_status: false
+      status_type: "student_only"
       is_experimental_group: false
     - level: "متوسطه دوم"
       group: "دهم علوم و معارف اسلامی"
       code: 30
-      dual_status: false
+      allowed_status: "{1}"
+      is_dual_status: false
+      status_type: "student_only"
       is_experimental_group: false
     - level: "متوسطه دوم"
       group: "یازدهم ریاضی"
       code: 21
-      dual_status: false
+      allowed_status: "{1}"
+      is_dual_status: false
+      status_type: "student_only"
       is_experimental_group: false
     - level: "متوسطه دوم"
       group: "یازدهم تجربی"
       code: 22
-      dual_status: false
+      allowed_status: "{1}"
+      is_dual_status: false
+      status_type: "student_only"
       is_experimental_group: false
     - level: "متوسطه دوم"
       group: "یازدهم علوم انسانی"
       code: 23
-      dual_status: false
+      allowed_status: "{1}"
+      is_dual_status: false
+      status_type: "student_only"
       is_experimental_group: false
     - level: "متوسطه دوم"
       group: "یازدهم علوم و معارف اسلامی"
       code: 29
-      dual_status: false
+      allowed_status: "{1}"
+      is_dual_status: false
+      status_type: "student_only"
       is_experimental_group: false
 
     - level: "متوسطه اول"
       group: "نهم"
       code: 27
-      dual_status: false
+      allowed_status: "{1}"
+      is_dual_status: false
+      status_type: "student_only"
       is_experimental_group: false
     - level: "متوسطه اول"
       group: "هشتم"
       code: 31
-      dual_status: false
+      allowed_status: "{1}"
+      is_dual_status: false
+      status_type: "student_only"
       is_experimental_group: false
     - level: "متوسطه اول"
       group: "هفتم"
       code: 33
-      dual_status: false
+      allowed_status: "{1}"
+      is_dual_status: false
+      status_type: "student_only"
       is_experimental_group: false
-      clarification: "این پایه هفتم واقعی است (کد ۳۳)"
+      clarification: "این پایه هفتم واقعی است (کد ۳۳) - فقط دانش آموز {1}"
 
     - level: "دبستان"
       group: "دوم دبستان"
       code: 46
-      dual_status: false
+      allowed_status: "{1}"
+      is_dual_status: false
+      status_type: "student_only"
       is_experimental_group: false
     - level: "دبستان"
       group: "سوم دبستان"
       code: 45
-      dual_status: false
+      allowed_status: "{1}"
+      is_dual_status: false
+      status_type: "student_only"
       is_experimental_group: false
     - level: "دبستان"
       group: "چهارم دبستان"
       code: 43
-      dual_status: false
+      allowed_status: "{1}"
+      is_dual_status: false
+      status_type: "student_only"
       is_experimental_group: false
     - level: "دبستان"
       group: "پنجم دبستان"
       code: 41
-      dual_status: false
+      allowed_status: "{1}"
+      is_dual_status: false
+      status_type: "student_only"
       is_experimental_group: false
-      clarification: "این پایه پنجم واقعی است (کد ۴۱)"
+      clarification: "این پایه پنجم واقعی است (کد ۴۱) - فقط دانش آموز {1}"
     - level: "دبستان"
       group: "ششم دبستان"
       code: 35
-      dual_status: false
+      allowed_status: "{1}"
+      is_dual_status: false
+      status_type: "student_only"
       is_experimental_group: false
 
     - level: "هنرستان"
       group: "دوازدهم الکتروتکنیک"
       code: 11
-      dual_status: true
+      allowed_status: "{0,1}"
+      is_dual_status: true
+      status_type: "dual"
       is_experimental_group: false
+      clarification: "هنرستان دوازدهم - وضعیت {0,1}"
     - level: "هنرستان"
       group: "دوازدهم شبکه و نرم‌افزار رایانه"
       code: 12
-      dual_status: true
+      allowed_status: "{0,1}"
+      is_dual_status: true
+      status_type: "dual"
       is_experimental_group: false
+      clarification: "هنرستان دوازدهم - وضعیت {0,1}"
     - level: "هنرستان"
       group: "دوازدهم تربیت بدنی"
       code: 14
-      dual_status: true
+      allowed_status: "{0,1}"
+      is_dual_status: true
+      status_type: "dual"
       is_experimental_group: false
+      clarification: "هنرستان دوازدهم - وضعیت {0,1}"
     - level: "هنرستان"
       group: "دوازدهم حسابداری"
       code: 17
-      dual_status: true
+      allowed_status: "{0,1}"
+      is_dual_status: true
+      status_type: "dual"
       is_experimental_group: false
+      clarification: "هنرستان دوازدهم - وضعیت {0,1}"
     - level: "هنرستان"
       group: "دوازدهم مکانیک خودرو"
       code: 18
-      dual_status: true
+      allowed_status: "{0,1}"
+      is_dual_status: true
+      status_type: "dual"
       is_experimental_group: false
+      clarification: "هنرستان دوازدهم - وضعیت {0,1}"
     - level: "هنرستان"
       group: "یازدهم الکتروتکنیک"
       code: 53
-      dual_status: false
+      allowed_status: "{1}"
+      is_dual_status: false
+      status_type: "student_only"
       is_experimental_group: false
+      clarification: "هنرستان یازدهم - فقط دانش آموز {1}"
     - level: "هنرستان"
       group: "یازدهم شبکه و نرم افزار"
       code: 55
-      dual_status: false
+      allowed_status: "{1}"
+      is_dual_status: false
+      status_type: "student_only"
       is_experimental_group: false
+      clarification: "هنرستان یازدهم - فقط دانش آموز {1}"
     - level: "هنرستان"
       group: "یازدهم تربیت بدنی"
       code: 66
-      dual_status: false
+      allowed_status: "{1}"
+      is_dual_status: false
+      status_type: "student_only"
       is_experimental_group: false
+      clarification: "هنرستان یازدهم - فقط دانش آموز {1}"
     - level: "هنرستان"
       group: "یازدهم حسابداری"
       code: 69
-      dual_status: false
+      allowed_status: "{1}"
+      is_dual_status: false
+      status_type: "student_only"
       is_experimental_group: false
+      clarification: "هنرستان یازدهم - فقط دانش آموز {1}"
     - level: "هنرستان"
       group: "دهم شبکه و نرم‌افزار رایانه"
       code: 83
-      dual_status: false
+      allowed_status: "{1}"
+      is_dual_status: false
+      status_type: "student_only"
       is_experimental_group: false
+      clarification: "هنرستان دهم - فقط دانش آموز {1}"
     - level: "هنرستان"
       group: "دهم حسابداری"
       code: 89
-      dual_status: false
+      allowed_status: "{1}"
+      is_dual_status: false
+      status_type: "student_only"
       is_experimental_group: false
+      clarification: "هنرستان دهم - فقط دانش آموز {1}"
 
   critical_notes:
-    - "کد ۷ ≠ پایه هفتم؛ کد ۷ = هنر در کنکوری"
-    - "پایه هفتم = کد ۳۳ در متوسطه اول"
-    - "کد ۵ ≠ پایه پنجم؛ کد ۵ = دوازدهم انسانی در کنکوری"
-    - "پایه پنجم = کد ۴۱ در دبستان"
+    - "کد ۷ ≠ پایه هفتم. کد ۷ = گروه هنر در کنکوری و وضعیت {0,1}"
+    - "پایه هفتم = کد ۳۳ در متوسطه اول و فقط وضعیت {1}"
+    - "کد ۵ ≠ پایه پنجم. کد ۵ = دوازدهم انسانی در کنکوری و وضعیت {0,1}"
+    - "پایه پنجم = کد ۴۱ در دبستان و فقط وضعیت {1}"
 
   statistics:
-    total_groups: 32
+    total_groups: 33
     dual_status_groups: 11
-    student_only_groups: 21
-    experimental_groups: 6
-    grade_groups: 26
+    student_only_groups: 22
+    by_level:
+      کنکوری:
+        total: 6
+        dual_status: 6
+        student_only: 0
+      متوسطه دوم:
+        total: 8
+        dual_status: 0
+        student_only: 8
+      متوسطه اول:
+        total: 3
+        dual_status: 0
+        student_only: 3
+      دبستان:
+        total: 5
+        dual_status: 0
+        student_only: 5
+      هنرستان:
+        total: 11
+        dual_status: 5
+        student_only: 6

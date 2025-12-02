@@ -132,6 +132,15 @@ EDUCATIONAL_STRUCTURE: tuple[EducationalRecord, ...] = (
     EducationalRecord("هنرستان", "دهم حسابداری", 89),
 )
 
+
+class AcademicInfo(TypedDict):
+    level: str
+    group: str
+    code: int
+    allowed_status: set[int]
+    is_dual_status: bool
+
+
 _CODE_TO_RECORD: dict[int, EducationalRecord] = {
     record.field_code: record for record in EDUCATIONAL_STRUCTURE
 }
@@ -207,6 +216,51 @@ def allowed_statuses_for_group(group_code: int, *, is_school_branch: bool) -> tu
     if group_code in DUAL_STATUS_GROUPS:
         return (Status.STUDENT, Status.GRADUATE)
     return (Status.STUDENT,)
+
+
+def get_academic_info(field_code: int) -> AcademicInfo:
+    """Return complete educational info for the given code, including status.
+
+    Raises:
+        DataMissingError: اگر کد رشته در ساختار آموزشی تعریف نشده باشد.
+    """
+
+    record = _CODE_TO_RECORD.get(field_code)
+    if record is None:
+        raise DataMissingError(func="get_academic_info", column="کدرشته", value=field_code)
+
+    is_dual_status = field_code in DUAL_STATUS_GROUPS
+    allowed_status: set[int] = {int(Status.STUDENT)}
+    if is_dual_status:
+        allowed_status.add(int(Status.GRADUATE))
+
+    return AcademicInfo(
+        level=record.educational_level,
+        group=record.experimental_group,
+        code=record.field_code,
+        allowed_status=allowed_status,
+        is_dual_status=is_dual_status,
+    )
+
+
+def validate_student_allocation(field_code: int, student_status: int) -> bool:
+    """Check if the student status is allowed for the field code."""
+
+    if student_status not in (Status.STUDENT, Status.GRADUATE):
+        raise ValueError("student_status must be 0 (graduate) or 1 (student)")
+
+    academic_info = get_academic_info(field_code)
+    return student_status in academic_info["allowed_status"]
+
+
+def get_eligible_codes_for_status(student_status: int) -> list[int]:
+    """Return all field codes eligible for the given student status."""
+
+    if student_status == Status.GRADUATE:
+        return sorted(DUAL_STATUS_GROUPS)
+    if student_status == Status.STUDENT:
+        return sorted(_CODE_TO_RECORD.keys())
+    raise ValueError("student_status must be 0 (graduate) or 1 (student)")
 
 
 @final

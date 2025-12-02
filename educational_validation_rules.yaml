@@ -1,4 +1,12 @@
 validation_rules:
+  status_based_rules:
+    dual_status_codes: [1, 3, 5, 7, 8, 9, 11, 12, 14, 17, 18]
+    student_only_codes: [21, 22, 23, 24, 25, 26, 27, 29, 30, 31, 33, 35, 41, 43, 45, 46, 53, 55, 66, 69, 83, 89]
+    rule_1: "If code in dual_status_codes, allowed_status must be {0,1}"
+    rule_2: "If code in student_only_codes, allowed_status must be {1}"
+    rule_3: "Student status = 0 (graduate) only allowed for dual_status codes"
+    rule_4: "Student status = 1 (student) allowed for all codes"
+
   code_7_rules:
     - if code == 7:
         level_must_be: "کنکوری"
@@ -10,17 +18,35 @@ validation_rules:
         level_must_be: "متوسطه اول"
         group_must_be: "هفتم"
         is_experimental_group_must_be: false
+  code_5_rules:
+    - if code == 5:
+        level_must_be: "کنکوری"
+        group_must_be: "دوازدهم انسانی"
+        is_experimental_group_must_be: true
+        never_allow_levels:
+          - "دبستان"
+  code_41_rules:
+    - if code == 41:
+        level_must_be: "دبستان"
+        group_must_be: "پنجم دبستان"
+        is_experimental_group_must_be: false
+        never_allow_levels:
+          - "کنکوری"
   code_confusion_matrix:
     confusing_codes:
       - code: 7
         wrong_assumption: "پایه هفتم"
         correct_meaning: "گروه هنر کنکوری"
+        validation: "code=7 → level=کنکوری, group=هنر, status∈{0,1}"
       - code: 5
         wrong_assumption: "پایه پنجم"
         correct_meaning: "دوازدهم انسانی کنکوری"
+        validation: "code=5 → level=کنکوری, group=دوازدهم انسانی, status∈{0,1}"
       - code: 33
         wrong_assumption: "گروه آزمایشی"
         correct_meaning: "پایه هفتم متوسطه اول"
+        validation: "code=33 → level=متوسطه اول, group=هفتم, status={1}"
       - code: 41
         wrong_assumption: "کد گروه ۵"
         correct_meaning: "پایه پنجم دبستان"
+        validation: "code=41 → level=دبستان, group=پنجم دبستان, status={1}"
