@@ -1515,7 +1515,7 @@ class MainWindow(QMainWindow):
         hint.setWordWrap(True)
         layout.addWidget(hint)
 
-        self._debug_dashboard = DebugDashboardWidget(self)
+        self._debug_dashboard = DebugDashboardWidget(parent=self)
         layout.addWidget(self._debug_dashboard)
         layout.addStretch(1)
         return page
