@@ -74,13 +74,21 @@ def _explain_mentor_type(
 
     law_refs = get_rule_definitions()[QA_RULE_MENTOR_TYPE_01].law_mapping.law_refs
     violations = tuple(rule_result.violations)
-    if not violations:
-        return None
 
-    combined_details: dict[str, object] = {}
+    combined_details_list: dict[str, list[object]] = {}
     for violation in violations:
         if violation.details:
-            combined_details.update(violation.details)
+            for key, value in violation.details.items():
+                if key not in combined_details_list:
+                    combined_details_list[key] = []
+                if isinstance(value, (list, tuple)):
+                    combined_details_list[key].extend(value)
+                else:
+                    combined_details_list[key].append(value)
+
+    combined_details: dict[str, object] = {
+        key: tuple(dict.fromkeys(values)) for key, values in combined_details_list.items()
+    }
     combined_details["matrix_rows"] = int(len(matrix))
     marker = matrix.attrs.get("qa_debug_marker")
     if marker is not None:
