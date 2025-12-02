@@ -6,7 +6,9 @@ Summary
 -------
 - Normal mentors: build graduation_status per Policy v1.0.3
   - Dual-status groups `{1, 3, 5, 7, 8, 9, 11, 12, 14, 17, 18}` → {1, 0}
-  - Student-only groups (22 codes) → {1}
+  - Student-only overrides `{33, 31, 27}` → {1} (پایه‌های هفتم، هشتم و نهم؛
+    کدرشته‌های 7/5 مفاهیم متفاوتی دارند)
+  - Remaining student-only groups (22 codes) → {1}
 - School mentors: build ONLY student=1
 - Everything else as per SSoT v1.0.2 (capacity gate, crosswalk+synonyms,
   finance 0/1/3, center mapping, atomic writes)
