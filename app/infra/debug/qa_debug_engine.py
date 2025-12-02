@@ -1,16 +1,16 @@
-from __future__ import annotations
-
 """Observe-only QA debug helpers scoped to QA_RULE_MENTOR_TYPE_01."""
 
+from __future__ import annotations
+
+from collections.abc import Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Mapping
 
 import pandas as pd
 
-from app.core.qa.invariants import QaReport, QaRuleResult
-from app.core.qa.rules import RuleId, QA_RULE_MENTOR_TYPE_01, get_rule_definitions
 from app.core.policy_loader import PolicyConfig
+from app.core.qa.invariants import QaReport, QaRuleResult
+from app.core.qa.rules import QA_RULE_MENTOR_TYPE_01, RuleId, get_rule_definitions
 
 __all__ = ["QADebugStory", "explain_rule", "explain_report"]
 
