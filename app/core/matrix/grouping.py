@@ -5,7 +5,14 @@ from collections.abc import Mapping, Sequence
 import pandas as pd
 
 from app.core.common.columns import enforce_join_key_types
-from app.core.common.domain import COL_GENDER, COL_GROUP, COL_STATUS, BuildConfig, _postal_valid
+from app.core.common.domain import (
+    COL_GENDER,
+    COL_GROUP,
+    COL_STATUS,
+    BuildConfig,
+    _postal_valid,
+    allowed_statuses_for_group,
+)
 
 __all__ = ["build_candidate_group_keys"]
 
@@ -43,6 +50,25 @@ def _ensure_iterable(values: object) -> list[object]:
     if isinstance(values, tuple):
         return list(values)
     return [values]
+
+
+def _status_domain(
+    configured_statuses: Sequence[object],
+    *,
+    group_code: int,
+    is_school_branch: bool,
+) -> tuple[int, ...]:
+    allowed = allowed_statuses_for_group(group_code, is_school_branch=is_school_branch)
+    normalized: list[int] = []
+    for value in configured_statuses:
+        if isinstance(value, str) and value.strip() == "":
+            continue
+        status_code = _safe_int(value)
+        normalized.append(status_code)
+    if not normalized:
+        return allowed
+    filtered = tuple(status for status in normalized if status in allowed)
+    return filtered or allowed
 
 
 def build_candidate_group_keys(
@@ -113,10 +139,19 @@ def build_candidate_group_keys(
                 continue
             _name, code = group_pair
             group_code = _safe_int(code)
+            normal_status_domain = _status_domain(
+                statuses_normal,
+                group_code=group_code,
+                is_school_branch=False,
+            )
+            school_status_domain = _status_domain(
+                statuses_school,
+                group_code=group_code,
+                is_school_branch=True,
+            )
             for gender in genders or [""]:
                 gender_code = _safe_int(gender)
-                for status in statuses_normal or [""]:
-                    status_code = _safe_int(status)
+                for status_code in normal_status_domain:
                     for finance in finance_variants or [0]:
                         finance_code = _safe_int(finance)
                         for school in schools_normal or [""]:
@@ -135,8 +170,7 @@ def build_candidate_group_keys(
                             }
                             records.append(record)
 
-                for status in statuses_school or [""]:
-                    status_code = _safe_int(status)
+                for status_code in school_status_domain:
                     for finance in finance_variants or [0]:
                         finance_code = _safe_int(finance)
                         for school in school_codes or [0]:

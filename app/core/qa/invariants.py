@@ -11,9 +11,11 @@ from pandas.api import types as ptypes
 from app.core.allocation.mentor_pool import compute_effective_status
 from app.core.canonical_frames import POOL_JOIN_KEY_DUPLICATES_ATTR
 from app.core.common.domain import (
+    COL_MENTOR_TYPE,
     BuildConfig,
     StudentBindingKind,
     _postal_valid,
+    allowed_statuses_for_group,
     classify_student_binding,
 )
 from app.core.common.national_id import canonical_national_code
@@ -30,6 +32,7 @@ __all__ = [
     "check_STU_01",
     "check_STU_02",
     "check_STU_BINDING_01",
+    "check_STATUS_DOMAIN_01",
     "check_JOIN_01",
     "check_POOL_JOIN_01",
     "check_SCHOOL_01",
@@ -195,6 +198,7 @@ def run_all_invariants(
         ),
         check_STU_02(allocation=allocation, inspactor=inspactor),
         check_STU_BINDING_01(student_report=student_report, policy=policy),
+        check_STATUS_DOMAIN_01(matrix=matrix, policy=policy),
         check_JOIN_01(matrix=matrix, policy=policy),
         check_MENTOR_TYPE_01(matrix=matrix, policy=policy),
         check_SCHOOL_01(matrix=matrix, invalid_mentors=invalid_mentors, policy=policy),
@@ -396,6 +400,72 @@ def check_STU_BINDING_01(  # noqa: N802
 
     return QaRuleResult(
         rule_id="QA_RULE_STU_BINDING_01",
+        passed=not violations,
+        violations=violations,
+    )
+
+
+def check_STATUS_DOMAIN_01(  # noqa: N802
+    *, matrix: pd.DataFrame | None, policy: PolicyConfig
+) -> QaRuleResult:
+    """QA_RULE_STATUS_DOMAIN_01 — انطباق دامنهٔ وضعیت فارغ‌التحصیلی با قانون."""
+
+    violations: list[QaViolation] = []
+    if matrix is None:
+        return QaRuleResult("QA_RULE_STATUS_DOMAIN_01", True, violations)
+
+    try:
+        group_column = policy.stage_column("type")
+        status_column = policy.stage_column("graduation_status")
+    except KeyError:
+        return QaRuleResult("QA_RULE_STATUS_DOMAIN_01", True, violations)
+
+    missing_columns = [
+        column
+        for column in (group_column, status_column, COL_MENTOR_TYPE)
+        if column not in matrix.columns
+    ]
+    if missing_columns:
+        violations.append(
+            QaViolation(
+                rule_id="QA_RULE_STATUS_DOMAIN_01",
+                level="error",
+                message="ستون‌های لازم برای قانون STATUS-DOMAIN-01 موجود نیست",
+                details={"missing_columns": tuple(sorted(missing_columns))},
+            )
+        )
+        return QaRuleResult("QA_RULE_STATUS_DOMAIN_01", False, violations)
+
+    for idx, row in matrix.iterrows():
+        group_value = pd.to_numeric(row[group_column], errors="coerce")
+        status_value = pd.to_numeric(row[status_column], errors="coerce")
+        mentor_type_value = str(row[COL_MENTOR_TYPE]).strip()
+
+        if pd.isna(group_value) or pd.isna(status_value):
+            continue
+
+        allowed = allowed_statuses_for_group(
+            int(group_value), is_school_branch=mentor_type_value == "مدرسه‌ای"
+        )
+        status_int = int(status_value)
+        if status_int not in allowed:
+            violations.append(
+                QaViolation(
+                    rule_id="QA_RULE_STATUS_DOMAIN_01",
+                    level="error",
+                    message="دامنهٔ وضعیت فارغ‌التحصیلی با Policy هم‌خوانی ندارد",
+                    details={
+                        "row": int(idx),
+                        group_column: int(group_value),
+                        status_column: status_int,
+                        "mentor_type": mentor_type_value,
+                        "allowed": allowed,
+                    },
+                )
+            )
+
+    return QaRuleResult(
+        rule_id="QA_RULE_STATUS_DOMAIN_01",
         passed=not violations,
         violations=violations,
     )

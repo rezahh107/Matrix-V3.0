@@ -56,6 +56,39 @@ class Status(IntEnum):
     GRADUATE = 0
 
 
+# Policy v1.0.3: only these groups support both student and graduate statuses.
+DUAL_STATUS_GROUPS: frozenset[int] = frozenset(
+    {
+        1,
+        3,
+        5,
+        7,
+        8,
+        9,
+        11,
+        12,
+        14,
+        17,
+        18,
+    }
+)
+
+
+def allowed_statuses_for_group(group_code: int, *, is_school_branch: bool) -> tuple[int, ...]:
+    """Return graduation_status domain for the given group and mentor branch.
+
+    School-branch mentors are student-only. Normal mentors may expose both
+    statuses only for the Policy-approved dual-status groups; all other groups
+    are constrained to the student status (1).
+    """
+
+    if is_school_branch:
+        return (Status.STUDENT,)
+    if group_code in DUAL_STATUS_GROUPS:
+        return (Status.STUDENT, Status.GRADUATE)
+    return (Status.STUDENT,)
+
+
 @final
 class Gender(IntEnum):
     """Gender codes."""

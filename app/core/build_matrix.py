@@ -24,7 +24,7 @@ from enum import Enum, IntEnum, auto
 from functools import lru_cache
 from itertools import product
 from logging import getLogger
-from typing import Any, Final, Literal, TypeVar
+from typing import Any, Literal, TypeVar
 
 import numpy as np
 import pandas as pd
@@ -47,10 +47,12 @@ from app.core.common.columns import (
     resolve_aliases,
 )
 from app.core.common.domain import (
+    DUAL_STATUS_GROUPS,  # noqa: F401 - re-export for compatibility
     BuildConfig,
     MentorType,
     StudentBindingKind,
     _postal_valid,
+    allowed_statuses_for_group,
     center_from_manager as domain_center_from_manager,
     classify_mentor_type_from_school_count,
     classify_student_binding,
@@ -145,25 +147,6 @@ BUILTIN_SYNONYMS = {
     "کل کنکوری": "__BUCKET__کنکوری",
     "کنکوریها": "__BUCKET__کنکوری",
 }
-
-# Policy v1.0.3: only these 11 groups support both student (1) and graduate (0).
-DUAL_STATUS_GROUPS: Final[frozenset[int]] = frozenset({1, 3, 5, 7, 8, 9, 11, 12, 14, 17, 18})
-
-
-def allowed_statuses_for_group(group_code: int, *, is_school_branch: bool) -> tuple[int, ...]:
-    """Return graduation_status domain for the given group and mentor branch.
-
-    School-branch mentors are student-only. Normal mentors may expose both
-    statuses only for the Policy-approved dual-status groups; all other groups
-    are constrained to the student status (1).
-    """
-
-    if is_school_branch:
-        return (1,)
-    if group_code in DUAL_STATUS_GROUPS:
-        return (1, 0)
-    return (1,)
-
 
 # =============================================================================
 # PROGRESS API
@@ -1184,6 +1167,8 @@ def generate_row_variants(
     schools_raw: list[Any],
     finance_variants: Iterable[int],
     code_to_name_school: dict[str, str],
+    *,
+    is_school_branch: bool = False,
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
 
@@ -1200,44 +1185,59 @@ def generate_row_variants(
         return "", str(sc_val), 0
 
     iter_genders = genders or [""]
-    iter_statuses = statuses or [""]
     iter_schools = schools_raw if any(schools_raw) else [""]
 
-    for (g_name, g_code), ge, st, fin, sc in product(
-        group_pairs, iter_genders, iter_statuses, finance_variants, iter_schools
+    for (g_name, g_code), ge, fin, sc in product(
+        group_pairs, iter_genders, finance_variants, iter_schools
     ):
         gcode = norm_gender(ge) if ge != "" else None
-        stcode = norm_status(st) if st != "" else None
+        allowed_statuses = allowed_statuses_for_group(
+            int(g_code), is_school_branch=is_school_branch
+        )
+        normalized_statuses: list[int] = []
+        for status_raw in statuses:
+            if isinstance(status_raw, str) and status_raw.strip() == "":
+                continue
+            normalized_status = norm_status(status_raw)
+            if normalized_status is not None:
+                normalized_statuses.append(int(normalized_status))
+        status_domain_candidates = tuple(normalized_statuses)
+        filtered = tuple(
+            status for status in status_domain_candidates if status in allowed_statuses
+        )
+        status_domain = filtered or allowed_statuses
         school_code, school_name, is_school = _school_lookup(sc)
 
         alias_val = base.get("alias", "")
-
-        rows.append(
-            {
-                "جایگزین": int(alias_val) if str(alias_val).strip().isdigit() else str(alias_val),
-                "پشتیبان": base["supporter"],
-                "کد کارمندی پشتیبان": base["mentor_id"],
-                "مدیر": base["manager"],
-                "ردیف پشتیبان": (
-                    int(base["row_id"]) if str(base["row_id"]).strip().isdigit() else ""
-                ),
-                "نام رشته": g_name,
-                "کدرشته": int(g_code),
-                "جنسیت": int(gcode) if gcode is not None else "",
-                "دانش آموز فارغ": int(stcode) if stcode is not None else "",
-                "مرکز گلستان صدرا": int(base["center_code"]),
-                "مالی حکمت بنیاد": int(fin),
-                "کد مدرسه": school_code,
-                "عادی مدرسه": "مدرسه‌ای" if is_school else "عادی",
-                "نام مدرسه": school_name,
-                "جنسیت2": gender_text(gcode),
-                "دانش آموز فارغ2": status_text(stcode),
-                "مرکز گلستان صدرا3": base["center_text"],
-                CAPACITY_CURRENT_COL: safe_int(base.get("capacity_current", 0)),
-                CAPACITY_SPECIAL_COL: safe_int(base.get("capacity_special", 0)),
-                "remaining_capacity": safe_int(base.get("capacity_remaining", 0)),
-            }
-        )
+        for stcode in status_domain:
+            rows.append(
+                {
+                    "جایگزین": (
+                        int(alias_val) if str(alias_val).strip().isdigit() else str(alias_val)
+                    ),
+                    "پشتیبان": base["supporter"],
+                    "کد کارمندی پشتیبان": base["mentor_id"],
+                    "مدیر": base["manager"],
+                    "ردیف پشتیبان": (
+                        int(base["row_id"]) if str(base["row_id"]).strip().isdigit() else ""
+                    ),
+                    "نام رشته": g_name,
+                    "کدرشته": int(g_code),
+                    "جنسیت": int(gcode) if gcode is not None else "",
+                    "دانش آموز فارغ": int(stcode) if stcode is not None else "",
+                    "مرکز گلستان صدرا": int(base["center_code"]),
+                    "مالی حکمت بنیاد": int(fin),
+                    "کد مدرسه": school_code,
+                    "عادی مدرسه": "مدرسه‌ای" if is_school else "عادی",
+                    "نام مدرسه": school_name,
+                    "جنسیت2": gender_text(gcode),
+                    "دانش آموز فارغ2": status_text(stcode),
+                    "مرکز گلستان صدرا3": base["center_text"],
+                    CAPACITY_CURRENT_COL: safe_int(base.get("capacity_current", 0)),
+                    CAPACITY_SPECIAL_COL: safe_int(base.get("capacity_special", 0)),
+                    "remaining_capacity": safe_int(base.get("capacity_remaining", 0)),
+                }
+            )
     return rows
 
 
@@ -1600,14 +1600,14 @@ def _explode_rows(
         for value in configured_iterable:
             coerced = _coerce_int_like(value)
             normalized_values.append(int(coerced) if coerced is not None else 0)
-        normalized: tuple[int, ...] = tuple(normalized_values)
-
-        if normalized:
-            return normalized
-
         group_value = _coerce_int_like(row.get("group_code"))
         group_int = int(group_value) if group_value is not None else 0
         allowed = allowed_statuses_for_group(group_int, is_school_branch=type_label == "مدرسه‌ای")
+        normalized: tuple[int, ...] = tuple(normalized_values)
+        if normalized:
+            filtered = tuple(value for value in normalized if value in allowed)
+            if filtered:
+                return filtered
         return allowed
 
     df["status_seq"] = df.apply(_statuses_for_row, axis=1)
