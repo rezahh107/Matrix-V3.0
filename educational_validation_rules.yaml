@@ -33,20 +33,20 @@ validation_rules:
         never_allow_levels:
           - "کنکوری"
   code_confusion_matrix:
-    confusing_codes:
+    code_confusion_rules:
       - code: 7
         wrong_assumption: "پایه هفتم"
-        correct_meaning: "گروه هنر کنکوری"
+        correct: "گروه هنر کنکوری (dual_status)"
         validation: "code=7 → level=کنکوری, group=هنر, status∈{0,1}"
+      - code: 33
+        wrong_assumption: "گروه آزمایشی (dual_status)"
+        correct: "پایه هفتم متوسطه اول (student_only)"
+        validation: "code=33 → level=متوسطه اول, group=هفتم, status={1}"
       - code: 5
         wrong_assumption: "پایه پنجم"
-        correct_meaning: "دوازدهم انسانی کنکوری"
+        correct: "دوازدهم انسانی کنکوری (dual_status)"
         validation: "code=5 → level=کنکوری, group=دوازدهم انسانی, status∈{0,1}"
-      - code: 33
-        wrong_assumption: "گروه آزمایشی"
-        correct_meaning: "پایه هفتم متوسطه اول"
-        validation: "code=33 → level=متوسطه اول, group=هفتم, status={1}"
       - code: 41
         wrong_assumption: "کد گروه ۵"
-        correct_meaning: "پایه پنجم دبستان"
+        correct: "پایه پنجم دبستان (student_only)"
         validation: "code=41 → level=دبستان, group=پنجم دبستان, status={1}"

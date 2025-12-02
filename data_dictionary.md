@@ -26,7 +26,7 @@
   - `{1}`: Student Only (فقط دانش آموز)
 - **Business Rule**: Determines if graduates can enroll
 - **Dual-Status Groups**: 11 codes (1,3,5,7,8,9,11,12,14,17,18)
-- **Student-Only Groups**: Remaining codes (status {1})
+- **Student-Only Groups**: 22 codes (همهٔ کدهای دیگر در جدول مرجع با وضعیت {1})
 
 ## Field: `student_status`
 - **Type**: Integer
@@ -75,5 +75,5 @@
 ### Hierarchy Stats
 - Total mappings: 33
 - Dual-status codes: {1, 3, 5, 7, 8, 9, 11, 12, 14, 17, 18} → {1, 0}
-- Student-only codes: سایر کدها → {1}
-- Experimental groups (کنکوری): 6 | Grade groups: 27
+- Student-only codes: {21, 22, 23, 24, 25, 26, 27, 29, 30, 31, 33, 35, 41, 43, 45, 46, 53, 55, 66, 69, 83, 89} → {1}
+- Experimental groups (کنکوری): 6 | Grade groups (پایه‌ها و هنرستان): 27
