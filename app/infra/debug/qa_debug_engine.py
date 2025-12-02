@@ -75,7 +75,7 @@ def _explain_mentor_type(
     law_refs = get_rule_definitions()[QA_RULE_MENTOR_TYPE_01].law_mapping.law_refs
     violations = tuple(rule_result.violations)
 
-    combined_details_list: dict[str, list] = {}
+    combined_details_list: dict[str, list[object]] = {}
     for violation in violations:
         if violation.details:
             for key, value in violation.details.items():
