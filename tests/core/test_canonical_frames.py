@@ -51,6 +51,29 @@ def test_canonicalize_pool_frame_rejects_invalid_school_code() -> None:
         canonicalize_pool_frame(pool, policy=policy)
 
 
+def test_canonicalize_pool_frame_reports_index_on_missing_join_key() -> None:
+    policy = load_policy()
+    pool = pd.DataFrame(
+        {
+            policy.stage_column("group"): [pd.NA],
+            policy.stage_column("gender"): [1],
+            policy.stage_column("graduation_status"): [0],
+            policy.stage_column("center"): [1],
+            policy.stage_column("finance"): [1],
+            policy.columns.school_code: [0],
+            "کد کارمندی پشتیبان": ["m1"],
+            "remaining_capacity": [1],
+        }
+    )
+
+    with pytest.raises(JoinKeyCanonicalizationError) as excinfo:
+        canonicalize_pool_frame(pool, policy=policy)
+
+    message = str(excinfo.value)
+    assert "index 0" in message
+    assert policy.stage_column("group") in message
+
+
 def test_sanitize_pool_does_not_drop_alias_by_virtual_range() -> None:
     policy = replace(
         load_policy(),

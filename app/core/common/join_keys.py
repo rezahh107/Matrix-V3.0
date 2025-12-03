@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable, Mapping, Sequence
 from numbers import Number
-from typing import Literal, TypedDict, cast
+from typing import Hashable, Literal, TypedDict, cast
 
 import pandas as pd
 
@@ -45,10 +45,12 @@ class JoinKeyMismatchDetail(TypedDict):
 class JoinKeyCanonicalizationError(ValueError):
     """Raised when a join-key value cannot be canonicalized to ``int``."""
 
-    def __init__(self, column: str, value: object) -> None:
-        super().__init__(f"Cannot canonicalize join key '{column}' from value {value!r}")
+    def __init__(self, column: str, value: object, *, index: Hashable | None = None) -> None:
+        suffix = "" if index is None else f" at index {index!r}"
+        super().__init__(f"Cannot canonicalize join key '{column}'{suffix} from value {value!r}")
         self.column = column
         self.value = value
+        self.index = index
 
 
 def coerce_join_int(value: object) -> int:

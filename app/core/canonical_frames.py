@@ -142,16 +142,21 @@ def _canonicalize_join_key_columns(
             raise KeyError(f"Missing join key column: {column}")
         series = ensure_series(canonicalized[column])
         column_raise = raise_on_invalid or column in strict_set
-        canonical_series = series.map(
-            lambda raw: _safe_canonical_join_value(
-                column,
-                raw,
-                policy=policy,
-                raise_on_invalid=column_raise,
-                allow_missing_when_strict=allow_missing_when_strict,
-            )
-        )
-        values = pd.Series(canonical_series, index=canonicalized.index, dtype="Int64")
+        canonical_values: list[pd.NAType | int] = []
+        for idx, raw in series.items():
+            try:
+                canonical_values.append(
+                    _safe_canonical_join_value(
+                        column,
+                        raw,
+                        policy=policy,
+                        raise_on_invalid=column_raise,
+                        allow_missing_when_strict=allow_missing_when_strict,
+                    )
+                )
+            except JoinKeyCanonicalizationError as exc:
+                raise JoinKeyCanonicalizationError(column, raw, index=idx) from exc
+        values = pd.Series(canonical_values, index=canonicalized.index, dtype="Int64")
         negative_mask = values.notna() & (values < 0)
         if negative_mask.any():
             if column_raise:
