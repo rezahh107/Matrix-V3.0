@@ -8,7 +8,10 @@ import pytest
 from app.core.policy_loader import load_policy
 from app.infra.errors import JoinKeyValidationError
 from app.infra.local_database import LocalDatabase
-from app.infra.reference_students_repository import import_student_report_with_validation
+from app.infra.reference_students_repository import (
+    import_student_report_from_excel,
+    import_student_report_with_validation,
+)
 
 
 def _write_excel(df: pd.DataFrame, path: Path) -> None:
@@ -34,14 +37,15 @@ def test_invalid_group_code_surfaces_structured_result(tmp_path: Path) -> None:
     excel_path = tmp_path / "students.xlsx"
     _write_excel(raw, excel_path)
 
-    with pytest.raises(JoinKeyValidationError) as exc_info:
-        import_student_report_with_validation(excel_path, db=db, policy=policy)
+    bundle = import_student_report_with_validation(excel_path, db=db, policy=policy)
 
-    result = exc_info.value.result
-    assert len(result.issues) == 1
-    issue = result.issues[0]
+    assert len(bundle.join_keys.issues) == 1
+    issue = bundle.join_keys.issues[0]
     assert issue.column == "کدرشته"
     assert issue.error_code == "DATA_MISSING"
+
+    with pytest.raises(JoinKeyValidationError):
+        import_student_report_from_excel(excel_path, db=db, policy=policy)
 
 
 def test_valid_join_keys_pass_through(tmp_path: Path) -> None:

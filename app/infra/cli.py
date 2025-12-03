@@ -610,6 +610,7 @@ def _resolve_students_frame(
             df = import_student_report_from_excel(students_path, db=db, policy=policy)
         else:
             raw_df = read_excel_first_sheet(students_path)
+            raw_df = columns_module.canonicalize_headers(raw_df, header_mode="fa")
             validation = validate_and_canonicalize_join_keys(
                 raw_df, policy=policy, entity_type="student"
             )
