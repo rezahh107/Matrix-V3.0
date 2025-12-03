@@ -322,7 +322,15 @@ def validate_and_canonicalize_join_keys(
             valid_mask[:] = False
             continue
 
-        conversion = canonical_df[column].apply(
+        candidate = canonical_df[column]
+        if isinstance(candidate, pd.DataFrame):
+            series = candidate.iloc[:, -1].copy()
+            canonical_df = canonical_df.drop(columns=column)
+            canonical_df[column] = series
+        else:
+            series = candidate.copy()
+
+        conversion = series.apply(
             lambda value: _canonicalize_join_key_value_safe(column, value, policy=policy)
         )
         coerced = conversion.apply(lambda pair: pair[0])
@@ -331,9 +339,10 @@ def validate_and_canonicalize_join_keys(
         error_mask = errors.notna()
         if error_mask.any():
             for row_index, raw_value, error_code in zip(
-                canonical_df.index[error_mask],
-                canonical_df[column][error_mask],
+                series.index[error_mask],
+                series[error_mask],
                 errors[error_mask],
+                strict=False,
             ):
                 issues.append(
                     JoinKeyValidationIssue(

@@ -5,9 +5,8 @@ import pytest
 from pandas.testing import assert_frame_equal
 
 from app.core.canonical_frames import canonicalize_pool_frame
-from app.core.common.join_keys import JoinKeyCanonicalizationError
 from app.core.policy_loader import load_policy
-from app.infra.errors import DatabaseOperationError
+from app.infra.errors import DatabaseOperationError, JoinKeyValidationError
 from app.infra.local_database import LocalDatabase
 from app.infra.reference_mentors_repository import (
     _POOL_JOIN_KEY_QA_ATTR,
@@ -134,7 +133,7 @@ def test_import_pool_reports_unmapped_group(tmp_path: Path) -> None:
     insp_path = tmp_path / "insp.xlsx"
     _write_pool_excel(inspactor_df, insp_path)
 
-    with pytest.raises(JoinKeyCanonicalizationError):
+    with pytest.raises(JoinKeyValidationError):
         import_mentor_pool_from_excel(insp_path, db=db, policy=policy)
 
 
