@@ -22,6 +22,12 @@ def import_forms_with_validation(
     """Import form entries from Excel/CSV and validate join keys."""
 
     df = read_excel_first_sheet(path)
+    if "entry_id" not in df.columns or "received_at" not in df.columns:
+        df = df.copy()
+        if "entry_id" not in df.columns:
+            df["entry_id"] = (df.index + 1).map(str)
+        if "received_at" not in df.columns:
+            df["received_at"] = pd.NaT
     validation = validate_and_canonicalize_join_keys(df, policy=policy, entity_type="form")
     db.upsert_forms_entries(validation.canonical_df, source=str(path))
     return validation
