@@ -251,38 +251,40 @@ def parse_group_codes(
         VALID_GROUP_CODES if valid_codes is None else tuple(int(v) for v in valid_codes)
     )
     valid_set = set(int(v) for v in effective_valid)
-    seen: set[int] = set()
+    seen_valid: set[int] = set()
     invalid_seen: set[int] = set()
-    parsed: list[int] = []
+
+    def _digits_only(value: str) -> str:
+        return "".join(ch for ch in value if ch.isdigit())
 
     def _register(value: int) -> None:
-        nonlocal parsed
         if value in valid_set:
-            if value not in seen:
-                parsed.append(value)
-                seen.add(value)
+            seen_valid.add(value)
         elif invalid_collector is not None and value not in invalid_seen:
             invalid_collector.append(value)
             invalid_seen.add(value)
 
     for token in tokens:
-        token = token.strip()
+        token = token.strip().replace("-", ":")
         if not token:
             continue
         if ":" in token:
-            try:
-                start, end = token.split(":", 1)
-                a, b = int(start), int(end)
-            except ValueError:
+            start, end = token.split(":", 1)
+            start_digits, end_digits = _digits_only(start), _digits_only(end)
+            if not start_digits or not end_digits:
                 continue
+            a, b = int(start_digits), int(end_digits)
             if a > b:
                 a, b = b, a
             for value in range(a, b + 1):
                 _register(value)
             continue
-        if token.isdigit():
-            _register(int(token))
-    return parsed
+
+        digits_only = _digits_only(token)
+        if digits_only:
+            _register(int(digits_only))
+
+    return sorted(seen_valid)
 
 
 def validate_and_canonicalize_join_keys(
