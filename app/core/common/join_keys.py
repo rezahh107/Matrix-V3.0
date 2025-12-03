@@ -19,7 +19,7 @@ from app.core.common.types import (
     JoinKeyValidationIssue,
     JoinKeyValidationResult,
 )
-from app.core.counter import normalize_digits
+from app.core.counter import normalize_digits, strip_hidden_chars
 from app.core.policy_loader import PolicyConfig
 
 __all__ = [
@@ -78,7 +78,8 @@ def coerce_join_int(value: object) -> int:
     if isinstance(value, complex):
         raise ValueError("DATA_MISSING")
     if isinstance(value, str):
-        digits = normalize_digits(value).strip()
+        digits = strip_hidden_chars(normalize_digits(value))
+        digits = re.sub(r"\s+", "", digits)
         if not digits:
             raise ValueError("DATA_MISSING")
         return int(digits)
