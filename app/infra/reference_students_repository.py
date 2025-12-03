@@ -13,8 +13,9 @@ import pandas as pd
 
 from app.core.canonical_frames import canonicalize_students_frame
 from app.core.common.join_keys import validate_and_canonicalize_join_keys
-from app.core.common.types import JoinKeyValidationResult
+from app.core.common.types import StudentValidationBundle
 from app.core.policy_loader import PolicyConfig
+from app.core.students.domain_validation import validate_student_domain
 from app.infra.io_utils import read_excel_first_sheet
 from app.infra.local_database import LocalDatabase, _coerce_int_columns
 
@@ -28,7 +29,7 @@ def _read_student_source(path: Path) -> pd.DataFrame:
 
 def import_student_report_with_validation(
     path: Path, *, db: LocalDatabase, policy: PolicyConfig
-) -> JoinKeyValidationResult:
+) -> StudentValidationBundle:
     """وارد کردن StudentReport از دیسک و ذخیره در کش SQLite.
 
     دیتافریم خروجی بر اساس Policy نرمال شده و سپس در ``students_cache``
@@ -38,8 +39,9 @@ def import_student_report_with_validation(
     raw_df = _read_student_source(path)
     validation = validate_and_canonicalize_join_keys(raw_df, policy=policy, entity_type="student")
     normalized = canonicalize_students_frame(validation.canonical_df, policy=policy)
-    db.upsert_students_cache(normalized, join_keys=policy.join_keys)
-    return JoinKeyValidationResult(canonical_df=normalized, issues=validation.issues)
+    domain_result = validate_student_domain(normalized, policy=policy)
+    db.upsert_students_cache(domain_result.canonical_df, join_keys=policy.join_keys)
+    return StudentValidationBundle(join_keys=validation, domain=domain_result)
 
 
 def import_student_report_from_excel(

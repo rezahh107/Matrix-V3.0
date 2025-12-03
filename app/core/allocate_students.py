@@ -70,6 +70,7 @@ from .common.types import (
 from .counter import normalize_digits, strip_hidden_chars
 from .policy_loader import PolicyConfig, load_policy
 from .reason.selection_reason import build_selection_reason_rows as _build_selection_reason_rows
+from .students.domain_validation import assert_student_domain_clean
 
 ProgressFn = Callable[[int, str], None]
 
@@ -1406,6 +1407,7 @@ def _normalize_students(df: pd.DataFrame, policy: PolicyConfig) -> pd.DataFrame:
     for column in policy.join_keys:
         if column in students.columns:
             students[column] = students[column].astype("Int64")
+    assert_student_domain_clean(students, policy=policy)
     return students
 
 

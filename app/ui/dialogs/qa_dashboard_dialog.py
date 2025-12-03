@@ -25,13 +25,15 @@ class QADashboardDialog(QDialog):
         layout.addWidget(QLabel("Join-key issues per run"))
         table = QTableWidget(self)
         entities: list[JoinKeyEntityType] = ["student", "mentor", "school", "form"]
-        table.setColumnCount(len(entities) + 1)
-        headers = ["Run"] + [entity.title() for entity in entities]
+        table.setColumnCount(len(entities) + 2)
+        headers = ["Run", "Student Domain"] + [entity.title() for entity in entities]
         table.setHorizontalHeaderLabels(headers)
         table.setRowCount(len(vm.summaries))
         for row_index, summary in enumerate(vm.summaries):
             self._set_item(table, row_index, 0, summary.run_label)
-            for col_index, entity in enumerate(entities, start=1):
+            domain_count = vm.student_domain_counts[row_index] if vm.student_domain_counts else 0
+            self._set_item(table, row_index, 1, str(domain_count))
+            for col_index, entity in enumerate(entities, start=2):
                 count = vm.issue_count(row_index, entity)
                 self._set_item(table, row_index, col_index, str(count))
         table.resizeColumnsToContents()

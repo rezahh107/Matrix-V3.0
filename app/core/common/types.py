@@ -147,6 +147,62 @@ class JoinKeyValidationResult:
         )
 
 
+@dataclass(frozen=True)
+class StudentDomainValidationIssue:
+    """Structured issue raised during student domain validation."""
+
+    row_index: int
+    group_code: int | None
+    graduation_status: int | None
+    allowed_statuses: tuple[int, ...]
+    error_code: str
+
+
+@dataclass(frozen=True)
+class StudentDomainValidationResult:
+    """Result of validating domain-specific student invariants."""
+
+    canonical_df: pd.DataFrame
+    issues: list[StudentDomainValidationIssue]
+
+    @property
+    def issues_df(self) -> pd.DataFrame:
+        if not self.issues:
+            return pd.DataFrame(
+                columns=[
+                    "row_index",
+                    "group_code",
+                    "graduation_status",
+                    "allowed_statuses",
+                    "error_code",
+                ]
+            )
+        return pd.DataFrame(
+            [
+                {
+                    "row_index": issue.row_index,
+                    "group_code": issue.group_code,
+                    "graduation_status": issue.graduation_status,
+                    "allowed_statuses": issue.allowed_statuses,
+                    "error_code": issue.error_code,
+                }
+                for issue in self.issues
+            ]
+        )
+
+
+@dataclass(frozen=True)
+class StudentValidationBundle:
+    """Aggregate result for student import validation layers."""
+
+    join_keys: JoinKeyValidationResult
+    domain: StudentDomainValidationResult
+
+    @property
+    def canonical_df(self) -> pd.DataFrame:
+        return self.domain.canonical_df
+
+
 PolicyGender = Literal["male", "female"]
 GraduationStatus = Literal["graduated", "not_graduated"]
 CenterStatus = Literal["registered", "not_registered"]
