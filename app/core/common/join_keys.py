@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Hashable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Hashable, Iterable, Mapping, Sequence
 from numbers import Number
 from typing import Literal, TypedDict, cast
 
@@ -11,7 +11,13 @@ import pandas as pd
 
 from app.core.common.columns import _GENDER_TOKEN_MAP, CANON_EN_TO_FA
 from app.core.common.normalization import normalize_fa
-from app.core.common.types import CANONICAL_JOIN_KEYS, JOIN_KEY_GENDER, JoinKeyName
+from app.core.common.types import (
+    CANONICAL_JOIN_KEYS,
+    JOIN_KEY_GENDER,
+    JoinKeyName,
+    JoinKeyValidationIssue,
+    JoinKeyValidationResult,
+)
 from app.core.counter import normalize_digits
 from app.core.policy_loader import PolicyConfig
 
@@ -30,6 +36,8 @@ __all__ = [
     "resolve_finance_variants",
     "validate_policy_join_keys",
     "validate_selected_mentor_join_keys",
+    "validate_and_canonicalize_join_keys",
+    "assert_canonical_join_keys",
 ]
 
 
@@ -74,6 +82,20 @@ def coerce_join_int(value: object) -> int:
             raise ValueError("DATA_MISSING")
         return int(digits)
     return int(cast(int, value))
+
+
+def _canonicalize_join_key_value_safe(
+    column: str, value: object, *, policy: PolicyConfig
+) -> tuple[int | None, str | None]:
+    try:
+        coerced = canonicalize_join_key_value(column, value, policy=policy)
+        return coerced, None
+    except JoinKeyCanonicalizationError as exc:
+        error_code = "DATA_INVALID"
+        inner = exc.__cause__
+        if isinstance(inner, ValueError):
+            error_code = inner.args[0] if inner.args else "DATA_INVALID"
+        return None, error_code
 
 
 def _canonical_join_key_name(column: str) -> JoinKeyName:
@@ -260,6 +282,87 @@ def parse_group_codes(
         if token.isdigit():
             _register(int(token))
     return parsed
+
+
+def validate_and_canonicalize_join_keys(
+    df_raw: pd.DataFrame,
+    *,
+    policy: PolicyConfig,
+    entity_type: Literal["student", "mentor"],
+    progress: Callable[[int, str], None] | None = None,
+) -> JoinKeyValidationResult:
+    """Validate join keys for a raw DataFrame and return canonical/invalid splits.
+
+    The function never raises for data-quality issues; instead, it collects
+    :class:`JoinKeyValidationIssue` entries for rows containing missing or invalid
+    join-key values. Only fully valid rows are propagated to ``canonical_df``.
+    """
+
+    issues: list[JoinKeyValidationIssue] = []
+    canonical_rows: list[dict[str, object]] = []
+    join_key_columns = list(policy.join_keys)
+    total_rows = len(df_raw)
+    for offset, (_, row) in enumerate(df_raw.iterrows()):
+        row_valid = True
+        canonical_row = row.to_dict()
+        for column in join_key_columns:
+            if column not in df_raw.columns:
+                issues.append(
+                    JoinKeyValidationIssue(
+                        entity_type=entity_type,
+                        row_index=int(offset),
+                        column=column,
+                        raw_value=None,
+                        error_code="MISSING_COLUMN",
+                    )
+                )
+                row_valid = False
+                continue
+            raw_value = row.get(column, None)
+            coerced, error = _canonicalize_join_key_value_safe(column, raw_value, policy=policy)
+            if error is not None:
+                issues.append(
+                    JoinKeyValidationIssue(
+                        entity_type=entity_type,
+                        row_index=int(offset),
+                        column=column,
+                        raw_value=raw_value,
+                        error_code=error,
+                    )
+                )
+                row_valid = False
+            elif coerced is not None:
+                canonical_row[column] = coerced
+        if row_valid:
+            canonical_rows.append(canonical_row)
+        if progress is not None and total_rows:
+            pct = int(((offset + 1) / total_rows) * 100)
+            progress(pct, "validated join keys")
+
+    canonical_df = pd.DataFrame(canonical_rows, columns=df_raw.columns)
+    for column in join_key_columns:
+        if column in canonical_df.columns:
+            canonical_df[column] = canonical_df[column].astype("Int64")
+    return JoinKeyValidationResult(canonical_df=canonical_df, issues=issues)
+
+
+def assert_canonical_join_keys(df: pd.DataFrame, policy: PolicyConfig) -> None:
+    """Assert that a DataFrame carries fully canonical join-key columns.
+
+    The check is intended for internal Core usage to prevent accidental invocation
+    of Core algorithms with unvalidated data.
+    """
+
+    join_key_columns = list(policy.join_keys)
+    missing = [column for column in join_key_columns if column not in df.columns]
+    if missing:
+        raise ValueError(f"DataFrame missing join-key columns: {missing}")
+    for column in join_key_columns:
+        series = df[column]
+        if series.isna().any():
+            raise ValueError(f"Join-key column '{column}' contains null values")
+        if not pd.api.types.is_integer_dtype(series.dtype):
+            raise ValueError(f"Join-key column '{column}' must be integer typed")
 
 
 _JOIN_KEY_LOOKUP: dict[str, JoinKeyName] = {

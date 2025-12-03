@@ -31,8 +31,11 @@ from collections.abc import (
     MutableMapping,
     ValuesView,
 )
+from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Final, Literal, NewType, TypedDict, TypeGuard, cast
+
+import pandas as pd
 
 from .columns import CANON_EN_TO_FA
 
@@ -99,6 +102,47 @@ CANONICAL_JOIN_KEYS: tuple[str, ...] = (
 JoinKeyName = NewType("JoinKeyName", str)
 
 JoinProfile = Mapping[JoinKeyName, int]
+
+
+@dataclass(frozen=True)
+class JoinKeyValidationIssue:
+    """Structured validation issue captured during join-key canonicalization."""
+
+    entity_type: Literal["student", "mentor"]
+    row_index: int
+    column: str
+    raw_value: object
+    error_code: str
+
+
+@dataclass(frozen=True)
+class JoinKeyValidationResult:
+    """Result of validating and canonicalizing join keys for a DataFrame."""
+
+    canonical_df: pd.DataFrame
+    issues: list[JoinKeyValidationIssue]
+
+    @property
+    def invalid_rows(self) -> pd.DataFrame:
+        """Return a DataFrame representation of all validation issues."""
+
+        if not self.issues:
+            return pd.DataFrame(
+                columns=["entity_type", "row_index", "column", "raw_value", "error_code"]
+            )
+        return pd.DataFrame(
+            [
+                {
+                    "entity_type": issue.entity_type,
+                    "row_index": issue.row_index,
+                    "column": issue.column,
+                    "raw_value": issue.raw_value,
+                    "error_code": issue.error_code,
+                }
+                for issue in self.issues
+            ]
+        )
+
 
 PolicyGender = Literal["male", "female"]
 GraduationStatus = Literal["graduated", "not_graduated"]

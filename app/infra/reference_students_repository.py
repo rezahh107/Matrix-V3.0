@@ -12,6 +12,8 @@ from pathlib import Path
 import pandas as pd
 
 from app.core.canonical_frames import canonicalize_students_frame
+from app.core.common.join_keys import validate_and_canonicalize_join_keys
+from app.core.common.types import JoinKeyValidationResult
 from app.core.policy_loader import PolicyConfig
 from app.infra.io_utils import read_excel_first_sheet
 from app.infra.local_database import LocalDatabase, _coerce_int_columns
@@ -24,9 +26,9 @@ def _read_student_source(path: Path) -> pd.DataFrame:
     return pd.read_csv(path)
 
 
-def import_student_report_from_excel(
+def import_student_report_with_validation(
     path: Path, *, db: LocalDatabase, policy: PolicyConfig
-) -> pd.DataFrame:
+) -> JoinKeyValidationResult:
     """وارد کردن StudentReport از دیسک و ذخیره در کش SQLite.
 
     دیتافریم خروجی بر اساس Policy نرمال شده و سپس در ``students_cache``
@@ -34,9 +36,19 @@ def import_student_report_from_excel(
     """
 
     raw_df = _read_student_source(path)
-    normalized = canonicalize_students_frame(raw_df, policy=policy)
+    validation = validate_and_canonicalize_join_keys(raw_df, policy=policy, entity_type="student")
+    normalized = canonicalize_students_frame(validation.canonical_df, policy=policy)
     db.upsert_students_cache(normalized, join_keys=policy.join_keys)
-    return normalized
+    return JoinKeyValidationResult(canonical_df=normalized, issues=validation.issues)
+
+
+def import_student_report_from_excel(
+    path: Path, *, db: LocalDatabase, policy: PolicyConfig
+) -> pd.DataFrame:
+    """Compatibility wrapper returning only canonical student data."""
+
+    result = import_student_report_with_validation(path, db=db, policy=policy)
+    return result.canonical_df
 
 
 def load_students_from_cache(*, db: LocalDatabase, policy: PolicyConfig) -> pd.DataFrame:
