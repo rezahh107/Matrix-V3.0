@@ -71,6 +71,7 @@ from app.infra.local_database import LocalDatabase
 from app.infra.year_database_manager import YearDatabaseInfo, YearDatabaseManager
 from app.ui.database_manager_dialog import DatabaseManagerDialog
 from app.ui.debug_dashboard import DebugDashboardWidget
+from app.ui.dialogs.qa_dashboard_dialog import QADashboardDialog
 from app.ui.fonts import get_app_font
 from app.ui.helpers.counter_helpers import detect_year_candidates
 from app.ui.helpers.manager_helpers import extract_manager_names
@@ -85,6 +86,7 @@ from .app_preferences import AppPreferences
 from .effects import SafeOpacityEffect
 from .i18n import Language
 from .log_panel import LogPanel
+from .viewmodels.qa_dashboard_vm import QADashboardVM
 from .preferences import (
     format_last_run_label,
     read_last_run_info,
@@ -2748,6 +2750,13 @@ class MainWindow(QMainWindow):
                 hook()
             except Exception as exc:  # pragma: no cover - unexpected UI failure
                 self._append_log(f"⚠️ خطا در ذخیره تنظیمات: {exc}")
+
+    def open_qa_dashboard(self) -> None:
+        """Launch the QA dashboard dialog with the latest summaries."""
+
+        vm = QADashboardVM()
+        dialog = QADashboardDialog(vm, self)
+        dialog.exec()
 
     # -------------------------------------------------------------- Qt events
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 - امضای Qt

@@ -80,3 +80,34 @@ def test_assert_canonical_join_keys_rejects_nulls() -> None:
     )
     with pytest.raises(ValueError):
         assert_canonical_join_keys(df, policy)
+
+
+def test_validate_multiple_entity_types_share_api() -> None:
+    policy = load_policy()
+    df = pd.DataFrame(
+        [
+            {
+                "کدرشته": "1",
+                "جنسیت": 1,
+                "دانش آموز فارغ": 0,
+                "مرکز گلستان صدرا": 2,
+                "مالی حکمت بنیاد": 1,
+                "کد مدرسه": 10,
+            },
+            {
+                "کدرشته": "bad",
+                "جنسیت": "x",
+                "دانش آموز فارغ": 0,
+                "مرکز گلستان صدرا": 2,
+                "مالی حکمت بنیاد": 1,
+                "کد مدرسه": 10,
+            },
+        ]
+    )
+    student_result = validate_and_canonicalize_join_keys(
+        df, policy=policy, entity_type="student"
+    )
+    school_result = validate_and_canonicalize_join_keys(
+        df, policy=policy, entity_type="school"
+    )
+    assert len(student_result.issues) == len(school_result.issues)
