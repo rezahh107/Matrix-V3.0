@@ -86,7 +86,6 @@ from .app_preferences import AppPreferences
 from .effects import SafeOpacityEffect
 from .i18n import Language
 from .log_panel import LogPanel
-from .viewmodels.qa_dashboard_vm import QADashboardVM
 from .preferences import (
     format_last_run_label,
     read_last_run_info,
@@ -102,6 +101,7 @@ from .theme import (
     apply_theme_mode,
     build_theme,
 )
+from .viewmodels.qa_dashboard_vm import QADashboardVM
 from .widgets import DatabaseStatusWidget, FilePicker, ThemedStatusBar
 
 logger = logging.getLogger(__name__)

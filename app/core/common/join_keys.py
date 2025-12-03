@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from collections.abc import Callable, Hashable, Iterable, Mapping, Sequence
 from numbers import Number
-from typing import TypedDict, cast
+from typing import Literal, TypedDict, cast
 
 import pandas as pd
 

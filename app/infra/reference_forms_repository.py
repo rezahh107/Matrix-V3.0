@@ -9,9 +9,9 @@ import pandas as pd
 from app.core.common.join_keys import validate_and_canonicalize_join_keys
 from app.core.common.types import JoinKeyValidationResult
 from app.core.policy_loader import PolicyConfig
-from app.infra.local_database import LocalDatabase
 from app.infra.forms_repository import FormsRepository
 from app.infra.io_utils import read_excel_first_sheet
+from app.infra.local_database import LocalDatabase
 
 __all__ = ["import_forms_with_validation", "load_forms_with_validation"]
 
