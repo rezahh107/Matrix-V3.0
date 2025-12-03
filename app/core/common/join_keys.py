@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Hashable, Iterable, Mapping, Sequence
 from numbers import Number
-from typing import Hashable, Literal, TypedDict, cast
+from typing import Literal, TypedDict, cast
 
 import pandas as pd
 
