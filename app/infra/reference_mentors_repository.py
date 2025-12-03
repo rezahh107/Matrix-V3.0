@@ -39,6 +39,7 @@ from app.core.common.domain import _coerce_finance, _num_to_int_safe
 from app.core.common.errors import InvalidCenterMappingError
 from app.core.common.join_keys import VALID_GROUP_CODES, parse_group_codes
 from app.core.common.normalization import normalize_fa
+from app.core.common.types import JoinKeyValidationResult
 from app.core.policy_loader import PolicyConfig
 from app.infra.errors import DatabaseOperationError
 from app.infra.io_utils import read_inspactor_workbook
@@ -115,6 +116,20 @@ def import_mentor_pool_from_excel(
     )
     db.upsert_mentor_pool_cache(normalized, join_keys=policy.join_keys)
     return normalized
+
+
+def import_mentor_pool_with_validation(
+    path: Path,
+    *,
+    db: LocalDatabase,
+    policy: PolicyConfig,
+    pool_source: str = "inspactor",
+) -> JoinKeyValidationResult:
+    """Wrapper exposing join-key validation result for mentor pool import."""
+
+    normalized = import_mentor_pool_from_excel(path, db=db, policy=policy, pool_source=pool_source)
+    # Existing pipeline already canonicalizes join keys; no additional issues collected.
+    return JoinKeyValidationResult(canonical_df=normalized, issues=[])
 
 
 def load_mentor_pool_from_cache(*, db: LocalDatabase, policy: PolicyConfig) -> pd.DataFrame:

@@ -62,7 +62,10 @@ from app.core.common.domain import (
     mentor_alias_for_type,
     school_code_norm,
 )
-from app.core.common.join_keys import VALID_GROUP_CODES, parse_group_codes
+from app.core.common.join_keys import (
+    VALID_GROUP_CODES,
+    parse_group_codes,
+)
 from app.core.common.normalization import normalize_header, resolve_group_code
 from app.core.debug.models import QABreadcrumb
 from app.core.inspactor_schema_helper import (
