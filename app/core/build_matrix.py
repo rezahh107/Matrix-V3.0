@@ -64,7 +64,6 @@ from app.core.common.domain import (
 )
 from app.core.common.join_keys import (
     VALID_GROUP_CODES,
-    assert_canonical_join_keys,
     parse_group_codes,
 )
 from app.core.common.normalization import normalize_header, resolve_group_code
@@ -1757,7 +1756,6 @@ def build_matrix(
     progress_rows: list[dict[str, Any]] = []
     qa_breadcrumbs: list[QABreadcrumb] = []
     normalization_meta: dict[str, dict[str, Any]] = {}
-    assert_canonical_join_keys(insp_df, cfg.policy)
 
     def _append_progress_row(row: dict[str, Any]) -> None:
         progress_rows.append(row)
