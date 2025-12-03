@@ -58,6 +58,22 @@ def test_coerce_join_int_accepts_digit_strings(text: str, expected: int) -> None
     assert coerce_join_int(text) == expected
 
 
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        ("1\u200c2\u200d3", 123),
+        ("1 2 3", 123),
+    ],
+)
+def test_coerce_join_int_strips_hidden_and_whitespace(text: str, expected: int) -> None:
+    assert coerce_join_int(text) == expected
+
+
 def test_coerce_join_int_rejects_non_numeric_strings() -> None:
     with pytest.raises(ValueError):
         coerce_join_int("پسر")
+
+
+def test_coerce_join_int_rejects_empty_after_cleaning() -> None:
+    with pytest.raises(ValueError):
+        coerce_join_int(" \u200c ")
