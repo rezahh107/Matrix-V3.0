@@ -237,6 +237,8 @@ def test_resolve_aliases_handles_common_variants() -> None:
             "mentor_id": ["1001"],
             "کد رشته": [101],
             "کد مدرسه": [501],
+            "شامل گروه‌های آزمایشی": ["21"],
+            "گروه‌های آزمایشی": ["تجربی"],
         }
     )
 
@@ -245,6 +247,8 @@ def test_resolve_aliases_handles_common_variants() -> None:
     assert CANON_EN_TO_FA["mentor_name"] in resolved.columns
     assert CANON_EN_TO_FA["manager_name"] in resolved.columns
     assert resolved[CANON_EN_TO_FA["mentor_id"]].tolist() == ["1001"]
+    assert "شامل گروه های آزمایشی" in resolved.columns
+    assert "گروه آزمایشی" in resolved.columns
 
 
 def test_ensure_required_columns_with_aliases() -> None:
