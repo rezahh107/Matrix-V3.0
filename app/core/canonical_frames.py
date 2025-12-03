@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Collection, Mapping, Sequence
+from collections.abc import Collection, Hashable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -113,14 +113,20 @@ def _safe_canonical_join_value(
     policy: PolicyConfig,
     raise_on_invalid: bool,
     allow_missing_when_strict: bool,
+    index: Hashable | None = None,
 ) -> int | NAType:
-    """Canonicalize a join value while preserving NA on failure."""
+    """Canonicalize a join value while preserving NA on failure.
+
+    When ``raise_on_invalid`` is set, the raised ``JoinKeyCanonicalizationError``
+    carries the originating index to aid debugging while continuing to allow
+    missing values for strict columns when explicitly permitted.
+    """
 
     try:
         return canonicalize_join_key_value(column, raw, policy=policy)
     except JoinKeyCanonicalizationError as exc:
         if raise_on_invalid and not (allow_missing_when_strict and _is_missing_value(exc.value)):
-            raise
+            raise JoinKeyCanonicalizationError(column, raw, index=index) from exc
         return pd.NA
 
 
@@ -144,18 +150,16 @@ def _canonicalize_join_key_columns(
         column_raise = raise_on_invalid or column in strict_set
         canonical_values: list[pd.NAType | int] = []
         for idx, raw in series.items():
-            try:
-                canonical_values.append(
-                    _safe_canonical_join_value(
-                        column,
-                        raw,
-                        policy=policy,
-                        raise_on_invalid=column_raise,
-                        allow_missing_when_strict=allow_missing_when_strict,
-                    )
+            canonical_values.append(
+                _safe_canonical_join_value(
+                    column,
+                    raw,
+                    policy=policy,
+                    raise_on_invalid=column_raise,
+                    allow_missing_when_strict=allow_missing_when_strict,
+                    index=idx,
                 )
-            except JoinKeyCanonicalizationError as exc:
-                raise JoinKeyCanonicalizationError(column, raw, index=idx) from exc
+            )
         values = pd.Series(canonical_values, index=canonicalized.index, dtype="Int64")
         negative_mask = values.notna() & (values < 0)
         if negative_mask.any():

@@ -106,6 +106,11 @@ def _is_group_key(column: JoinKeyName, policy: PolicyConfig) -> bool:
 def _is_missing_value(value: object) -> bool:
     if value is None:
         return True
+    try:
+        if bool(pd.isna(value)):
+            return True
+    except (TypeError, ValueError):
+        pass
     if isinstance(value, Number) and pd.isna(value):
         return True
     if isinstance(value, str):
