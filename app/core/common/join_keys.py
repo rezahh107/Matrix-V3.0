@@ -299,14 +299,16 @@ def validate_and_canonicalize_join_keys(
     """
 
     issues: list[JoinKeyValidationIssue] = []
-    canonical_rows: list[dict[str, object]] = []
     join_key_columns = list(policy.join_keys)
     total_rows = len(df_raw)
-    for offset, (_, row) in enumerate(df_raw.iterrows()):
-        row_valid = True
-        canonical_row = row.to_dict()
-        for column in join_key_columns:
-            if column not in df_raw.columns:
+    canonical_df = df_raw.copy(deep=True)
+    row_positions = pd.Series(range(total_rows), index=df_raw.index)
+    valid_mask = pd.Series(True, index=df_raw.index)
+
+    for column in join_key_columns:
+        if column not in canonical_df.columns:
+            canonical_df[column] = pd.NA
+            for row_index, offset in row_positions.items():
                 issues.append(
                     JoinKeyValidationIssue(
                         entity_type=entity_type,
@@ -316,33 +318,47 @@ def validate_and_canonicalize_join_keys(
                         error_code="MISSING_COLUMN",
                     )
                 )
-                row_valid = False
-                continue
-            raw_value = row.get(column, None)
-            coerced, error = _canonicalize_join_key_value_safe(column, raw_value, policy=policy)
-            if error is not None:
+            valid_mask[:] = False
+            continue
+
+        conversion = canonical_df[column].apply(
+            lambda value: _canonicalize_join_key_value_safe(
+                column, value, policy=policy
+            )
+        )
+        coerced = conversion.apply(lambda pair: pair[0])
+        errors = conversion.apply(lambda pair: pair[1])
+
+        error_mask = errors.notna()
+        if error_mask.any():
+            for row_index, raw_value, error_code in zip(
+                canonical_df.index[error_mask],
+                canonical_df[column][error_mask],
+                errors[error_mask],
+            ):
                 issues.append(
                     JoinKeyValidationIssue(
                         entity_type=entity_type,
-                        row_index=int(offset),
+                        row_index=int(row_positions[row_index]),
                         column=column,
                         raw_value=raw_value,
-                        error_code=error,
+                        error_code=str(error_code),
                     )
                 )
-                row_valid = False
-            elif coerced is not None:
-                canonical_row[column] = coerced
-        if row_valid:
-            canonical_rows.append(canonical_row)
-        if progress is not None and total_rows:
+            valid_mask.loc[error_mask] = False
+
+        coerced_mask = coerced.notna()
+        if coerced_mask.any():
+            canonical_df.loc[coerced_mask, column] = coerced[coerced_mask]
+
+    canonical_df = canonical_df.loc[valid_mask].reset_index(drop=True)
+    for column in join_key_columns:
+        canonical_df[column] = canonical_df[column].astype("Int64")
+
+    if progress is not None and total_rows:
+        for offset in range(total_rows):
             pct = int(((offset + 1) / total_rows) * 100)
             progress(pct, "validated join keys")
-
-    canonical_df = pd.DataFrame(canonical_rows, columns=df_raw.columns)
-    for column in join_key_columns:
-        if column in canonical_df.columns:
-            canonical_df[column] = canonical_df[column].astype("Int64")
     return JoinKeyValidationResult(canonical_df=canonical_df, issues=issues)
 
 
