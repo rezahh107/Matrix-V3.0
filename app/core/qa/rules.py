@@ -242,9 +242,7 @@ def get_rule_definitions() -> dict[RuleId, QaRuleDefinition]:
                 important_columns=(_GRADUATION_STATUS, _GROUP_CODE),
                 source_tables=("matrix",),
                 lineage_keys=(_GRADUATION_STATUS, _GROUP_CODE),
-                diagnosis_hints=(
-                    "کدرشته‌های دوحالته باید در دامنهٔ مجاز فارغ/دانش‌آموز باشند.",
-                ),
+                diagnosis_hints=("کدرشته‌های دوحالته باید در دامنهٔ مجاز فارغ/دانش‌آموز باشند.",),
                 canary_thresholds=_frozen_thresholds({}),
             ),
         ),
