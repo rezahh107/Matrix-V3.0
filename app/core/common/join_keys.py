@@ -14,6 +14,7 @@ from app.core.common.normalization import normalize_fa
 from app.core.common.types import (
     CANONICAL_JOIN_KEYS,
     JOIN_KEY_GENDER,
+    JoinKeyEntityType,
     JoinKeyName,
     JoinKeyValidationIssue,
     JoinKeyValidationResult,
@@ -288,7 +289,7 @@ def validate_and_canonicalize_join_keys(
     df_raw: pd.DataFrame,
     *,
     policy: PolicyConfig,
-    entity_type: Literal["student", "mentor"],
+    entity_type: JoinKeyEntityType,
     progress: Callable[[int, str], None] | None = None,
 ) -> JoinKeyValidationResult:
     """Validate join keys for a raw DataFrame and return canonical/invalid splits.

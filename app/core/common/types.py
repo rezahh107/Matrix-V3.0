@@ -104,11 +104,14 @@ JoinKeyName = NewType("JoinKeyName", str)
 JoinProfile = Mapping[JoinKeyName, int]
 
 
+JoinKeyEntityType = Literal["student", "mentor", "school", "form"]
+
+
 @dataclass(frozen=True)
 class JoinKeyValidationIssue:
     """Structured validation issue captured during join-key canonicalization."""
 
-    entity_type: Literal["student", "mentor"]
+    entity_type: JoinKeyEntityType
     row_index: int
     column: str
     raw_value: object

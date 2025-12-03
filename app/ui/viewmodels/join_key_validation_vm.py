@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
 
-from app.core.common.types import JoinKeyValidationIssue, JoinKeyValidationResult
+from app.core.common.types import (
+    JoinKeyEntityType,
+    JoinKeyValidationIssue,
+    JoinKeyValidationResult,
+)
 
 
 @dataclass
 class JoinKeyIssueVM:
-    entity_type: Literal["student", "mentor"]
+    entity_type: JoinKeyEntityType
     row_index: int
     column: str
     raw_value: object
