@@ -42,6 +42,8 @@ class QADashboardVM:
         summary = self._summaries[run_index]
         return summary.total_issues > 0
 
-    def fix_target(self, run_index: int, entity: JoinKeyEntityType) -> tuple[str, JoinKeyEntityType]:
+    def fix_target(
+        self, run_index: int, entity: JoinKeyEntityType
+    ) -> tuple[str, JoinKeyEntityType]:
         summary = self._summaries[run_index]
         return summary.run_label, entity

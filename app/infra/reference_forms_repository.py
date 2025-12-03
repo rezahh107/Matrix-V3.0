@@ -34,7 +34,5 @@ def load_forms_with_validation(
 
     repo = FormsRepository(client=None, db=db)
     cached: pd.DataFrame = repo.load_entries()
-    validation = validate_and_canonicalize_join_keys(
-        cached, policy=policy, entity_type="form"
-    )
+    validation = validate_and_canonicalize_join_keys(cached, policy=policy, entity_type="form")
     return validation

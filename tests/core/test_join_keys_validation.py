@@ -104,10 +104,6 @@ def test_validate_multiple_entity_types_share_api() -> None:
             },
         ]
     )
-    student_result = validate_and_canonicalize_join_keys(
-        df, policy=policy, entity_type="student"
-    )
-    school_result = validate_and_canonicalize_join_keys(
-        df, policy=policy, entity_type="school"
-    )
+    student_result = validate_and_canonicalize_join_keys(df, policy=policy, entity_type="student")
+    school_result = validate_and_canonicalize_join_keys(df, policy=policy, entity_type="school")
     assert len(student_result.issues) == len(school_result.issues)
