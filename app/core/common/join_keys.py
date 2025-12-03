@@ -322,9 +322,7 @@ def validate_and_canonicalize_join_keys(
             continue
 
         conversion = canonical_df[column].apply(
-            lambda value: _canonicalize_join_key_value_safe(
-                column, value, policy=policy
-            )
+            lambda value: _canonicalize_join_key_value_safe(column, value, policy=policy)
         )
         coerced = conversion.apply(lambda pair: pair[0])
         errors = conversion.apply(lambda pair: pair[1])
