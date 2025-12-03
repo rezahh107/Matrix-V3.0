@@ -18,7 +18,7 @@ import json
 import logging
 import platform
 import sys
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Hashable, Mapping, Sequence
 from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
@@ -40,6 +40,11 @@ from app.core.canonical_frames import (
     canonicalize_pool_frame,
     canonicalize_students_frame,
 )
+from app.core.common.join_keys import (
+    JoinKeyCanonicalizationError,
+    validate_and_canonicalize_join_keys,
+)
+from app.core.common.types import JoinKeyValidationIssue, JoinKeyValidationResult
 from app.core.counter import (
     assert_unique_student_ids,
     assign_counters,
@@ -58,6 +63,7 @@ from app.infra.errors import (
     DatabaseCorruptError,
     DatabasePreparationError,
     DatabaseSchemaMismatchError,
+    JoinKeyValidationError,
     ReferenceDataMissingError,
     SchemaVersionMismatchError,
 )
@@ -139,6 +145,17 @@ _DEFAULT_ALLOC_PROFILE_PATH = DEFAULT_SABT_PROFILE_PATH
 _DEFAULT_LOCAL_DB_PATH = Path("smart_alloc.db")
 
 logger = logging.getLogger(__name__)
+
+
+def _safe_row_index(raw: Hashable | None) -> int:
+    if isinstance(raw, int):
+        return raw
+    if isinstance(raw, str):
+        try:
+            return int(raw)
+        except ValueError:
+            return 0
+    return 0
 
 
 class AllocationConsistencyError(ValueError):
@@ -592,7 +609,13 @@ def _resolve_students_frame(
         if db:
             df = import_student_report_from_excel(students_path, db=db, policy=policy)
         else:
-            df = canonicalize_students_frame(read_excel_first_sheet(students_path), policy=policy)
+            raw_df = read_excel_first_sheet(students_path)
+            validation = validate_and_canonicalize_join_keys(
+                raw_df, policy=policy, entity_type="student"
+            )
+            if validation.issues:
+                raise JoinKeyValidationError(validation)
+            df = canonicalize_students_frame(validation.canonical_df, policy=policy)
         inputs = {"students": str(students_path)}
         inputs_mtime = {"students": students_path.stat().st_mtime}
         return df, inputs, inputs_mtime
@@ -625,12 +648,25 @@ def _resolve_mentor_pool_frame(
                 pool_path, db=db, policy=policy, pool_source=pool_source
             )
         else:
-            df = canonicalize_pool_frame(
-                read_inspactor_workbook(pool_path),
-                policy=policy,
-                sanitize_pool=False,
-                pool_source=pool_source,
-            )
+            raw_df = read_inspactor_workbook(pool_path)
+            try:
+                df = canonicalize_pool_frame(
+                    raw_df,
+                    policy=policy,
+                    sanitize_pool=False,
+                    pool_source=pool_source,
+                )
+            except JoinKeyCanonicalizationError as exc:
+                issue = JoinKeyValidationIssue(
+                    entity_type="mentor",
+                    row_index=_safe_row_index(exc.index),
+                    column=exc.column,
+                    raw_value=exc.value,
+                    error_code="DATA_INVALID",
+                )
+                raise JoinKeyValidationError(
+                    JoinKeyValidationResult(canonical_df=pd.DataFrame(), issues=[issue])
+                ) from exc
         inputs = {pool_arg: str(pool_path)}
         inputs_mtime = {pool_arg: pool_path.stat().st_mtime}
         return df, inputs, inputs_mtime
@@ -2917,6 +2953,14 @@ def main(
             return runner(args, policy, progress)
 
         raise RuntimeError(f"Unsupported command: {args.command}")
+    except JoinKeyValidationError as exc:
+        if ui_overrides is not None:
+            raise
+        issues = exc.result.invalid_rows
+        print(f"❌ {exc}", file=sys.stderr)
+        if not issues.empty:
+            print(issues.to_string(index=False), file=sys.stderr)
+        return 2
     except ReferenceDataMissingError as exc:
         if ui_overrides is not None:
             raise

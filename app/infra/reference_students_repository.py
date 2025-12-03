@@ -16,6 +16,7 @@ from app.core.common.join_keys import validate_and_canonicalize_join_keys
 from app.core.common.types import StudentValidationBundle
 from app.core.policy_loader import PolicyConfig
 from app.core.students.domain_validation import validate_student_domain
+from app.infra.errors import JoinKeyValidationError
 from app.infra.io_utils import read_excel_first_sheet
 from app.infra.local_database import LocalDatabase, _coerce_int_columns
 
@@ -38,6 +39,8 @@ def import_student_report_with_validation(
 
     raw_df = _read_student_source(path)
     validation = validate_and_canonicalize_join_keys(raw_df, policy=policy, entity_type="student")
+    if validation.issues:
+        raise JoinKeyValidationError(validation)
     normalized = canonicalize_students_frame(validation.canonical_df, policy=policy)
     domain_result = validate_student_domain(normalized, policy=policy)
     db.upsert_students_cache(domain_result.canonical_df, join_keys=policy.join_keys)

@@ -67,10 +67,12 @@ from app.core.counter import find_max_sequence_by_prefix, year_to_yy
 from app.core.policy_loader import get_policy
 from app.infra import cli
 from app.infra.debug import QADebugStory
+from app.infra.errors import JoinKeyValidationError
 from app.infra.local_database import LocalDatabase
 from app.infra.year_database_manager import YearDatabaseInfo, YearDatabaseManager
 from app.ui.database_manager_dialog import DatabaseManagerDialog
 from app.ui.debug_dashboard import DebugDashboardWidget
+from app.ui.dialogs.join_key_validation_dialog import JoinKeyValidationDialog
 from app.ui.dialogs.qa_dashboard_dialog import QADashboardDialog
 from app.ui.fonts import get_app_font
 from app.ui.helpers.counter_helpers import detect_year_candidates
@@ -80,6 +82,7 @@ from app.ui.loaders import ExcelLoader
 from app.ui.mentor_pool_dialog import MentorPoolDialog
 from app.ui.models import MentorPoolEntry, build_mentor_entries_from_dataframe
 from app.ui.policy_cache import get_cached_policy
+from app.ui.viewmodels.join_key_validation_vm import JoinKeyValidationVM
 from app.utils.path_utils import resource_path
 
 from .app_preferences import AppPreferences
@@ -323,6 +326,8 @@ class MainWindow(QMainWindow):
         self._matrix_mentor_pool_source: str = ""
         self._matrix_mentor_pool_dialog: MentorPoolDialog | None = None
         self._mentor_pool_dialog_class = MentorPoolDialog
+        self._join_key_validation_dialog_class = JoinKeyValidationDialog
+        self._join_key_validation_dialog: JoinKeyValidationDialog | None = None
         self._toolbar_actions: dict[str, QAction] = {}
         self._toolbar_theme_label: QLabel | None = None
         self._language_label: QLabel | None = None
@@ -2704,6 +2709,25 @@ class MainWindow(QMainWindow):
         self._refresh_debug_dashboard()
 
         if error is not None:
+            if isinstance(error, JoinKeyValidationError):
+                vm = JoinKeyValidationVM.from_core_result(error.result)
+                dialog_class = self._join_key_validation_dialog_class
+                dialog = dialog_class(vm, self)
+                self._join_key_validation_dialog = dialog
+                dialog.setModal(True)
+                dialog.show()
+                dialog.raise_()
+                detail = self._t(
+                    "status.join_key_validation",
+                    "خطای کلید الحاق؛ نیاز به پاکسازی داده",
+                )
+                color = self._theme.colors.warning
+                self._status.setText(self._t("status.error", "خطا"))
+                self._set_stage(self._t("status.error", "خطا"), detail)
+                self._update_progress_caption(self._progress.value(), detail)
+                self._append_log(f'<span style="color:{color}">❌ {detail}</span>')
+                self._update_status_bar_state("error")
+                return
             msg = str(error)
             if isinstance(error, (FileNotFoundError, PermissionError)):
                 color = self._theme.colors.error

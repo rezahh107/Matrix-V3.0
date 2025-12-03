@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
+    QWidget,
 )
 
 from app.ui.viewmodels.join_key_validation_vm import JoinKeyValidationVM
@@ -15,8 +16,8 @@ from app.ui.viewmodels.join_key_validation_vm import JoinKeyValidationVM
 class JoinKeyValidationDialog(QDialog):
     """Simple dialog to present join-key validation issues."""
 
-    def __init__(self, validation_vm: JoinKeyValidationVM, parent: object | None = None) -> None:
-        super().__init__(parent)  # type: ignore[arg-type]
+    def __init__(self, validation_vm: JoinKeyValidationVM, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
         self._vm = validation_vm
         self.setWindowTitle("Join Key Validation")
         layout = QVBoxLayout(self)

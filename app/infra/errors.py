@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.core.common.types import JoinKeyValidationResult
 
 
 class InfraError(RuntimeError):
@@ -123,4 +127,20 @@ __all__ = [
     "DatabasePreparationError",
     "DatabaseCorruptError",
     "DatabaseSchemaMismatchError",
+    "JoinKeyValidationError",
 ]
+
+
+@dataclass(eq=True)
+class JoinKeyValidationError(InfraError):
+    """Raised when join-key canonicalization fails with structured issues."""
+
+    result: JoinKeyValidationResult
+    message: str = field(init=False)
+
+    def __post_init__(self) -> None:
+        count = len(self.result.issues)
+        self.message = f"join-key validation failed with {count} issue(s)"
+
+    def __str__(self) -> str:
+        return self.message

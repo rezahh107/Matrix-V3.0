@@ -37,11 +37,15 @@ from app.core.canonical_frames import (  # type: ignore[attr-defined]
 )
 from app.core.common.domain import _coerce_finance, _num_to_int_safe
 from app.core.common.errors import InvalidCenterMappingError
-from app.core.common.join_keys import VALID_GROUP_CODES, parse_group_codes
+from app.core.common.join_keys import (
+    VALID_GROUP_CODES,
+    parse_group_codes,
+    validate_and_canonicalize_join_keys,
+)
 from app.core.common.normalization import normalize_fa
 from app.core.common.types import JoinKeyValidationResult
 from app.core.policy_loader import PolicyConfig
-from app.infra.errors import DatabaseOperationError
+from app.infra.errors import DatabaseOperationError, JoinKeyValidationError
 from app.infra.io_utils import read_inspactor_workbook
 from app.infra.local_database import LocalDatabase, _coerce_int_columns
 from app.infra.references.schools import get_school_reference_frames
@@ -98,6 +102,10 @@ def import_mentor_pool_from_excel(
             raw_employee = candidate.copy()
 
     derived, qa_issues = _derive_pool_join_keys(raw_df, db=db, policy=policy)
+    validation = validate_and_canonicalize_join_keys(derived, policy=policy, entity_type="mentor")
+    if validation.issues:
+        raise JoinKeyValidationError(validation)
+    derived = validation.canonical_df
     if isinstance(raw_employee, pd.DataFrame):
         raw_employee = raw_employee.iloc[:, 0]
     if raw_employee is not None:
@@ -127,8 +135,12 @@ def import_mentor_pool_with_validation(
 ) -> JoinKeyValidationResult:
     """Wrapper exposing join-key validation result for mentor pool import."""
 
-    normalized = import_mentor_pool_from_excel(path, db=db, policy=policy, pool_source=pool_source)
-    # Existing pipeline already canonicalizes join keys; no additional issues collected.
+    try:
+        normalized = import_mentor_pool_from_excel(
+            path, db=db, policy=policy, pool_source=pool_source
+        )
+    except JoinKeyValidationError as exc:
+        return exc.result
     return JoinKeyValidationResult(canonical_df=normalized, issues=[])
 
 
