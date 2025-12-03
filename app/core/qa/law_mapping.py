@@ -70,4 +70,9 @@ def all_law_mappings() -> dict[RuleId, LawMapping]:
             law_refs=("LAW-HISTORY-CHANNEL-01",),
             description="کلید تاریخچه باید کاننیکال، یکتا و ردیابی‌پذیر باشد.",
         ),
+        "QA_RULE_STATUS_DOMAIN_01": LawMapping(
+            rule_id="QA_RULE_STATUS_DOMAIN_01",
+            law_refs=("LAW-STU-GRAD-01",),
+            description="دامنهٔ وضعیت فارغ‌التحصیلی باید با گروه/پایه سازگار باشد.",
+        ),
     }

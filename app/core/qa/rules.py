@@ -20,6 +20,7 @@ QA_RULE_SCHOOL_01 = "QA_RULE_SCHOOL_01"
 QA_RULE_GOV_01 = "QA_RULE_GOV_01"
 QA_RULE_ALLOC_01 = "QA_RULE_ALLOC_01"
 QA_RULE_HISTORY_CHANNEL_01 = "QA_RULE_HISTORY_CHANNEL_01"
+QA_RULE_STATUS_DOMAIN_01 = "QA_RULE_STATUS_DOMAIN_01"
 
 QA_RULE_IDS: tuple[RuleId, ...] = (
     QA_RULE_STU_01,
@@ -32,6 +33,7 @@ QA_RULE_IDS: tuple[RuleId, ...] = (
     QA_RULE_GOV_01,
     QA_RULE_ALLOC_01,
     QA_RULE_HISTORY_CHANNEL_01,
+    QA_RULE_STATUS_DOMAIN_01,
 )
 
 __all__ = [
@@ -48,6 +50,7 @@ __all__ = [
     "QA_RULE_GOV_01",
     "QA_RULE_ALLOC_01",
     "QA_RULE_HISTORY_CHANNEL_01",
+    "QA_RULE_STATUS_DOMAIN_01",
     "get_rule_definitions",
 ]
 
@@ -228,6 +231,18 @@ def get_rule_definitions() -> dict[RuleId, QaRuleDefinition]:
                 diagnosis_hints=(
                     "کلید تاریخچه باید بدون فضای خالی و یکتا باشد؛ تخصیص channel را بررسی کنید.",
                 ),
+                canary_thresholds=_frozen_thresholds({}),
+            ),
+        ),
+        QA_RULE_STATUS_DOMAIN_01: QaRuleDefinition(
+            rule_id=QA_RULE_STATUS_DOMAIN_01,
+            title="دامنهٔ وضعیت فارغ‌التحصیلی مطابق Policy/SSoT",  # noqa: RUF001
+            law_mapping=mappings[QA_RULE_STATUS_DOMAIN_01],
+            debug_context=QADebugContext.from_sequences(
+                important_columns=(_GRADUATION_STATUS, _GROUP_CODE),
+                source_tables=("matrix",),
+                lineage_keys=(_GRADUATION_STATUS, _GROUP_CODE),
+                diagnosis_hints=("کدرشته‌های دوحالته باید در دامنهٔ مجاز فارغ/دانش‌آموز باشند.",),
                 canary_thresholds=_frozen_thresholds({}),
             ),
         ),
