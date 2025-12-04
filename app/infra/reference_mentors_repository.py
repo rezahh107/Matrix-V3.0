@@ -32,6 +32,7 @@ from app.core.build_matrix import (  # type: ignore[attr-defined]
     norm_status,
 )
 from app.core.canonical_frames import (  # type: ignore[attr-defined]
+    POOL_JOIN_KEY_DUPLICATES_ATTR,
     canonicalize_headers,
     canonicalize_pool_frame,
 )
@@ -45,7 +46,7 @@ from app.core.common.join_keys import (
 from app.core.common.normalization import normalize_fa
 from app.core.common.types import JoinKeyValidationResult
 from app.core.policy_loader import PolicyConfig
-from app.infra.errors import DatabaseOperationError, JoinKeyValidationError
+from app.infra.errors import JoinKeyValidationError
 from app.infra.io_utils import read_inspactor_workbook
 from app.infra.local_database import LocalDatabase, _coerce_int_columns
 from app.infra.references.schools import get_school_reference_frames
@@ -117,13 +118,19 @@ def import_mentor_pool_from_excel(
         pool_source=pool_source,
     )
     normalized.attrs[_POOL_JOIN_KEY_QA_ATTR] = qa_issues
-    _raise_on_duplicate_mentor_ids(
-        normalized,
-        policy=policy,
-        pool_source=pool_source,
-    )
-    db.upsert_mentor_pool_cache(normalized, join_keys=policy.join_keys)
-    return normalized
+    existing_duplicates = normalized.attrs.get(POOL_JOIN_KEY_DUPLICATES_ATTR)
+    if not isinstance(existing_duplicates, pd.DataFrame) or existing_duplicates.empty:
+        normalized.attrs[POOL_JOIN_KEY_DUPLICATES_ATTR] = _detect_duplicate_mentor_join_profiles(
+            normalized, policy=policy, pool_source=pool_source
+        )
+    cache_payload = normalized
+    if isinstance(existing_duplicates, pd.DataFrame) and not existing_duplicates.empty:
+        cache_payload = normalized.drop_duplicates(
+            subset=["mentor_id", *policy.join_keys], keep="first"
+        ).copy()
+        cache_payload.attrs.update(normalized.attrs)
+    db.upsert_mentor_pool_cache(cache_payload, join_keys=policy.join_keys)
+    return cache_payload
 
 
 def import_mentor_pool_with_validation(
@@ -148,7 +155,8 @@ def load_mentor_pool_from_cache(*, db: LocalDatabase, policy: PolicyConfig) -> p
     """بازیابی استخر منتورها از کش SQLite."""
 
     cached = db.load_mentor_pool_cache(join_keys=policy.join_keys)
-    _raise_on_duplicate_mentor_ids(cached, policy=policy, pool_source="cache")
+    duplicates = _detect_duplicate_mentor_join_profiles(cached, policy=policy, pool_source="cache")
+    cached.attrs[POOL_JOIN_KEY_DUPLICATES_ATTR] = duplicates
     return _coerce_int_columns(cached, policy.join_keys)
 
 
@@ -156,7 +164,7 @@ __all__ = [
     "import_mentor_pool_from_excel",
     "load_mentor_pool_from_cache",
     "_POOL_JOIN_KEY_QA_ATTR",
-    "_raise_on_duplicate_mentor_ids",
+    "_detect_duplicate_mentor_join_profiles",
 ]
 
 
@@ -358,85 +366,47 @@ def _derive_pool_join_keys(
 _POOL_JOIN_KEY_QA_ATTR: Final[str] = "pool_join_key_derivation_issues"
 
 
-def _raise_on_duplicate_mentor_ids(
+def _detect_duplicate_mentor_join_profiles(
     pool: pd.DataFrame, *, policy: PolicyConfig, pool_source: str
-) -> None:
-    """ولیدیت یکتایی کلید ترکیبی «mentor_id + ۶ کلید اتصال» با پیام خوانا.
+) -> pd.DataFrame:
+    """گزارش تکرار کامل «mentor_id + ۶ کلید اتصال» بدون توقف اجرا.
 
-    این بررسی اجازه می‌دهد یک mentor_id در چند ترکیب کلید شش‌تایی تکرار شود،
-    اما در صورت وجود دو ردیف یکسان روی کلید ترکیبی، خطای دترمینیستیک
-    ``DatabaseOperationError`` با نمونهٔ ردیف‌های متضاد تولید می‌کند تا اپراتور
-    بتواند ورودی Inspactor یا کش را اصلاح کند.
-
-    Args:
-        pool: دیتافریم کاننیکال استخر منتورها.
-        policy: پیکربندی سیاست برای دسترسی به کلیدهای الحاقی (شش‌تایی).
-        pool_source: منبع داده (inspactor/matrix/cache) جهت درج در پیام خطا.
-
-    Raises:
-        DatabaseOperationError: در صورت وجود ردیف تکراری روی کلید ترکیبی
-            ``mentor_id`` به‌همراه ۶ کلید اتصال.
-
-    مثال::
-
-        >>> from app.core.policy_loader import load_policy
-        >>> policy = load_policy()  # doctest: +SKIP
-        >>> df = pd.DataFrame({
-        ...     "mentor_id": ["m1", "m1"],
-        ...     "کد کارمندی پشتیبان": ["E1", "E1"],
-        ...     "کدرشته": [1, 1],
-        ...     "جنسیت": [1, 1],
-        ...     "دانش آموز فارغ": [0, 0],
-        ...     "مرکز گلستان صدرا": [1, 1],
-        ...     "مالی حکمت بنیاد": [0, 0],
-        ...     "کد مدرسه": [3581, 3581],
-        ... })
-        >>> _raise_on_duplicate_mentor_ids(df, policy=policy, pool_source="inspactor")
-        Traceback (most recent call last):
-            ...
-        DatabaseOperationError: استخر «inspactor» دارای ردیف تکراری بر اساس کلید ترکیبی mentor_id و کلیدهای اتصال است؛ نمونه‌ها: [{'mentor_id': 'm1', 'کدرشته': 1, 'جنسیت': 1, 'دانش آموز فارغ': 0, 'مرکز گلستان صدرا': 1, 'مالی حکمت بنیاد': 0, 'کد مدرسه': 3581}]; نمونهٔ ردیف‌ها: [{'mentor_id': 'm1', 'کد کارمندی پشتیبان': 'E1', 'کدرشته': 1, 'جنسیت': 1, 'دانش آموز فارغ': 0, 'مرکز گلستان صدرا': 1, 'مالی حکمت بنیاد': 0, 'کد مدرسه': 3581}]
+    این تابع تنها ردیف‌های کاملاً یکسان (کلید هفت‌تایی) را برمی‌گرداند تا در QA
+    نمایش داده شوند. ساختار join-key (حضور ستون‌ها و نوع int) باید پیش‌تر در
+    Core تضمین شده باشد؛ در غیر این صورت دیتافریم تهی برمی‌گردد.
     """
 
     if pool is None or "mentor_id" not in pool.columns:
-        return
+        return pd.DataFrame(columns=[*policy.join_keys, "mentor_id", "duplicate_group_size"])
     key_columns = ["mentor_id", *policy.join_keys]
     if not all(col in pool.columns for col in key_columns):
-        return
+        return pd.DataFrame(columns=[*policy.join_keys, "mentor_id", "duplicate_group_size"])
 
-    trimmed = pool.copy()
+    trimmed = pool.loc[:, key_columns].copy()
     trimmed["mentor_id"] = trimmed["mentor_id"].astype("string").str.strip()
+    numeric_cols = [col for col in policy.join_keys if col in trimmed.columns]
+    for column in numeric_cols:
+        trimmed[column] = pd.to_numeric(trimmed[column], errors="coerce").astype("Int64")
+
     non_null_mask = ~trimmed[key_columns].isna().any(axis=1)
     if not bool(non_null_mask.any()):
-        return
+        return pd.DataFrame(columns=[*policy.join_keys, "mentor_id", "duplicate_group_size"])
 
     duplicate_mask = trimmed.loc[non_null_mask].duplicated(subset=key_columns, keep=False)
     if not bool(duplicate_mask.any()):
-        return
+        return pd.DataFrame(columns=[*policy.join_keys, "mentor_id", "duplicate_group_size"])
 
-    duplicate_rows = (
-        trimmed.loc[non_null_mask & duplicate_mask, key_columns]
-        .drop_duplicates()
-        .head(5)
-        .fillna("")
-        .to_dict(orient="records")
+    duplicate_rows = trimmed.loc[non_null_mask & duplicate_mask, key_columns].copy()
+    duplicate_rows["duplicate_group_size"] = (
+        duplicate_rows.groupby(key_columns, sort=False)["mentor_id"]
+        .transform("size")
+        .astype("Int64")
     )
-    raw_employee_col = (
-        "کد کارمندی پشتیبان (خام)" if "کد کارمندی پشتیبان (خام)" in trimmed.columns else None
-    )
-    employee_col = raw_employee_col or "کد کارمندی پشتیبان"
-    sample_columns = ["mentor_id", employee_col, *policy.join_keys]
-    sample_rows = (
-        trimmed.loc[non_null_mask & duplicate_mask, sample_columns]
-        .head(5)
-        .fillna("")
-        .to_dict(orient="records")
-    )
-
-    message = (
-        f"استخر «{pool_source}» دارای ردیف تکراری بر اساس کلید ترکیبی mentor_id و "
-        f"کلیدهای اتصال است؛ نمونه‌ها: {duplicate_rows}; نمونهٔ ردیف‌ها: {sample_rows}"
-    )
-    raise DatabaseOperationError(message)
+    numeric_index = pd.to_numeric(duplicate_rows.index, errors="coerce")
+    duplicate_rows["pool_row_index"] = numeric_index.astype("Int64")
+    duplicate_rows["pool_source"] = pool_source
+    sort_columns = key_columns + ["pool_row_index"]
+    return duplicate_rows.sort_values(sort_columns, kind="stable").reset_index(drop=True)
 
 
 def _append_issue(
