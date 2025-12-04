@@ -4,9 +4,9 @@ import pandas as pd
 import pytest
 from pandas.testing import assert_frame_equal
 
-from app.core.canonical_frames import canonicalize_pool_frame
+from app.core.canonical_frames import POOL_JOIN_KEY_DUPLICATES_ATTR, canonicalize_pool_frame
 from app.core.policy_loader import load_policy
-from app.infra.errors import DatabaseOperationError, JoinKeyValidationError
+from app.infra.errors import JoinKeyValidationError
 from app.infra.local_database import LocalDatabase
 from app.infra.reference_mentors_repository import (
     _POOL_JOIN_KEY_QA_ATTR,
@@ -287,7 +287,7 @@ def test_import_pool_reports_unknown_center_and_finance(tmp_path: Path) -> None:
     assert int(normalized["مالی حکمت بنیاد"].iloc[0]) == policy.finance_variants[0]
 
 
-def test_import_pool_rejects_duplicate_composite_keys(tmp_path: Path) -> None:
+def test_import_pool_reports_duplicate_composite_keys(tmp_path: Path) -> None:
     policy = load_policy()
     db = LocalDatabase(tmp_path / "cache.sqlite")
 
@@ -307,13 +307,14 @@ def test_import_pool_rejects_duplicate_composite_keys(tmp_path: Path) -> None:
     excel_path = tmp_path / "dup_pool.xlsx"
     _write_pool_excel(duplicated_pool, excel_path)
 
-    with pytest.raises(DatabaseOperationError) as excinfo:
-        import_mentor_pool_from_excel(excel_path, db=db, policy=policy)
+    normalized = import_mentor_pool_from_excel(excel_path, db=db, policy=policy)
 
-    message = str(excinfo.value)
-    assert "mentor_id" in message
-    assert "کلید ترکیبی" in message
-    assert "کدرشته" in message
+    duplicates = normalized.attrs.get(POOL_JOIN_KEY_DUPLICATES_ATTR)
+    assert duplicates is not None
+    assert isinstance(duplicates, pd.DataFrame)
+    assert len(duplicates) == 2
+    mentor_column = "mentor_id" if "mentor_id" in duplicates.columns else "کد کارمندی پشتیبان"
+    assert set(duplicates[mentor_column]) == {"m1"}
 
 
 def test_import_pool_allows_same_mentor_multiple_join_keys(tmp_path: Path) -> None:

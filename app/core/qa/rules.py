@@ -175,7 +175,8 @@ def get_rule_definitions() -> dict[RuleId, QaRuleDefinition]:
                 source_tables=("pool",),
                 lineage_keys=("mentor_id",),
                 diagnosis_hints=(
-                    "کلید ترکیبی mentor_id و ۶ کلید join باید یکتا باشد؛ ردیف‌های تکراری را حذف کنید.",
+                    "فقط تکرار کامل mentor_id به‌همراه ۶ کلید join نامعتبر است؛"
+                    " وجود چند پروفایل متفاوت برای یک منتور مجاز است.",
                 ),
                 canary_thresholds=_frozen_thresholds({}),
             ),
