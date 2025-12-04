@@ -6,6 +6,7 @@ from app.core.build_matrix import (
     CAPACITY_CURRENT_COL,
     CAPACITY_SPECIAL_COL,
     COL_GROUP,
+    COL_GROUP_INCLUDED,
     COL_MANAGER_NAME,
     COL_MENTOR_ID,
     COL_MENTOR_NAME,
@@ -118,16 +119,38 @@ def test_missing_required_non_derived_columns_fail() -> None:
 
 def test_missing_required_columns_report_diagnostics() -> None:
     policy = load_policy()
-    broken = _valid_inspactor_frame().drop(columns=[COL_MENTOR_NAME, COL_MANAGER_NAME, COL_GROUP])
+    broken = _valid_inspactor_frame().drop(columns=[COL_MENTOR_NAME, COL_MANAGER_NAME])
 
     with pytest.raises(KeyError) as excinfo:
         assert_inspactor_schema(broken, policy)
 
     message = str(excinfo.value)
     assert "accepted:" in message
-    assert COL_GROUP in message
     assert "mentor_name" in message
     assert COL_MENTOR_ID in message  # در پیش‌نمایش ستون‌های موجود
+
+
+def test_group_source_only_included_column_passes() -> None:
+    policy = load_policy()
+    raw = _valid_inspactor_frame().drop(columns=[COL_GROUP]).assign(**{COL_GROUP_INCLUDED: ["27"]})
+
+    ensured = assert_inspactor_schema(raw, policy)
+
+    assert COL_GROUP_INCLUDED in ensured.columns
+    assert COL_GROUP not in ensured.columns
+
+
+def test_group_source_missing_both_columns_fails() -> None:
+    policy = load_policy()
+    raw = _valid_inspactor_frame().drop(columns=[COL_GROUP])
+    without_group = raw.drop(columns=[COL_GROUP_INCLUDED], errors="ignore")
+
+    with pytest.raises(KeyError) as excinfo:
+        assert_inspactor_schema(without_group, policy)
+
+    message = str(excinfo.value)
+    assert COL_GROUP in message
+    assert COL_GROUP_INCLUDED in message
 
 
 def test_pipeline_ordering_requires_defaults_before_ensure() -> None:

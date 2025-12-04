@@ -5,6 +5,7 @@ from __future__ import annotations
 import pandas as pd
 
 from app.core.build_matrix import (
+    COL_GROUP,
     COL_MANAGER_NAME,
     COL_MENTOR_ID,
     COL_MENTOR_NAME,
@@ -136,3 +137,74 @@ def test_prepare_base_rows_reports_unseen_when_no_valid_group() -> None:
     assert unseen_groups == [
         {"group_token": "نامعتبر", "supporter": "پشتیبان ب", "manager": "مدیر ب"}
     ]
+
+
+def test_prepare_base_rows_prefers_included_group_column() -> None:
+    """ستون «شامل گروه‌های آزمایشی» باید بر ستون legacy اولویت داشته باشد."""
+
+    name_to_code, code_to_name, buckets, synonyms = _sample_crosswalk()
+    cfg = BuildConfig()
+    included_col = "شامل گروه های آزمایشی"
+    insp = pd.DataFrame(
+        {
+            COL_MENTOR_ID: ["EMP-3"],
+            COL_MENTOR_NAME: ["پشتیبان ج"],
+            COL_MANAGER_NAME: ["مدیر ج"],
+            COL_GROUP: ["نامعتبر"],
+            included_col: ["27"],
+        }
+    )
+
+    base_df, unseen_groups, unmatched_schools = _prepare_base_rows(
+        insp,
+        cfg=cfg,
+        name_to_code=name_to_code,
+        code_to_name=code_to_name,
+        buckets=buckets,
+        synonyms=synonyms,
+        school_name_to_code={},
+        code_to_name_school={},
+        group_cols=[COL_GROUP],
+        school_cols=[],
+        gender_col=None,
+        included_col=included_col,
+    )
+
+    assert unseen_groups == []
+    assert unmatched_schools == []
+    assert base_df.iloc[0]["group_pairs"] == [("یازدهم ریاضی", 27)]
+
+
+def test_prepare_base_rows_accepts_only_included_group_column() -> None:
+    """اگر فقط ستون جدید وجود داشته باشد باید همان استفاده شود."""
+
+    name_to_code, code_to_name, buckets, synonyms = _sample_crosswalk()
+    cfg = BuildConfig()
+    included_col = "شامل گروه های آزمایشی"
+    insp = pd.DataFrame(
+        {
+            COL_MENTOR_ID: ["EMP-4"],
+            COL_MENTOR_NAME: ["پشتیبان د"],
+            COL_MANAGER_NAME: ["مدیر د"],
+            included_col: ["27"],
+        }
+    )
+
+    base_df, unseen_groups, unmatched_schools = _prepare_base_rows(
+        insp,
+        cfg=cfg,
+        name_to_code=name_to_code,
+        code_to_name=code_to_name,
+        buckets=buckets,
+        synonyms=synonyms,
+        school_name_to_code={},
+        code_to_name_school={},
+        group_cols=[],
+        school_cols=[],
+        gender_col=None,
+        included_col=included_col,
+    )
+
+    assert unseen_groups == []
+    assert unmatched_schools == []
+    assert base_df.iloc[0]["group_pairs"] == [("یازدهم ریاضی", 27)]

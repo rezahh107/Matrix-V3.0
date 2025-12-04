@@ -120,8 +120,9 @@ REQUIRED_INSPACTOR_COLUMNS = {
     COL_SCHOOL_COUNT,
     CAPACITY_CURRENT_COL,
     CAPACITY_SPECIAL_COL,
-    COL_GROUP,
 }
+
+GROUP_SOURCE_COLUMNS: tuple[str, str] = (COL_GROUP, COL_GROUP_INCLUDED)
 
 DERIVED_INSPACTOR_COLUMNS = frozenset(
     {
@@ -214,6 +215,16 @@ def assert_inspactor_schema(df: pd.DataFrame, policy: PolicyConfig) -> pd.DataFr
         coerced,
         default_cfg,
     )
+
+    has_group_source = any(column in prepared.columns for column in GROUP_SOURCE_COLUMNS)
+    if not has_group_source:
+        diagnostics = missing_inspactor_diagnostics(prepared, GROUP_SOURCE_COLUMNS)
+        message = (
+            f"[policy {getattr(policy, 'version', '<unknown>')}] "
+            f"حداقل یکی از ستون‌های '{COL_GROUP}' یا '{COL_GROUP_INCLUDED}' باید در "
+            "گزارش Inspactor موجود باشد."
+        ) + diagnostics
+        raise KeyError(message)
 
     def _raise_missing_columns_error(
         frame: pd.DataFrame,
