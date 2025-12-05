@@ -145,13 +145,10 @@ Where code conflicts with LAW/TECH, **LAW/TECH and this spec are authoritative**
 
 ### 2.1 Domain Rules (Policy-First Invariants)
 
-**JOIN-CORE / JOIN-01**
+**JOIN-CORE / JOIN-01**  
 All joins between students and mentors must use the six canonical integer join keys with consistent semantics across Import / Matrix / Core / QA / Export. (certain) [LAW][TECH][app/core/common/types.py][app/core/common/join_keys.py][app/infra/qa/alloc_join_validation.py]
 
-**GRAD-STATUS-01**
-`graduation_status` domain is group-specific per Policy v1.0.3: only dual-status groups `{1, 3, 5, 7, 8, 9, 11, 12, 14, 17, 18}` may emit `{1, 0}`; all 22 other groups must emit only `1`. School-branch matrix rows are always `1` unless Policy changes. Enforced in Infra `build_matrix_v1_0_2` and Core `_explode_rows` while keeping the six join keys unchanged. (certain) [LAW][TECH][app/infra/matrix/build_matrix_v1_0_2.py][app/core/build_matrix.py]
-
-**RANK-CORE**
+**RANK-CORE**  
 Mentor ranking for selection must be based only on descending `remaining_capacity` plus a deterministic tie-breaker (`mentor_id` via `natural_key`). Any use of `occupancy_ratio` in ranking is a P0 violation. (certain) [LAW][TECH][AGENTS.md]
 
 **TRACE-CORE**  
