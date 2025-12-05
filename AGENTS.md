@@ -1,223 +1,448 @@
-# AGENTS — Smart Student Allocation Engine
+# AGENTS — Smart Student Allocation Engine (v3.1)
 
-Version: 2.0  
-Scope: Coding / refactor agents working on the student→mentor allocation system.
+**Scope:** Coding / refactor agents working on the student→mentor allocation system  
+**Audience:** LLM-based coding agents (Codex, etc.) + human reviewers  
 
-This file is the contract for how agents should read the repo, which rules are non-negotiable,
-and how to implement changes safely.
+This file is a **contract**.  
+Agents MUST follow this file and the upstream specs listed below.
 
 ---
 
-## 1. Upstream specs (read these first)
+## 1. Upstream specs (authoritative sources)
 
-Authoritative domain rules live in these documents:
+Always treat these as the **Single Source of Truth (SSoT)** for domain rules:
 
-- `docs/LAW_Smart_Student_Allocation_v3.0.md`  (LAW v3.0)
-- `docs/Technical_SSoT_Smart_Student_Allocation_v3.0-TECH.md`
-- `docs/Repository Specification (SSoT).md`
-- `docs/📚 Refactor Narrative v3.0 — Import & Join Pipeline.md`
+- `docs/LAW_Smart_Student_Allocation_v3.0.md`  
+- `docs/Technical_SSoT_Smart_Student_Allocation_v3.0-TECH.md`  
+- `docs/Repository Specification (SSoT).md`  
+- `docs/📚 Refactor Narrative v3.0 — Import & Join Pipeline.md`  
 - `docs/LAW v3.0 — Regulatory Coverage Map v1.0.md`
 
-**AGENTS.md must NOT redefine domain rules.**  
-If anything here conflicts with LAW/Technical SSoT/Regulatory Coverage Map, those documents win.
+**AGENTS.md MUST NOT define new domain rules.**  
+If anything here conflicts with these documents, **those documents win**.
+
+Machine hint:
+
+- When you need exact semantics (wildcards, capacity formula details, special cases),
+  **look up by rule ID** in the upstream docs (e.g. `JOIN-CORE-01`, `RANK-CORE-01`, `SCHOOL-01`).
 
 ---
 
 ## 2. Architecture boundaries (Core / Infra / UI)
 
-Everything you do must respect this layering:
+### 2.1. Layers
 
-- **Core (`app/core/**`)**
+- **Core** (`app/core/**`)
   - Pure domain + algorithms.
-  - No file/network/DB/Qt/logging/UI.
-  - Deterministic: same inputs ⇒ same outputs (including ordering).
-  - No `inplace=True` in pandas, no merge-in-loops.
+  - No I/O: no file, no network, no DB, no Qt, no CLI, no logging.
+  - Deterministic: same inputs → same outputs (including ordering).
+  - Pandas:
+    - No `inplace=True`.
+    - No merge-in-loops in hot paths.
+    - Avoid chained assignment; use `.copy()` when needed.
 
-- **Infra (`app/infra/**`)**
-  - I/O, Excel/SQLite/WordPress, CLI, QA exports, history.
-  - May call Core; MUST NOT re-implement join, ranking, or trace semantics.
-  - Can add logging/metrics/feature flags around Core.
+- **Infra** (`app/infra/**`)
+  - I/O (Excel, SQLite, WordPress), CLI, logging, QA exporters, history store.
+  - May import Core; MUST NOT re-implement:
+    - join semantics,
+    - ranking semantics,
+    - 8-step trace semantics.
+  - Can add feature flags, error handling, and observability around Core.
 
-- **UI (`app/ui/**`)**
-  - PySide6 presentation only.
-  - No allocation/join/ranking/trace logic.
+- **UI** (`app/ui/**`)
+  - PySide6 presentation layer (widgets, dialogs, view-models).
+  - No business rules: no allocation/join/ranking/trace logic.
   - Talks to Infra/Core via public APIs.
 
-Any change that breaks `Core ← Infra ← UI` is forbidden.
+### 2.2. Dependency rule
+
+Dependency direction:
+
+- **Allowed:** `Core ← Infra ← UI`
+- **Forbidden:**
+  - Any import from `app.infra` or `app.ui` inside `app.core`
+  - Circular imports between layers
+
+If a requested change requires breaking this direction, agents MUST treat it as a red flag and use **RISK_REFUSAL**.
 
 ---
 
 ## 3. Non-negotiable domain invariants
 
-These invariants are defined in LAW v3.0 and the Regulatory Coverage Map.
-Agents must treat them as *hard constraints*, not suggestions.
+These are hard constraints derived from LAW v3.0 + Technical SSoT + Coverage Map.
 
-### 3.1 Join keys & profiles
+### 3.1. Join keys and profiles
 
-- Exactly **6 join keys**, all integers, used consistently end-to-end:
-  `["کدرشته","جنسیت","دانش آموز فارغ","مرکز گلستان صدرا","مالی حکمت بنیاد","کد مدرسه"]`
-- Domain model:
-  - `JoinKeyProfile`: 6-int immutable, hashable value object.
-  - `Mentor`: may hold `list[JoinKeyProfile]` (multi-profile mentor allowed at domain level).
-  - `Student`: exactly one `JoinKeyProfile`.
+**[INVARIANT-JOIN-01] Six join keys**
 
-Never:
-- add/remove join keys,
-- change their meaning or type,
-- build ad-hoc join logic outside the unified pipeline (see §4).
+Exactly 6 join keys, all `int`, used end-to-end:
 
-### 3.2 Capacity & ranking
+```text
+["کدرشته", "جنسیت", "دانش آموز فارغ", "مرکز گلستان صدرا", "مالی حکمت بنیاد", "کد مدرسه"]
+````
 
-- `remaining_capacity = capacity_limit - (assigned_baseline + allocations_new)`
-- Invariants:
-  - `remaining_capacity` MUST NOT be negative.
-  - Ranking in Core:
-    1. `remaining_capacity` (descending)
-    2. `allocations_new` (ascending) — when present as explicit tie-breaker
-    3. `mentor_id` (ascending), stable sort.
-- No ratio/score-based ranking (`occupancy_ratio`, custom scores, etc.) as domain concepts.
+Canonical (snake_case) fields:
 
-### 3.3 Trace (8-stage)
+```text
+group_code, gender_code, grad_status_code,
+center_code, finance_code, school_code
+```
 
-Per student, the trace has exactly 8 stages in this order:
+Rules:
 
-`type, group, gender, graduation_status, center, finance, school, capacity_gate`
+* DO NOT add/remove join keys.
+* DO NOT change their type (must stay `int`).
+* DO NOT change their semantics (including meaning of `0` as wildcard where defined in LAW/TECH).
 
-Core may add extra metadata but MUST NOT:
-- change names,
-- change order,
-- drop stages.
+**[INVARIANT-JOIN-02] JoinKeyProfile**
 
-### 3.4 School / center wildcard & mentor type
+Domain object: `JoinKeyProfile`
 
-From LAW v3.0 / Coverage Map (names only, semantics live there):
+* Immutable, hashable value object over the 6 join keys.
+* Equality and `__hash__` MUST depend only on these 6 fields.
 
-- `SCHOOL-01`, `CENTER-01`, `WILDCARD-COMBINE-01`  
-  - School and center each support `0` as a wildcard.
-  - Eligibility is the AND of school_match and center_match.
-- `MENTOR-TYPE-01`  
-  - Mentor type derived from `school_count` (NORMAL vs SCHOOL).
-- `MATRIX-BRANCH-01`  
-  - Matrix rows must be either “normal” branch or “school” branch, never a hybrid.
+Domain:
 
-Agents MUST NOT introduce new “dual” mentor types or alternative wildcard semantics.
+* A Mentor MAY have multiple profiles (multi-profile mentor allowed at domain level).
+* A Student has exactly one join profile (one row in canonical student frame).
+
+Default v3 behavior (Refactor Narrative):
+
+* `JoinKeyResolver` MAY be conservative:
+
+  * a multi-profile mentor can be excluded from `usable_profiles`,
+  * but MUST always be surfaced in QA outputs (`all_profiles` + issues).
+
+Any change that:
+
+* modifies the set of join keys, or
+* redefines equality/hash for `JoinKeyProfile`
+
+MUST be treated as a **policy-level change** → use **RISK_REFUSAL**.
 
 ---
 
-## 4. Refactor v3 — import & join pipeline (mentors)
+### 3.2. Capacity and ranking
 
-For mentor import & join, all new work MUST follow this pipeline:
+**[INVARIANT-CAP-01] remaining_capacity**
 
-`FieldRegistry → HeaderResolver → ValueCanonicalizer → JoinKeyResolver → MentorPoolBuilder`
+Formula (domain-level):
 
-High-level expectations:
+```text
+remaining_capacity = capacity_limit - (assigned_baseline + allocations_new)
+```
 
-- **FieldRegistry (Infra)**
-  - Single SSoT for mentor/join related fields (sources, priorities, parsing rules).
-- **HeaderResolver (Infra)**
-  - Maps raw Excel headers → canonical field names.
-  - Fail-fast when headers are missing/ambiguous.
-- **ValueCanonicalizer (Infra)**
-  - Converts raw text values → canonical domain types (group, gender, finance, center/school, capacity…).
-- **JoinKeyResolver (Infra, Core-facing)**
-  - Constructs `JoinKeyProfile`(s), detects duplicates/missing/invalid combos.
-  - Produces QA artifacts and a clear `can_continue` decision.
-- **MentorPoolBuilder (Infra)**
-  - Builds canonical mentor DataFrame for Core (`build_matrix`, allocation).
-  - Applies capacity gates and emits QA sheets.
+Invariants:
 
-Core must only consume the canonical DataFrame and MUST NOT reconstruct join keys by itself.
+* `remaining_capacity` MUST NOT be negative in any canonical mentor pool.
+* If a negative value would appear, it MUST be detected and turned into a QA issue or hard failure,
+  according to LAW/TECH and QA rules.
+* The canonical `remaining_capacity` column in mentor pools MUST always be derived from this formula;
+  no alternative or independently maintained `remaining_capacity` source of truth is allowed.
 
----
+**[INVARIANT-RANK-01] Ranking order (RANK-CORE)**
 
-## 5. Agent expectations (how to write code)
+Ranking for student→mentor matching in Core:
 
-### 5.1 General coding style
+1. `remaining_capacity` (descending)
+2. `allocations_new` (ascending) — when present as explicit tie-breaker
+3. `mentor_id` (ascending), stable sort
 
-- Fully type-annotated functions and methods (params + return).
-- No bare `dict/list/set/tuple` — use typed generics.
-- Avoid `Any` and `# type: ignore` except in the smallest possible scope, with a reason.
-- Keep functions small and intention-revealing (≈≤40 effective lines, ≤~3 branches).
-- Prefer composition (helpers, dataclasses) over inheritance.
+Rules:
 
-### 5.2 Tests & tooling (must pass)
-
-Every change that touches production code should ship with tests and pass:
-
-- `pytest -q`
-- `mypy --strict app/core app/infra app/ui tests`
-- `ruff check .`
-- `black --check app/ infra/ ui/ tests/`
-
-Tests should:
-
-- Use clear Arrange–Act–Assert structure.
-- Be deterministic, no hidden shared state.
-- Add regression tests for every bug fix (especially around join, capacity, trace, QA).
-
-### 5.3 Observability & QA
-
-- Keep `ExecutionTracer` and QA exporters working:
-  - Trace 8 stages.
-  - QA sheets for join-key issues, capacity issues, invalid mentors, matrix vs students.
-- When changing behavior that affects QA, update or add QA tests instead of weakening checks.
+* DO NOT change the ranking order.
+* DO NOT introduce ratio-based ranking metrics (e.g. `occupancy_ratio`, composite scores) as domain concepts.
+* Any optimization (pre-sorting, batching, etc.) MUST preserve this order.
 
 ---
 
-## 6. Risk & refusal behaviour (for LLM agents)
+### 3.3. Trace (8-stage)
 
-Agents are expected to follow their system-prompt **RISK_REFUSAL** protocol.
+**[INVARIANT-TRACE-01] Trace steps**
 
-Use RISK_REFUSAL instead of guessing when:
+Per allocation, the trace has exactly 8 stages in this order:
 
-- A change would modify join semantics, ranking order, trace stages, capacity rules, or wildcard rules.
-- A change would alter Core/Infra/UI boundaries.
-- A request conflicts with LAW/Technical SSoT/Regulatory Coverage Map.
-- Scope is a broad refactor across many modules with unclear migration impact.
+```text
+type, group, gender, graduation_status, center, finance, school, capacity_gate
+```
 
-When in doubt: **stop and emit RISK_REFUSAL** instead of silently changing domain semantics.
+Rules:
+
+* You MAY add extra metadata around the trace (e.g. counts, debug info).
+* You MUST NOT:
+
+  * change names,
+  * change order,
+  * drop stages.
 
 ---
 
-## 7. File-scoped guidance
+### 3.4. School / center wildcard, mentor type, matrix branch
+
+High-level (exact semantics live in LAW/TECH + Coverage Map):
+
+* **SCHOOL-01, CENTER-01, WILDCARD-COMBINE-01:**
+
+  * `school_code = 0` and/or `center_code = 0` act as wildcards under specific rules.
+  * Eligibility is defined as an AND of `school_match` and `center_match`.
+* **MENTOR-TYPE-01:**
+
+  * Mentor type derived from school-related fields (`NORMAL` vs `SCHOOL`).
+  * Semantics defined in Technical SSoT.
+* **MATRIX-BRANCH-01:**
+
+  * Matrix rows belong either to a “normal” branch or a “school” branch.
+  * No hybrid rows mixing branches.
+
+Agents MUST NOT invent:
+
+* new mentor types (e.g. “dual”, “mixed”) at domain level,
+* or alternative wildcard semantics.
+
+---
+
+## 4. Refactor v3 — mentor import & join pipeline
+
+All mentor import & join work in v3 MUST follow this unified pipeline:
+
+```text
+FieldRegistry → HeaderResolver → ValueCanonicalizer → JoinKeyResolver → MentorPoolBuilder
+```
+
+### 4.1. Stage responsibilities
+
+**[PIPELINE-01] FieldRegistry (Infra)**
+
+Single SSoT for mentor/join-related fields:
+
+* canonical name,
+* type,
+* required/optional,
+* `join_key_index` (1..6 or `None`),
+* semantic version.
+
+**[PIPELINE-02] HeaderResolver (Infra)**
+
+Maps raw Excel headers → canonical field names using `FieldRegistry`.
+
+Outputs:
+
+* `mapping`,
+* `issues` (missing, ambiguous, unknown),
+* `can_continue` flag.
+
+MUST fail-fast (`can_continue = False`) for:
+
+* missing essential join headers,
+* unresolvable ambiguity on join headers.
+
+**[PIPELINE-03] ValueCanonicalizer (Infra)**
+
+Converts raw cells → canonical domain values:
+
+* group, gender, grad_status, finance, center, school, mentor_type, capacity, etc.
+
+Outputs:
+
+* canonical `DataFrame`,
+* `issues` (invalid/unknown values),
+* `failed_rows`,
+* `can_continue` flag based on threshold (see Refactor Narrative v3.0 tunables).
+
+**[PIPELINE-04] JoinKeyResolver (Infra, Core-facing)**
+
+Constructs `JoinKeyProfile`(s) from canonical DF using `FieldRegistry`.
+
+Builds:
+
+* `all_profiles: dict[mentor_id, list[JoinKeyProfile]]`
+* `usable_profiles: dict[mentor_id, JoinKeyProfile]`
+
+Detects:
+
+* missing join keys,
+* invalid combinations,
+* multiple profiles per mentor.
+
+Emits:
+
+* structured issues (`JoinKeyIssue`),
+* `failed_rows`,
+* `can_continue`.
+
+**[PIPELINE-05] MentorPoolBuilder (Infra)**
+
+Builds canonical mentor pool DF for Core:
+
+* 6 join key columns (`int`),
+* capacity columns (`capacity_limit`, `assigned_baseline`, `allocations_new`, `remaining_capacity`),
+* mentor type/status,
+* other domain fields.
+
+Applies capacity gates from Policy/LAW/Technical SSoT.
+Emits QA sheets and metrics.
+
+### 4.2. Core consumption rule
+
+Core (`build_matrix`, allocation) MUST only consume:
+
+* canonical mentor DF from `MentorPoolBuilder`,
+* canonical student DF from the existing pipeline,
+* Policy/LAW-compatible config objects.
+
+Core MUST NOT:
+
+* reconstruct join keys from raw headers,
+* re-implement join logic,
+* re-implement capacity gates or wildcards.
+
+Any new mentor import path MUST be wired through these 5 stages.
+
+---
+
+## 5. Coding style & quality (for all agents)
+
+### 5.1. Typing and structure
+
+All functions/methods:
+
+* fully typed (parameters + return type),
+* no bare `dict`/`list`/`set`/`tuple`; use typed generics.
+
+`Any` and `# type: ignore`:
+
+* only when strictly necessary,
+* with smallest possible scope,
+* MUST include a short comment (reason).
+
+Functions:
+
+* keep small and intention-revealing (~≤40 effective lines, ≤3 main branches),
+* prefer composition (helpers, dataclasses) over inheritance.
+
+### 5.2. Tools and commands
+
+Every production change MUST be compatible with:
+
+```bash
+python -m pytest -q
+mypy --strict app/core app/infra app/ui tests
+ruff check .
+black --check app/ infra/ ui/ tests/
+```
+
+Tests MUST:
+
+* follow Arrange–Act–Assert pattern,
+* be deterministic, with no hidden shared state,
+* include regression tests for each bug fix,
+* especially cover join, capacity, trace, and QA behaviors.
+
+---
+
+## 6. Observability & QA
+
+Keep `ExecutionTracer` and QA exporters working:
+
+* 8-stage trace for allocations,
+* QA workbooks for:
+
+  * join-key issues,
+  * invalid mentors,
+  * capacity issues,
+  * matrix vs students validation.
+
+When behavior affecting QA changes:
+
+* update / add QA tests and snapshots,
+* do NOT weaken or remove QA checks to “make tests green”.
+
+---
+
+## 7. Risk & refusal behaviour (RISK_REFUSAL)
+
+Agents are expected to implement the **RISK_REFUSAL** protocol defined in their system-prompt.
+
+Use **RISK_REFUSAL** (instead of guessing) when a requested change would:
+
+* Modify any of these invariants:
+
+  * 6 join keys (set, type, semantics),
+  * ranking order,
+  * 8-stage trace,
+  * capacity rules,
+  * wildcard school/center semantics,
+  * mentor types or matrix branches.
+* Break architecture boundaries:
+
+  * Core ↔ Infra ↔ UI direction,
+  * introduce I/O/logging/Qt into Core.
+* Conflict with LAW / Technical SSoT / Repository Spec / Coverage Map.
+* Require a broad refactor across many modules with unclear migration/rollback.
+
+When in doubt → stop and emit **RISK_REFUSAL** with a short explanation and recommendation.
+
+---
+
+## 8. File-scoped guidance
 
 When editing:
 
-- `app/core/**`
-  - Never add I/O, randomness, or time-based decisions.
-  - Respect capacity, ranking, and trace invariants.
-- `app/infra/**`
-  - Keep Excel/DB/CLI concerns here.
-  - Do not redefine join/ranking/trace; only adapt to external formats and QA.
-- `app/ui/**`
-  - No business logic; only PySide6 widgets, view-models, and wiring to Infra.
+* `app/core/**`:
 
-If a change seems to blur these boundaries, treat it as a red flag and fall back to RISK_REFUSAL.
+  * no I/O, no randomness, no time-based decisions;
+  * keep join/rank/trace/capacity invariants intact.
 
----
+* `app/infra/**`:
 
-## 8. Versioning & maintenance
+  * keep parsing, I/O, Excel/DB/CLI here;
+  * do not redefine domain behavior; only adapt external formats to canonical forms.
 
-- **AGENTS.md v2.0** targets:
-  - LAW v3.0
-  - Technical SSoT v3.0-TECH
-  - Refactor Narrative v3.0 (Import & Join Pipeline)
-  - LAW v3.0 — Regulatory Coverage Map v1.0
-  - Repository Specification (SSoT)
+* `app/ui/**`:
 
-When any of these upstream documents change in a way that affects code:
+  * view-only orchestration and interaction;
+  * do not add allocation/join/QA logic here.
 
-1. Update the upstream doc first.
-2. Reflect the change in tests and implementation.
-3. Update AGENTS.md (version bump, short changelog entry).
-4. Have the change reviewed with architectural eyes, not just code review.
+If a change blurs these boundaries, treat it as a red flag and consider **RISK_REFUSAL**.
 
 ---
 
-## 9. Changelog
+## 9. Versioning & maintenance
 
-- **v2.0**
-  - Shrunk AGENTS.md into a concise, GitHub-style guide for coding agents.
-  - Delegated full rule text to LAW v3.0, Technical SSoT, Refactor Narrative v3.0, and
-    Regulatory Coverage Map v1.0.
-  - Emphasised the unified mentor import & join pipeline and architectural invariants.
+This AGENTS file targets:
+
+* LAW v3.0
+* Technical SSoT v3.0-TECH
+* Repository Specification (SSoT)
+* Refactor Narrative v3.0 — Import & Join Pipeline
+* LAW v3.0 — Regulatory Coverage Map v1.0
+
+When any upstream doc changes in a way that affects code:
+
+1. Update upstream doc first (LAW/TECH/Refactor/SSoT).
+2. Adjust tests and implementation.
+3. Update `AGENTS.md`:
+
+   * bump version (e.g. v3.1 → v3.2),
+   * add a short changelog entry.
+
+Ensure changes are reviewed with **architectural focus**, not only line-by-line code review.
+
+---
+
+## 10. Changelog
+
+**v3.1**
+
+* English, LLM-oriented version.
+* Explicit rule IDs (`INVARIANT-*`, `PIPELINE-*`) for easier machine reference.
+* Tight alignment with:
+
+  * LAW v3.0,
+  * Technical SSoT v3.0-TECH,
+  * Refactor Narrative v3.0,
+  * Regulatory Coverage Map v1.0.
+* Stronger guidance for RISK_REFUSAL triggers and Core/Infra/UI boundaries.
+
+```
+```
