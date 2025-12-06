@@ -76,7 +76,7 @@ from app.ui.dialogs.join_key_validation_dialog import JoinKeyValidationDialog
 from app.ui.dialogs.qa_dashboard_dialog import QADashboardDialog
 from app.ui.fonts import get_app_font
 from app.ui.helpers.counter_helpers import detect_year_candidates
-from app.ui.helpers.manager_helpers import extract_manager_names
+from app.ui.helpers.manager_helpers import extract_manager_names, load_manager_names_from_pool
 from app.ui.history_metrics import HistoryMetricsDialog
 from app.ui.loaders import ExcelLoader
 from app.ui.mentor_pool_dialog import MentorPoolDialog
@@ -2071,6 +2071,19 @@ class MainWindow(QMainWindow):
             on_loaded=self._process_manager_dataframe,
         )
 
+    def _load_manager_names_from_pool(self) -> list[str]:
+        """خواندن نام مدیران از مسیر مشخص‌شده در ورودی استخر."""
+
+        path_text = self._picker_pool.text().strip()
+        if not path_text:
+            return self._get_default_managers()
+        pool_path = Path(path_text)
+        try:
+            return load_manager_names_from_pool(pool_path)
+        except (FileNotFoundError, IsADirectoryError, ValueError) as exc:
+            QMessageBox.warning(self, "خواندن فایل", f"بارگذاری مدیران: {exc}")
+            return self._get_default_managers()
+
     def _process_manager_dataframe(self, dataframe: pd.DataFrame) -> None:
         """پردازش دیتافریم مدیران خوانده‌شده و به‌روزرسانی ComboBoxها."""
 
@@ -2091,7 +2104,10 @@ class MainWindow(QMainWindow):
 
         self._manager_names_cache = list(names)
         for center_id, combo in self._center_manager_combos.items():
-            self._refresh_manager_combo(center_id, combo, list(names))
+            try:
+                self._refresh_manager_combo(center_id, combo, list(names))
+            except RuntimeError:
+                continue
         self._append_log("✅ لیست مدیران به‌روزرسانی شد")
 
     def _reset_mentor_pool_cache(self) -> None:
