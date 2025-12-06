@@ -163,12 +163,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"golden regression: {exc}")
         return 1
 
-    any_failures = False
-    for scenario in config.scenarios:
-        succeeded = _run_scenario(scenario, dry_run=args.dry_run)
-        any_failures = any_failures or not succeeded
-
-    if any_failures:
+    if not all(_run_scenario(scenario, dry_run=args.dry_run) for scenario in config.scenarios):
         print("golden regression completed with failures")
         return 1
 
