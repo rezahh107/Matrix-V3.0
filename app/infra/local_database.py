@@ -18,6 +18,7 @@ from __future__ import annotations
 import io
 import json
 import logging
+import shutil
 import sqlite3
 from collections.abc import Iterable, Mapping, Sequence
 from contextlib import suppress
@@ -250,6 +251,19 @@ class LocalDatabase:
             backup = self.path.with_name(f"{self.path.name}.bak-{timestamp}")
             try:
                 self.path.replace(backup)
+            except PermissionError:
+                logger.warning("Rename backup failed due to permission; trying copy", exc_info=True)
+                try:
+                    backup.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(self.path, backup)
+                except OSError as copy_exc:
+                    raise DatabasePreparationError(
+                        path=str(self.path),
+                        reason="انتقال فایل برای بکاپ ممکن نشد.",
+                        hint="دسترسی دیسک یا قفل فایل را بررسی کنید و دوباره تلاش نمایید.",
+                    ) from copy_exc
+                with suppress(OSError):
+                    self.path.unlink()
             except OSError as exc:  # pragma: no cover - I/O failure
                 raise DatabasePreparationError(
                     path=str(self.path),
@@ -324,10 +338,7 @@ class LocalDatabase:
                     hint="فایل پایگاه‌داده را حذف کنید تا با Schema جدید بازسازی شود.",
                 ) from exc
             if self._is_corruption_error(exc):
-                logger.warning(
-                    "Local DB appears corrupted at %s; backing up and recreating", self.path
-                )
-                backup = self._recover_corrupt_database()
+                backup = self._recover_and_wrap_corruption(exc)
                 raise DatabaseCorruptError(
                     path=str(self.path),
                     reason="فایل پایگاه‌داده خراب است و بازسازی شد.",
@@ -343,10 +354,7 @@ class LocalDatabase:
             ) from exc
         except sqlite3.DatabaseError as exc:  # pragma: no cover - خطای پایگاه دادهٔ خراب
             if self._is_corruption_error(exc):
-                logger.warning(
-                    "Local DB appears corrupted at %s; backing up and recreating", self.path
-                )
-                backup = self._recover_corrupt_database()
+                backup = self._recover_and_wrap_corruption(exc)
                 raise DatabaseCorruptError(
                     path=str(self.path),
                     reason="فایل پایگاه‌داده خراب است و بازسازی شد.",
@@ -367,6 +375,25 @@ class LocalDatabase:
                 hint="مسیر فایل یا مجوز نوشتن را بررسی کنید.",
             ) from exc
         logger.debug("Local DB schema ensured at %s", self.path)
+
+    def _recover_and_wrap_corruption(self, exc: sqlite3.Error) -> Path | None:
+        """پشتیبان‌گیری و بازسازی فایل خراب؛ هر خطا را به DatabaseCorruptError می‌پیچد."""
+
+        logger.warning("Local DB appears corrupted at %s; backing up and recreating", self.path)
+        backup: Path | None = None
+        try:
+            backup = self._recover_corrupt_database()
+        except DatabaseCorruptError:
+            raise
+        except sqlite3.DatabaseError as recover_exc:
+            raise DatabaseCorruptError(
+                path=str(self.path),
+                reason="فایل پایگاه‌داده خراب است و بازسازی شد.",
+                hint="جهت ادامه، در صورت نیاز داده‌های مرجع را دوباره بارگذاری کنید و فرمان را مجدداً اجرا نمایید.",
+                backup_path=backup,
+            ) from recover_exc
+
+        return backup
 
     def _initialize_once(self) -> None:
         """اجرای یک‌بارهٔ مسیر ساخت/مهاجرت Schema بدون بازیابی.
@@ -483,6 +510,23 @@ class LocalDatabase:
             backup = self.path.with_suffix(self.path.suffix + ".corrupt")
             try:
                 self.path.replace(backup)
+            except PermissionError:
+                logger.warning(
+                    "Rename corrupt DB backup failed due to permission; falling back to copy",
+                    exc_info=True,
+                )
+                try:
+                    backup.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(self.path, backup)
+                except OSError as copy_exc:
+                    logger.exception("Failed to backup corrupt DB at %s", self.path)
+                    raise DatabaseCorruptError(
+                        path=str(self.path),
+                        reason="بکاپ‌گیری از پایگاه‌داده خراب ناکام ماند.",
+                        hint="مجوز دسترسی یا قفل بودن فایل را بررسی کنید و در صورت لزوم فایل را به‌صورت دستی حذف کنید.",
+                    ) from copy_exc
+                with suppress(OSError):
+                    self.path.unlink()
             except OSError as exc:
                 logger.exception("Failed to backup corrupt DB at %s", self.path)
                 raise DatabaseCorruptError(

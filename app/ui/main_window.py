@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
+import threading
 from collections.abc import Callable, Iterable, Sequence
 from pathlib import Path
 
@@ -309,6 +310,7 @@ class MainWindow(QMainWindow):
         self._ensure_year_loaded()
 
         self._worker: Worker | None = None
+        self._worker_stop_event: threading.Event | None = None
         self._success_hook: Callable[[], None] | None = None
         self._btn_open_output_folder: QPushButton | None = None
         self._btn_mentor_pool: QPushButton | None = None
@@ -354,7 +356,9 @@ class MainWindow(QMainWindow):
         exporter_config = resource_path("config", "SmartAlloc_Exporter_Config_v1.json")
         self._default_sabt_config_path = str(exporter_config) if exporter_config.exists() else ""
 
-        self._splitter = AccentSplitter(Qt.Orientation.Vertical, self, self._theme)
+        self._splitter: AccentSplitter | None = AccentSplitter(
+            Qt.Orientation.Vertical, self, self._theme
+        )
         self._splitter.setChildrenCollapsible(False)
         self._splitter.destroyed.connect(self._on_splitter_destroyed)
         self._splitter.splitterMoved.connect(lambda *_: self._update_overlay_geometry())
@@ -486,7 +490,7 @@ class MainWindow(QMainWindow):
 
         self.setCentralWidget(self._splitter)
 
-        self._busy_overlay = QFrame(self._splitter)
+        self._busy_overlay: QFrame | None = QFrame(self._splitter)
         self._busy_overlay.setObjectName("busyOverlay")
         overlay_layout = QVBoxLayout(self._busy_overlay)
         overlay_layout.setContentsMargins(0, 0, 0, 0)
@@ -2508,13 +2512,30 @@ class MainWindow(QMainWindow):
 
         self._launch_worker(_task, action, on_success=on_success)
 
+    def run_task(
+        self,
+        func: Callable[[threading.Event, ProgressFn], None],
+        stop_event: threading.Event,
+        *,
+        description: str | None = None,
+    ) -> Worker:
+        """Execute a callable in a Worker thread with a stop_event contract."""
+
+        def _task(*, progress: ProgressFn) -> None:
+            func(stop_event, progress)
+
+        self._worker_stop_event = stop_event
+        action = description or "background task"
+        worker = self._launch_worker(_task, action)
+        return worker
+
     def _launch_worker(
         self,
         func: Callable[..., None],
         action: str,
         *,
         on_success: Callable[[], None] | None = None,
-    ) -> None:
+    ) -> Worker:
         """اجرای تابع در Worker با آماده‌سازی UI."""
 
         self._progress.setValue(0)
@@ -2535,6 +2556,7 @@ class MainWindow(QMainWindow):
         worker.finished.connect(self._on_finished)
         self._worker = worker
         worker.start()
+        return worker
 
     # ----------------------------------------------------------------- Helpers
     def _disable_controls(self, disabled: bool) -> None:
@@ -2546,7 +2568,7 @@ class MainWindow(QMainWindow):
             if not self._is_widget_valid(widget):
                 continue
             widget.setEnabled(not disabled)
-        if hasattr(self, "_busy_overlay"):
+        if hasattr(self, "_busy_overlay") and self._busy_overlay is not None:
             self._update_overlay_geometry()
             if self._is_widget_valid(self._busy_overlay):
                 self._busy_overlay.setVisible(disabled)
@@ -2570,8 +2592,11 @@ class MainWindow(QMainWindow):
     def _update_overlay_geometry(self) -> None:
         """همگام‌سازی اندازه پوشش مشغول برای جلوگیری از کلیک."""
 
-        if not self._is_widget_valid(self._busy_overlay) or not self._is_widget_valid(
-            self._splitter
+        if (
+            self._busy_overlay is None
+            or self._splitter is None
+            or not self._is_widget_valid(self._busy_overlay)
+            or not self._is_widget_valid(self._splitter)
         ):
             return
         try:
@@ -2584,7 +2609,7 @@ class MainWindow(QMainWindow):
         """Align overlay updates with splitter lifetime to avoid dangling access."""
 
         self._splitter = None
-        if self._is_widget_valid(self._busy_overlay):
+        if self._busy_overlay is not None and self._is_widget_valid(self._busy_overlay):
             self._busy_overlay.hide()
         self._busy_overlay = None
 
@@ -2690,6 +2715,20 @@ class MainWindow(QMainWindow):
         self._log_line = 0
         self._sync_log_placeholder()
 
+    def _show_async_message(self, icon: QMessageBox.Icon, title: str, text: str) -> None:
+        """نمایش پیام غیرمسدودکننده برای خطاها/هشدارها."""
+
+        if self._is_closing or not self._is_widget_valid(self):
+            return
+        box = QMessageBox(self)
+        box.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        box.setIcon(icon)
+        box.setWindowTitle(title)
+        box.setText(text)
+        box.setStandardButtons(QMessageBox.StandardButton.Ok)
+        box.setModal(True)
+        box.open()
+
     def _append_log(self, text: str) -> None:
         """افزودن پیام به لاگ با برجسته کردن خطاها."""
 
@@ -2702,13 +2741,13 @@ class MainWindow(QMainWindow):
         timestamp = QDateTime.currentDateTime().toString("HH:mm:ss")
         prefix = f"[{self._log_line:03d} | {timestamp}]"
         lowered = message.lower()
-        background = None
+        background: str | None = None
         if message.strip().startswith("✅"):
             background = self._theme.success_soft.name(QColor.NameFormat.HexArgb)
         elif message.strip().startswith("❌"):
             background = QColor(self._theme.colors.error).lighter(150).name()
         elif message.strip().startswith("ℹ️") or message.strip().startswith("⚠️"):
-            background = self._theme.accent_soft
+            background = self._theme.accent_soft.name(QColor.NameFormat.HexArgb)
         elif ("error" in lowered or "خطا" in message) and "<span" not in message:
             background = QColor(self._theme.colors.error).lighter(150).name()
         content = message
@@ -2792,6 +2831,7 @@ class MainWindow(QMainWindow):
     def _on_finished(self, success: bool, error: object | None) -> None:
         """پایان عملیات را مدیریت کرده و پیام مناسب را نمایش می‌دهد."""
 
+        self._worker_stop_event = None
         if self._is_closing or not self._is_widget_valid(self):
             self._worker = None
             self._success_hook = None
@@ -2827,13 +2867,19 @@ class MainWindow(QMainWindow):
             msg = str(error)
             if isinstance(error, (FileNotFoundError, PermissionError)):
                 color = self._theme.colors.error
-                QMessageBox.critical(self, self._t("status.error", "خطا"), msg)
+                self._show_async_message(
+                    QMessageBox.Icon.Critical, self._t("status.error", "خطا"), msg
+                )
             elif isinstance(error, ValueError):
                 color = self._theme.colors.warning
-                QMessageBox.warning(self, self._t("status.error", "خطا"), msg)
+                self._show_async_message(
+                    QMessageBox.Icon.Warning, self._t("status.error", "خطا"), msg
+                )
             else:
                 color = self._theme.colors.error
-                QMessageBox.critical(self, self._t("status.error", "خطا"), msg)
+                self._show_async_message(
+                    QMessageBox.Icon.Critical, self._t("status.error", "خطا"), msg
+                )
             self._status.setText(self._t("status.error", "خطا"))
             self._set_stage(self._t("status.error", "خطا"), msg)
             self._update_progress_caption(self._progress.value(), self._t("status.error", "خطا"))
@@ -2884,9 +2930,11 @@ class MainWindow(QMainWindow):
 
         self._is_closing = True
         if self._worker is not None and self._worker.isRunning():
+            if self._worker_stop_event is not None:
+                self._worker_stop_event.set()
             self._worker.request_cancel()
             self._worker.wait(3000)
-        if hasattr(self, "_splitter"):
+        if hasattr(self, "_splitter") and self._splitter is not None:
             settings = QSettings()
             settings.setValue("ui/main_splitter", self._splitter.saveState())
         super().closeEvent(event)

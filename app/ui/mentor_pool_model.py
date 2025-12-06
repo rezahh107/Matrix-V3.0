@@ -133,9 +133,15 @@ class ManagerMentorModel(QStandardItemModel):
                 child_active.setCheckState(child_enabled)
                 child_active.setData("mentor", _ROLE_KIND)
                 child_active.setData(mentor.mentor_id, _ROLE_ID)
-                child_active.setData(
-                    f"{mentor.mentor_name} {mentor.mentor_id} {group.name}", _ROLE_SEARCH
-                )
+                search_fields = [
+                    mentor.mentor_name,
+                    mentor.mentor_id,
+                    group.name,
+                    mentor.center,
+                    mentor.school,
+                ]
+                joined_search = " ".join(str(value) for value in search_fields if value is not None)
+                child_active.setData(joined_search, _ROLE_SEARCH)
 
                 child_name = QStandardItem(mentor.mentor_name)
                 child_id = QStandardItem(str(mentor.mentor_id))

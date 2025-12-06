@@ -128,11 +128,11 @@ class Theme:
         return int(self.spacing_base * 3)
 
     @property
-    def accent_soft(self) -> str:
+    def accent_soft(self) -> QColor:
         base = QColor(self.colors.primary)
         soft = QColor(base)
         soft.setAlphaF(0.1)
-        return soft.name(QColor.NameFormat.HexArgb)
+        return soft
 
     # Backward-friendly names for legacy call sites
     @property

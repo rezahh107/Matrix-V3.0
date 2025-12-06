@@ -5,7 +5,8 @@ from __future__ import annotations
 import logging
 import sys
 from pathlib import Path
-from textwrap import dedent
+
+import yaml
 
 from app.infra.logging import configure_logging, install_exception_hook
 
@@ -15,32 +16,35 @@ def _create_logging_config(tmp_path: Path) -> Path:
 
     log_path = tmp_path / "logs" / "test.log"
     config_path = tmp_path / "logging.yaml"
+    config = {
+        "version": 1,
+        "disable_existing_loggers": False,
+        "formatters": {
+            "detailed": {
+                "format": "[%(asctime)s] %(levelname)s %(name)s | session=%(session_id)s user=%(user)s error=%(error_id)s report=%(report_path)s | %(message)s",
+                "datefmt": "%Y-%m-%d %H:%M:%S",
+            }
+        },
+        "handlers": {
+            "file": {
+                "class": "logging.FileHandler",
+                "level": "DEBUG",
+                "formatter": "detailed",
+                "filename": log_path.as_posix(),
+                "encoding": "utf-8",
+            }
+        },
+        "loggers": {
+            "test.logger": {
+                "level": "DEBUG",
+                "handlers": ["file"],
+                "propagate": False,
+            }
+        },
+        "root": {"level": "WARNING", "handlers": ["file"]},
+    }
     config_path.write_text(
-        dedent(
-            f"""
-            version: 1
-            disable_existing_loggers: false
-            formatters:
-              detailed:
-                format: "[%(asctime)s] %(levelname)s %(name)s | session=%(session_id)s user=%(user)s error=%(error_id)s report=%(report_path)s | %(message)s"
-                datefmt: "%Y-%m-%d %H:%M:%S"
-            handlers:
-              file:
-                class: logging.FileHandler
-                level: DEBUG
-                formatter: detailed
-                filename: "{log_path}"
-                encoding: utf-8
-            loggers:
-              test.logger:
-                level: DEBUG
-                handlers: [file]
-                propagate: false
-            root:
-              level: WARNING
-              handlers: [file]
-            """
-        ).strip()
+        yaml.safe_dump(config, allow_unicode=True, sort_keys=False), encoding="utf-8"
     )
     return config_path
 

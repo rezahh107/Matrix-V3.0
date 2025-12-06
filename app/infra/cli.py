@@ -58,6 +58,7 @@ from app.core.policy_loader import MentorStatus, PolicyConfig, load_policy
 from app.core.qa.invariants import QaReport, run_all_invariants
 from app.infra import history_store
 from app.infra.audit_allocations import audit_allocations, summarize_report
+from app.infra.console import safe_print
 from app.infra.debug.qa_debug_engine import build_debug_stories
 from app.infra.errors import (
     DatabaseCorruptError,
@@ -1023,13 +1024,13 @@ def _ensure_valid_dataframe(df: pd.DataFrame, name: str = "") -> pd.DataFrame:
     و در صورت لزوم، تبدیلات لازم را انجام می‌دهد.
     """
     if df.empty:
-        print(f"⚠️  هشدار: دیتافریم {name} خالی است!")
+        safe_print(f"⚠️  هشدار: دیتافریم {name} خالی است!")
         return df
 
     # 1. بررسی و ادغام ستون‌های تکراری
     duplicate_cols = df.columns[df.columns.duplicated()]
     if len(duplicate_cols) > 0:
-        print(
+        safe_print(
             f"⚠️  هشدار: دیتافریم {name} دارای {len(duplicate_cols)} ستون تکراری است: {list(duplicate_cols.unique())}"
         )
         df = _coalesce_duplicate_columns(df)
@@ -1041,7 +1042,7 @@ def _ensure_valid_dataframe(df: pd.DataFrame, name: str = "") -> pd.DataFrame:
             complex_cols.append(col)
 
     if len(complex_cols) > 0:
-        print(f"⚠️  هشدار: دیتافریم {name} دارای ستون‌های پیچیده است: {complex_cols}")
+        safe_print(f"⚠️  هشدار: دیتافریم {name} دارای ستون‌های پیچیده است: {complex_cols}")
         df = _make_excel_safe(df)
 
     return df
@@ -1412,18 +1413,18 @@ def _format_duplicate_report(report: list[dict[str, object]]) -> str:
 def _prompt_duplicate_resolution(report_text: str) -> str:
     """نمایش گزارش و دریافت تصمیم کاربر برای رفع تکرار."""
 
-    print("❌ student_id تکراری در خروجی شمارنده یافت شد:")
-    print(report_text)
-    print("گزینه‌ها:")
-    print("  [R] تخصیص شمارندهٔ جدید به ردیف‌های تکراری")
-    print("  [D] حذف ردیف‌های تکراری و نگهداشت اولین رخداد")
-    print("  [A] انصراف و اصلاح دستی (خروج با خطا)")
+    safe_print("❌ student_id تکراری در خروجی شمارنده یافت شد:")
+    safe_print(report_text)
+    safe_print("گزینه‌ها:")
+    safe_print("  [R] تخصیص شمارندهٔ جدید به ردیف‌های تکراری")
+    safe_print("  [D] حذف ردیف‌های تکراری و نگهداشت اولین رخداد")
+    safe_print("  [A] انصراف و اصلاح دستی (خروج با خطا)")
     while True:
         choice = input("گزینهٔ موردنظر (R/D/A): ").strip().lower()
         mapping = {"r": "assign-new", "d": "drop", "a": "abort"}
         if choice in mapping:
             return mapping[choice]
-        print("گزینهٔ نامعتبر است؛ یکی از R/D/A را انتخاب کنید.")
+        safe_print("گزینهٔ نامعتبر است؛ یکی از R/D/A را انتخاب کنید.")
 
 
 def _assign_new_counters_for_duplicates(
@@ -1524,8 +1525,8 @@ def _apply_counter_duplicate_strategy(
             )
         normalized_strategy = _prompt_duplicate_resolution(report_text)
     elif normalized_strategy == "abort":
-        print("❌ student_id تکراری در خروجی شمارنده یافت شد:")
-        print(report_text)
+        safe_print("❌ student_id تکراری در خروجی شمارنده یافت شد:")
+        safe_print(report_text)
 
     if normalized_strategy == "abort":
         raise ValueError("student_id تکراری یافت شد؛ اجرای شمارنده متوقف شد تا ورودی اصلاح شود.")
@@ -1539,7 +1540,7 @@ def _apply_counter_duplicate_strategy(
         drop_indexes = [idx for idx in drop_indexes if idx in students_df.index]
         if not drop_indexes:
             return counters, False, tuple()
-        print(
+        safe_print(
             f"ℹ️  {len(drop_indexes)} ردیف تکراری حذف می‌شود؛ شمارنده برای ردیف‌های باقی‌مانده بازتولید خواهد شد."
         )
         return counters, True, tuple(drop_indexes)
@@ -1551,7 +1552,7 @@ def _apply_counter_duplicate_strategy(
         policy,
         academic_year,
     )
-    print(f"ℹ️  شمارندهٔ جدید برای {resolved_rows} ردیف تکراری ساخته شد.")
+    safe_print(f"ℹ️  شمارندهٔ جدید برای {resolved_rows} ردیف تکراری ساخته شد.")
     return updated, False, tuple()
 
 
@@ -3063,24 +3064,24 @@ def main(
         if ui_overrides is not None:
             raise
         issues = exc.result.invalid_rows
-        print(f"❌ {exc}", file=sys.stderr)
+        safe_print(f"❌ {exc}", file=sys.stderr)
         if not issues.empty:
-            print(issues.to_string(index=False), file=sys.stderr)
+            safe_print(issues.to_string(index=False), file=sys.stderr)
         return 2
     except ReferenceDataMissingError as exc:
         if ui_overrides is not None:
             raise
-        print(f"❌ {exc}", file=sys.stderr)
+        safe_print(f"❌ {exc}", file=sys.stderr)
         return 2
     except (DatabasePreparationError, DatabaseCorruptError) as exc:
         if ui_overrides is not None:
             raise
-        print(f"❌ {exc}", file=sys.stderr)
+        safe_print(f"❌ {exc}", file=sys.stderr)
         return 2
     except SchemaVersionMismatchError as exc:
         if ui_overrides is not None:
             raise
-        print(f"❌ نسخهٔ پایگاه داده ناسازگار است: {exc}", file=sys.stderr)
+        safe_print(f"❌ نسخهٔ پایگاه داده ناسازگار است: {exc}", file=sys.stderr)
         return 2
     except ValueError as exc:
         if ui_overrides is not None:
@@ -3093,7 +3094,7 @@ def main(
             is_coverage_error or is_dedup_error or is_duplicate_error or is_school_lookup_error
         ):
             raise
-        print(f"❌ {exc}", file=sys.stderr)
+        safe_print(f"❌ {exc}", file=sys.stderr)
         return 2
 
 

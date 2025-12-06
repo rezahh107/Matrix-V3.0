@@ -54,11 +54,15 @@ def configure_connection(conn: sqlite3.Connection) -> sqlite3.Connection:
     1
     """
 
-    conn.row_factory = sqlite3.Row
-    _set_pragma(conn, "foreign_keys", "ON")
-    _set_pragma(conn, "journal_mode", "WAL")
-    _set_pragma(conn, "synchronous", "NORMAL")
-    return conn
+    try:
+        conn.row_factory = sqlite3.Row
+        _set_pragma(conn, "foreign_keys", "ON")
+        _set_pragma(conn, "journal_mode", "WAL")
+        _set_pragma(conn, "synchronous", "NORMAL")
+        return conn
+    except sqlite3.DatabaseError:
+        conn.close()
+        raise
 
 
 __all__ = ["configure_connection"]

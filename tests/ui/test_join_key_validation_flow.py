@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from typing import cast
 
 import pandas as pd
@@ -23,6 +24,14 @@ def qapp() -> QApplication:
     if app is None:
         app = QApplication([])
     return cast(QApplication, app)
+
+
+def _drain_events(app: QApplication, timeout_ms: int = 500) -> None:
+    """Process Qt events for a bounded duration."""
+
+    deadline = time.monotonic() + timeout_ms / 1000
+    while time.monotonic() < deadline:
+        app.processEvents()
 
 
 class _StubJoinKeyDialog(JoinKeyValidationDialog):
@@ -63,7 +72,7 @@ def test_join_key_validation_error_opens_dialog(qapp: QApplication) -> None:
     dialog = _StubJoinKeyDialog.instances[-1]
     assert dialog.view_model.issues[0].column == "کدرشته"
     window.close()
-    qapp.processEvents()
+    _drain_events(qapp)
 
 
 def test_non_join_key_error_does_not_create_dialog(qapp: QApplication) -> None:
@@ -74,10 +83,12 @@ def test_non_join_key_error_does_not_create_dialog(qapp: QApplication) -> None:
 
     _StubJoinKeyDialog.instances.clear()
     window._splitter.deleteLater()
-    qapp.processEvents()
+    _drain_events(qapp)
 
     window._on_finished(False, ValueError("other error"))
 
+    _drain_events(qapp)
     assert not _StubJoinKeyDialog.instances
+    assert window._join_key_validation_dialog is None
     window.close()
-    qapp.processEvents()
+    _drain_events(qapp)

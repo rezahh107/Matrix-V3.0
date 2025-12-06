@@ -3,47 +3,40 @@ from __future__ import annotations
 from pathlib import Path
 
 import pandas as pd
-from PySide6.QtCore import QCoreApplication, QEventLoop, QTimer
+import pytest
+from PySide6.QtCore import QCoreApplication
 
 from app.ui.loaders import ExcelLoader
+from tests.ui.qt_loader_harness import (
+    wait_for_loader_failure,
+    wait_for_loader_success,
+)
+
+pytest.importorskip(
+    "PySide6.QtWidgets",
+    reason="PySide6 not available in test environment",
+)
 
 
-def _ensure_app() -> QCoreApplication:
-    app = QCoreApplication.instance()
-    if app is None:
-        app = QCoreApplication([])
-    return app
-
-
-def test_excel_loader_success(tmp_path: Path) -> None:
-    _ensure_app()
+def test_excel_loader_success(qtbot: pytest.QtBot, qapp: QCoreApplication, tmp_path: Path) -> None:
     csv_path = tmp_path / "data.csv"
-    pd.DataFrame({"a": [1, 2]}).to_csv(csv_path, index=False)
+    expected = pd.DataFrame({"a": [1, 2]})
+    expected.to_csv(csv_path, index=False)
 
     loader = ExcelLoader(csv_path)
-    results: list[pd.DataFrame] = []
-    loop = QEventLoop()
-    loader.loaded.connect(lambda df: (results.append(df), loop.quit()))
-    loader.failed.connect(lambda msg: (_ for _ in ()).throw(AssertionError(msg)))
+    loader.setParent(qapp)
 
-    loader.start()
-    QTimer.singleShot(3000, loop.quit)
-    loop.exec()
+    df = wait_for_loader_success(qtbot, loader, timeout_ms=5000)
 
-    assert results and results[0]["a"].tolist() == [1, 2]
+    assert isinstance(df, pd.DataFrame)
+    pd.testing.assert_frame_equal(df.reset_index(drop=True), expected.reset_index(drop=True))
 
 
-def test_excel_loader_failure(tmp_path: Path) -> None:
-    _ensure_app()
-    missing = tmp_path / "missing.xlsx"
+def test_excel_loader_failure(qtbot: pytest.QtBot, qapp: QCoreApplication, tmp_path: Path) -> None:
+    missing = tmp_path / "missing.csv"
     loader = ExcelLoader(missing)
-    errors: list[str] = []
-    loop = QEventLoop()
-    loader.loaded.connect(lambda *_: (_ for _ in ()).throw(AssertionError("expected failure")))
-    loader.failed.connect(lambda msg: (errors.append(msg), loop.quit()))
+    loader.setParent(qapp)
 
-    loader.start()
-    QTimer.singleShot(3000, loop.quit)
-    loop.exec()
+    error = wait_for_loader_failure(qtbot, loader, timeout_ms=5000)
 
-    assert errors and "missing.xlsx" in errors[0]
+    assert "missing.csv" in error
