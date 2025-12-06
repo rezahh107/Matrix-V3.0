@@ -2514,7 +2514,7 @@ class MainWindow(QMainWindow):
 
     def run_task(
         self,
-        func: Callable[[threading.Event], None],
+        func: Callable[[threading.Event, ProgressFn], None],
         stop_event: threading.Event,
         *,
         description: str | None = None,
@@ -2522,7 +2522,7 @@ class MainWindow(QMainWindow):
         """Execute a callable in a Worker thread with a stop_event contract."""
 
         def _task(*, progress: ProgressFn) -> None:
-            func(stop_event, progress=progress)
+            func(stop_event, progress)
 
         self._worker_stop_event = stop_event
         action = description or "background task"
@@ -2741,13 +2741,13 @@ class MainWindow(QMainWindow):
         timestamp = QDateTime.currentDateTime().toString("HH:mm:ss")
         prefix = f"[{self._log_line:03d} | {timestamp}]"
         lowered = message.lower()
-        background = None
+        background: str | None = None
         if message.strip().startswith("✅"):
             background = self._theme.success_soft.name(QColor.NameFormat.HexArgb)
         elif message.strip().startswith("❌"):
             background = QColor(self._theme.colors.error).lighter(150).name()
         elif message.strip().startswith("ℹ️") or message.strip().startswith("⚠️"):
-            background = self._theme.accent_soft
+            background = self._theme.accent_soft.name(QColor.NameFormat.HexArgb)
         elif ("error" in lowered or "خطا" in message) and "<span" not in message:
             background = QColor(self._theme.colors.error).lighter(150).name()
         content = message
