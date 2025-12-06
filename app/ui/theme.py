@@ -27,6 +27,9 @@ __all__ = [
     "apply_global_font",
     "apply_palette",
     "apply_theme",
+    "build_dark_theme",
+    "build_light_theme",
+    "relative_luminance",
     "apply_card_shadow",
     "setup_button_hover_animation",
     "build_theme",
@@ -353,6 +356,31 @@ def build_theme(mode: str | None = None) -> Theme:
         colors = ThemeColors()
 
     return Theme(colors=colors, typography=ThemeTypography(), mode=normalized)
+
+
+def build_light_theme() -> Theme:
+    """ساخت تم روشن با توکن‌های پیش‌فرض."""
+
+    return build_theme("light")
+
+
+def build_dark_theme() -> Theme:
+    """ساخت تم تیره."""
+
+    return build_theme("dark")
+
+
+def relative_luminance(color: QColor) -> float:
+    """محاسبهٔ روشنایی نسبی رنگ بر اساس استاندارد WCAG."""
+
+    def _channel(value: int) -> float:
+        srgb = value / 255
+        return srgb / 12.92 if srgb <= 0.03928 else ((srgb + 0.055) / 1.055) ** 2.4
+
+    r = _channel(color.red())
+    g = _channel(color.green())
+    b = _channel(color.blue())
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
 
 
 def apply_theme_mode(app: QApplication, mode: str | None = None) -> Theme:
