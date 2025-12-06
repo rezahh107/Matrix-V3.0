@@ -232,6 +232,27 @@ def configure_logging(
     return context
 
 
+def structured_event(event: str, **fields: object) -> dict[str, object]:
+    """Build a structured payload for logging with standard metadata.
+
+    Args:
+        event: Machine-friendly event name (e.g., ``"qa.trace"``).
+        **fields: Arbitrary event fields to attach if not ``None``.
+
+    Returns:
+        A dictionary safe to pass via ``logger.info(..., extra={"structured": ...})``.
+    """
+
+    payload: dict[str, object] = {
+        "event": event,
+        "timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+    }
+    for key, value in fields.items():
+        if value is not None:
+            payload[key] = value
+    return payload
+
+
 def install_exception_hook(logger: logging.Logger, context: LoggingContext) -> Callable[[], None]:
     """نصب هندلر خطای سراسری برای ثبت و ذخیرهٔ گزارش تفصیلی.
 
@@ -311,6 +332,7 @@ __all__ = [
     "LoggingContext",
     "SessionContextFilter",
     "configure_logging",
+    "structured_event",
     "install_exception_hook",
     "setup_logging",
 ]
