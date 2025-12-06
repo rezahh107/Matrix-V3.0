@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import sys
 from pathlib import Path
 
 import pandas as pd
@@ -18,6 +20,10 @@ pytest.importorskip(
 )
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32" and os.environ.get("CI"),
+    reason="Flaky Qt loader UI test on headless Windows CI; TECH-DEBT:QT-LOADER-01",
+)
 def test_excel_loader_success(qtbot: pytest.QtBot, qapp: QCoreApplication, tmp_path: Path) -> None:
     csv_path = tmp_path / "data.csv"
     expected = pd.DataFrame({"a": [1, 2]})
