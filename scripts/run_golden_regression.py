@@ -171,7 +171,9 @@ def _run_scenario(config: GoldenConfig, scenario: GoldenScenario, *, dry_run: bo
     if scenario.description:
         print(f"  description: {scenario.description}")
 
-    resolved_requires = [config.resolve(path) for command in scenario.commands for path in command.requires]
+    resolved_requires = [
+        config.resolve(path) for command in scenario.commands for path in command.requires
+    ]
     missing = _missing_files(resolved_requires)
 
     if missing:
