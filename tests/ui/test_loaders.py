@@ -16,10 +16,7 @@ from tests.ui.qt_loader_harness import (
 
 pytestmark = pytest.mark.skipif(
     sys.platform == "win32" and os.environ.get("CI"),
-    reason=(
-        "Qt loader UI tests flaky on headless Windows CI; "
-        "TECH-DEBT:QT-LOADER-01"
-    ),
+    reason=("Qt loader UI tests flaky on headless Windows CI; " "TECH-DEBT:QT-LOADER-01"),
 )
 
 pytest.importorskip(
