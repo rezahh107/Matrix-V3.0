@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from PySide6.QtCore import QSize, Qt
+from PySide6.QtCore import QPoint, QSize, Qt
 from PySide6.QtGui import QImage
 from PySide6.QtWidgets import QApplication, QLabel, QWidget
 
@@ -33,7 +33,7 @@ def test_safe_drop_shadow_renders_offscreen(
         assert assert_painter_active(
             painter, "test_safe_drop_shadow_renders_offscreen", strict=True
         )
-        widget.render(painter)
+        widget.render(painter, QPoint(0, 0))
 
     assert_image_has_content(image)
 
@@ -54,6 +54,6 @@ def test_safe_opacity_renders_offscreen(
 
     with painter_on_image(image) as painter:
         assert assert_painter_active(painter, "test_safe_opacity_renders_offscreen", strict=True)
-        widget.render(painter)
+        widget.render(painter, QPoint(0, 0))
 
     assert_image_has_content(image)

@@ -14,8 +14,10 @@ from tests.ui.qt_loader_harness import (
     wait_for_loader_success,
 )
 
+skip_on_windows_ci = sys.platform == "win32" and bool(os.environ.get("CI"))
+
 pytestmark = pytest.mark.skipif(
-    sys.platform == "win32" and os.environ.get("CI"),
+    skip_on_windows_ci,
     reason=("Qt loader UI tests flaky on headless Windows CI; " "TECH-DEBT:QT-LOADER-01"),
 )
 

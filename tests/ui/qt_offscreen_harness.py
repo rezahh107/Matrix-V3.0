@@ -4,7 +4,7 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 
 import pytest
-from PySide6.QtCore import QSize, Qt
+from PySide6.QtCore import QPoint, QSize, Qt
 from PySide6.QtGui import QImage, QPainter
 from PySide6.QtWidgets import QApplication, QWidget
 
@@ -44,7 +44,7 @@ def render_widget_offscreen(factory: Callable[[], QWidget]) -> QImage:
 
     painter = QPainter(image)
     try:
-        widget.render(painter)
+        widget.render(painter, QPoint(0, 0))
     finally:
         painter.end()
 

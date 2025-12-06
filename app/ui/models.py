@@ -173,9 +173,6 @@ def build_mentor_entries_from_dataframe(
             else:
                 center_value = _center_field_value(center_id_value)
 
-        if center_value is not None:
-            center_value = _string_value(center_value)
-
         school_name_value = _first_present(
             record,
             ("school_name",),
@@ -195,9 +192,6 @@ def build_mentor_entries_from_dataframe(
                 school_value = None
             else:
                 school_value = _school_field_value(school_code_value)
-
-        if school_value is not None:
-            school_value = _string_value(school_value)
 
         entries.append(
             MentorPoolEntry(
