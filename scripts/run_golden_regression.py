@@ -91,7 +91,7 @@ def _load_config(config_path: Path) -> GoldenConfig:
         for command_raw in commands_raw:
             if not isinstance(command_raw, dict):
                 raise GoldenRegressionError(f"Commands for scenario '{name}' must be mappings.")
-            command_name = str(command_raw.get("name", "")).strip() or "unnamed-command"
+            command_name = str(command_raw.get("name") or "").strip() or "unnamed-command"
             args = command_raw.get("args")
             if not isinstance(args, list) or not all(isinstance(arg, str) for arg in args):
                 raise GoldenRegressionError(
