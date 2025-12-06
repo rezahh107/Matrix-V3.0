@@ -2058,6 +2058,14 @@ class MainWindow(QMainWindow):
             self._apply_manager_names(self._get_default_managers())
             return
         pool_path = Path(path_text)
+        if not pool_path.exists():
+            QMessageBox.warning(
+                self,
+                "مسیر نامعتبر",
+                "فایل انتخاب‌شده وجود ندارد. لطفاً فایل معتبر انتخاب کنید.",
+            )
+            self._apply_manager_names(self._get_default_managers())
+            return
         if pool_path.is_dir():
             QMessageBox.warning(
                 self,

@@ -45,7 +45,11 @@ def test_center_section_creation(qt_app):  # noqa: ARG001
 def test_manager_list_loading_error_handling(qt_app, monkeypatch):  # noqa: ARG001
     window = MainWindow()
     monkeypatch.setattr(window, "_get_default_managers", lambda: ["پیش‌فرض"])
-    window._picker_pool.setText("/path/to/missing.xlsx")
+    window._picker_pool.blockSignals(True)
+    try:
+        window._picker_pool.setText("/path/to/missing.xlsx")
+    finally:
+        window._picker_pool.blockSignals(False)
 
     with patch.object(QMessageBox, "warning", return_value=None):
         managers = window._load_manager_names_from_pool()
