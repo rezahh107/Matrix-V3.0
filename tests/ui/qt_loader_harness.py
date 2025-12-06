@@ -70,7 +70,14 @@ def _wait_for_finish(
             loader.finished.disconnect(_on_finished)
         with contextlib.suppress(Exception):
             timer.timeout.disconnect(_on_timeout)
-        loader.wait(1000)
+
+        if loader.isRunning():
+            loader.quit()
+            loader.wait(timeout_ms + 1000)
+
+        if loader.isRunning():
+            pytest.fail("Loader thread did not terminate after wait")
+
         loader.deleteLater()
         qtbot.wait(10)
 
