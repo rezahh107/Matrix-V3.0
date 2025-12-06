@@ -13,6 +13,7 @@ from PySide6.QtCore import (
     QDateTime,
     QEasingCurve,
     QEvent,
+    QObject,
     QPropertyAnimation,
     QSettings,
     Qt,
@@ -329,6 +330,7 @@ class MainWindow(QMainWindow):
         self._mentor_pool_dialog_class = MentorPoolDialog
         self._join_key_validation_dialog_class = JoinKeyValidationDialog
         self._join_key_validation_dialog: JoinKeyValidationDialog | None = None
+        self._is_closing = False
         self._toolbar_actions: dict[str, QAction] = {}
         self._toolbar_theme_label: QLabel | None = None
         self._language_label: QLabel | None = None
@@ -2044,6 +2046,11 @@ class MainWindow(QMainWindow):
             return
         self._load_manager_names_async()
 
+    def _is_widget_valid(self, widget: QObject | None) -> bool:
+        """Check whether a Qt object is still alive before touching it."""
+
+        return widget is not None and Shiboken.isValid(widget)
+
     def _on_pool_text_changed(self) -> None:
         """واکنش به تغییر مسیر استخر منتورها."""
 
@@ -2488,7 +2495,11 @@ class MainWindow(QMainWindow):
     def _disable_controls(self, disabled: bool) -> None:
         """فعال/غیرفعال کردن کنترل‌های تعاملی."""
 
+        if self._is_closing:
+            return
         for widget in self._interactive:
+            if not self._is_widget_valid(widget):
+                continue
             widget.setEnabled(not disabled)
         if hasattr(self, "_busy_overlay"):
             self._update_overlay_geometry()
@@ -2621,8 +2632,9 @@ class MainWindow(QMainWindow):
     def _append_log(self, text: str) -> None:
         """افزودن پیام به لاگ با برجسته کردن خطاها."""
 
-        if self._log is None:
-            self._log_buffer.append(text)
+        if self._log is None or not self._is_widget_valid(self._log) or self._is_closing:
+            if not self._is_closing:
+                self._log_buffer.append(text)
             return
         message = str(text or "")
         self._log_line += 1
@@ -2719,6 +2731,10 @@ class MainWindow(QMainWindow):
     def _on_finished(self, success: bool, error: object | None) -> None:
         """پایان عملیات را مدیریت کرده و پیام مناسب را نمایش می‌دهد."""
 
+        if self._is_closing or not self._is_widget_valid(self):
+            self._worker = None
+            self._success_hook = None
+            return
         self._disable_controls(False)
         self._set_busy_cursor(False)
         self._progress.setRange(0, 100)
@@ -2805,6 +2821,7 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 - امضای Qt
         """در صورت اجرای تسک فعال، تلاش برای لغو امن و سپس بستن."""
 
+        self._is_closing = True
         if self._worker is not None and self._worker.isRunning():
             self._worker.request_cancel()
             self._worker.wait(3000)
