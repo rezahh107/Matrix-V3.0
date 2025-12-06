@@ -16,6 +16,7 @@ env:
 jobs:
   lint-and-test:
     runs-on: windows-latest
+    timeout-minutes: 30
 
     steps:
       - name: Checkout repository
@@ -47,4 +48,4 @@ jobs:
         run: mypy app
 
       - name: Run pytest
-        run: python -m pytest -q
+        run: python -m pytest -vv --disable-warnings --durations=20 -s
