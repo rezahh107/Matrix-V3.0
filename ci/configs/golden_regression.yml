@@ -1,24 +1,21 @@
 # Golden regression scenarios for Smart Student Allocation
 # Update paths to point to committed golden Excel inputs and outputs.
 
-base_dir: docs/golden
+base_dir: docs/golden_datasets/phase01_lock_current_behavior
 
 scenarios:
-  - name: sample_allocation
-    description: Placeholder scenario using golden Inspactor/School/Crosswalk inputs.
+  - name: phase01_lock_current_behavior
+    description: Run matrix build against the phase01 locked golden inputs.
     commands:
-      - name: build-matrix (placeholder)
+      - name: build-matrix
         args:
           - build-matrix
           - --inspactor
-          - docs/golden/sample_inspactor.xlsx
+          - InspactorReport-1404_09_15-3570.xlsx
           - --schools
-          - docs/golden/sample_school_report.xlsx
-          - --crosswalk
-          - docs/golden/sample_crosswalk.xlsx
+          - SchoolReport-1404_09_15-3570.xlsx
           - --output
-          - docs/golden/output/sample_matrix.xlsx
+          - output/phase01_matrix.xlsx
         requires:
-          - sample_inspactor.xlsx
-          - sample_school_report.xlsx
-          - sample_crosswalk.xlsx
+          - InspactorReport-1404_09_15-3570.xlsx
+          - SchoolReport-1404_09_15-3570.xlsx
