@@ -1,5 +1,8 @@
 # Golden regression scenarios for Smart Student Allocation
-# Update the paths to point to committed golden Excel inputs and outputs.
+# Update paths to point to committed golden Excel inputs and outputs.
+
+base_dir: docs/golden
+
 scenarios:
   - name: sample_allocation
     description: Placeholder scenario using golden Inspactor/School/Crosswalk inputs.
@@ -8,14 +11,14 @@ scenarios:
         args:
           - build-matrix
           - --inspactor
-          - ci/golden/sample_inspactor.xlsx
+          - docs/golden/sample_inspactor.xlsx
           - --schools
-          - ci/golden/sample_school_report.xlsx
+          - docs/golden/sample_school_report.xlsx
           - --crosswalk
-          - ci/golden/sample_crosswalk.xlsx
+          - docs/golden/sample_crosswalk.xlsx
           - --output
-          - ci/golden/output/sample_matrix.xlsx
+          - docs/golden/output/sample_matrix.xlsx
         requires:
-          - ci/golden/sample_inspactor.xlsx
-          - ci/golden/sample_school_report.xlsx
-          - ci/golden/sample_crosswalk.xlsx
+          - sample_inspactor.xlsx
+          - sample_school_report.xlsx
+          - sample_crosswalk.xlsx
