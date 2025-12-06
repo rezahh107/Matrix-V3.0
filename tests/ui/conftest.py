@@ -36,10 +36,11 @@ def qapp():
 
 
 def waitSignal(signal: Any, *, timeout: int | None = None) -> list[tuple[Any, ...]]:  # noqa: N802
-    """Wait for a Qt signal using the Qt event loop (no Python threads).
+    """Wait synchronously for a Qt signal using only the Qt event loop.
 
-    Returns the captured signal arguments as a list of tuples. Raises a pytest
-    failure on timeout to keep tests deterministic and avoid native aborts.
+    Avoids Python threading primitives to prevent Windows offscreen aborts.
+    Returns a list of emitted argument tuples; raises a pytest failure on
+    timeout for deterministic error reporting.
     """
 
     from PySide6.QtCore import QCoreApplication, QEventLoop, QTimer
@@ -48,34 +49,42 @@ def waitSignal(signal: Any, *, timeout: int | None = None) -> list[tuple[Any, ..
         pytest.fail("waitSignal called without an active Q(Core)Application")
 
     loop = QEventLoop()
-    timeout_ms = 1000 if timeout is None else timeout
-    args: list[tuple[Any, ...]] = []
+    timeout_ms = 5000 if timeout is None else timeout
+    captured: list[tuple[Any, ...]] = []
     timed_out = False
 
-    def _on_emitted(*signal_args: Any) -> None:
-        args.append(tuple(signal_args))
-        loop.quit()
+    def _on_emitted(*args: Any) -> None:
+        captured.append(tuple(args))
+        if loop.isRunning():
+            loop.quit()
 
     def _on_timeout() -> None:
         nonlocal timed_out
         timed_out = True
-        loop.quit()
+        if loop.isRunning():
+            loop.quit()
 
-    signal.connect(_on_emitted)
     timer = QTimer()
     timer.setSingleShot(True)
+
+    signal.connect(_on_emitted)
     timer.timeout.connect(_on_timeout)
     timer.start(timeout_ms)
 
-    loop.exec()
-
-    with contextlib.suppress(Exception):
-        signal.disconnect(_on_emitted)
-    timer.stop()
+    try:
+        loop.exec()
+    finally:
+        with contextlib.suppress(Exception):
+            signal.disconnect(_on_emitted)
+        with contextlib.suppress(Exception):
+            timer.timeout.disconnect(_on_timeout)
+        if timer.isActive():
+            timer.stop()
 
     if timed_out:
         pytest.fail(f"Timed out after {timeout_ms} ms waiting for signal {signal}")
-    return args
+
+    return captured
 
 
 class _MiniQtBot:
