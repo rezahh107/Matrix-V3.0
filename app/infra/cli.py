@@ -92,6 +92,7 @@ from app.infra.excel.qa_export import (
     build_join_key_summary_sheet,
 )
 from app.infra.excel_writer import write_selection_reasons_sheet
+from app.infra.logging import structured_event
 from app.infra.exporter_archive_repository import (
     ExporterArchiveConfig,
     ExporterArchiveRepository,
@@ -118,7 +119,7 @@ from app.infra.reference_students_repository import (
     import_student_report_from_excel,
     load_students_from_cache,
 )
-from app.infra.validators.join_keys import validate_allocation_join_keys
+from app.infra.validators.join_keys import JoinKeyAuditResult, validate_allocation_join_keys
 
 if TYPE_CHECKING:
     from app.core.common.domain import BuildConfig
@@ -208,6 +209,68 @@ def _sync_counter_summary_with_allocations(
     synced["next_female_start"] = max(next_female_start, female_count + 1)
 
     return synced
+
+
+def _build_qa_meta(
+    *,
+    run_uuid: str,
+    command_name: str,
+    policy: PolicyConfig,
+    capacity_column: str,
+    output: Path,
+    input_students_path: Path | None,
+    input_pool_path: Path | None,
+    started_at: datetime,
+    completed_at: datetime | None,
+    qa_report: QaReport | None,
+    join_key_audit: pd.DataFrame | None,
+    trace_df: pd.DataFrame | None,
+    history_info_df: pd.DataFrame | None,
+) -> dict[str, object]:
+    """Summarize QA and trace observability for logging and exports."""
+
+    meta: dict[str, object] = {
+        "run_uuid": run_uuid,
+        "command": command_name,
+        "policy_version": policy.version,
+        "ssot_version": "1.0.2",
+        "capacity_column": capacity_column,
+        "output_path": str(output),
+        "source_output": str(output),
+    }
+    if input_students_path:
+        meta["input_students"] = str(input_students_path)
+    if input_pool_path:
+        meta["input_pool"] = str(input_pool_path)
+
+    meta["started_at"] = started_at.isoformat().replace("+00:00", "Z")
+    if completed_at is not None:
+        meta["completed_at"] = completed_at.isoformat().replace("+00:00", "Z")
+        meta["duration_seconds"] = max(
+            0.0, (completed_at - started_at).total_seconds()
+        )
+
+    if qa_report is not None:
+        total_rules = len(qa_report.results)
+        failed_rules = sum(not result.passed for result in qa_report.results)
+        meta["qa_rules_total"] = total_rules
+        meta["qa_rules_failed"] = failed_rules
+        meta["qa_passed"] = failed_rules == 0
+
+    join_mismatches = 0
+    if join_key_audit is not None and "any_mismatch" in join_key_audit.columns:
+        join_mismatches = int(join_key_audit["any_mismatch"].fillna(False).sum())
+    meta["join_mismatches"] = join_mismatches
+
+    if trace_df is not None:
+        meta["trace_rows"] = int(trace_df.shape[0])
+        summary_df_attr = trace_df.attrs.get("summary_df")
+        if isinstance(summary_df_attr, pd.DataFrame):
+            meta["trace_summary_rows"] = int(summary_df_attr.shape[0])
+    if history_info_df is not None:
+        meta["history_info_rows"] = int(history_info_df.shape[0])
+
+    return meta
 
 
 def _coerce_header_mode(value: str | None) -> HeaderMode:
@@ -2004,7 +2067,10 @@ def _allocate_and_write(
     cli_args_text = " ".join(getattr(args, "_raw_argv", [])).strip() or None
     ui_overrides: dict[str, object] = getattr(args, "_ui_overrides", {}) or {}
     qa_report: QaReport | None = None
+    join_key_audit: JoinKeyAuditResult | None = None
     history_metrics_df: pd.DataFrame | None = None
+    history_info_df: pd.DataFrame | None = None
+    qa_meta: dict[str, object] | None = None
     success = False
     status_message = "success"
 
@@ -2145,15 +2211,26 @@ def _allocate_and_write(
                 qa_debug_callback(stories)
             except Exception:  # pragma: no cover - UI safety
                 logger.exception("Failed to deliver QA debug stories to UI")
+        qa_meta = _build_qa_meta(
+            run_uuid=run_uuid,
+            command_name=command_name,
+            policy=policy,
+            capacity_column=capacity_column,
+            output=output,
+            input_students_path=input_students_path,
+            input_pool_path=input_pool_path,
+            started_at=started_at,
+            completed_at=datetime.now(UTC),
+            qa_report=qa_report,
+            join_key_audit=join_key_audit.audit_frame,
+            trace_df=trace_df,
+            history_info_df=history_info_df,
+        )
         merged_extras = dict(qa_report.extras or {})
         qa_context = QaValidationContext(
             allocation=allocations_df,
             allocation_summary=updated_pool_df,
-            meta={
-                "policy_version": policy.version,
-                "ssot_version": "1.0.2",
-                "source_output": str(output),
-            },
+            meta=qa_meta,
             alloc_join_audit=join_key_audit_sheet,
             alloc_join_summary=join_key_summary_sheet,
             pool_join_conflicts=merged_extras.get("pool_join_conflicts"),
@@ -2165,6 +2242,8 @@ def _allocate_and_write(
             base_output=output,
             context=qa_context,
         )
+        if qa_meta is not None:
+            logger.info("QA and trace summary", extra={"structured": structured_event("qa.trace", **qa_meta)})
         if not qa_report.passed:
             failed_rules = {violation.rule_id for violation in qa_report.violations}
             detail = "; ".join(f"{v.rule_id}: {v.message}" for v in qa_report.violations)
@@ -2310,6 +2389,33 @@ def _allocate_and_write(
         )
         unallocated_students = (
             total_students - allocated_students if allocated_students is not None else None
+        )
+        if qa_meta is None:
+            join_key_audit_frame = join_key_audit.audit_frame if join_key_audit else None
+            qa_meta = _build_qa_meta(
+                run_uuid=run_uuid,
+                command_name=command_name,
+                policy=policy,
+                capacity_column=capacity_column,
+                output=output,
+                input_students_path=input_students_path,
+                input_pool_path=input_pool_path,
+                started_at=started_at,
+                completed_at=completed_at,
+                qa_report=qa_report,
+                join_key_audit=join_key_audit_frame,
+                trace_df=trace_df,
+                history_info_df=history_info_df,
+            )
+        final_meta = dict(qa_meta or {})
+        final_meta.setdefault(
+            "completed_at", completed_at.isoformat().replace("+00:00", "Z")
+        )
+        final_meta["success"] = success
+        final_meta["status"] = status_message
+        logger.info(
+            "Allocation run completed",
+            extra={"structured": structured_event("qa.trace.completed", **final_meta)},
         )
         qa_outcome = history_store.summarize_qa(qa_report)
         run_ctx = history_store.build_run_context(

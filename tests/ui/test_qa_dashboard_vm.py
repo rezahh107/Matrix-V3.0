@@ -23,7 +23,11 @@ def test_qa_dashboard_vm_registers_runs() -> None:
                 ],
             ),
         },
+        qa_failed_rules=2,
+        trace_rows=5,
     )
     assert vm.issue_count(0, "mentor") == 1
     assert vm.has_issues(0)
     assert vm.fix_target(0, "mentor") == ("run-1", "mentor")
+    assert vm.summaries[0].qa_failed_rules == 2
+    assert vm.summaries[0].trace_rows == 5
