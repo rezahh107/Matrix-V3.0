@@ -92,7 +92,6 @@ from app.infra.excel.qa_export import (
     build_join_key_summary_sheet,
 )
 from app.infra.excel_writer import write_selection_reasons_sheet
-from app.infra.logging import structured_event
 from app.infra.exporter_archive_repository import (
     ExporterArchiveConfig,
     ExporterArchiveRepository,
@@ -105,6 +104,7 @@ from app.infra.io_utils import (
     write_xlsx_atomic,
 )
 from app.infra.local_database import LocalDatabase
+from app.infra.logging import structured_event
 from app.infra.reference_managers_repository import import_managers_from_excel
 from app.infra.reference_mentors_repository import (
     import_mentor_pool_from_excel,
