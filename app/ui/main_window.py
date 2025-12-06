@@ -356,6 +356,7 @@ class MainWindow(QMainWindow):
 
         self._splitter = AccentSplitter(Qt.Orientation.Vertical, self, self._theme)
         self._splitter.setChildrenCollapsible(False)
+        self._splitter.destroyed.connect(self._on_splitter_destroyed)
         self._splitter.splitterMoved.connect(lambda *_: self._update_overlay_geometry())
 
         top_pane = QWidget(self._splitter)
@@ -2547,9 +2548,10 @@ class MainWindow(QMainWindow):
             widget.setEnabled(not disabled)
         if hasattr(self, "_busy_overlay"):
             self._update_overlay_geometry()
-            self._busy_overlay.setVisible(disabled)
-            if disabled:
-                self._busy_overlay.raise_()
+            if self._is_widget_valid(self._busy_overlay):
+                self._busy_overlay.setVisible(disabled)
+                if disabled:
+                    self._busy_overlay.raise_()
         if self._progress_caption is not None and self._progress_pulse is not None:
             if disabled:
                 self._progress_caption.setProperty("busy", True)
@@ -2568,8 +2570,23 @@ class MainWindow(QMainWindow):
     def _update_overlay_geometry(self) -> None:
         """همگام‌سازی اندازه پوشش مشغول برای جلوگیری از کلیک."""
 
-        if hasattr(self, "_busy_overlay") and self._busy_overlay is not None:
+        if not self._is_widget_valid(self._busy_overlay) or not self._is_widget_valid(
+            self._splitter
+        ):
+            return
+        try:
             self._busy_overlay.setGeometry(self._splitter.rect())
+        except RuntimeError:
+            # Widget was deleted between validity check and geometry update.
+            return
+
+    def _on_splitter_destroyed(self, _obj: QObject | None = None) -> None:
+        """Align overlay updates with splitter lifetime to avoid dangling access."""
+
+        self._splitter = None
+        if self._is_widget_valid(self._busy_overlay):
+            self._busy_overlay.hide()
+        self._busy_overlay = None
 
     def _set_busy_cursor(self, busy: bool) -> None:
         """نمایش نشانگر مشغول هنگام اجرای عملیات طولانی."""
