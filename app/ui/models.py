@@ -84,7 +84,9 @@ def _center_field_value(value: object) -> str | int | None:
     return _string_value(value)
 
 
-def _school_field_value(value: object) -> int | None:
+def _school_field_value(value: object) -> str | int | None:
+    if isinstance(value, str):
+        return value.strip()
     return _coerce_int_or_none(value)
 
 

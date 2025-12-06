@@ -31,7 +31,9 @@ def render_widget_offscreen(factory: Callable[[], QWidget]) -> QImage:
 
     widget = factory()
 
-    size = widget.sizeHint()
+    size = widget.size()
+    if not size.isValid() or size.isEmpty():
+        size = widget.sizeHint()
     if not size.isValid() or size.isEmpty():
         size = QSize(400, 300)
     widget.resize(size)
@@ -52,7 +54,9 @@ def render_widget_offscreen(factory: Callable[[], QWidget]) -> QImage:
 
 
 def assert_image_has_content(image: QImage) -> None:
-    ptr = image.constBits()
-    ptr.setsize(image.sizeInBytes())
-    if not any(ptr):
+    buffer = image.constBits()
+    data = bytes(buffer)
+    if len(data) < image.sizeInBytes():
+        pytest.fail("Rendered image buffer shorter than expected")
+    if not any(data):
         pytest.fail("Rendered image is empty (all pixels transparent or zero)")
