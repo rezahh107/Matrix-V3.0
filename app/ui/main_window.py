@@ -2059,15 +2059,11 @@ class MainWindow(QMainWindow):
             return
         pool_path = Path(path_text)
         if not pool_path.exists():
-            self._append_log(
-                "⚠️ فایل استخر پیدا نشد؛ از لیست پیش‌فرض مدیران استفاده می‌شود."
-            )
+            self._append_log("⚠️ فایل استخر پیدا نشد؛ از لیست پیش‌فرض مدیران استفاده می‌شود.")
             self._apply_manager_names(self._get_default_managers())
             return
         if pool_path.is_dir():
-            self._append_log(
-                "⚠️ مسیر انتخاب‌شده پوشه است؛ از لیست پیش‌فرض مدیران استفاده می‌شود."
-            )
+            self._append_log("⚠️ مسیر انتخاب‌شده پوشه است؛ از لیست پیش‌فرض مدیران استفاده می‌شود.")
             self._apply_manager_names(self._get_default_managers())
             return
         self._run_excel_loader(
