@@ -60,6 +60,7 @@ from PySide6.QtWidgets import (
     QWidget,
     QWidgetAction,
 )
+from shiboken6 import Shiboken
 
 from app.core.allocation.history_metrics import METRIC_COLUMNS
 from app.core.common.columns import canonicalize_headers
@@ -2030,6 +2031,8 @@ class MainWindow(QMainWindow):
     ) -> None:
         """پر کردن ComboBox با لیست مدیران."""
 
+        if not Shiboken.isValid(combo):
+            return
         combo.blockSignals(True)
         combo.clear()
         source_names = names or self._manager_names_cache or self._get_default_managers()
@@ -2042,6 +2045,7 @@ class MainWindow(QMainWindow):
     def _refresh_all_manager_combos(self) -> None:
         """بارگذاری مجدد تمام ComboBoxهای مدیران."""
 
+        self._prune_invalid_manager_combos()
         if not self._center_manager_combos:
             return
         self._load_manager_names_async()
@@ -2093,9 +2097,21 @@ class MainWindow(QMainWindow):
         """به‌روزرسانی تمام ComboBoxهای مدیران با لیست داده‌شده."""
 
         self._manager_names_cache = list(names)
+        self._prune_invalid_manager_combos()
         for center_id, combo in self._center_manager_combos.items():
             self._refresh_manager_combo(center_id, combo, list(names))
         self._append_log("✅ لیست مدیران به‌روزرسانی شد")
+
+    def _prune_invalid_manager_combos(self) -> None:
+        """حذف ComboBoxهایی که دیگر در سطح Qt معتبر نیستند."""
+
+        invalid_ids = [
+            center_id
+            for center_id, combo in self._center_manager_combos.items()
+            if not Shiboken.isValid(combo)
+        ]
+        for center_id in invalid_ids:
+            self._center_manager_combos.pop(center_id, None)
 
     def _reset_mentor_pool_cache(self) -> None:
         """پاک‌سازی کش استخر منتورها هنگام تغییر مسیر فایل."""
