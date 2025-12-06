@@ -246,9 +246,7 @@ def _build_qa_meta(
     meta["started_at"] = started_at.isoformat().replace("+00:00", "Z")
     if completed_at is not None:
         meta["completed_at"] = completed_at.isoformat().replace("+00:00", "Z")
-        meta["duration_seconds"] = max(
-            0.0, (completed_at - started_at).total_seconds()
-        )
+        meta["duration_seconds"] = max(0.0, (completed_at - started_at).total_seconds())
 
     if qa_report is not None:
         total_rules = len(qa_report.results)
@@ -2243,7 +2241,10 @@ def _allocate_and_write(
             context=qa_context,
         )
         if qa_meta is not None:
-            logger.info("QA and trace summary", extra={"structured": structured_event("qa.trace", **qa_meta)})
+            logger.info(
+                "QA and trace summary",
+                extra={"structured": structured_event("qa.trace", **qa_meta)},
+            )
         if not qa_report.passed:
             failed_rules = {violation.rule_id for violation in qa_report.violations}
             detail = "; ".join(f"{v.rule_id}: {v.message}" for v in qa_report.violations)
@@ -2408,9 +2409,7 @@ def _allocate_and_write(
                 history_info_df=history_info_df,
             )
         final_meta = dict(qa_meta or {})
-        final_meta.setdefault(
-            "completed_at", completed_at.isoformat().replace("+00:00", "Z")
-        )
+        final_meta.setdefault("completed_at", completed_at.isoformat().replace("+00:00", "Z"))
         final_meta["success"] = success
         final_meta["status"] = status_message
         logger.info(

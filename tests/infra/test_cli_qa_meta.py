@@ -12,7 +12,9 @@ from app.infra.cli import _build_qa_meta
 
 def _make_report(passed: bool, rule_id: str) -> QaReport:
     violation = QaViolation(rule_id=rule_id, level="error", message="bad", details=None)
-    result = QaRuleResult(rule_id=rule_id, passed=passed, violations=[violation] if not passed else [])
+    result = QaRuleResult(
+        rule_id=rule_id, passed=passed, violations=[violation] if not passed else []
+    )
     return QaReport(results=[result])
 
 
