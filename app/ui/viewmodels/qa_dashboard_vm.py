@@ -14,6 +14,8 @@ from app.core.common.types import (
 class RunJoinKeySummary:
     run_label: str
     entity_counts: dict[JoinKeyEntityType, int]
+    qa_failed_rules: int = 0
+    trace_rows: int | None = None
 
     @property
     def total_issues(self) -> int:
@@ -40,11 +42,20 @@ class QADashboardVM:
         run_label: str,
         results: dict[JoinKeyEntityType, JoinKeyValidationResult],
         student_domain: StudentDomainValidationResult | None = None,
+        qa_failed_rules: int | None = None,
+        trace_rows: int | None = None,
     ) -> None:
         counts: dict[JoinKeyEntityType, int] = {}
         for entity_type, result in results.items():
             counts[entity_type] = len(result.issues)
-        self._summaries.append(RunJoinKeySummary(run_label=run_label, entity_counts=counts))
+        self._summaries.append(
+            RunJoinKeySummary(
+                run_label=run_label,
+                entity_counts=counts,
+                qa_failed_rules=qa_failed_rules or 0,
+                trace_rows=trace_rows,
+            )
+        )
         if student_domain is not None:
             self._student_domain_counts.append(len(student_domain.issues))
         else:
