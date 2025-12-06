@@ -77,7 +77,7 @@ from app.ui.dialogs.join_key_validation_dialog import JoinKeyValidationDialog
 from app.ui.dialogs.qa_dashboard_dialog import QADashboardDialog
 from app.ui.fonts import get_app_font
 from app.ui.helpers.counter_helpers import detect_year_candidates
-from app.ui.helpers.manager_helpers import extract_manager_names
+from app.ui.helpers.manager_helpers import extract_manager_names, load_manager_names_from_pool
 from app.ui.history_metrics import HistoryMetricsDialog
 from app.ui.loaders import ExcelLoader
 from app.ui.mentor_pool_dialog import MentorPoolDialog
@@ -2033,20 +2033,24 @@ class MainWindow(QMainWindow):
 
         if not Shiboken.isValid(combo):
             return
-        combo.blockSignals(True)
-        combo.clear()
-        source_names = names or self._manager_names_cache or self._get_default_managers()
-        combo.addItems(source_names)
-        preferred = self._prefs.get_center_manager(center_id, "")
-        if preferred:
-            combo.setCurrentText(preferred)
-        combo.blockSignals(False)
+        try:
+            combo.blockSignals(True)
+            combo.clear()
+            source_names = names or self._manager_names_cache or self._get_default_managers()
+            combo.addItems(source_names)
+            preferred = self._prefs.get_center_manager(center_id, "")
+            if preferred:
+                combo.setCurrentText(preferred)
+            combo.blockSignals(False)
+        except RuntimeError:
+            # Combo was deleted between validity check and refresh; drop it.
+            self._center_manager_combos.pop(center_id, None)
 
     def _refresh_all_manager_combos(self) -> None:
         """بارگذاری مجدد تمام ComboBoxهای مدیران."""
 
         self._prune_invalid_manager_combos()
-        if not self._center_manager_combos:
+        if not self._center_manager_combos or not Shiboken.isValid(self._picker_pool):
             return
         self._load_manager_names_async()
 
@@ -2058,6 +2062,9 @@ class MainWindow(QMainWindow):
 
     def _load_manager_names_async(self) -> None:
         """بارگذاری نام مدیران از استخر بدون مسدود کردن UI."""
+
+        if not Shiboken.isValid(self._picker_pool):
+            return
 
         path_text = self._picker_pool.text().strip()
         if not path_text:
@@ -2077,6 +2084,32 @@ class MainWindow(QMainWindow):
             description="بارگذاری مدیران",
             on_loaded=self._process_manager_dataframe,
         )
+
+    def _load_manager_names_from_pool(self) -> list[str]:
+        """خواندن همزمان نام مدیران برای استفاده در تست‌ها و fallback ها."""
+
+        if not Shiboken.isValid(self._picker_pool):
+            return self._get_default_managers()
+
+        path_text = self._picker_pool.text().strip()
+        if not path_text:
+            return self._get_default_managers()
+
+        pool_path = Path(path_text)
+        try:
+            return load_manager_names_from_pool(pool_path)
+        except FileNotFoundError:
+            QMessageBox.warning(self, "فایل یافت نشد", f"مسیر مشخص‌شده وجود ندارد: {pool_path}")
+        except IsADirectoryError:
+            QMessageBox.warning(self, "مسیر نامعتبر", "مسیر انتخاب‌شده یک پوشه است.")
+        except Exception as exc:  # pragma: no cover - defensive UI guard
+            self._append_log(f"❌ خطا در خواندن مدیران: {exc}")
+            QMessageBox.warning(
+                self,
+                "بارگذاری مدیران",
+                "امکان استخراج مدیران از فایل استخر نبود؛ از پیش‌فرض استفاده می‌شود.",
+            )
+        return self._get_default_managers()
 
     def _process_manager_dataframe(self, dataframe: pd.DataFrame) -> None:
         """پردازش دیتافریم مدیران خوانده‌شده و به‌روزرسانی ComboBoxها."""
