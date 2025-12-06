@@ -23,7 +23,7 @@ def qt_app():
 
 
 def test_center_section_creation(qt_app):  # noqa: ARG001
-    with patch("app.ui.main_window.load_policy") as mock_load_policy:
+    with patch("app.ui.main_window.get_cached_policy") as mock_get_cached_policy:
         center_management = Mock()
         center_management.enabled = True
         center_management.centers = [
@@ -33,7 +33,7 @@ def test_center_section_creation(qt_app):  # noqa: ARG001
         ]
         mock_policy = Mock()
         mock_policy.center_management = center_management
-        mock_load_policy.return_value = mock_policy
+        mock_get_cached_policy.return_value = mock_policy
 
         window = MainWindow()
         section = window._create_center_management_section()
@@ -45,7 +45,11 @@ def test_center_section_creation(qt_app):  # noqa: ARG001
 def test_manager_list_loading_error_handling(qt_app, monkeypatch):  # noqa: ARG001
     window = MainWindow()
     monkeypatch.setattr(window, "_get_default_managers", lambda: ["پیش‌فرض"])
-    window._picker_pool.setText("/path/to/missing.xlsx")
+    window._picker_pool.blockSignals(True)
+    try:
+        window._picker_pool.setText("/path/to/missing.xlsx")
+    finally:
+        window._picker_pool.blockSignals(False)
 
     with patch.object(QMessageBox, "warning", return_value=None):
         managers = window._load_manager_names_from_pool()
