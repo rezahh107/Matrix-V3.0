@@ -1,12 +1,12 @@
-from __future__ import annotations
-
 """Golden regression entry point for Smart Student Allocation CI."""
+
+from __future__ import annotations
 
 import argparse
 import sys
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Sequence
 
 import yaml
 
