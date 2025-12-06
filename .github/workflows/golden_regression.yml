@@ -1,10 +1,7 @@
-name: Python CI
+name: Golden Regression
 
 on:
-  push:
-    branches: ["main"]
-  pull_request:
-    branches: ["main"]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -14,13 +11,8 @@ env:
   PIP_DISABLE_PIP_VERSION_CHECK: 1
 
 jobs:
-  lint-and-test:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-latest]
-    runs-on: ${{ matrix.os }}
-
+  golden-regression:
+    runs-on: windows-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -29,7 +21,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: "pip"
+          cache: pip
           cache-dependency-path: |
             requirements.txt
             pyproject.toml
@@ -41,14 +33,5 @@ jobs:
           pip install -e .
           pip install mypy
 
-      - name: Lint with ruff
-        run: ruff check .
-
-      - name: Check formatting with black
-        run: black --check .
-
-      - name: Type-check with mypy
-        run: mypy
-
-      - name: Run pytest
-        run: python -m pytest -q
+      - name: Run golden regression scenarios
+        run: python scripts/run_golden_regression.py --config ci/configs/golden_regression.yml
