@@ -39,20 +39,28 @@ def test_painter_state_restores_properties(qtbot: pytest.QtBot, qapp: QApplicati
 
 
 def test_safe_effects_render_without_state_leak(qtbot: pytest.QtBot, qapp: QApplication) -> None:
-    widget = QWidget()
-    widget.resize(160, 120)
-    widget.setGraphicsEffect(SafeDropShadowEffect("shadow_test", widget))
-    inner = QWidget(widget)
-    inner.setGraphicsEffect(SafeOpacityEffect("opacity_test", inner))
-    inner.resize(80, 60)
+    def make_widget() -> QWidget:
+        widget = QWidget()
+        widget.resize(160, 120)
+        widget.setGraphicsEffect(SafeDropShadowEffect("shadow_test", widget))
+        inner = QWidget(widget)
+        inner.setGraphicsEffect(SafeOpacityEffect("opacity_test", inner))
+        inner.resize(80, 60)
+        qtbot.addWidget(widget)
+        return widget
 
-    image = render_widget_offscreen(qtbot, widget, widget.size())
+    image = render_widget_offscreen(make_widget)
     assert_image_has_content(image)
 
 
 def test_dashboard_card_render_offscreen(qtbot: pytest.QtBot, qapp: QApplication) -> None:
-    card = DashboardCard("title", "desc")
-    image = render_widget_offscreen(qtbot, card, QSize(200, 140))
+    def make_card() -> DashboardCard:
+        card = DashboardCard("title", "desc")
+        card.resize(QSize(200, 140))
+        qtbot.addWidget(card)
+        return card
+
+    image = render_widget_offscreen(make_card)
     assert_image_has_content(image)
 
 
@@ -60,6 +68,11 @@ def test_dashboard_card_render_offscreen(qtbot: pytest.QtBot, qapp: QApplication
 def test_dashboard_card_multiple_renders(
     qtbot: pytest.QtBot, qapp: QApplication, _run: int
 ) -> None:
-    card = DashboardCard("title", "desc")
-    image = render_widget_offscreen(qtbot, card, QSize(220, 160))
+    def make_card() -> DashboardCard:
+        card = DashboardCard("title", "desc")
+        card.resize(QSize(220, 160))
+        qtbot.addWidget(card)
+        return card
+
+    image = render_widget_offscreen(make_card)
     assert_image_has_content(image)

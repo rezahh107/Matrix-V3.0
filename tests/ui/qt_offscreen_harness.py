@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from typing import Any
 
 import pytest
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QImage, QPainter
-from PySide6.QtWidgets import QWidget
+from PySide6.QtWidgets import QApplication, QWidget
 
 
 @contextmanager
@@ -22,25 +21,32 @@ def painter_on_image(image: QImage) -> Iterator[QPainter]:
             painter.end()
 
 
-def render_widget_offscreen(
-    qtbot: Any,
-    widget: QWidget,
-    size: QSize,
-    *,
-    fill: int = Qt.transparent,
-) -> QImage:
-    widget.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
+def render_widget_offscreen(factory: Callable[[], QWidget]) -> QImage:
+    """Synchronously render a widget into an offscreen image.
+
+    Assumes a QApplication already exists (provided by the test harness). The
+    widget is created via `factory`, resized to a reasonable size, and rendered
+    into a transparent QImage without nested event loops or threading.
+    """
+
+    widget = factory()
+
+    size = widget.sizeHint()
+    if not size.isValid() or size.isEmpty():
+        size = QSize(400, 300)
     widget.resize(size)
-    qtbot.addWidget(widget)
-    widget.ensurePolished()
-    widget.update()
-    qtbot.wait(0)
+
+    widget.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
+    QApplication.processEvents()
 
     image = QImage(size, QImage.Format_ARGB32_Premultiplied)
-    image.fill(fill)
+    image.fill(Qt.transparent)
 
-    with painter_on_image(image) as painter:
+    painter = QPainter(image)
+    try:
         widget.render(painter)
+    finally:
+        painter.end()
 
     return image
 
