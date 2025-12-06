@@ -94,11 +94,9 @@ class DebugDashboardWidget(QWidget):
             self._story_list.addItem(item)
         if self._stories:
             self._story_list.setCurrentRow(0)
+            self._render_story(self._stories[0])
         else:
-            self._story_view.clear()
-            self._rule_label.setText("—")
-            self._severity_label.setText("—")
-            self._law_label.setText("—")
+            self._render_story(None)
 
     def _on_selection_changed(
         self, current: QListWidgetItem | None, previous: QListWidgetItem | None

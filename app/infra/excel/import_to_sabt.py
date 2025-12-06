@@ -24,6 +24,7 @@ from app.core.pipeline import (
     debug_registration_distribution,
     enrich_student_contacts,
 )
+from app.infra.console import safe_print
 from app.infra.excel._writer import ensure_text_columns
 from app.infra.excel.common import attach_contact_columns
 
@@ -1372,7 +1373,7 @@ def _verify_headers(
         return
     if on_mismatch is not None:
         on_mismatch(ws.title, template_headers, expected_list)
-    print(f"⚠️  Rewriting headers in sheet '{ws.title}' to match config exactly")
+    safe_print(f"⚠️  Rewriting headers in sheet '{ws.title}' to match config exactly")
     _rewrite_sheet_headers(ws, expected_list)
 
 

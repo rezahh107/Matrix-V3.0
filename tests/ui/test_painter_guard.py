@@ -1,49 +1,45 @@
-"""تست سبک برای نگهبان نقاش و افکت‌های ایمن شده."""
+"""Lightweight tests for painter guard and safe effects."""
 
 from __future__ import annotations
 
 import pytest
+from PySide6.QtCore import QSize, Qt
+from PySide6.QtGui import QImage
+from PySide6.QtWidgets import QApplication, QLabel, QWidget
+
+from app.ui.effects import SafeDropShadowEffect, SafeOpacityEffect
+from app.ui.utils import assert_painter_active, painter_guard as painter_guard_module
+from tests.ui.qt_offscreen_harness import assert_image_has_content, painter_on_image
 
 pytest.importorskip(
     "PySide6.QtWidgets",
     exc_type=ImportError,
     reason="PySide6 not available in test environment",
 )
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QImage, QPainter
-from PySide6.QtWidgets import QApplication, QLabel, QWidget
-
-from app.ui.effects import SafeDropShadowEffect, SafeOpacityEffect
-from app.ui.utils import assert_painter_active, painter_guard as painter_guard_module
-
-
-@pytest.fixture()
-def qapp() -> QApplication:
-    app = QApplication.instance()
-    if app is None:
-        app = QApplication([])
-    return app
 
 
 def test_safe_drop_shadow_renders_offscreen(
-    monkeypatch: pytest.MonkeyPatch, qapp: QApplication
+    monkeypatch: pytest.MonkeyPatch, qtbot: pytest.QtBot, qapp: QApplication
 ) -> None:
     monkeypatch.setattr(painter_guard_module, "painter_guard_enabled", True)
     widget = QWidget()
     widget.resize(160, 120)
     widget.setGraphicsEffect(SafeDropShadowEffect("test_shadow", widget))
 
-    image = QImage(widget.size(), QImage.Format_ARGB32_Premultiplied)
+    image = QImage(QSize(160, 120), QImage.Format_ARGB32_Premultiplied)
     image.fill(Qt.transparent)
 
-    painter = QPainter(image)
-    assert assert_painter_active(painter, "test_safe_drop_shadow_renders_offscreen", strict=True)
-    widget.render(painter)
-    painter.end()
+    with painter_on_image(image) as painter:
+        assert assert_painter_active(
+            painter, "test_safe_drop_shadow_renders_offscreen", strict=True
+        )
+        widget.render(painter)
+
+    assert_image_has_content(image)
 
 
 def test_safe_opacity_renders_offscreen(
-    monkeypatch: pytest.MonkeyPatch, qapp: QApplication
+    monkeypatch: pytest.MonkeyPatch, qtbot: pytest.QtBot, qapp: QApplication
 ) -> None:
     monkeypatch.setattr(painter_guard_module, "painter_guard_enabled", True)
     widget = QWidget()
@@ -53,10 +49,11 @@ def test_safe_opacity_renders_offscreen(
     label.resize(80, 40)
     label.setGraphicsEffect(SafeOpacityEffect("test_opacity", label))
 
-    image = QImage(widget.size(), QImage.Format_ARGB32_Premultiplied)
+    image = QImage(QSize(140, 90), QImage.Format_ARGB32_Premultiplied)
     image.fill(Qt.transparent)
 
-    painter = QPainter(image)
-    assert assert_painter_active(painter, "test_safe_opacity_renders_offscreen", strict=True)
-    widget.render(painter)
-    painter.end()
+    with painter_on_image(image) as painter:
+        assert assert_painter_active(painter, "test_safe_opacity_renders_offscreen", strict=True)
+        widget.render(painter)
+
+    assert_image_has_content(image)

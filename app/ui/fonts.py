@@ -28,6 +28,7 @@ __all__ = [
     "ensure_vazir_local_fonts",
     "load_vazir_font",
     "create_app_font",
+    "has_prefer_full_hinting",
     "get_app_font",
     "get_heading_font",
     "prepare_default_font",
@@ -419,13 +420,24 @@ def _with_antialias(font: QFont) -> QFont:
     strategy |= QFont.StyleStrategy.PreferQuality
     font.setStyleStrategy(strategy)
 
-    if hasattr(QFont, "HintingPreference") and hasattr(
-        QFont.HintingPreference, "PreferFullHinting"
-    ):
+    if has_prefer_full_hinting():
         font.setHintingPreference(QFont.HintingPreference.PreferFullHinting)
 
     font.setKerning(True)
     return font
+
+
+def has_prefer_full_hinting() -> bool:
+    """Detect availability of full hinting preference in the Qt build."""
+
+    try:
+        from PySide6.QtGui import QFont
+    except Exception:
+        return False
+
+    return hasattr(QFont, "HintingPreference") and hasattr(
+        QFont.HintingPreference, "PreferFullHinting"
+    )
 
 
 def _resolve_weight() -> QFont.Weight:

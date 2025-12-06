@@ -18,14 +18,6 @@ from app.ui.fonts import create_app_font, resolve_vazir_family_name
 from app.ui.i18n import Language
 
 
-@pytest.fixture()
-def qapp() -> QApplication:
-    app = QApplication.instance()
-    if app is None:
-        app = QApplication([])
-    return app
-
-
 def test_create_app_font_uses_fallback_when_vazir_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(fonts, "load_vazir_font", lambda point_size=None: None)
     font = create_app_font()
@@ -127,10 +119,14 @@ def test_light_theme_log_background_is_light() -> None:
     assert dark_luminance < light_luminance
 
 
-def test_heading_font_is_larger_than_body(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_heading_font_is_larger_than_body(
+    qapp: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setattr(fonts, "load_vazir_font", lambda point_size=None: None)
     body_font = fonts.create_app_font()
     heading_font = fonts.get_heading_font()
+
+    qapp.processEvents()
 
     assert heading_font.family() == body_font.family()
     assert heading_font.pointSize() > body_font.pointSize()

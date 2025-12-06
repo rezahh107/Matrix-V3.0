@@ -18,6 +18,7 @@ from __future__ import annotations
 import io
 import json
 import logging
+import shutil
 import sqlite3
 from collections.abc import Iterable, Mapping, Sequence
 from contextlib import suppress
@@ -250,6 +251,19 @@ class LocalDatabase:
             backup = self.path.with_name(f"{self.path.name}.bak-{timestamp}")
             try:
                 self.path.replace(backup)
+            except PermissionError:
+                logger.warning("Rename backup failed due to permission; trying copy", exc_info=True)
+                try:
+                    backup.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(self.path, backup)
+                except OSError as copy_exc:
+                    raise DatabasePreparationError(
+                        path=str(self.path),
+                        reason="انتقال فایل برای بکاپ ممکن نشد.",
+                        hint="دسترسی دیسک یا قفل فایل را بررسی کنید و دوباره تلاش نمایید.",
+                    ) from copy_exc
+                with suppress(OSError):
+                    self.path.unlink()
             except OSError as exc:  # pragma: no cover - I/O failure
                 raise DatabasePreparationError(
                     path=str(self.path),
@@ -483,6 +497,23 @@ class LocalDatabase:
             backup = self.path.with_suffix(self.path.suffix + ".corrupt")
             try:
                 self.path.replace(backup)
+            except PermissionError:
+                logger.warning(
+                    "Rename corrupt DB backup failed due to permission; falling back to copy",
+                    exc_info=True,
+                )
+                try:
+                    backup.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(self.path, backup)
+                except OSError as copy_exc:
+                    logger.exception("Failed to backup corrupt DB at %s", self.path)
+                    raise DatabaseCorruptError(
+                        path=str(self.path),
+                        reason="بکاپ‌گیری از پایگاه‌داده خراب ناکام ماند.",
+                        hint="مجوز دسترسی یا قفل بودن فایل را بررسی کنید و در صورت لزوم فایل را به‌صورت دستی حذف کنید.",
+                    ) from copy_exc
+                with suppress(OSError):
+                    self.path.unlink()
             except OSError as exc:
                 logger.exception("Failed to backup corrupt DB at %s", self.path)
                 raise DatabaseCorruptError(

@@ -31,7 +31,15 @@ class ExcelLoader(QThread):
             if not self._path.exists():
                 raise FileNotFoundError(str(self._path))
             suffix = self._path.suffix.lower()
-            df = pd.read_csv(self._path) if suffix == ".csv" else pd.read_excel(self._path)
+            if suffix == ".csv":
+                df = pd.read_csv(self._path)
+            elif suffix in {".xlsx", ".xls", ".xlsm", ".xlsb"}:
+                try:
+                    df = pd.read_excel(self._path, engine="openpyxl")
+                except ImportError as exc:
+                    raise RuntimeError("openpyxl is required to read Excel files") from exc
+            else:
+                raise ValueError(f"Unsupported file type: {self._path}")
             self.loaded.emit(df)
         except Exception as exc:  # pragma: no cover - خطای غیرمنتظره
             self.failed.emit(str(exc))

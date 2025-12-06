@@ -27,8 +27,7 @@ def qapp() -> QApplication:
 def test_create_app_font_does_not_raise_without_full_hinting_preference(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    if hasattr(QFont, "HintingPreference"):
-        monkeypatch.delattr(QFont.HintingPreference, "PreferFullHinting", raising=False)
+    monkeypatch.setattr(fonts, "has_prefer_full_hinting", lambda: False)
     font = fonts.create_app_font(point_size=9)
     assert isinstance(font, QFont)
 

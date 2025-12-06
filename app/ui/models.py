@@ -151,7 +151,10 @@ def build_mentor_entries_from_dataframe(
 
         center_name_value = _first_present(
             record,
-            ("center_name",),
+            (
+                "center_name",
+                "مرکز",
+            ),
         )
         center_value: str | int | None
         if _string_value(center_name_value):
@@ -162,12 +165,16 @@ def build_mentor_entries_from_dataframe(
                 (
                     "center",
                     "center_id",
+                    "center_code",
                 ),
             )
             if isinstance(center_id_value, float) and pd.isna(center_id_value):
                 center_value = None
             else:
                 center_value = _center_field_value(center_id_value)
+
+        if center_value is not None:
+            center_value = _string_value(center_value)
 
         school_name_value = _first_present(
             record,
@@ -188,6 +195,9 @@ def build_mentor_entries_from_dataframe(
                 school_value = None
             else:
                 school_value = _school_field_value(school_code_value)
+
+        if school_value is not None:
+            school_value = _string_value(school_value)
 
         entries.append(
             MentorPoolEntry(
@@ -214,6 +224,7 @@ def build_mentor_entries_from_dataframe(
                             "capacity",
                             "capacity_current",
                             "capacity_special",
+                            "ظرفیت",
                         ),
                     )
                 ),
