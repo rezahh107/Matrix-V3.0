@@ -60,6 +60,7 @@ from PySide6.QtWidgets import (
     QWidget,
     QWidgetAction,
 )
+from shiboken6 import Shiboken
 
 from app.core.allocation.history_metrics import METRIC_COLUMNS
 from app.core.common.columns import canonicalize_headers
@@ -2104,6 +2105,8 @@ class MainWindow(QMainWindow):
 
         self._manager_names_cache = list(names)
         for center_id, combo in self._center_manager_combos.items():
+            if not Shiboken.isValid(combo):
+                continue
             try:
                 self._refresh_manager_combo(center_id, combo, list(names))
             except RuntimeError:
