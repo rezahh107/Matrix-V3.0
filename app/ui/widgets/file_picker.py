@@ -82,6 +82,13 @@ class FilePicker(QWidget):
 
         self._edit.setText(value)
 
+    def blockSignals(self, block: bool) -> bool:  # noqa: N802 - امضای Qt
+        """Block signals for both the composite widget and its line edit."""
+
+        blocked = super().blockSignals(block)
+        self._edit.blockSignals(block)
+        return blocked
+
     def line_edit(self) -> QLineEdit:
         """دسترسی مستقیم به QLineEdit داخلی برای اتصال سیگنال‌ها."""
 
