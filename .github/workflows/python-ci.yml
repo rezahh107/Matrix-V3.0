@@ -48,7 +48,7 @@ jobs:
         run: black --check .
 
       - name: Type-check with mypy
-        run: mypy app tests
+        run: mypy
 
       - name: Run pytest
         run: python -m pytest -q
