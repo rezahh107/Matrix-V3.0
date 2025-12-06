@@ -76,7 +76,7 @@ def _load_config(config_path: Path) -> GoldenConfig:
     for item in scenarios_raw:
         if not isinstance(item, dict):
             raise GoldenRegressionError("Scenario entries must be mappings.")
-        name = str(item.get("name", "")).strip()
+        name = str(item.get("name") or "").strip()
         if not name:
             raise GoldenRegressionError("Each scenario must have a non-empty name.")
 
