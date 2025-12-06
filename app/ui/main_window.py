@@ -2031,9 +2031,9 @@ class MainWindow(QMainWindow):
     ) -> None:
         """پر کردن ComboBox با لیست مدیران."""
 
-        if not Shiboken.isValid(combo):
-            return
         try:
+            if not Shiboken.isValid(combo):
+                return
             combo.blockSignals(True)
             combo.clear()
             source_names = names or self._manager_names_cache or self._get_default_managers()
@@ -2066,7 +2066,10 @@ class MainWindow(QMainWindow):
         if not Shiboken.isValid(self._picker_pool):
             return
 
-        path_text = self._picker_pool.text().strip()
+        try:
+            path_text = self._picker_pool.text().strip()
+        except RuntimeError:
+            return
         if not path_text:
             self._apply_manager_names(self._get_default_managers())
             return
@@ -2091,7 +2094,10 @@ class MainWindow(QMainWindow):
         if not Shiboken.isValid(self._picker_pool):
             return self._get_default_managers()
 
-        path_text = self._picker_pool.text().strip()
+        try:
+            path_text = self._picker_pool.text().strip()
+        except RuntimeError:
+            return self._get_default_managers()
         if not path_text:
             return self._get_default_managers()
 
