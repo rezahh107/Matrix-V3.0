@@ -338,10 +338,7 @@ class LocalDatabase:
                     hint="فایل پایگاه‌داده را حذف کنید تا با Schema جدید بازسازی شود.",
                 ) from exc
             if self._is_corruption_error(exc):
-                logger.warning(
-                    "Local DB appears corrupted at %s; backing up and recreating", self.path
-                )
-                backup = self._recover_corrupt_database()
+                backup = self._recover_and_wrap_corruption(exc)
                 raise DatabaseCorruptError(
                     path=str(self.path),
                     reason="فایل پایگاه‌داده خراب است و بازسازی شد.",
@@ -357,10 +354,7 @@ class LocalDatabase:
             ) from exc
         except sqlite3.DatabaseError as exc:  # pragma: no cover - خطای پایگاه دادهٔ خراب
             if self._is_corruption_error(exc):
-                logger.warning(
-                    "Local DB appears corrupted at %s; backing up and recreating", self.path
-                )
-                backup = self._recover_corrupt_database()
+                backup = self._recover_and_wrap_corruption(exc)
                 raise DatabaseCorruptError(
                     path=str(self.path),
                     reason="فایل پایگاه‌داده خراب است و بازسازی شد.",
@@ -381,6 +375,25 @@ class LocalDatabase:
                 hint="مسیر فایل یا مجوز نوشتن را بررسی کنید.",
             ) from exc
         logger.debug("Local DB schema ensured at %s", self.path)
+
+    def _recover_and_wrap_corruption(self, exc: sqlite3.Error) -> Path | None:
+        """پشتیبان‌گیری و بازسازی فایل خراب؛ هر خطا را به DatabaseCorruptError می‌پیچد."""
+
+        logger.warning("Local DB appears corrupted at %s; backing up and recreating", self.path)
+        backup: Path | None = None
+        try:
+            backup = self._recover_corrupt_database()
+        except DatabaseCorruptError:
+            raise
+        except sqlite3.DatabaseError as recover_exc:
+            raise DatabaseCorruptError(
+                path=str(self.path),
+                reason="فایل پایگاه‌داده خراب است و بازسازی شد.",
+                hint="جهت ادامه، در صورت نیاز داده‌های مرجع را دوباره بارگذاری کنید و فرمان را مجدداً اجرا نمایید.",
+                backup_path=backup,
+            ) from recover_exc
+
+        return backup
 
     def _initialize_once(self) -> None:
         """اجرای یک‌بارهٔ مسیر ساخت/مهاجرت Schema بدون بازیابی.
