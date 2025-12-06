@@ -4,7 +4,8 @@ import contextlib
 from typing import Any
 
 import pytest
-from PySide6.QtCore import QCoreApplication, QEventLoop, QThread, QTimer
+from PySide6.QtCore import QCoreApplication, QThread
+from PySide6.QtTest import QSignalSpy
 
 
 def _wait_for_finish(
@@ -20,57 +21,29 @@ def _wait_for_finish(
     if app is None:
         pytest.fail("No active QCoreApplication for loader wait")
 
-    loop = QEventLoop()
-    timed_out = False
     success: bool | None = None
     payload: object | None = None
 
-    def _on_loaded(result: object) -> None:
-        nonlocal success, payload
-        success, payload = True, result
-        if loop.isRunning():
-            loop.quit()
-
-    def _on_failed(message: object) -> None:
-        nonlocal success, payload
-        success, payload = False, message
-        if loop.isRunning():
-            loop.quit()
-
-    def _on_finished() -> None:
-        if success is None and loop.isRunning():
-            loop.quit()
-
-    def _on_timeout() -> None:
-        nonlocal timed_out
-        timed_out = True
-        if loop.isRunning():
-            loop.quit()
-
-    timer = QTimer()
-    timer.setSingleShot(True)
-    timer.timeout.connect(_on_timeout)
-
-    loader.loaded.connect(_on_loaded)
-    loader.failed.connect(_on_failed)
-    loader.finished.connect(_on_finished)
+    loaded_spy = QSignalSpy(loader.loaded)
+    failed_spy = QSignalSpy(loader.failed)
+    finished_spy = QSignalSpy(loader.finished)
 
     loader.start()
-    timer.start(timeout_ms)
 
     try:
-        loop.exec()
-    finally:
-        timer.stop()
-        with contextlib.suppress(Exception):
-            loader.loaded.disconnect(_on_loaded)
-        with contextlib.suppress(Exception):
-            loader.failed.disconnect(_on_failed)
-        with contextlib.suppress(Exception):
-            loader.finished.disconnect(_on_finished)
-        with contextlib.suppress(Exception):
-            timer.timeout.disconnect(_on_timeout)
+        if not finished_spy.wait(timeout_ms):
+            pytest.fail(
+                f"Loader did not finish within {timeout_ms} ms; "
+                f"loaded_count={len(loaded_spy)}, failed_count={len(failed_spy)}"
+            )
 
+        if loaded_spy:
+            success, payload = True, loaded_spy[-1][0]
+        elif failed_spy:
+            success, payload = False, failed_spy[-1][0]
+        else:
+            success, payload = None, None
+    finally:
         if loader.isRunning():
             loader.quit()
             loader.wait(timeout_ms + 1000)
@@ -78,13 +51,9 @@ def _wait_for_finish(
         if loader.isRunning():
             pytest.fail("Loader thread did not terminate after wait")
 
-        loader.deleteLater()
+        with contextlib.suppress(Exception):
+            loader.deleteLater()
         qtbot.wait(10)
-
-    if timed_out:
-        pytest.fail(
-            f"Timed out after {timeout_ms} ms waiting for loader signals; success={success}"
-        )
 
     return success, payload
 
