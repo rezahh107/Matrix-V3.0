@@ -60,6 +60,7 @@ from PySide6.QtWidgets import (
     QWidget,
     QWidgetAction,
 )
+from shiboken6 import Shiboken
 
 from app.core.allocation.history_metrics import METRIC_COLUMNS
 from app.core.common.columns import canonicalize_headers
@@ -76,7 +77,7 @@ from app.ui.dialogs.join_key_validation_dialog import JoinKeyValidationDialog
 from app.ui.dialogs.qa_dashboard_dialog import QADashboardDialog
 from app.ui.fonts import get_app_font
 from app.ui.helpers.counter_helpers import detect_year_candidates
-from app.ui.helpers.manager_helpers import extract_manager_names
+from app.ui.helpers.manager_helpers import extract_manager_names, load_manager_names_from_pool
 from app.ui.history_metrics import HistoryMetricsDialog
 from app.ui.loaders import ExcelLoader
 from app.ui.mentor_pool_dialog import MentorPoolDialog
@@ -188,6 +189,9 @@ _EN_TEXT_DEFAULTS: dict[str, str] = {
     "stage.pick_scenario": "Select a scenario to start",
 }
 _PERSIAN_PATTERN = re.compile(r"[\u0600-\u06FF]")
+
+# Alias kept for compatibility with tests that patch `app.ui.main_window.load_policy`.
+load_policy = get_cached_policy
 
 __all__ = ["MainWindow", "run_demo", "FilePicker"]
 
@@ -1922,7 +1926,7 @@ class MainWindow(QMainWindow):
         self._center_manager_combos.clear()
 
         try:
-            policy = get_cached_policy()
+            policy = load_policy()
             if not policy.center_management.enabled:
                 label = QLabel("مدیریت مراکز غیرفعال است")
                 main_layout.addWidget(label)
@@ -2027,19 +2031,26 @@ class MainWindow(QMainWindow):
     ) -> None:
         """پر کردن ComboBox با لیست مدیران."""
 
-        combo.blockSignals(True)
-        combo.clear()
-        source_names = names or self._manager_names_cache or self._get_default_managers()
-        combo.addItems(source_names)
-        preferred = self._prefs.get_center_manager(center_id, "")
-        if preferred:
-            combo.setCurrentText(preferred)
-        combo.blockSignals(False)
+        try:
+            if not Shiboken.isValid(combo):
+                return
+            combo.blockSignals(True)
+            combo.clear()
+            source_names = names or self._manager_names_cache or self._get_default_managers()
+            combo.addItems(source_names)
+            preferred = self._prefs.get_center_manager(center_id, "")
+            if preferred:
+                combo.setCurrentText(preferred)
+            combo.blockSignals(False)
+        except RuntimeError:
+            # Combo was deleted between validity check and refresh; drop it.
+            self._center_manager_combos.pop(center_id, None)
 
     def _refresh_all_manager_combos(self) -> None:
         """بارگذاری مجدد تمام ComboBoxهای مدیران."""
 
-        if not self._center_manager_combos:
+        self._prune_invalid_manager_combos()
+        if not self._center_manager_combos or not Shiboken.isValid(self._picker_pool):
             return
         self._load_manager_names_async()
 
@@ -2052,7 +2063,13 @@ class MainWindow(QMainWindow):
     def _load_manager_names_async(self) -> None:
         """بارگذاری نام مدیران از استخر بدون مسدود کردن UI."""
 
-        path_text = self._picker_pool.text().strip()
+        if not Shiboken.isValid(self._picker_pool):
+            return
+
+        try:
+            path_text = self._picker_pool.text().strip()
+        except RuntimeError:
+            return
         if not path_text:
             self._apply_manager_names(self._get_default_managers())
             return
@@ -2070,6 +2087,35 @@ class MainWindow(QMainWindow):
             description="بارگذاری مدیران",
             on_loaded=self._process_manager_dataframe,
         )
+
+    def _load_manager_names_from_pool(self) -> list[str]:
+        """خواندن همزمان نام مدیران برای استفاده در تست‌ها و fallback ها."""
+
+        if not Shiboken.isValid(self._picker_pool):
+            return self._get_default_managers()
+
+        try:
+            path_text = self._picker_pool.text().strip()
+        except RuntimeError:
+            return self._get_default_managers()
+        if not path_text:
+            return self._get_default_managers()
+
+        pool_path = Path(path_text)
+        try:
+            return load_manager_names_from_pool(pool_path)
+        except FileNotFoundError:
+            QMessageBox.warning(self, "فایل یافت نشد", f"مسیر مشخص‌شده وجود ندارد: {pool_path}")
+        except IsADirectoryError:
+            QMessageBox.warning(self, "مسیر نامعتبر", "مسیر انتخاب‌شده یک پوشه است.")
+        except Exception as exc:  # pragma: no cover - defensive UI guard
+            self._append_log(f"❌ خطا در خواندن مدیران: {exc}")
+            QMessageBox.warning(
+                self,
+                "بارگذاری مدیران",
+                "امکان استخراج مدیران از فایل استخر نبود؛ از پیش‌فرض استفاده می‌شود.",
+            )
+        return self._get_default_managers()
 
     def _process_manager_dataframe(self, dataframe: pd.DataFrame) -> None:
         """پردازش دیتافریم مدیران خوانده‌شده و به‌روزرسانی ComboBoxها."""
@@ -2090,9 +2136,21 @@ class MainWindow(QMainWindow):
         """به‌روزرسانی تمام ComboBoxهای مدیران با لیست داده‌شده."""
 
         self._manager_names_cache = list(names)
+        self._prune_invalid_manager_combos()
         for center_id, combo in self._center_manager_combos.items():
             self._refresh_manager_combo(center_id, combo, list(names))
         self._append_log("✅ لیست مدیران به‌روزرسانی شد")
+
+    def _prune_invalid_manager_combos(self) -> None:
+        """حذف ComboBoxهایی که دیگر در سطح Qt معتبر نیستند."""
+
+        invalid_ids = [
+            center_id
+            for center_id, combo in self._center_manager_combos.items()
+            if not Shiboken.isValid(combo)
+        ]
+        for center_id in invalid_ids:
+            self._center_manager_combos.pop(center_id, None)
 
     def _reset_mentor_pool_cache(self) -> None:
         """پاک‌سازی کش استخر منتورها هنگام تغییر مسیر فایل."""

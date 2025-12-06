@@ -1,35 +1,55 @@
-"""Golden regression entry point for Smart Student Allocation CI."""
+"""Golden regression entry point for Smart Student Allocation CI.
+
+This runner keeps Core logic untouched by delegating execution to the existing
+CLI entry point (`app.infra.cli.main`). Scenarios are defined in a YAML config
+to keep CI and local runs aligned. The script validates configuration structure
+and required files before running anything and can perform a dry-run to avoid
+side effects.
+"""
 
 from __future__ import annotations
 
 import argparse
 import sys
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import yaml
 
 from app.infra import cli
 
 
-@dataclass
+@dataclass(frozen=True)
 class GoldenCommand:
+    """A single CLI invocation within a scenario."""
+
     name: str
     args: list[str]
     requires: list[Path]
 
 
-@dataclass
+@dataclass(frozen=True)
 class GoldenScenario:
+    """A named scenario bundling one or more CLI commands."""
+
     name: str
     description: str | None
     commands: list[GoldenCommand]
 
 
-@dataclass
+@dataclass(frozen=True)
 class GoldenConfig:
+    """Top-level configuration parsed from YAML."""
+
+    base_dir: Path
     scenarios: list[GoldenScenario]
+
+    def resolve(self, path: Path) -> Path:
+        """Resolve paths relative to the declared base directory."""
+
+        return path if path.is_absolute() else self.base_dir / path
 
 
 class GoldenRegressionError(Exception):
@@ -57,6 +77,62 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def _as_path(value: Any, *, field: str) -> Path:
+    if not isinstance(value, str):
+        raise GoldenRegressionError(f"Field '{field}' must be a string path.")
+    candidate = Path(value.strip())
+    if not str(candidate):
+        raise GoldenRegressionError(f"Field '{field}' must not be empty.")
+    return candidate
+
+
+def _parse_command(raw: Any, scenario_name: str) -> GoldenCommand:
+    if not isinstance(raw, dict):
+        raise GoldenRegressionError(f"Commands for scenario '{scenario_name}' must be mappings.")
+
+    name_raw = raw.get("name")
+    name = str(name_raw).strip() if name_raw is not None else ""
+    if not name:
+        raise GoldenRegressionError(f"Scenario '{scenario_name}' has a command without a name.")
+
+    args_raw = raw.get("args")
+    if not isinstance(args_raw, list) or not all(isinstance(arg, str) for arg in args_raw):
+        raise GoldenRegressionError(
+            f"Command '{name}' in scenario '{scenario_name}' must provide a list of args."
+        )
+    args = [arg.strip() for arg in args_raw]
+
+    requires_raw = raw.get("requires", [])
+    if not isinstance(requires_raw, Iterable) or isinstance(requires_raw, (str, bytes)):
+        raise GoldenRegressionError(
+            f"Command '{name}' in scenario '{scenario_name}' must list required files."
+        )
+    requires = [_as_path(item, field=f"requires[{idx}]") for idx, item in enumerate(requires_raw)]
+
+    return GoldenCommand(name=name, args=args, requires=requires)
+
+
+def _parse_scenario(raw: Any) -> GoldenScenario:
+    if not isinstance(raw, dict):
+        raise GoldenRegressionError("Scenario entries must be mappings.")
+
+    name_raw = raw.get("name")
+    name = str(name_raw).strip() if name_raw is not None else ""
+    if not name:
+        raise GoldenRegressionError("Each scenario must have a non-empty name.")
+
+    description_raw = raw.get("description")
+    description = str(description_raw) if description_raw is not None else None
+
+    commands_raw = raw.get("commands")
+    if not isinstance(commands_raw, list) or not commands_raw:
+        raise GoldenRegressionError(f"Scenario '{name}' has no commands defined.")
+
+    commands = [_parse_command(command_raw, name) for command_raw in commands_raw]
+
+    return GoldenScenario(name=name, description=description, commands=commands)
+
+
 def _load_config(config_path: Path) -> GoldenConfig:
     if not config_path.exists():
         raise GoldenRegressionError(
@@ -68,50 +144,18 @@ def _load_config(config_path: Path) -> GoldenConfig:
     if not isinstance(raw, dict):
         raise GoldenRegressionError("Golden regression config must be a mapping.")
 
+    base_dir_raw = raw.get("base_dir")
+    base_dir = _as_path(base_dir_raw, field="base_dir")
+    if not base_dir.is_absolute():
+        base_dir = (config_path.parent / base_dir).resolve()
+
     scenarios_raw = raw.get("scenarios")
-    if not scenarios_raw:
+    if not isinstance(scenarios_raw, list) or not scenarios_raw:
         raise GoldenRegressionError("No scenarios defined in golden regression config.")
 
-    scenarios: list[GoldenScenario] = []
-    for item in scenarios_raw:
-        if not isinstance(item, dict):
-            raise GoldenRegressionError("Scenario entries must be mappings.")
-        name = str(item.get("name") or "").strip()
-        if not name:
-            raise GoldenRegressionError("Each scenario must have a non-empty name.")
+    scenarios = [_parse_scenario(item) for item in scenarios_raw]
 
-        description_raw = item.get("description")
-        description = str(description_raw) if description_raw is not None else None
-
-        commands_raw = item.get("commands")
-        if not commands_raw:
-            raise GoldenRegressionError(f"Scenario '{name}' has no commands defined.")
-
-        commands: list[GoldenCommand] = []
-        for command_raw in commands_raw:
-            if not isinstance(command_raw, dict):
-                raise GoldenRegressionError(f"Commands for scenario '{name}' must be mappings.")
-            command_name = str(command_raw.get("name") or "").strip() or "unnamed-command"
-            args = command_raw.get("args")
-            if not isinstance(args, list) or not all(isinstance(arg, str) for arg in args):
-                raise GoldenRegressionError(
-                    f"Command '{command_name}' in scenario '{name}' must provide a list of args."
-                )
-
-            requires_raw = command_raw.get("requires", [])
-            requires: list[Path] = []
-            if not isinstance(requires_raw, list):
-                raise GoldenRegressionError(
-                    f"Command '{command_name}' in scenario '{name}' must list required files."
-                )
-            for raw_path in requires_raw:
-                requires.append(Path(str(raw_path)))
-
-            commands.append(GoldenCommand(name=command_name, args=args, requires=requires))
-
-        scenarios.append(GoldenScenario(name=name, description=description, commands=commands))
-
-    return GoldenConfig(scenarios=scenarios)
+    return GoldenConfig(base_dir=base_dir, scenarios=scenarios)
 
 
 def _missing_files(paths: list[Path]) -> list[Path]:
@@ -122,14 +166,15 @@ def _run_command(command: GoldenCommand) -> int:
     return cli.main(command.args)
 
 
-def _run_scenario(scenario: GoldenScenario, *, dry_run: bool) -> bool:
+def _run_scenario(config: GoldenConfig, scenario: GoldenScenario, *, dry_run: bool) -> bool:
     print(f"[SCENARIO] {scenario.name}")
     if scenario.description:
         print(f"  description: {scenario.description}")
 
-    missing: list[Path] = []
-    for command in scenario.commands:
-        missing.extend(_missing_files(command.requires))
+    resolved_requires = [
+        config.resolve(path) for command in scenario.commands for path in command.requires
+    ]
+    missing = _missing_files(resolved_requires)
 
     if missing:
         missing_unique = sorted({path.as_posix() for path in missing})
@@ -145,10 +190,10 @@ def _run_scenario(scenario: GoldenScenario, *, dry_run: bool) -> bool:
 
     for command in scenario.commands:
         print(f"  running: {command.name} -> cli.main({command.args})")
-        result = _run_command(command)
-        if result != 0:
+        exit_code = _run_command(command)
+        if exit_code != 0:
             print(f"  status: failed-command ({command.name})")
-            print(f"  exit-code: {result}")
+            print(f"  exit-code: {exit_code}")
             return False
 
     print("  status: success")
@@ -163,7 +208,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"golden regression: {exc}")
         return 1
 
-    if not all(_run_scenario(scenario, dry_run=args.dry_run) for scenario in config.scenarios):
+    all_passed = True
+    for scenario in config.scenarios:
+        scenario_passed = _run_scenario(config, scenario, dry_run=args.dry_run)
+        all_passed = all_passed and scenario_passed
+
+    if not all_passed:
         print("golden regression completed with failures")
         return 1
 

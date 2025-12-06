@@ -1,25 +1,57 @@
-# Golden Regression CI (Scaffold)
+# Golden Regression CI
 
-## Purpose
-- Run allocation/QA flows on committed golden Excel datasets without touching Core logic.
-- Executes via `scripts/run_golden_regression.py` (used by `.github/workflows/golden_regression.yml`).
+Golden regression is a thin, config-driven wrapper around the existing CLI
+(`app.infra.cli.main`). It runs allocation/QA commands against committed golden
+Excel inputs without touching Core behavior.
 
-## Add golden datasets
-- Place golden Excel inputs under `ci/golden/` (e.g., `ci/golden/sample_inspactor.xlsx`).
-- Keep the directory committed and free of secrets; do **not** add real data until ready.
+## Where to store golden files
+- Place all committed golden Excel inputs/outputs under a committed docs
+  folder, for example `docs/golden_datasets/phase01_lock_current_behavior/`.
+  Keep the directory free of secrets; placeholder files are fine until real
+  goldens are ready.
 
-## Wire scenarios
-- Edit `ci/configs/golden_regression.yml`:
-  - Add a `name` and optional `description` for each scenario.
-  - Provide one or more `commands` with CLI `args` matching `app.infra.cli.main` (e.g., `build-matrix ...`).
-  - List `requires` paths for every golden Excel file needed by the command.
-- The helper script fails fast with a clear message if any `requires` path is missing.
+## Configure scenarios (YAML)
+- Edit `ci/configs/golden_regression.yml`.
+- Top-level keys:
+  - `base_dir`: root directory that contains your golden Excel files (for
+    example `docs/golden_datasets/phase01_lock_current_behavior`). Relative
+    paths in `requires` are resolved against this directory.
+  - `scenarios`: list of named scenarios. Each scenario includes:
+    - `name` (required) and optional `description`.
+    - `commands`: one or more CLI invocations. Each command defines:
+      - `name`: label for logging.
+      - `args`: list of arguments passed verbatim to `app.infra.cli.main`
+        (e.g., `build-matrix --inspactor ...`). Paths can be absolute or
+        relative; use `base_dir` to avoid repetition.
+      - `requires`: list of Excel files that must exist before running. Relative
+        entries are resolved under `base_dir` and are validated before any CLI
+        command executes. Ensure `args` and `requires` reference the same
+        filenames so the runner checks the files you actually use.
 
-## Running locally
+The scaffolded scenario points to the `phase01_lock_current_behavior` golden
+set; adjust `base_dir` and filenames to match your committed goldens.
+
+## Run locally
 - Install dependencies (`pip install -r requirements.txt && pip install -e .`).
-- Dry run (structure + file presence only): `python scripts/run_golden_regression.py --dry-run`.
-- Full run (executes CLI commands): `python scripts/run_golden_regression.py`.
+- Dry run (validate YAML + file presence only):
+  ```bash
+  python scripts/run_golden_regression.py --config ci/configs/golden_regression.yml --dry-run
+  ```
+- Full run (executes CLI commands):
+  ```bash
+  python scripts/run_golden_regression.py --config ci/configs/golden_regression.yml
+  ```
+- Exit codes: non-zero when the config is missing/malformed, when required files
+  are absent, or when any CLI command fails.
 
-## CI workflow
-- Trigger manually via `workflow_dispatch` in `.github/workflows/golden_regression.yml`.
-- To run on PRs later, add `pull_request` (and optional `push`) triggers to the workflow when golden data are committed.
+## CI usage (GitHub Actions)
+- The script is OS-agnostic (uses `pathlib.Path`) and can run on Windows or
+  Linux runners.
+- Example invocation from a workflow step:
+  ```bash
+  python scripts/run_golden_regression.py --config ci/configs/golden_regression.yml --dry-run
+  ```
+  - Add real golden Excel files under your chosen `base_dir` (for example,
+    `docs/golden_datasets/phase01_lock_current_behavior/`) and update the YAML
+    when scenarios are ready. The runner will fail fast in CI if required files
+    are missing, providing a clear list of absent paths.
