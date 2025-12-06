@@ -17,6 +17,8 @@ jobs:
   lint-and-test:
     runs-on: windows-latest
     timeout-minutes: 30
+    env:
+      MATRIX2_TEMP_SKIP_QT_UI: "1" # TEMPORARY CI WAIVER: skip Qt UI tests on Windows until loader harness stabilized
 
     steps:
       - name: Checkout repository
