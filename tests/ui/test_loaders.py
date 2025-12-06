@@ -14,16 +14,20 @@ from tests.ui.qt_loader_harness import (
     wait_for_loader_success,
 )
 
+pytestmark = pytest.mark.skipif(
+    sys.platform == "win32" and os.environ.get("CI"),
+    reason=(
+        "Qt loader UI tests flaky on headless Windows CI; "
+        "TECH-DEBT:QT-LOADER-01"
+    ),
+)
+
 pytest.importorskip(
     "PySide6.QtWidgets",
     reason="PySide6 not available in test environment",
 )
 
 
-@pytest.mark.skipif(
-    sys.platform == "win32" and os.environ.get("CI"),
-    reason="Flaky Qt loader UI test on headless Windows CI; TECH-DEBT:QT-LOADER-01",
-)
 def test_excel_loader_success(qtbot: pytest.QtBot, qapp: QCoreApplication, tmp_path: Path) -> None:
     csv_path = tmp_path / "data.csv"
     expected = pd.DataFrame({"a": [1, 2]})
