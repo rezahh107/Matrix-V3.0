@@ -189,6 +189,9 @@ _EN_TEXT_DEFAULTS: dict[str, str] = {
 }
 _PERSIAN_PATTERN = re.compile(r"[\u0600-\u06FF]")
 
+# Alias kept for compatibility with tests that patch `app.ui.main_window.load_policy`.
+load_policy = get_cached_policy
+
 __all__ = ["MainWindow", "run_demo", "FilePicker"]
 
 
@@ -1922,7 +1925,7 @@ class MainWindow(QMainWindow):
         self._center_manager_combos.clear()
 
         try:
-            policy = get_cached_policy()
+            policy = load_policy()
             if not policy.center_management.enabled:
                 label = QLabel("مدیریت مراکز غیرفعال است")
                 main_layout.addWidget(label)
