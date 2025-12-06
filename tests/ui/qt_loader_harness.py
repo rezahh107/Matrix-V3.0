@@ -6,6 +6,8 @@ import pytest
 from PySide6.QtCore import QThread
 from PySide6.QtTest import QSignalSpy
 
+from .conftest import waitSignal
+
 
 def _wait_for_finish(qtbot: Any, loader: QThread, timeout_ms: int) -> tuple[QSignalSpy, QSignalSpy]:
     loaded_spy = QSignalSpy(loader.loaded)
@@ -14,7 +16,7 @@ def _wait_for_finish(qtbot: Any, loader: QThread, timeout_ms: int) -> tuple[QSig
     loader.start()
 
     try:
-        qtbot.waitSignal(loader.finished, timeout=timeout_ms)
+        waitSignal(loader.finished, timeout=timeout_ms)
     except Exception:
         if loader.isRunning():
             loader.requestInterruption()

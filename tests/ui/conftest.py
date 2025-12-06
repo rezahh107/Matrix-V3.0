@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import gc
 from typing import Any
 
@@ -34,6 +35,49 @@ def qapp():
     gc.collect()
 
 
+def waitSignal(signal: Any, *, timeout: int | None = None) -> list[tuple[Any, ...]]:  # noqa: N802
+    """Wait for a Qt signal using the Qt event loop (no Python threads).
+
+    Returns the captured signal arguments as a list of tuples. Raises a pytest
+    failure on timeout to keep tests deterministic and avoid native aborts.
+    """
+
+    from PySide6.QtCore import QCoreApplication, QEventLoop, QTimer
+
+    if QCoreApplication.instance() is None:
+        pytest.fail("waitSignal called without an active Q(Core)Application")
+
+    loop = QEventLoop()
+    timeout_ms = 1000 if timeout is None else timeout
+    args: list[tuple[Any, ...]] = []
+    timed_out = False
+
+    def _on_emitted(*signal_args: Any) -> None:
+        args.append(tuple(signal_args))
+        loop.quit()
+
+    def _on_timeout() -> None:
+        nonlocal timed_out
+        timed_out = True
+        loop.quit()
+
+    signal.connect(_on_emitted)
+    timer = QTimer()
+    timer.setSingleShot(True)
+    timer.timeout.connect(_on_timeout)
+    timer.start(timeout_ms)
+
+    loop.exec()
+
+    with contextlib.suppress(Exception):
+        signal.disconnect(_on_emitted)
+    timer.stop()
+
+    if timed_out:
+        pytest.fail(f"Timed out after {timeout_ms} ms waiting for signal {signal}")
+    return args
+
+
 class _MiniQtBot:
     def __init__(self, app: Any):
         from PySide6.QtCore import Qt
@@ -54,12 +98,7 @@ class _MiniQtBot:
         QTest.qWait(ms)
 
     def waitSignal(self, signal: Any, *, timeout: int | None = None) -> Any:  # noqa: N802
-        from PySide6.QtTest import QSignalSpy
-
-        spy = QSignalSpy(signal)
-        if not spy.wait(timeout or 1000):
-            raise TimeoutError(f"Signal did not emit within {timeout or 1000} ms")
-        return spy
+        return waitSignal(signal, timeout=timeout)
 
     def _cleanup(self) -> None:
         for widget in self._widgets:
