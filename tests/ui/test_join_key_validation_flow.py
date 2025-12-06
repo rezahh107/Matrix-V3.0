@@ -62,6 +62,8 @@ def test_join_key_validation_error_opens_dialog(qapp: QApplication) -> None:
     assert _StubJoinKeyDialog.instances, "join-key validation dialog should be created"
     dialog = _StubJoinKeyDialog.instances[-1]
     assert dialog.view_model.issues[0].column == "کدرشته"
+    window.close()
+    qapp.processEvents()
 
 
 def test_non_join_key_error_does_not_create_dialog(qapp: QApplication) -> None:
@@ -71,6 +73,11 @@ def test_non_join_key_error_does_not_create_dialog(qapp: QApplication) -> None:
     )
 
     _StubJoinKeyDialog.instances.clear()
+    window._splitter.deleteLater()
+    qapp.processEvents()
+
     window._on_finished(False, ValueError("other error"))
 
     assert not _StubJoinKeyDialog.instances
+    window.close()
+    qapp.processEvents()
