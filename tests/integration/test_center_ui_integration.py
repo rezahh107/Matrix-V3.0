@@ -23,7 +23,7 @@ def qt_app():
 
 
 def test_center_section_creation(qt_app):  # noqa: ARG001
-    with patch("app.ui.main_window.load_policy") as mock_load_policy:
+    with patch("app.ui.main_window.get_cached_policy") as mock_get_cached_policy:
         center_management = Mock()
         center_management.enabled = True
         center_management.centers = [
@@ -33,7 +33,7 @@ def test_center_section_creation(qt_app):  # noqa: ARG001
         ]
         mock_policy = Mock()
         mock_policy.center_management = center_management
-        mock_load_policy.return_value = mock_policy
+        mock_get_cached_policy.return_value = mock_policy
 
         window = MainWindow()
         section = window._create_center_management_section()
