@@ -60,9 +60,7 @@ def import_mentor_pool_from_excel(
     """وارد کردن استخر منتورها از Inspactor و ذخیره در کش."""
 
     raw_df = read_inspactor_workbook(path)
-    return import_mentor_pool_from_dataframe(
-        raw_df, db=db, policy=policy, pool_source=pool_source
-    )
+    return import_mentor_pool_from_dataframe(raw_df, db=db, policy=policy, pool_source=pool_source)
 
 
 def import_mentor_pool_from_dataframe(
@@ -148,7 +146,9 @@ def load_mentor_pool_from_cache(*, db: LocalDatabase, policy: PolicyConfig) -> p
     cached = db.load_mentor_pool_cache(join_keys=policy.join_keys)
     duplicates = _detect_duplicate_mentor_join_profiles(cached, policy=policy, pool_source="cache")
     cached.attrs[POOL_JOIN_KEY_DUPLICATES_ATTR] = duplicates
-    cached.attrs.setdefault(_POOL_QA_PAYLOAD_ATTR, {}).setdefault("duplicates", duplicates.to_dict("records"))
+    cached.attrs.setdefault(_POOL_QA_PAYLOAD_ATTR, {}).setdefault(
+        "duplicates", duplicates.to_dict("records")
+    )
     return _coerce_int_columns(cached, policy.join_keys)
 
 
@@ -170,7 +170,11 @@ def _has_non_empty_mentor_id(df: pd.DataFrame) -> bool:
 def _extract_raw_employee_id(df: pd.DataFrame) -> pd.Series | pd.DataFrame | None:
     if "کد کارمندی پشتیبان" in df.columns:
         candidate = df.loc[:, "کد کارمندی پشتیبان"]
-        return candidate.iloc[:, -1].copy() if isinstance(candidate, pd.DataFrame) else candidate.copy()
+        return (
+            candidate.iloc[:, -1].copy()
+            if isinstance(candidate, pd.DataFrame)
+            else candidate.copy()
+        )
     raw_headers = canonicalize_headers(df, header_mode="fa")
     if "کد کارمندی پشتیبان" in raw_headers.columns:
         candidate = raw_headers.loc[:, "کد کارمندی پشتیبان"]

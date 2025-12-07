@@ -39,7 +39,11 @@ class JoinKeyResolver:
         attr_issues = values.canonical_df.attrs.get(_POOL_JOIN_KEY_QA_ATTR, [])
         issues.extend(attr_issues)
         issues.extend(validation.issues)
-        canonical = validation.canonical_df
+        canonical = validation.canonical_df.copy()
+        missing_mentor_id = "mentor_id" not in canonical.columns
+        if missing_mentor_id:
+            issues.append({"reason": "MISSING_MENTOR_ID", "column": "mentor_id"})
+            canonical["mentor_id"] = pd.Series(pd.NA, index=canonical.index)
         if attr_issues:
             canonical.attrs[_POOL_JOIN_KEY_QA_ATTR] = attr_issues
         all_profiles = canonical.copy()
@@ -54,7 +58,11 @@ class JoinKeyResolver:
                     "mentors": sorted(multi_profile),
                 }
             )
-        usable_profiles = all_profiles.loc[~all_profiles["mentor_id"].isin(multi_profile)].copy()
+        usable_profiles = all_profiles.copy()
+        if "mentor_id" in usable_profiles.columns:
+            usable_profiles = usable_profiles.loc[
+                ~usable_profiles["mentor_id"].isin(multi_profile)
+            ].copy()
         return JoinKeyResolutionResult(
             canonical_df=canonical,
             issues=issues,
@@ -73,7 +81,9 @@ class JoinKeyResolver:
     def _detect_duplicate_profiles(self, canonical: pd.DataFrame) -> pd.DataFrame:
         key_columns = ["mentor_id", *self._policy.join_keys]
         if not all(col in canonical.columns for col in key_columns):
-            return pd.DataFrame(columns=[*self._policy.join_keys, "mentor_id", "duplicate_group_size"])
+            return pd.DataFrame(
+                columns=[*self._policy.join_keys, "mentor_id", "duplicate_group_size"]
+            )
         trimmed = canonical.loc[:, key_columns].copy()
         trimmed["mentor_id"] = trimmed["mentor_id"].astype("string").str.strip()
         numeric_cols = [col for col in self._policy.join_keys if col in trimmed.columns]
@@ -82,10 +92,18 @@ class JoinKeyResolver:
         non_null = ~trimmed[key_columns].isna().any(axis=1)
         duplicated_mask = trimmed.loc[non_null].duplicated(subset=key_columns, keep=False)
         if not bool(duplicated_mask.any()):
-            return pd.DataFrame(columns=[*self._policy.join_keys, "mentor_id", "duplicate_group_size"])
+            return pd.DataFrame(
+                columns=[*self._policy.join_keys, "mentor_id", "duplicate_group_size"]
+            )
         duplicate_rows = trimmed.loc[non_null & duplicated_mask, key_columns].copy()
         duplicate_rows["duplicate_group_size"] = (
-            duplicate_rows.groupby(key_columns, sort=False)["mentor_id"].transform("size").astype("Int64")
+            duplicate_rows.groupby(key_columns, sort=False)["mentor_id"]
+            .transform("size")
+            .astype("Int64")
         )
-        duplicate_rows["pool_row_index"] = pd.to_numeric(duplicate_rows.index, errors="coerce").astype("Int64")
-        return duplicate_rows.sort_values(key_columns + ["pool_row_index"], kind="stable").reset_index(drop=True)
+        duplicate_rows["pool_row_index"] = pd.to_numeric(
+            duplicate_rows.index, errors="coerce"
+        ).astype("Int64")
+        return duplicate_rows.sort_values(
+            key_columns + ["pool_row_index"], kind="stable"
+        ).reset_index(drop=True)

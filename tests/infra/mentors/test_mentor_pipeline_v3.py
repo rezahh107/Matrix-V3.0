@@ -98,7 +98,10 @@ def test_edge_multi_profile_and_wildcards_exposes_qa() -> None:
     reasons = {issue["reason"] for issue in result.join_key_result.issues}
     assert "MULTIPLE_JOIN_PROFILES_PER_MENTOR" in reasons
     assert result.join_key_result.usable_profiles.shape[0] == 1
-    assert any(issue["reason"] == "MULTIPLE_JOIN_PROFILES_PER_MENTOR" for issue in result.build_result.qa_issues)
+    assert any(
+        issue["reason"] == "MULTIPLE_JOIN_PROFILES_PER_MENTOR"
+        for issue in result.build_result.qa_issues
+    )
 
 
 def test_header_alias_resolved_and_forwarded() -> None:
@@ -143,7 +146,9 @@ def test_reference_repository_delegates_pipeline(monkeypatch: pytest.MonkeyPatch
 def test_db_derivation_and_cache_canonicalization(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[dict[str, Any]] = []
 
-    def _fake_derive(df: pd.DataFrame, *, db: object, policy: object) -> tuple[pd.DataFrame, list[dict[str, Any]]]:
+    def _fake_derive(
+        df: pd.DataFrame, *, db: object, policy: object
+    ) -> tuple[pd.DataFrame, list[dict[str, Any]]]:
         calls.append({"db": db, "columns": list(df.columns)})
         derived = df.copy()
         derived[policy.join_keys[0]] = [1]
@@ -186,7 +191,9 @@ def test_qa_payload_schema_forwarded_via_attrs() -> None:
         "usable_profiles",
         "all_profiles",
     }
-    assert any(issue["reason"] == "MULTIPLE_JOIN_PROFILES_PER_MENTOR" for issue in qa_payload["issues"])
+    assert any(
+        issue["reason"] == "MULTIPLE_JOIN_PROFILES_PER_MENTOR" for issue in qa_payload["issues"]
+    )
 
 
 def test_qa_attr_is_forwarded_into_result() -> None:
@@ -199,7 +206,9 @@ def test_qa_attr_is_forwarded_into_result() -> None:
     result = pipeline.run(payload)
 
     assert not result.can_continue
-    assert any(issue["reason"] == "CENTER_FALLBACK_WILDCARD" for issue in result.build_result.qa_issues)
+    assert any(
+        issue["reason"] == "CENTER_FALLBACK_WILDCARD" for issue in result.build_result.qa_issues
+    )
 
 
 def test_cache_join_key_canonicalization_outputs_ints() -> None:
@@ -236,3 +245,26 @@ def test_failure_missing_join_keys_in_headers_or_values() -> None:
     assert not result.header_result.can_continue
     assert not result.can_continue
     assert any(issue["reason"] == "MISSING_JOIN_KEY" for issue in result.value_result.issues)
+
+
+def test_missing_mentor_id_is_reported_not_crashing() -> None:
+    payload = pd.DataFrame(
+        {
+            "ظرفیت": [1],
+            "کدرشته": [1],
+            "جنسیت": [1],
+            "دانش آموز فارغ": [0],
+            "مرکز گلستان صدرا": [10],
+            "مالی حکمت بنیاد": [0],
+            "کد مدرسه": [101],
+        }
+    )
+
+    pipeline = MentorPipelineV3(policy=policy.config)
+    result = pipeline.run(payload)
+
+    assert not result.can_continue
+    assert any(
+        issue.get("reason") == "MISSING_MENTOR_ID" for issue in result.join_key_result.issues
+    )
+    assert "mentor_id" in result.join_key_result.canonical_df.columns

@@ -29,11 +29,29 @@ class HeaderResolver:
 
     def resolve(self, df: pd.DataFrame) -> HeaderResolutionResult:
         resolved = canonicalize_headers(df, header_mode=self._header_mode)
-        if "mentor_id" not in resolved.columns and "کد کارمندی پشتیبان" in resolved.columns:
-            resolved = resolved.rename(columns={"کد کارمندی پشتیبان": "mentor_id"})
+        resolved = self._ensure_mentor_id(resolved)
         missing = self._missing_fields(resolved.columns)
         return HeaderResolutionResult(resolved_df=resolved, missing_fields=missing)
 
     def _missing_fields(self, columns: Iterable[str]) -> list[str]:
         column_set = {col for col in columns}
         return [field for field in self._registry.required_fields if field not in column_set]
+
+    def _ensure_mentor_id(self, df: pd.DataFrame) -> pd.DataFrame:
+        if "mentor_id" in df.columns:
+            return df
+        alias_map = {
+            "کد کارمندی پشتیبان": "mentor_id",
+            "mentorcode": "mentor_id",
+            "mentor_code": "mentor_id",
+            "mentorid": "mentor_id",
+            "employee_id": "mentor_id",
+            "employeeid": "mentor_id",
+        }
+        renamed = df
+        for column in df.columns:
+            normalized = str(column).strip().lower()
+            if normalized in alias_map:
+                renamed = df.rename(columns={column: alias_map[normalized]})
+                break
+        return renamed

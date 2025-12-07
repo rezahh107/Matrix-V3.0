@@ -69,11 +69,15 @@ class MentorPipelineV3:
                 working, db=self._db, policy=self._policy
             )
             derived_df.attrs[_POOL_JOIN_KEY_QA_ATTR] = derive_issues
-            value_result = ValueCanonicalizationResult(canonical_df=derived_df, issues=derive_issues)
+            value_result = ValueCanonicalizationResult(
+                canonical_df=derived_df, issues=derive_issues
+            )
             canonical_df = derived_df
         attr_issues = canonical_df.attrs.get(_POOL_JOIN_KEY_QA_ATTR, [])
         if attr_issues and not value_result.issues:
-            value_result = ValueCanonicalizationResult(canonical_df=canonical_df, issues=attr_issues)
+            value_result = ValueCanonicalizationResult(
+                canonical_df=canonical_df, issues=attr_issues
+            )
         join_key_result = self._join_key_resolver.resolve(value_result)
         build_result = self._builder.build(join_key_result)
         return MentorPipelineResult(
