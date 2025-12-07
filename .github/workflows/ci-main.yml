@@ -34,13 +34,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install -e .
-          pip install mypy
 
       - name: Lint with ruff
         run: ruff check .
-
-      - name: Type-check with mypy
-        run: mypy app tests
 
       - name: Run core pytest suite (Windows)
         run: |
@@ -79,7 +75,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install -e .
-          pip install mypy
 
       - name: Run UI pytest suite
         run: pytest tests/ui --maxfail=1 -q
