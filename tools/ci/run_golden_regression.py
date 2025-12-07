@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import sys
-from typing import Sequence
+from collections.abc import Sequence
 
 import pytest
-
 
 TEST_TARGETS: Sequence[str] = (
     "tests/integration/test_allocator_golden.py::test_bilingual_headers_reduce_false_no_match",
