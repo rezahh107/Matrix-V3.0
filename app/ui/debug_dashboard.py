@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QClipboard
 from PySide6.QtWidgets import (
     QApplication,
     QFileDialog,
@@ -19,7 +20,6 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from PySide6.QtGui import QClipboard
 
 from app.infra.debug import QADebugStory
 from app.infra.debug.qa_debug_presenter import format_story_for_text, summarize_story
@@ -139,8 +139,9 @@ class DebugDashboardWidget(QWidget):
         if clipboard is None:
             return
 
-        clipboard.clear(QClipboard.Mode.Clipboard)
-        clipboard.setText(text or "", QClipboard.Mode.Clipboard)
+        payload = text or ""
+        clipboard.setText(payload, QClipboard.Mode.Clipboard)
+        clipboard.setText(payload)
         QApplication.processEvents()
 
     def _save_current_story(self) -> None:
