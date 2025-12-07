@@ -134,19 +134,23 @@ class DebugDashboardWidget(QWidget):
         return self._formatter(story)
 
     def _copy_current_story(self) -> None:
-        story = self._current_story()
-        if story is None:
+        text = self._current_story_text()
+        if not text:
             return
 
-        text = self._formatter(story)
         clipboard = QApplication.clipboard()
         if clipboard is None:
             return
 
-        payload = text or ""
-        clipboard.clear(QClipboard.Mode.Clipboard)
-        clipboard.setText(payload, mode=QClipboard.Mode.Clipboard)
-        QApplication.processEvents()
+        payload = text
+        for _ in range(3):
+            clipboard.clear(QClipboard.Mode.Clipboard)
+            clipboard.setText(payload, mode=QClipboard.Mode.Clipboard)
+            clipboard.setText(payload)
+            QApplication.processEvents()
+            current = clipboard.text()
+            if current:
+                break
 
     def _save_current_story(self) -> None:
         story = self._current_story()
