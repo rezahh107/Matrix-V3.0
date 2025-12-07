@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 
-from PySide6.QtCore import QMimeData, Qt
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QClipboard
 from PySide6.QtWidgets import (
     QApplication,
@@ -134,23 +134,19 @@ class DebugDashboardWidget(QWidget):
         return self._formatter(story)
 
     def _copy_current_story(self) -> None:
-        text = self._current_story_text()
+        story = self._current_story()
+        if story is None:
+            return
+
+        text = self._formatter(story)
         clipboard = QApplication.clipboard()
         if clipboard is None:
             return
 
         payload = text or ""
-        mime = QMimeData()
-        mime.setText(payload)
-
         clipboard.clear(QClipboard.Mode.Clipboard)
-        clipboard.setMimeData(mime, mode=QClipboard.Mode.Clipboard)
-        clipboard.setText(payload, QClipboard.Mode.Clipboard)
+        clipboard.setText(payload, mode=QClipboard.Mode.Clipboard)
         QApplication.processEvents()
-
-        if payload and payload not in clipboard.text(QClipboard.Mode.Clipboard):
-            clipboard.setText(payload, QClipboard.Mode.Clipboard)
-            QApplication.processEvents()
 
     def _save_current_story(self) -> None:
         story = self._current_story()
