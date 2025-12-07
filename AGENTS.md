@@ -120,6 +120,12 @@ Any change that:
 
 MUST be treated as a **policy-level change** → use **RISK_REFUSAL**.
 
+### 3.2. Mentor pipeline invariants
+
+- **MENTOR_PIPELINE_V3_SSoT:** تمام ریفکتورهای ایمپورت پشتیبان باید MentorPipelineV3 را تنها SSoT برای استخر mentor نگه دارند؛ هیچ منطق join/الحاق جدیدی در Infra بیرون از این پایپلاین مجاز نیست.
+- **MENTOR_QA_EXPORT_STABLE_SCHEMA:** اسکیمای خروجی QA برای مسائل الحاق پشتیبان باید پایدار بماند؛ هر تغییری باید با Technical SSoT و تست‌ها به‌روزرسانی شود و breaking change بدون هماهنگی ممنوع است.
+- **NO_CORE_MENTOR_JOIN_LOGIC:** Core نباید منطق join پشتیبان را پیاده‌سازی کند؛ Core فقط استخر canonical خروجی MentorPipelineV3 را مصرف می‌کند.
+
 ---
 
 ### 3.2. Capacity and ranking
@@ -430,7 +436,15 @@ Ensure changes are reviewed with **architectural focus**, not only line-by-line 
 
 ---
 
-## 10. Changelog
+## 10. Mentor-focused PR checklist
+
+For any PR touching mentors or mentor import:
+
+- [ ] آیا ۶ کلید join همچنان `int` و بدون تغییر معنا هستند؟
+- [ ] آیا ترتیب ranking (remaining_capacity ↓, allocations_new ↑, mentor_id ↑) و Trace ۸ مرحله‌ای حفظ شده است؟
+- [ ] آیا مسیر ایمپورت از MentorPipelineV3 عبور می‌کند و اسکیمای QA exports حفظ شده است؟
+
+## 11. Changelog
 
 **v3.1**
 

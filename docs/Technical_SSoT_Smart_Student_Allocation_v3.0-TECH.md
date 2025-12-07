@@ -219,6 +219,25 @@ conflict محسوب نمی‌شود.
   - در سایر حالات ⇒ `student_type = "normal"`.
 - **وابستگی‌ها:** کدپستی دانش‌آموز در این قانون نقشی ندارد و هر کد دیگری (مثلاً mentor_id) نباید مسیر جداگانه‌ای بسازد.
 
+### 4.5. Mentor Import & Join — Infra Pipeline v3
+
+- همهٔ ورودی‌های ایمپورت/الحاق پشتیبان در Infra باید از پایپلاین واحد **MentorPipelineV3** عبور کنند؛ هیچ مسیر موازی یا ساخت استخر بدون این پایپلاین مجاز نیست.
+- مراحل پایپلاین (به همین ترتیب):
+  1. **FieldRegistry** — ثبت فیلدهای mentor و فیلدهای Join (۶ کلید عددی) برای ارجاع ثابت.
+  2. **HeaderResolver** — نگاشت هدرهای خام به فیلدهای canonical با قواعد alias؛ خروجی شامل مپ هدر و گزارش alias است.
+  3. **ValueCanonicalizer** — اعتبارسنجی دامنه و کاننیکال‌سازی مقادیر؛ خروجی `ValueCanonicalizationResult` با پرچم `can_continue` (خطای P0 ⇒ can_continue=false و توقف).
+  4. **JoinKeyResolver** — ساخت شش کلید الحاق عددی، اعمال wildcard مدرسه/مرکز طبق LAW/TECH، برچسب‌گذاری پشتیبان‌های چندپروفایله، و تولید QA برای کلیدهای Join.
+  5. **MentorPoolBuilder** — تولید `MentorPoolBuildResult` شامل `pool` canonical برای Core و متادیتای QA (issues، duplicates، multi-profile).
+- شکل مورد انتظار `MentorPoolBuildResult.pool` (حداقل ستون‌های مصرفی Core):
+  - `mentor_id`, شش کلید join (`group_code`, `gender_code`, `grad_status_code`, `center_code`, `finance_code`, `school_code`) همگی `int` بدون مقدار خالی.
+  - ظرفیت و وضعیت: `capacity_limit`, `assigned_baseline`, `allocations_new`, `remaining_capacity` با فرمول CAPACITY-01، `mentor_status`, نوع پشتیبان (School/Normal).
+  - تبارشناسی/lineage: `_src_insp_row_id`, `_src_mentor_id`, `_src_school_idx` و سایر ستون‌های ردیابی موردنیاز QA.
+- متادیتای QA در `MentorPoolBuildResult`: لیست issues (severity، نگاشت LAW/QA Rule، context)، گزارش duplicates (بر اساس mentor_id و پروفایل join)، و multi-profile mentors با `all_profiles`, `usable_profiles`, QA-only.
+- معنای `can_continue`:
+  - HeaderResolver / ValueCanonicalizer / JoinKeyResolver باید خطاهای P0 را به `can_continue=false` ارتقا دهند و از ساخت استخر جلوگیری کنند؛ خطاهای پایین‌تر به‌صورت QA issue عبور می‌کنند.
+  - MentorPoolBuilder فقط زمانی `pool` را برمی‌گرداند که `can_continue=true`; در غیر این صورت نتیجه صرفاً شامل متادیتای توقف است.
+- همهٔ entrypointهای ایمپورت در Infra باید MentorPipelineV3 را صدا بزنند و فقط `MentorPoolBuildResult.pool` را به Core تحویل دهند؛ Core هیچ منطق الحاق مستقلی ندارد و صرفاً مصرف‌کنندهٔ این SSoT است.
+
 ---
 
 ## 5. اینورینت‌های هستهٔ Core
