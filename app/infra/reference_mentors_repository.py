@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Final
+from typing import TYPE_CHECKING, Any, Final
 
 import pandas as pd
 from pandas._libs.missing import NAType
@@ -34,22 +34,20 @@ from app.core.build_matrix import (  # type: ignore[attr-defined]
 from app.core.canonical_frames import (  # type: ignore[attr-defined]
     POOL_JOIN_KEY_DUPLICATES_ATTR,
     canonicalize_headers,
-    canonicalize_pool_frame,
 )
 from app.core.common.domain import _coerce_finance, _num_to_int_safe
 from app.core.common.errors import InvalidCenterMappingError
-from app.core.common.join_keys import (
-    VALID_GROUP_CODES,
-    parse_group_codes,
-    validate_and_canonicalize_join_keys,
-)
+from app.core.common.join_keys import VALID_GROUP_CODES, parse_group_codes
 from app.core.common.normalization import normalize_fa
-from app.core.common.types import JoinKeyValidationResult
+from app.core.common.types import JoinKeyValidationIssue, JoinKeyValidationResult
 from app.core.policy_loader import PolicyConfig
 from app.infra.errors import JoinKeyValidationError
 from app.infra.io_utils import read_inspactor_workbook
 from app.infra.local_database import LocalDatabase, _coerce_int_columns
 from app.infra.references.schools import get_school_reference_frames
+
+if TYPE_CHECKING:
+    from app.infra.mentors.pipeline_v3 import MentorPipelineResult
 
 
 def import_mentor_pool_from_excel(
@@ -59,65 +57,46 @@ def import_mentor_pool_from_excel(
     policy: PolicyConfig,
     pool_source: str = "inspactor",
 ) -> pd.DataFrame:
-    """وارد کردن استخر منتورها از Inspactor و ذخیره در کش.
-
-    این ورودی خام تنها شامل ستون‌های Inspactor/School است. این تابع ابتدا
-    کلیدهای الحاقی شش‌تایی سیاست را مشتق کرده و QA ناشی از مپینگ‌های نامعتبر
-    (گروه/مرکز/مالی/مدرسه) را روی خروجی نرمال‌شده نگه می‌دارد تا اپراتور
-    بتواند هشدارها را در کش یا لاگ مشاهده کند.
-    """
+    """وارد کردن استخر منتورها از Inspactor و ذخیره در کش."""
 
     raw_df = read_inspactor_workbook(path)
-    # حذف ردیف‌های کاملاً تکراری تنها زمانی که ستون mentor_id در ورودی
-    # موجود نیست (فرمت خام Inspactor). برای ورودی‌های دارای mentor_id،
-    # تکرار روی کلیدهای ترکیبی باید منجر به خطای QA شود و نباید با
-    # dedupe پنهان گردد.
-    mentor_columns = [
-        col
-        for col in raw_df.columns
-        if col.strip().lower() == "mentor_id" or str(col).strip() == COL_MENTOR_ID
-    ]
-    mentor_id_present = False
-    for col in mentor_columns:
-        candidate = raw_df[col]
-        series = candidate.iloc[:, -1] if isinstance(candidate, pd.DataFrame) else candidate
-        series = series.astype("string").str.strip()
-        if not series.eq("").all():
-            mentor_id_present = True
-            break
-    if not mentor_id_present:
-        raw_df = raw_df.drop_duplicates(keep="first")
-    raw_employee = None
-    if "کد کارمندی پشتیبان" in raw_df.columns:
-        candidate = raw_df.loc[:, "کد کارمندی پشتیبان"]
-        if isinstance(candidate, pd.DataFrame):
-            raw_employee = candidate.iloc[:, -1].copy()
-        else:
-            raw_employee = candidate.copy()
-    else:
-        raw_headers = canonicalize_headers(raw_df, header_mode="fa")
-        if "کد کارمندی پشتیبان" in raw_headers.columns:
-            candidate = raw_headers.loc[:, "کد کارمندی پشتیبان"]
-            if isinstance(candidate, pd.DataFrame):
-                candidate = candidate.iloc[:, 0]
-            raw_employee = candidate.copy()
+    return import_mentor_pool_from_dataframe(raw_df, db=db, policy=policy, pool_source=pool_source)
 
-    derived, qa_issues = _derive_pool_join_keys(raw_df, db=db, policy=policy)
-    validation = validate_and_canonicalize_join_keys(derived, policy=policy, entity_type="mentor")
-    if validation.issues:
-        raise JoinKeyValidationError(validation)
-    derived = validation.canonical_df
+
+def import_mentor_pool_from_dataframe(
+    df: pd.DataFrame,
+    *,
+    db: LocalDatabase | None,
+    policy: PolicyConfig,
+    pool_source: str = "inspactor",
+) -> pd.DataFrame:
+    """Normalize mentor pool payloads via MentorPipelineV3 as the single SSoT."""
+
+    mentor_id_present = _has_non_empty_mentor_id(df)
+    working_df = df.drop_duplicates(keep="first") if not mentor_id_present else df.copy()
+    raw_employee = _extract_raw_employee_id(working_df)
+
+    from app.infra.mentors.pipeline_v3 import MentorPipelineV3
+
+    pipeline = MentorPipelineV3(
+        policy=policy,
+        pool_source=pool_source,
+        header_mode="fa",
+        db=db,
+    )
+    result = pipeline.run(working_df)
+    _raise_on_join_key_failure(result)
+    normalized = result.build_result.pool
     if isinstance(raw_employee, pd.DataFrame):
         raw_employee = raw_employee.iloc[:, 0]
     if raw_employee is not None:
-        derived["کد کارمندی پشتیبان (خام)"] = raw_employee.reindex(derived.index)
-    normalized = canonicalize_pool_frame(
-        derived,
-        policy=policy,
-        sanitize_pool=False,
-        pool_source=pool_source,
+        normalized["کد کارمندی پشتیبان (خام)"] = raw_employee.reindex(normalized.index)
+    normalized.attrs[_POOL_JOIN_KEY_QA_ATTR] = normalized.attrs.get(
+        _POOL_JOIN_KEY_QA_ATTR, result.build_result.qa_issues
     )
-    normalized.attrs[_POOL_JOIN_KEY_QA_ATTR] = qa_issues
+    normalized.attrs[_POOL_QA_PAYLOAD_ATTR] = normalized.attrs.get(
+        _POOL_QA_PAYLOAD_ATTR, result.build_result.qa_payload
+    )
     existing_duplicates = normalized.attrs.get(POOL_JOIN_KEY_DUPLICATES_ATTR)
     if not isinstance(existing_duplicates, pd.DataFrame) or existing_duplicates.empty:
         normalized.attrs[POOL_JOIN_KEY_DUPLICATES_ATTR] = _detect_duplicate_mentor_join_profiles(
@@ -129,7 +108,8 @@ def import_mentor_pool_from_excel(
             subset=["mentor_id", *policy.join_keys], keep="first"
         ).copy()
         cache_payload.attrs.update(normalized.attrs)
-    db.upsert_mentor_pool_cache(cache_payload, join_keys=policy.join_keys)
+    if db is not None:
+        db.upsert_mentor_pool_cache(cache_payload, join_keys=policy.join_keys)
     return cache_payload
 
 
@@ -151,17 +131,78 @@ def import_mentor_pool_with_validation(
     return JoinKeyValidationResult(canonical_df=normalized, issues=[])
 
 
+def _raise_on_join_key_failure(result: MentorPipelineResult) -> None:
+    if result.join_key_result.blocking_issues:
+        raise JoinKeyValidationError(
+            JoinKeyValidationResult(
+                canonical_df=result.join_key_result.canonical_df,
+                issues=_normalize_join_key_issues(result.join_key_result.blocking_issues),
+            )
+        )
+
+
+def _normalize_join_key_issues(issues: list[dict[str, Any]]) -> list[JoinKeyValidationIssue]:
+    normalized: list[JoinKeyValidationIssue] = []
+    for issue in issues:
+        normalized.append(
+            JoinKeyValidationIssue(
+                entity_type=issue.get("entity_type", "mentor"),
+                row_index=int(issue.get("row_index", -1) or -1),
+                column=str(issue.get("column", "")),
+                raw_value=issue.get("raw_value"),
+                error_code=str(issue.get("reason", issue.get("error_code", "DATA_INVALID"))),
+            )
+        )
+    return normalized
+
+
 def load_mentor_pool_from_cache(*, db: LocalDatabase, policy: PolicyConfig) -> pd.DataFrame:
     """بازیابی استخر منتورها از کش SQLite."""
 
     cached = db.load_mentor_pool_cache(join_keys=policy.join_keys)
     duplicates = _detect_duplicate_mentor_join_profiles(cached, policy=policy, pool_source="cache")
     cached.attrs[POOL_JOIN_KEY_DUPLICATES_ATTR] = duplicates
+    cached.attrs.setdefault(_POOL_QA_PAYLOAD_ATTR, {}).setdefault(
+        "duplicates", duplicates.to_dict("records")
+    )
     return _coerce_int_columns(cached, policy.join_keys)
+
+
+def _has_non_empty_mentor_id(df: pd.DataFrame) -> bool:
+    mentor_columns = [
+        col
+        for col in df.columns
+        if col.strip().lower() == "mentor_id" or str(col).strip() == COL_MENTOR_ID
+    ]
+    for col in mentor_columns:
+        candidate = df[col]
+        series = candidate.iloc[:, -1] if isinstance(candidate, pd.DataFrame) else candidate
+        series = series.astype("string").str.strip()
+        if not series.eq("").all():
+            return True
+    return False
+
+
+def _extract_raw_employee_id(df: pd.DataFrame) -> pd.Series | pd.DataFrame | None:
+    if "کد کارمندی پشتیبان" in df.columns:
+        candidate = df.loc[:, "کد کارمندی پشتیبان"]
+        return (
+            candidate.iloc[:, -1].copy()
+            if isinstance(candidate, pd.DataFrame)
+            else candidate.copy()
+        )
+    raw_headers = canonicalize_headers(df, header_mode="fa")
+    if "کد کارمندی پشتیبان" in raw_headers.columns:
+        candidate = raw_headers.loc[:, "کد کارمندی پشتیبان"]
+        if isinstance(candidate, pd.DataFrame):
+            candidate = candidate.iloc[:, 0]
+        return candidate.copy()
+    return None
 
 
 __all__ = [
     "import_mentor_pool_from_excel",
+    "import_mentor_pool_from_dataframe",
     "load_mentor_pool_from_cache",
     "_POOL_JOIN_KEY_QA_ATTR",
     "_detect_duplicate_mentor_join_profiles",
@@ -364,6 +405,7 @@ def _derive_pool_join_keys(
 
 
 _POOL_JOIN_KEY_QA_ATTR: Final[str] = "pool_join_key_derivation_issues"
+_POOL_QA_PAYLOAD_ATTR: Final[str] = "mentor_pool_qa_payload"
 
 
 def _detect_duplicate_mentor_join_profiles(

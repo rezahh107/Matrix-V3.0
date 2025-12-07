@@ -147,6 +147,11 @@ def _run_phase01() -> Phase01Run:
         validation = import_mentor_pool_with_validation(
             GOLDEN_INSPACTOR, db=db, policy=policy, pool_source="inspactor"
         )
+        if validation.issues:
+            raise GoldenRegressionError(
+                "GOLDEN_REGRESSION_ERROR: Mentor pipeline reported P0 issues: "
+                f"{validation.issues}"
+            )
         pool = _canonicalize_pool(validation.canonical_df)
         issues = _issues_to_frame(validation.issues)
     return Phase01Run(mentor_pool=pool, join_key_issues=issues)
