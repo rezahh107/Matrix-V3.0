@@ -36,6 +36,7 @@ class DebugDashboardWidget(QWidget):
         super().__init__(parent)
         self._stories: list[QADebugStory] = []
         self._formatter = formatter or format_story_for_text
+        self._current_index: int | None = None
 
         splitter = QSplitter(Qt.Orientation.Horizontal, self)
 
@@ -88,12 +89,14 @@ class DebugDashboardWidget(QWidget):
 
         self._stories = list(stories)
         self._story_list.clear()
+        self._current_index = None
         for index, story in enumerate(self._stories):
             summary = summarize_story(story)
             item = QListWidgetItem(self._elide_text(summary, max_chars=120))
             item.setData(Qt.ItemDataRole.UserRole, index)
             self._story_list.addItem(item)
         if self._stories:
+            self._current_index = 0
             self._story_list.setCurrentRow(0)
             self._render_story(self._stories[0])
         else:
@@ -103,7 +106,8 @@ class DebugDashboardWidget(QWidget):
         self, current: QListWidgetItem | None, previous: QListWidgetItem | None
     ) -> None:  # noqa: ARG002 - previous kept for Qt signature
         index = -1 if current is None else int(current.data(Qt.ItemDataRole.UserRole) or -1)
-        story = self._stories[index] if 0 <= index < len(self._stories) else None
+        self._current_index = index if 0 <= index < len(self._stories) else None
+        story = self._stories[index] if self._current_index is not None else None
         self._render_story(story)
 
     def _render_story(self, story: QADebugStory | None) -> None:
@@ -120,6 +124,9 @@ class DebugDashboardWidget(QWidget):
         self._story_view.setPlainText(self._formatter(story))
 
     def _current_story(self) -> QADebugStory | None:
+        if self._current_index is not None and 0 <= self._current_index < len(self._stories):
+            return self._stories[self._current_index]
+
         item = self._story_list.currentItem()
         if item is None:
             return self._stories[0] if self._stories else None
