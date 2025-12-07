@@ -53,8 +53,10 @@ def classify_changes(changed_files: Iterable[str]) -> tuple[list[str], list[str]
 
     for path_str in changed_files:
         path = Path(path_str)
-        if path.parts and path.parts[0] == "docs" and any(
-            keyword in path.name for keyword in LAW_DOC_KEYWORDS
+        if (
+            path.parts
+            and path.parts[0] == "docs"
+            and any(keyword in path.name for keyword in LAW_DOC_KEYWORDS)
         ):
             law_docs.append(path_str)
 
