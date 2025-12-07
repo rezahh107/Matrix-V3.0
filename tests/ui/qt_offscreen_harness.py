@@ -37,16 +37,22 @@ def render_widget_offscreen(factory: Callable[[], QWidget]) -> QImage:
     if not size.isValid() or size.isEmpty():
         size = QSize(400, 300)
     widget.resize(size)
-
+    widget.ensurePolished()
     widget.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
+    widget.show()
+    widget.update()
     QApplication.processEvents()
 
     image = QImage(size, QImage.Format_ARGB32_Premultiplied)
-    image.fill(Qt.transparent)
+    image.fill(Qt.white)
 
     painter = QPainter(image)
     try:
-        widget.render(painter, QPoint(0, 0))
+        widget.render(
+            painter,
+            QPoint(0, 0),
+            renderFlags=QWidget.RenderFlag.DrawWindowBackground | QWidget.RenderFlag.DrawChildren,
+        )
     finally:
         painter.end()
 
@@ -54,6 +60,9 @@ def render_widget_offscreen(factory: Callable[[], QWidget]) -> QImage:
 
 
 def assert_image_has_content(image: QImage) -> None:
+    if image.isNull():
+        pytest.fail("Rendered image is null")
+
     buffer = image.constBits()
     data = bytes(buffer)
     if len(data) < image.sizeInBytes():

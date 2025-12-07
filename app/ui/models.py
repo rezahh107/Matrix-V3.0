@@ -85,9 +85,14 @@ def _center_field_value(value: object) -> str | int | None:
 
 
 def _school_field_value(value: object) -> str | int | None:
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return None
     if isinstance(value, str):
         return value.strip()
-    return _coerce_int_or_none(value)
+    coerced = _coerce_int_or_none(value)
+    if coerced is not None:
+        return str(coerced)
+    return _string_value(value)
 
 
 def _capacity_value(value: object) -> int | float | None:
