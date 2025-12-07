@@ -1,0 +1,74 @@
+name: CI — Core & UI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  core-windows:
+    name: Core tests (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      QT_QPA_PLATFORM: offscreen
+      PIP_DISABLE_PIP_VERSION_CHECK: 1
+      MATRIX2_TEMP_SKIP_QT_UI: "1"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: |
+            requirements.txt
+            pyproject.toml
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e .
+
+      - name: Lint with ruff
+        run: ruff check .
+
+      - name: Run core pytest suite (Windows)
+        run: pytest tests/unit tests/infra tests/integration --maxfail=1 -q
+
+  ui-windows:
+    name: UI tests (Windows, Qt/PySide6)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    needs: [core-windows]
+    env:
+      QT_QPA_PLATFORM: offscreen
+      PIP_DISABLE_PIP_VERSION_CHECK: 1
+      PYTEST_QT_API: pyside6
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: |
+            requirements.txt
+            pyproject.toml
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e .
+
+      - name: Run UI pytest suite
+        run: pytest tests/ui --maxfail=1 -q
