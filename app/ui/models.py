@@ -84,8 +84,15 @@ def _center_field_value(value: object) -> str | int | None:
     return _string_value(value)
 
 
-def _school_field_value(value: object) -> int | None:
-    return _coerce_int_or_none(value)
+def _school_field_value(value: object) -> str | int | None:
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return None
+    if isinstance(value, str):
+        return value.strip()
+    coerced = _coerce_int_or_none(value)
+    if coerced is not None:
+        return coerced
+    return _string_value(value)
 
 
 def _capacity_value(value: object) -> int | float | None:
@@ -173,9 +180,6 @@ def build_mentor_entries_from_dataframe(
             else:
                 center_value = _center_field_value(center_id_value)
 
-        if center_value is not None:
-            center_value = _string_value(center_value)
-
         school_name_value = _first_present(
             record,
             ("school_name",),
@@ -195,9 +199,6 @@ def build_mentor_entries_from_dataframe(
                 school_value = None
             else:
                 school_value = _school_field_value(school_code_value)
-
-        if school_value is not None:
-            school_value = _string_value(school_value)
 
         entries.append(
             MentorPoolEntry(

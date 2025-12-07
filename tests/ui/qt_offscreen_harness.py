@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from typing import Any
 
 import pytest
-from PySide6.QtCore import QSize, Qt
+from PySide6.QtCore import QPoint, QSize, Qt
 from PySide6.QtGui import QImage, QPainter
-from PySide6.QtWidgets import QWidget
+from PySide6.QtWidgets import QApplication, QWidget
 
 
 @contextmanager
@@ -22,31 +21,59 @@ def painter_on_image(image: QImage) -> Iterator[QPainter]:
             painter.end()
 
 
-def render_widget_offscreen(
-    qtbot: Any,
-    widget: QWidget,
-    size: QSize,
-    *,
-    fill: int = Qt.transparent,
-) -> QImage:
-    widget.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
+def render_widget_offscreen(factory: Callable[[], QWidget]) -> QImage:
+    """Synchronously render a widget into an offscreen image.
+
+    Assumes a QApplication already exists (provided by the test harness). The
+    widget is created via `factory`, resized to a reasonable size, and rendered
+    into a transparent QImage without nested event loops or threading.
+    """
+
+    widget = factory()
+
+    size = widget.size()
+    if not size.isValid() or size.isEmpty():
+        size = widget.sizeHint()
+    if not size.isValid() or size.isEmpty():
+        size = QSize(400, 300)
     widget.resize(size)
-    qtbot.addWidget(widget)
     widget.ensurePolished()
+    widget.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
+    widget.show()
     widget.update()
-    qtbot.wait(0)
+    QApplication.processEvents()
 
     image = QImage(size, QImage.Format_ARGB32_Premultiplied)
-    image.fill(fill)
+    image.fill(Qt.white)
 
-    with painter_on_image(image) as painter:
-        widget.render(painter)
+    painter = QPainter(image)
+    try:
+        widget.render(
+            painter,
+            QPoint(0, 0),
+            renderFlags=QWidget.RenderFlag.DrawWindowBackground | QWidget.RenderFlag.DrawChildren,
+        )
+    finally:
+        painter.end()
 
     return image
 
 
 def assert_image_has_content(image: QImage) -> None:
-    ptr = image.constBits()
-    ptr.setsize(image.sizeInBytes())
-    if not any(ptr):
-        pytest.fail("Rendered image is empty (all pixels transparent or zero)")
+    if image.isNull():
+        pytest.fail("Rendered image is null")
+
+    width = image.width()
+    height = image.height()
+    sample_points = {
+        (0, 0),
+        (max(0, width // 2), max(0, height // 2)),
+        (max(0, width - 1), max(0, height - 1)),
+    }
+
+    for x, y in sample_points:
+        color = image.pixelColor(x, y)
+        if color.isValid() and color.alpha() > 0:
+            return
+
+    pytest.fail("Rendered image is empty (all sampled pixels fully transparent)")

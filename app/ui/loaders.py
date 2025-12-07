@@ -13,7 +13,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pandas as pd
-from PySide6.QtCore import QThread, Signal
+from PySide6.QtCore import QObject, QThread, Signal
 
 
 class ExcelLoader(QThread):
@@ -22,8 +22,8 @@ class ExcelLoader(QThread):
     loaded: Signal = Signal(object)
     failed: Signal = Signal(str)
 
-    def __init__(self, path: Path):
-        super().__init__()
+    def __init__(self, path: Path, parent: QObject | None = None):
+        super().__init__(parent)
         self._path = Path(path)
 
     def run(self) -> None:
