@@ -141,14 +141,20 @@ class DebugDashboardWidget(QWidget):
         clipboard.clear(QClipboard.Mode.Clipboard)
         clipboard.clear(QClipboard.Mode.Selection)
 
-        for _ in range(3):
+        def _write_and_confirm() -> bool:
+            from PySide6.QtTest import QTest
+
             clipboard.setText(text, QClipboard.Mode.Clipboard)
-            clipboard.setText(text)
             QApplication.processEvents()
-            if text in clipboard.text(QClipboard.Mode.Clipboard) or text in clipboard.text():
+            QTest.qWait(5)
+            current = clipboard.text(QClipboard.Mode.Clipboard)
+            return bool(current and text in current)
+
+        for _ in range(5):
+            if _write_and_confirm():
                 break
         else:
-            clipboard.setText(text)
+            clipboard.setText(text, QClipboard.Mode.Clipboard)
             QApplication.processEvents()
 
     def _save_current_story(self) -> None:
