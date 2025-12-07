@@ -34,7 +34,7 @@ class ManagerMentorFilterProxy(QSortFilterProxyModel):
 
     def set_query(self, text: str) -> None:
         self._query = (text or "").strip().lower()
-        self.invalidateFilter()
+        self.invalidate()
 
     def filterAcceptsRow(  # noqa: N802 - نام متد باید با قرارداد Qt یکسان بماند
         self, source_row: int, source_parent: QModelIndex | QPersistentModelIndex

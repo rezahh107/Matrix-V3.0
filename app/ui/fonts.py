@@ -217,8 +217,7 @@ def _install_fonts_from_directory(directory: Path) -> list[str]:
         families.extend(QFontDatabase.applicationFontFamilies(font_id))
         LOGGER.debug("فونت %s ثبت شد با خانواده‌ها: %s", ttf, families)
     if families:
-        db = QFontDatabase()
-        resolved = resolve_vazir_family_name(db, candidates=families)
+        resolved = resolve_vazir_family_name(QFontDatabase, candidates=families)
         if resolved:
             LOGGER.debug("خانوادهٔ اصلی وزیر تشخیص داده شد: %s", resolved)
     return families
@@ -231,8 +230,7 @@ def _load_vazir_font_family_names() -> list[str]:
     families = _install_fonts_from_directory(FONTS_DIR)
     from PySide6.QtGui import QFontDatabase
 
-    db = QFontDatabase()
-    all_families = list(db.families()) + families
+    all_families = list(QFontDatabase.families()) + families
     vazir_like = [fam for fam in all_families if "vazir" in fam.casefold() or "وزیر" in fam]
     unique_sorted = sorted(dict.fromkeys(vazir_like), key=str.casefold)
     LOGGER.debug("خانواده‌های ثبت‌شده: %s", unique_sorted)
@@ -240,7 +238,7 @@ def _load_vazir_font_family_names() -> list[str]:
 
 
 def resolve_vazir_family_name(
-    db: QFontDatabase, *, candidates: Sequence[str] | None = None
+    db: QFontDatabase | type[QFontDatabase], *, candidates: Sequence[str] | None = None
 ) -> str | None:
     """انتخاب نام خانوادهٔ اصلی وزیر/وزیرمتن از میان خانواده‌های موجود."""
 
@@ -264,8 +262,7 @@ def load_vazir_font(point_size: int | None = None) -> QFont | None:
     from PySide6.QtGui import QFont, QFontDatabase
 
     families = _load_vazir_font_family_names()
-    db = QFontDatabase()
-    family = resolve_vazir_family_name(db, candidates=families)
+    family = resolve_vazir_family_name(QFontDatabase, candidates=families)
     if not family:
         LOGGER.debug("هیچ خانوادهٔ وزیر ثبت نشد")
         return None
@@ -337,7 +334,7 @@ def _select_fallback_family(preferred: str | None) -> str:
     try:
         from PySide6.QtGui import QFontDatabase
 
-        families = set(QFontDatabase().families())
+        families = set(QFontDatabase.families())
         for name in candidates:
             if name in families:
                 return name
