@@ -5,17 +5,12 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QClipboard
 from PySide6.QtWidgets import (
-    QApplication,
-    QFileDialog,
     QFormLayout,
-    QHBoxLayout,
     QLabel,
     QListWidget,
     QListWidgetItem,
     QPlainTextEdit,
-    QPushButton,
     QSplitter,
     QVBoxLayout,
     QWidget,
@@ -26,7 +21,7 @@ from app.infra.debug.qa_debug_presenter import format_story_for_text, summarize_
 
 
 class DebugDashboardWidget(QWidget):
-    """نمایش‌گر داستان‌های QA با امکان کپی و ذخیره."""
+    """نمایش‌گر داستان‌های QA به‌صورت متنی ساده."""
 
     def __init__(
         self,
@@ -65,19 +60,6 @@ class DebugDashboardWidget(QWidget):
         self._story_view.setReadOnly(True)
         self._story_view.setLineWrapMode(QPlainTextEdit.LineWrapMode.WidgetWidth)
         detail_layout.addWidget(self._story_view, 1)
-
-        action_row = QHBoxLayout()
-        action_row.setSpacing(8)
-        action_row.addStretch(1)
-        self._btn_copy = QPushButton("Copy story")
-        self._btn_copy.setObjectName("btnCopyDebugStory")
-        self._btn_copy.clicked.connect(self._copy_current_story)
-        self._btn_save = QPushButton("Save story…")
-        self._btn_save.setObjectName("btnSaveDebugStory")
-        self._btn_save.clicked.connect(self._save_current_story)
-        action_row.addWidget(self._btn_copy)
-        action_row.addWidget(self._btn_save)
-        detail_layout.addLayout(action_row)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -134,47 +116,15 @@ class DebugDashboardWidget(QWidget):
         index = int(item.data(Qt.ItemDataRole.UserRole) or -1)
         return self._stories[index] if 0 <= index < len(self._stories) else None
 
-    def _current_story_text(self) -> str:
+    def get_current_story_text(self) -> str | None:
         story = self._current_story()
         if story is None:
-            return ""
+            return None
         text = self._formatter(story)
         return text if text else str(story.rule_id)
 
     def _copy_current_story(self) -> str | None:
-        text = self._current_story_text()
-        if not text:
-            return None
-
-        try:
-            clipboard = QApplication.clipboard()
-        except Exception:
-            clipboard = None
-
-        if clipboard is not None:
-            try:
-                clipboard.clear(QClipboard.Mode.Clipboard)
-                clipboard.setText(text, mode=QClipboard.Mode.Clipboard)
-            except Exception:
-                # Best-effort: clipboard may be unavailable in headless CI
-                pass
-
-        return text
-
-    def _save_current_story(self) -> None:
-        story = self._current_story()
-        if story is None:
-            return
-        text = self._formatter(story)
-        filename, _ = QFileDialog.getSaveFileName(
-            self,
-            "Save debug story",
-            "qa_debug_story.md",
-            "Markdown (*.md);;Text Files (*.txt);;All Files (*)",
-        )
-        if filename:
-            with open(filename, "w", encoding="utf-8") as handle:
-                handle.write(text)
+        return self.get_current_story_text()
 
     @staticmethod
     def _elide_text(value: str, *, max_chars: int) -> str:

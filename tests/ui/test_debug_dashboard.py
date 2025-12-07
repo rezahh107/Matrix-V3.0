@@ -5,7 +5,6 @@ pytest.importorskip(
     reason="PySide6 not available in test environment",
     exc_type=ImportError,
 )
-from PySide6.QtGui import QClipboard
 from PySide6.QtWidgets import QApplication
 
 from app.core.qa.rules import QA_RULE_MENTOR_TYPE_01
@@ -48,44 +47,12 @@ def test_set_stories_populates_and_selects_first(qapp: QApplication) -> None:
     assert "QA_RULE_MENTOR_TYPE_01" in widget._story_view.toPlainText()
 
 
-def test_copy_and_save_actions(
-    monkeypatch: pytest.MonkeyPatch, qapp: QApplication, tmp_path
-) -> None:
-    class _FakeClipboard:
-        def __init__(self) -> None:
-            self._text = ""
-
-        def clear(  # noqa: N802 - Qt-style name for compatibility
-            self, mode: QClipboard.Mode = QClipboard.Mode.Clipboard
-        ) -> None:
-            self._text = ""
-
-        def setText(  # noqa: N802 - Qt-style name for compatibility
-            self, text: str, mode: QClipboard.Mode = QClipboard.Mode.Clipboard
-        ) -> None:
-            self._text = text
-
-        def text(self) -> str:
-            return self._text
-
-    fake_clipboard = _FakeClipboard()
-    monkeypatch.setattr(QApplication, "clipboard", lambda: fake_clipboard)
-
+def test_current_story_text_contains_rule_id(qapp: QApplication) -> None:
     widget = DebugDashboardWidget()
     widget.set_stories([_sample_story()])
 
-    # Copy
-    copied = widget._copy_current_story()
-    assert copied is not None
-    assert "QA_RULE_MENTOR_TYPE_01" in copied
-    assert "QA_RULE_MENTOR_TYPE_01" in fake_clipboard.text()
+    text = widget.get_current_story_text()
 
-    # Save
-    target = tmp_path / "story.md"
-    monkeypatch.setattr(
-        "PySide6.QtWidgets.QFileDialog.getSaveFileName",
-        lambda *_, **__: (str(target), "Markdown (*.md)"),
-    )
-    widget._save_current_story()
-    assert target.exists()
-    assert "گام بعدی" in target.read_text(encoding="utf-8")
+    assert isinstance(text, str)
+    assert text
+    assert "QA_RULE_MENTOR_TYPE_01" in text
