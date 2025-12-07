@@ -5,6 +5,7 @@ pytest.importorskip(
     reason="PySide6 not available in test environment",
     exc_type=ImportError,
 )
+from PySide6.QtGui import QClipboard
 from PySide6.QtWidgets import QApplication
 
 from app.core.qa.rules import QA_RULE_MENTOR_TYPE_01
@@ -50,14 +51,27 @@ def test_set_stories_populates_and_selects_first(qapp: QApplication) -> None:
 def test_copy_and_save_actions(
     monkeypatch: pytest.MonkeyPatch, qapp: QApplication, tmp_path
 ) -> None:
+    class _FakeClipboard:
+        def __init__(self) -> None:
+            self._text = ""
+
+        def setText(  # noqa: N802 - Qt-style name for compatibility
+            self, text: str, mode: QClipboard.Mode = QClipboard.Mode.Clipboard
+        ) -> None:
+            self._text = text
+
+        def text(self) -> str:
+            return self._text
+
+    fake_clipboard = _FakeClipboard()
+    monkeypatch.setattr(QApplication, "clipboard", lambda: fake_clipboard)
+
     widget = DebugDashboardWidget()
     widget.set_stories([_sample_story()])
 
     # Copy
     widget._copy_current_story()
-    clipboard = QApplication.clipboard()
-    assert clipboard is not None
-    assert "QA_RULE_MENTOR_TYPE_01" in clipboard.text()
+    assert "QA_RULE_MENTOR_TYPE_01" in fake_clipboard.text()
 
     # Save
     target = tmp_path / "story.md"
