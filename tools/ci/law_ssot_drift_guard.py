@@ -3,11 +3,10 @@ from __future__ import annotations
 import argparse
 import subprocess
 import sys
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable, List, Tuple
 
-
-LAW_DOC_KEYWORDS: Tuple[str, ...] = (
+LAW_DOC_KEYWORDS: tuple[str, ...] = (
     "LAW_",
     "SSoT",
     "Refactor Narrative",
@@ -15,7 +14,7 @@ LAW_DOC_KEYWORDS: Tuple[str, ...] = (
     "Coverage Map",
 )
 
-CODE_OR_TEST_PREFIXES: Tuple[str, ...] = (
+CODE_OR_TEST_PREFIXES: tuple[str, ...] = (
     "app/",
     "tests/",
 )
@@ -40,7 +39,7 @@ def parse_args(argv: Iterable[str]) -> argparse.Namespace:
     return parser.parse_args(list(argv))
 
 
-def get_changed_files(base_ref: str, head_ref: str) -> List[str]:
+def get_changed_files(base_ref: str, head_ref: str) -> list[str]:
     diff_output = subprocess.check_output(
         ["git", "diff", "--name-only", base_ref, head_ref],
         text=True,
@@ -48,9 +47,9 @@ def get_changed_files(base_ref: str, head_ref: str) -> List[str]:
     return [line.strip() for line in diff_output.splitlines() if line.strip()]
 
 
-def classify_changes(changed_files: Iterable[str]) -> Tuple[List[str], List[str]]:
-    law_docs: List[str] = []
-    code_or_tests: List[str] = []
+def classify_changes(changed_files: Iterable[str]) -> tuple[list[str], list[str]]:
+    law_docs: list[str] = []
+    code_or_tests: list[str] = []
 
     for path_str in changed_files:
         path = Path(path_str)
