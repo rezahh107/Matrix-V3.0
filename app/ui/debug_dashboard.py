@@ -138,7 +138,8 @@ class DebugDashboardWidget(QWidget):
         story = self._current_story()
         if story is None:
             return ""
-        return self._formatter(story)
+        text = self._formatter(story)
+        return text if text else str(story.rule_id)
 
     def _copy_current_story(self) -> str | None:
         text = self._current_story_text()
