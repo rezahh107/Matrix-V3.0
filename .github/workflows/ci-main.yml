@@ -6,10 +6,6 @@ on:
   pull_request:
     branches: ["main"]
 
-env:
-  QT_QPA_PLATFORM: offscreen
-  PIP_DISABLE_PIP_VERSION_CHECK: 1
-
 jobs:
   core-linux:
     name: Core tests (Linux)
@@ -59,6 +55,8 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 30
     env:
+      QT_QPA_PLATFORM: offscreen
+      PIP_DISABLE_PIP_VERSION_CHECK: 1
       MATRIX2_TEMP_SKIP_QT_UI: "1"
 
     steps:
@@ -103,6 +101,7 @@ jobs:
     needs: [core-linux, core-windows]
     env:
       QT_QPA_PLATFORM: offscreen
+      PIP_DISABLE_PIP_VERSION_CHECK: 1
       PYTEST_QT_API: pyside6
 
     steps:
