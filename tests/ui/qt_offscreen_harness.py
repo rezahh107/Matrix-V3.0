@@ -63,9 +63,17 @@ def assert_image_has_content(image: QImage) -> None:
     if image.isNull():
         pytest.fail("Rendered image is null")
 
-    buffer = image.constBits()
-    data = bytes(buffer)
-    if len(data) < image.sizeInBytes():
-        pytest.fail("Rendered image buffer shorter than expected")
-    if not any(data):
-        pytest.fail("Rendered image is empty (all pixels transparent or zero)")
+    width = image.width()
+    height = image.height()
+    sample_points = {
+        (0, 0),
+        (max(0, width // 2), max(0, height // 2)),
+        (max(0, width - 1), max(0, height - 1)),
+    }
+
+    for x, y in sample_points:
+        color = image.pixelColor(x, y)
+        if color.isValid() and color.alpha() > 0:
+            return
+
+    pytest.fail("Rendered image is empty (all sampled pixels fully transparent)")

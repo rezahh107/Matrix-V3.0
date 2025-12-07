@@ -142,8 +142,9 @@ class DebugDashboardWidget(QWidget):
 
         for _ in range(3):
             clipboard.setText(text, QClipboard.Mode.Clipboard)
+            clipboard.setText(text)
             QApplication.processEvents()
-            if text in clipboard.text(QClipboard.Mode.Clipboard):
+            if text in clipboard.text(QClipboard.Mode.Clipboard) or text in clipboard.text():
                 break
 
     def _save_current_story(self) -> None:

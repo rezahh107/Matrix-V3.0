@@ -91,7 +91,7 @@ def _school_field_value(value: object) -> str | int | None:
         return value.strip()
     coerced = _coerce_int_or_none(value)
     if coerced is not None:
-        return str(coerced)
+        return coerced
     return _string_value(value)
 
 
