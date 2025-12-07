@@ -55,6 +55,11 @@ def test_copy_and_save_actions(
         def __init__(self) -> None:
             self._text = ""
 
+        def clear(  # noqa: N802 - Qt-style name for compatibility
+            self, mode: QClipboard.Mode = QClipboard.Mode.Clipboard
+        ) -> None:
+            self._text = ""
+
         def setText(  # noqa: N802 - Qt-style name for compatibility
             self, text: str, mode: QClipboard.Mode = QClipboard.Mode.Clipboard
         ) -> None:
@@ -70,7 +75,9 @@ def test_copy_and_save_actions(
     widget.set_stories([_sample_story()])
 
     # Copy
-    widget._copy_current_story()
+    copied = widget._copy_current_story()
+    assert copied is not None
+    assert "QA_RULE_MENTOR_TYPE_01" in copied
     assert "QA_RULE_MENTOR_TYPE_01" in fake_clipboard.text()
 
     # Save
