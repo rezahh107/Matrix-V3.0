@@ -39,9 +39,8 @@ class HeaderResolver:
         return [field for field in self._registry.required_fields if field not in column_set]
 
     def _ensure_mentor_id(self, df: pd.DataFrame) -> pd.DataFrame:
-        if "mentor_id" in df.columns:
-            return df
         alias_map = {
+            "mentor_id": "mentor_id",
             "کد کارمندی پشتیبان": "mentor_id",
             "mentorcode": "mentor_id",
             "mentor_code": "mentor_id",
@@ -49,10 +48,26 @@ class HeaderResolver:
             "employee_id": "mentor_id",
             "employeeid": "mentor_id",
         }
-        renamed = df
-        for column in df.columns:
-            normalized = str(column).strip().lower()
-            if normalized in alias_map:
-                renamed = df.rename(columns={column: alias_map[normalized]})
-                break
-        return renamed
+
+        candidate_columns = [
+            column for column in df.columns if str(column).strip().lower() in alias_map
+        ]
+        if not candidate_columns:
+            return df
+
+        series_list: list[pd.Series] = []
+        for column in candidate_columns:
+            candidate = df.loc[:, column]
+            if isinstance(candidate, pd.DataFrame):
+                candidate = candidate.iloc[:, 0]
+            series_list.append(candidate.astype("string").str.strip())
+
+        mentor_series = series_list[0].reindex(df.index)
+        for extra in series_list[1:]:
+            extra_aligned = extra.reindex(df.index)
+            mentor_series = mentor_series.fillna(extra_aligned)
+            mentor_series = mentor_series.mask(mentor_series.eq(""), extra_aligned)
+
+        remaining = df.drop(columns=candidate_columns, errors="ignore")
+        remaining["mentor_id"] = mentor_series
+        return remaining

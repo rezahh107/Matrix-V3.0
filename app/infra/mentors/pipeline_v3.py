@@ -69,6 +69,7 @@ class MentorPipelineV3:
             derived_df, derive_issues = _derive_pool_join_keys(
                 working, db=self._db, policy=self._policy
             )
+            derived_df = self._header_resolver._ensure_mentor_id(derived_df)
             derived_df.attrs[_POOL_JOIN_KEY_QA_ATTR] = derive_issues
             value_result = ValueCanonicalizationResult(
                 canonical_df=derived_df, issues=derive_issues

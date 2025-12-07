@@ -132,11 +132,11 @@ def import_mentor_pool_with_validation(
 
 
 def _raise_on_join_key_failure(result: MentorPipelineResult) -> None:
-    if result.join_key_result.issues:
+    if result.join_key_result.blocking_issues:
         raise JoinKeyValidationError(
             JoinKeyValidationResult(
                 canonical_df=result.join_key_result.canonical_df,
-                issues=_normalize_join_key_issues(result.join_key_result.issues),
+                issues=_normalize_join_key_issues(result.join_key_result.blocking_issues),
             )
         )
 

@@ -17,13 +17,14 @@ from .value_canonicalizer import ValueCanonicalizationResult
 class JoinKeyResolutionResult:
     canonical_df: pd.DataFrame
     issues: list[dict[str, Any]]
+    blocking_issues: list[dict[str, Any]]
     duplicates: pd.DataFrame
     usable_profiles: pd.DataFrame
     all_profiles: pd.DataFrame
 
     @property
     def can_continue(self) -> bool:
-        return not self.issues
+        return not self.blocking_issues
 
 
 class JoinKeyResolver:
@@ -40,7 +41,8 @@ class JoinKeyResolver:
         attr_issues = cast(
             list[dict[str, Any]], values.canonical_df.attrs.get(_POOL_JOIN_KEY_QA_ATTR, [])
         )
-        issues.extend(attr_issues)
+        if attr_issues and attr_issues is not values.issues:
+            issues.extend(attr_issues)
         issues.extend(self._serialize_validation_issues(validation.issues))
         canonical = validation.canonical_df.copy()
         missing_mentor_id = "mentor_id" not in canonical.columns
@@ -66,9 +68,11 @@ class JoinKeyResolver:
             usable_profiles = usable_profiles.loc[
                 ~usable_profiles["mentor_id"].isin(multi_profile)
             ].copy()
+        blocking_issues = [issue for issue in issues if self._is_blocking_issue(issue)]
         return JoinKeyResolutionResult(
             canonical_df=canonical,
             issues=issues,
+            blocking_issues=blocking_issues,
             duplicates=duplicates,
             usable_profiles=usable_profiles,
             all_profiles=all_profiles,
@@ -104,10 +108,16 @@ class JoinKeyResolver:
                 columns=[*self._policy.join_keys, "mentor_id", "duplicate_group_size"]
             )
         trimmed = canonical.loc[:, key_columns].copy()
-        trimmed["mentor_id"] = trimmed["mentor_id"].astype("string").str.strip()
+        mentor_candidate = trimmed["mentor_id"]
+        if isinstance(mentor_candidate, pd.DataFrame):
+            mentor_candidate = mentor_candidate.iloc[:, 0]
+        trimmed["mentor_id"] = mentor_candidate.astype("string").str.strip()
         numeric_cols = [col for col in self._policy.join_keys if col in trimmed.columns]
         for column in numeric_cols:
-            trimmed[column] = pd.to_numeric(trimmed[column], errors="coerce").astype("Int64")
+            candidate = trimmed[column]
+            if isinstance(candidate, pd.DataFrame):
+                candidate = candidate.iloc[:, 0]
+            trimmed[column] = pd.to_numeric(candidate, errors="coerce").astype("Int64")
         non_null = ~trimmed[key_columns].isna().any(axis=1)
         duplicated_mask = trimmed.loc[non_null].duplicated(subset=key_columns, keep=False)
         if not bool(duplicated_mask.any()):
@@ -126,3 +136,17 @@ class JoinKeyResolver:
         return duplicate_rows.sort_values(
             key_columns + ["pool_row_index"], kind="stable"
         ).reset_index(drop=True)
+
+    def _is_blocking_issue(self, issue: dict[str, Any]) -> bool:
+        code = str(issue.get("reason", issue.get("error_code", ""))).upper()
+        blocking_codes = {
+            "MISSING_COLUMN",
+            "MISSING_JOIN_KEY",
+            "MISSING_MENTOR_ID",
+            "DATA_INVALID",
+            "DATA_MISSING",
+            "INVALID_JOIN_VALUE",
+            "INVALID_GROUP_CODE",
+            "INVALID_GENDER",
+        }
+        return code in blocking_codes
