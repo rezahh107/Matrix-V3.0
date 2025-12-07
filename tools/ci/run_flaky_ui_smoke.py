@@ -1,34 +1,37 @@
 from __future__ import annotations
 
-import os
 import subprocess
 import sys
-from pathlib import Path
+from collections.abc import Sequence
 
-
-def run_pytest_with_retries(args: list[str], retries: int = 2) -> int:
-    """Run pytest with limited retries to smooth over flaky UI smoke tests."""
-
-    repo_root = Path(__file__).resolve().parents[2]
-    env = os.environ.copy()
-    env.setdefault("QT_QPA_PLATFORM", "offscreen")
-    command = [sys.executable, "-m", "pytest", *args]
-
-    for attempt in range(1, retries + 2):
-        result = subprocess.run(command, cwd=repo_root, env=env, check=False)
-        if result.returncode == 0:
-            return 0
-
-        if attempt > retries:
-            return result.returncode
-
-    return 1
+CRITICAL_TESTS: Sequence[str] = [
+    "tests/ui/test_join_key_validation_flow.py::test_join_key_validation_error_opens_dialog",
+    "tests/ui/test_main_window_mentor_pool_integration.py::test_matrix_governance_button_and_overrides",
+]
+RUNS_PER_TEST = 3
 
 
 def main() -> int:
-    default_args = ["tests/ui", "--maxfail=1", "-q"]
-    retries = int(os.environ.get("UI_SMOKE_RETRIES", "1"))
-    return run_pytest_with_retries(default_args, retries=retries)
+    for test_path in CRITICAL_TESTS:
+        for iteration in range(1, RUNS_PER_TEST + 1):
+            result = subprocess.run(
+                [
+                    "pytest",
+                    test_path,
+                    "--maxfail=1",
+                    "-q",
+                ]
+            )
+            if result.returncode != 0:
+                print(
+                    f"Flaky UI smoke failed: {test_path} (iteration {iteration})",
+                    file=sys.stderr,
+                )
+                return 1
+    print(
+        "Flaky UI smoke passed: " f"{len(CRITICAL_TESTS)} tests x {RUNS_PER_TEST} runs each.",
+    )
+    return 0
 
 
 if __name__ == "__main__":
