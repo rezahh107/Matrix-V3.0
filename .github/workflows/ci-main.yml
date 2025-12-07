@@ -39,13 +39,7 @@ jobs:
         run: ruff check .
 
       - name: Run core pytest suite (Windows)
-        run: |
-          pytest \
-            tests/unit \
-            tests/infra \
-            tests/integration \
-            --maxfail=1 \
-            -q
+        run: pytest tests/unit tests/infra tests/integration --maxfail=1 -q
 
   ui-windows:
     name: UI tests (Windows, Qt/PySide6)
