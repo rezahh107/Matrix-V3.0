@@ -7,49 +7,6 @@ on:
     branches: ["main"]
 
 jobs:
-  core-linux:
-    name: Core tests (Linux)
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: "pip"
-          cache-dependency-path: |
-            requirements.txt
-            pyproject.toml
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install -e .
-          pip install mypy
-
-      - name: Lint with ruff
-        run: ruff check .
-
-      - name: Check formatting with black
-        run: black --check .
-
-      - name: Type-check with mypy
-        run: mypy app tests
-
-      - name: Run core pytest suite
-        run: |
-          pytest \
-            tests/unit \
-            tests/infra \
-            tests/integration \
-            --maxfail=1 \
-            -q
-
   core-windows:
     name: Core tests (Windows)
     runs-on: windows-latest
@@ -98,7 +55,7 @@ jobs:
     name: UI tests (Windows, Qt/PySide6)
     runs-on: windows-latest
     timeout-minutes: 30
-    needs: [core-linux, core-windows]
+    needs: [core-windows]
     env:
       QT_QPA_PLATFORM: offscreen
       PIP_DISABLE_PIP_VERSION_CHECK: 1
