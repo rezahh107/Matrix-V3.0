@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
-from typing import Sequence
+from collections.abc import Sequence
 
 CRITICAL_TESTS: Sequence[str] = [
     "tests/ui/test_join_key_validation_flow.py::test_join_key_validation_error_opens_dialog",

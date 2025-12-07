@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import subprocess
 import time
-from typing import Dict, Sequence
+from collections.abc import Sequence
 
 PERF_TESTS: Sequence[str] = [
     "tests/integration/test_allocator_end_to_end.py::test_allocator_end_to_end",
     "tests/integration/test_allocator_golden.py::test_bilingual_headers_reduce_false_no_match",
 ]
-LIMIT_SECONDS: Dict[str, float] = {
+LIMIT_SECONDS: dict[str, float] = {
     "tests/integration/test_allocator_end_to_end.py::test_allocator_end_to_end": 20.0,
     "tests/integration/test_allocator_golden.py::test_bilingual_headers_reduce_false_no_match": 20.0,
 }
