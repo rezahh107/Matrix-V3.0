@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QClipboard
 from PySide6.QtWidgets import (
     QApplication,
     QFileDialog,
@@ -117,8 +116,7 @@ class DebugDashboardWidget(QWidget):
         self._rule_label.setText(str(story.rule_id))
         self._severity_label.setText(story.severity)
         self._law_label.setText(", ".join(story.law_refs) if story.law_refs else "—")
-        text = self._formatter(story)
-        self._story_view.setPlainText(text)
+        self._story_view.setPlainText(self._formatter(story))
 
     def _current_story(self) -> QADebugStory | None:
         item = self._story_list.currentItem()
@@ -129,33 +127,20 @@ class DebugDashboardWidget(QWidget):
             return self._stories[index]
         return None
 
-    def _copy_current_story(self) -> None:
+    def _current_story_text(self) -> str:
         story = self._current_story()
         if story is None:
-            return
-        text = self._formatter(story)
+            return ""
+        return self._formatter(story)
+
+    def _copy_current_story(self) -> None:
+        text = self._current_story_text()
         clipboard = QApplication.clipboard()
         if clipboard is None:
             return
 
-        clipboard.clear(QClipboard.Mode.Clipboard)
-        clipboard.clear(QClipboard.Mode.Selection)
-
-        def _write_and_confirm() -> bool:
-            from PySide6.QtTest import QTest
-
-            clipboard.setText(text, QClipboard.Mode.Clipboard)
-            QApplication.processEvents()
-            QTest.qWait(5)
-            current = clipboard.text(QClipboard.Mode.Clipboard)
-            return bool(current and text in current)
-
-        for _ in range(5):
-            if _write_and_confirm():
-                break
-        else:
-            clipboard.setText(text, QClipboard.Mode.Clipboard)
-            QApplication.processEvents()
+        clipboard.setText(text)
+        QApplication.processEvents()
 
     def _save_current_story(self) -> None:
         story = self._current_story()
