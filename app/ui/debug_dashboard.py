@@ -140,9 +140,14 @@ class DebugDashboardWidget(QWidget):
             return
 
         payload = text or ""
+        clipboard.clear(QClipboard.Mode.Clipboard)
         clipboard.setText(payload, QClipboard.Mode.Clipboard)
-        clipboard.setText(payload)
         QApplication.processEvents()
+
+        if payload and payload not in clipboard.text(QClipboard.Mode.Clipboard):
+            clipboard.setText(payload, QClipboard.Mode.Selection)
+            clipboard.setText(payload, QClipboard.Mode.Clipboard)
+            QApplication.processEvents()
 
     def _save_current_story(self) -> None:
         story = self._current_story()
