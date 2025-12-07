@@ -16,12 +16,14 @@ LIMIT_SECONDS: dict[str, float] = {
 
 def run_test(test_path: str) -> tuple[float, bool]:
     start = time.perf_counter()
-    result = subprocess.run([
-        "pytest",
-        test_path,
-        "-q",
-        "--maxfail=1",
-    ])
+    result = subprocess.run(
+        [
+            "pytest",
+            test_path,
+            "-q",
+            "--maxfail=1",
+        ]
+    )
     elapsed = time.perf_counter() - start
     success = result.returncode == 0 and elapsed <= LIMIT_SECONDS[test_path]
     return elapsed, success

@@ -14,12 +14,14 @@ RUNS_PER_TEST = 3
 def main() -> int:
     for test_path in CRITICAL_TESTS:
         for iteration in range(1, RUNS_PER_TEST + 1):
-            result = subprocess.run([
-                "pytest",
-                test_path,
-                "--maxfail=1",
-                "-q",
-            ])
+            result = subprocess.run(
+                [
+                    "pytest",
+                    test_path,
+                    "--maxfail=1",
+                    "-q",
+                ]
+            )
             if result.returncode != 0:
                 print(
                     f"Flaky UI smoke failed: {test_path} (iteration {iteration})",
@@ -27,8 +29,7 @@ def main() -> int:
                 )
                 return 1
     print(
-        "Flaky UI smoke passed: "
-        f"{len(CRITICAL_TESTS)} tests x {RUNS_PER_TEST} runs each.",
+        "Flaky UI smoke passed: " f"{len(CRITICAL_TESTS)} tests x {RUNS_PER_TEST} runs each.",
     )
     return 0
 
