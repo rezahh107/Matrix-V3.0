@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from PySide6.QtGui import QClipboard
 
 from app.infra.debug import QADebugStory
 from app.infra.debug.qa_debug_presenter import format_story_for_text, summarize_story
@@ -121,11 +122,10 @@ class DebugDashboardWidget(QWidget):
     def _current_story(self) -> QADebugStory | None:
         item = self._story_list.currentItem()
         if item is None:
-            return None
+            return self._stories[0] if self._stories else None
+
         index = int(item.data(Qt.ItemDataRole.UserRole) or -1)
-        if 0 <= index < len(self._stories):
-            return self._stories[index]
-        return None
+        return self._stories[index] if 0 <= index < len(self._stories) else None
 
     def _current_story_text(self) -> str:
         story = self._current_story()
@@ -139,7 +139,8 @@ class DebugDashboardWidget(QWidget):
         if clipboard is None:
             return
 
-        clipboard.setText(text)
+        clipboard.clear(QClipboard.Mode.Clipboard)
+        clipboard.setText(text or "", QClipboard.Mode.Clipboard)
         QApplication.processEvents()
 
     def _save_current_story(self) -> None:
