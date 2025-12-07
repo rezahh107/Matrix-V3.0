@@ -39,7 +39,7 @@ from app.core.common.domain import _coerce_finance, _num_to_int_safe
 from app.core.common.errors import InvalidCenterMappingError
 from app.core.common.join_keys import VALID_GROUP_CODES, parse_group_codes
 from app.core.common.normalization import normalize_fa
-from app.core.common.types import JoinKeyValidationResult
+from app.core.common.types import JoinKeyValidationIssue, JoinKeyValidationResult
 from app.core.policy_loader import PolicyConfig
 from app.infra.errors import JoinKeyValidationError
 from app.infra.io_utils import read_inspactor_workbook
@@ -108,7 +108,8 @@ def import_mentor_pool_from_dataframe(
             subset=["mentor_id", *policy.join_keys], keep="first"
         ).copy()
         cache_payload.attrs.update(normalized.attrs)
-    db.upsert_mentor_pool_cache(cache_payload, join_keys=policy.join_keys)
+    if db is not None:
+        db.upsert_mentor_pool_cache(cache_payload, join_keys=policy.join_keys)
     return cache_payload
 
 
@@ -135,9 +136,24 @@ def _raise_on_join_key_failure(result: MentorPipelineResult) -> None:
         raise JoinKeyValidationError(
             JoinKeyValidationResult(
                 canonical_df=result.join_key_result.canonical_df,
-                issues=result.join_key_result.issues,
+                issues=_normalize_join_key_issues(result.join_key_result.issues),
             )
         )
+
+
+def _normalize_join_key_issues(issues: list[dict[str, Any]]) -> list[JoinKeyValidationIssue]:
+    normalized: list[JoinKeyValidationIssue] = []
+    for issue in issues:
+        normalized.append(
+            JoinKeyValidationIssue(
+                entity_type=issue.get("entity_type", "mentor"),
+                row_index=int(issue.get("row_index", -1) or -1),
+                column=str(issue.get("column", "")),
+                raw_value=issue.get("raw_value"),
+                error_code=str(issue.get("reason", issue.get("error_code", "DATA_INVALID"))),
+            )
+        )
+    return normalized
 
 
 def load_mentor_pool_from_cache(*, db: LocalDatabase, policy: PolicyConfig) -> pd.DataFrame:

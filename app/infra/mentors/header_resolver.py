@@ -5,7 +5,8 @@ from dataclasses import dataclass
 
 import pandas as pd
 
-from app.core.canonical_frames import canonicalize_headers
+from app.core.common.columns import canonicalize_headers
+from app.core.common.types import HeaderMode
 
 from .field_registry import FieldRegistry
 
@@ -23,7 +24,7 @@ class HeaderResolutionResult:
 class HeaderResolver:
     """Resolve mentor headers to canonical form and detect missing join fields."""
 
-    def __init__(self, registry: FieldRegistry, *, header_mode: str = "fa") -> None:
+    def __init__(self, registry: FieldRegistry, *, header_mode: HeaderMode = "fa") -> None:
         self._registry = registry
         self._header_mode = header_mode
 

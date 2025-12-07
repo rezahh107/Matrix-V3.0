@@ -6,6 +6,7 @@ from typing import Any
 
 import pandas as pd
 
+from app.core.common.types import HeaderMode
 from app.core.policy_loader import PolicyConfig
 from app.infra.io_utils import read_inspactor_workbook
 from app.infra.local_database import LocalDatabase, _coerce_int_columns
@@ -43,7 +44,7 @@ class MentorPipelineV3:
         *,
         policy: PolicyConfig,
         pool_source: str = "inspactor",
-        header_mode: str = "fa",
+        header_mode: HeaderMode = "fa",
         db: LocalDatabase | None = None,
     ) -> None:
         self._policy = policy

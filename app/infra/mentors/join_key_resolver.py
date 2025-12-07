@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 import pandas as pd
 
 from app.core.common.join_keys import validate_and_canonicalize_join_keys
+from app.core.common.types import JoinKeyValidationIssue
 from app.core.policy_loader import PolicyConfig
 from app.infra.reference_mentors_repository import _POOL_JOIN_KEY_QA_ATTR
 
@@ -36,9 +37,11 @@ class JoinKeyResolver:
             values.canonical_df, policy=self._policy, entity_type="mentor"
         )
         issues = list(values.issues)
-        attr_issues = values.canonical_df.attrs.get(_POOL_JOIN_KEY_QA_ATTR, [])
+        attr_issues = cast(
+            list[dict[str, Any]], values.canonical_df.attrs.get(_POOL_JOIN_KEY_QA_ATTR, [])
+        )
         issues.extend(attr_issues)
-        issues.extend(validation.issues)
+        issues.extend(self._serialize_validation_issues(validation.issues))
         canonical = validation.canonical_df.copy()
         missing_mentor_id = "mentor_id" not in canonical.columns
         if missing_mentor_id:
@@ -70,6 +73,22 @@ class JoinKeyResolver:
             usable_profiles=usable_profiles,
             all_profiles=all_profiles,
         )
+
+    def _serialize_validation_issues(
+        self, issues: list[JoinKeyValidationIssue]
+    ) -> list[dict[str, Any]]:
+        serialized: list[dict[str, Any]] = []
+        for issue in issues:
+            serialized.append(
+                {
+                    "reason": issue.error_code,
+                    "entity_type": issue.entity_type,
+                    "row_index": issue.row_index,
+                    "column": issue.column,
+                    "raw_value": issue.raw_value,
+                }
+            )
+        return serialized
 
     def _find_multi_profile_mentors(self, canonical: pd.DataFrame) -> set[str]:
         if "mentor_id" not in canonical.columns:
