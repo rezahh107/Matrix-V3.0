@@ -88,11 +88,22 @@ The high-level data flow of a full allocation run is: (certain) [LAW][TECH][AGEN
    - `qa/invariants.py` runs all QA_RULE_* across students, matrix, and allocations, producing a `QaReport` with severity mapping. (certain) [app/core/qa/invariants.py][LAW][TECH]  
    - `infra/qa/alloc_join_validation.py` validates allocation join keys vs students with SCHOOL-01 / wildcard semantics (feeding into `matrix_vs_students_validation.xlsx`). (certain) [app/infra/qa/alloc_join_validation.py][Policy-Eligibility-Matrix-v1.0.3.md]
 
-8. **Exports & History (Infra + UI)**  
-   - `export_allocations.py` writes allocation results and history metrics to Excel (Sabt-ready). (certain) [app/infra/excel/export_allocations.py]  
-   - `export_qa_validation.py` writes the QA workbooks (`eligibility_matrix.xlsx`, `matrix_vs_students_validation.xlsx`) under LAW/Policy contracts. (certain) [app/infra/excel/export_qa_validation.py][LAW][TECH]  
-   - `HistoryStore` and `LocalDatabase` store run metadata, metrics, QA summary, and students/mentor_pool caches. (certain) [app/infra/history_store.py][app/infra/local_database.py]  
+8. **Exports & History (Infra + UI)**
+   - `export_allocations.py` writes allocation results and history metrics to Excel (Sabt-ready). (certain) [app/infra/excel/export_allocations.py]
+   - `export_qa_validation.py` writes the QA workbooks (`eligibility_matrix.xlsx`, `matrix_vs_students_validation.xlsx`) under LAW/Policy contracts. (certain) [app/infra/excel/export_qa_validation.py][LAW][TECH]
+   - `HistoryStore` and `LocalDatabase` store run metadata, metrics, QA summary, and students/mentor_pool caches. (certain) [app/infra/history_store.py][app/infra/local_database.py]
    - UI dialogs display this history and metrics to the user. (certain) [app/ui/history_dialog.py][app/ui/history_metrics_dialog.py]
+
+### 1.3.1 Infra mentor import entrypoints (MentorPipelineV3 SSoT)
+
+- **Official entrypoints:**
+  - `reference_mentors_repository` (Inspactor Excel/CSV readers)،
+  - LocalDatabase helpers و هر ابزار Inspactor/CLI که استخر mentor می‌سازد.
+- **قرارداد:** تمام entrypointها باید به **MentorPipelineV3** در Infra متکی باشند و هرگز استخر mentor را به‌صورت دستی یا با join logic جدید نسازند؛ خروجی معتبر برای Core فقط `MentorPoolBuildResult.pool` است.
+- **Mini matrix (جریان داده رسمی):**
+  - EntryPoint (Inspactor/LocalDB/CLI) → MentorPipelineV3 (FieldRegistry → HeaderResolver → ValueCanonicalizer → JoinKeyResolver → MentorPoolBuilder) → `MentorPoolBuildResult.pool` → Core (`build_matrix`, `allocate_students`).
+  - QA خروجی MentorPipelineV3 (issues، duplicates، multi-profile) → QA workbooks (`eligibility_matrix`, `matrix_vs_students_validation`) و/یا `QaReport`.
+- **Golden datasets:** مسیر رسمی `ci/golden_datasets/mentors/**` برای سنجش parity legacy vs pipeline_v3 استفاده می‌شود؛ سناریوهای golden باید شش‌تایی join-key و ستون‌های ظرفیت را مقایسه کنند و در صورت نبود/خرابی دادهٔ طلایی fail-fast شوند.
 
 ---
 

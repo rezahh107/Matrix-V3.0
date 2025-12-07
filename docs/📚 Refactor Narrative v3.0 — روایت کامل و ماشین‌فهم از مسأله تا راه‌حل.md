@@ -2731,6 +2731,28 @@ def run_mentor_import_and_join(ctx: RunContext) -> MentorImportRunResult:
 
 ------
 
+## REF-V3-PHASE-02 — Mentor import unification (MentorPipelineV3)
+
+- **Before:** چند مسیر مجزا (Inspactor، LocalDatabase، اسکریپت‌های اد-هوک) با هدر/alias متفاوت وجود داشت که باعث drift در استخر پشتیبان می‌شد.
+- **After:** همهٔ entrypointهای Infra به پایپلاین یکتا **MentorPipelineV3** متصل می‌شوند و Core فقط استخر canonical را مصرف می‌کند؛ هیچ join logic در Core یا UI نوشته نمی‌شود.
+- **Why unification helps:**
+  - حذف واگرایی بین شاخه‌های Import و کاهش ریسک مغایرت ظرفیت/کلید،
+  - QA واحد برای تناقض کلید، multi-profile، و توقف‌های P0،
+  - مسیر روشن برای golden regression و مقایسه legacy vs pipeline_v3.
+- **Golden regression for mentors:** سناریوهای legacy و pipeline_v3 روی مجموعه‌های طلایی هم‌زمان اجرا می‌شوند تا برابری `mentor_id + ۶ کلید الحاق + ظرفیت` و مرتب‌سازی ظرفیت تأیید شود.
+- **QA payloads as evidence:** خروجی QA شامل issues، duplicates و multi-profile mentors بخشی از داستان رسمی شواهد است و باید در اکسپورت QA/History دیده شود.
+- **۸-گام ایمپورت/الحاق پشتیبان در فاز ۲:**
+  1. ورودی خام (Excel/DB) خوانده می‌شود.
+  2. **FieldRegistry** فیلدهای مجاز را تعیین می‌کند.
+  3. **HeaderResolver** هدرهای خام را به canonical نگاشت می‌دهد.
+  4. **ValueCanonicalizer** مقادیر را اعتبارسنجی و نرمال می‌کند (`can_continue` برای خطای P0 = false).
+  5. **JoinKeyResolver** شش کلید عددی را با wildcard مرکز/مدرسه می‌سازد و multi-profile mentors را علامت‌گذاری می‌کند.
+  6. **MentorPoolBuilder** استخر canonical و متادیتای QA را می‌سازد.
+  7. استخر canonical (`MentorPoolBuildResult.pool`) به Core تحویل می‌شود؛ Core هیچ Join جدیدی نمی‌سازد.
+  8. QA payloadها (issues، duplicates، multi-profile) به QA workbooks و تاریخچه ارسال می‌شوند.
+
+------
+
 ### E.6 چک‌لیست نهایی قبل از Merge هر تغییر
 
 قبل از این‌که هر PR مرتبط با این Refactor Merge شود، موارد زیر باید درست باشند:

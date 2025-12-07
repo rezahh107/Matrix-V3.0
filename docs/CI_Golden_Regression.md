@@ -31,6 +31,12 @@ Excel inputs without touching Core behavior.
 The scaffolded scenario points to the `phase01_lock_current_behavior` golden
 set; adjust `base_dir` and filenames to match your committed goldens.
 
+## MentorPipelineV3 parity (mentors)
+- Golden regression باید سناریوهای parity بین مسیر legacy و **MentorPipelineV3** را شامل شود.
+- مقایسه‌ها باید روی تپّل‌های شش‌گانهٔ join key (`group_code`, `gender_code`, `grad_status_code`, `center_code`, `finance_code`, `school_code`) و ستون‌های ظرفیت (`capacity_limit`, `assigned_baseline`, `allocations_new`, `remaining_capacity`) strict باشد.
+- اگر `ci/golden_datasets/mentors/**` پیدا نشود یا فایل‌ها خراب باشند، runner باید fail-fast با پیام واضح برگرداند.
+- فقط از داده‌های سانیت‌شدهٔ زیر `ci/golden_datasets/mentors/**` استفاده کنید؛ سناریوهای دیگر نباید به دادهٔ حساس تکیه کنند.
+
 ## Run locally
 - Install dependencies (`pip install -r requirements.txt && pip install -e .`).
 - Dry run (validate YAML + file presence only):
