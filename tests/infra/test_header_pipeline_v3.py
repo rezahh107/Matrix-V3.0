@@ -21,6 +21,22 @@ def test_header_pipeline_merges_mentor_id_aliases() -> None:
     assert result.resolved_df["mentor_id"].tolist() == ["A", "B"]
 
 
+def test_header_pipeline_respects_existing_canonical_mentor_id() -> None:
+    pipeline = HeaderPipelineV3(alias_registry=HEADER_ALIASES_V3)
+    df = pd.DataFrame(
+        {
+            "mentor_id": ["canonical", None],
+            "employee_id": [None, "alias"],
+            "گروه آزمایشی": ["27", "27"],
+        }
+    )
+
+    result = pipeline.resolve(df, source="mentor")
+
+    assert "mentor_id" in result.resolved_df
+    assert result.resolved_df["mentor_id"].tolist() == ["canonical", "alias"]
+
+
 def test_header_pipeline_reports_unknown_and_ambiguous_headers() -> None:
     pipeline = HeaderPipelineV3(
         alias_registry={"mentor": {"mentor_id": "mentor_id", "کد رشته": "کدرشته"}},
