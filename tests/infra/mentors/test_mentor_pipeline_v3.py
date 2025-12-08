@@ -146,6 +146,18 @@ def test_ensure_mentor_id_prefers_existing_canonical() -> None:
     assert "employee_id" not in ensured.columns
 
 
+def test_pipeline_handles_canonical_mentor_id_with_alias_column() -> None:
+    payload = _make_simple_df()
+    payload["mentor_code"] = ["alias-m1", "alias-m2"]
+
+    pipeline = MentorPipelineV3(policy=policy.config)
+    result = pipeline.run(payload)
+
+    assert result.can_continue
+    assert list(result.build_result.pool["mentor_id"]) == ["m1", "m2"]
+    assert "mentor_code" not in result.build_result.pool.columns
+
+
 def test_reference_repository_delegates_pipeline(monkeypatch: pytest.MonkeyPatch) -> None:
     class _FakeDB:
         def __init__(self) -> None:

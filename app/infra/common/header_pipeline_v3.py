@@ -89,7 +89,12 @@ class HeaderPipelineV3:
                 )
 
         renamed = df.rename(columns=rename_map, errors="ignore").copy()
-        renamed = self._merge_mentor_id_aliases(renamed, collisions.get("mentor_id", []))
+
+        mentor_aliases = collisions.get("mentor_id", [])
+        if "mentor_id" in renamed.columns and "mentor_id" not in mentor_aliases:
+            mentor_aliases = [*mentor_aliases, "mentor_id"]
+
+        renamed = self._merge_mentor_id_aliases(renamed, mentor_aliases)
 
         required = self._required.get(source, [])
         missing = [column for column in required if column not in renamed.columns]
@@ -110,15 +115,7 @@ class HeaderPipelineV3:
     def _merge_mentor_id_aliases(df: pd.DataFrame, aliases: list[str]) -> pd.DataFrame:
         candidates: list[pd.Series] = []
 
-        if (df.columns == "mentor_id").any():
-            candidate = df.loc[:, df.columns == "mentor_id"]
-            if isinstance(candidate, pd.DataFrame):
-                for idx in range(candidate.shape[1]):
-                    candidates.append(candidate.iloc[:, idx])
-            else:
-                candidates.append(candidate)
-
-        for column in aliases:
+        for column in dict.fromkeys(aliases):
             if column not in df.columns:
                 continue
             candidate = df.loc[:, column]
