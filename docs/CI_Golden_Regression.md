@@ -61,3 +61,7 @@ set; adjust `base_dir` and filenames to match your committed goldens.
     `docs/golden_datasets/phase01_lock_current_behavior/`) and update the YAML
     when scenarios are ready. The runner will fail fast in CI if required files
     are missing, providing a clear list of absent paths.
+
+## Health / issue stability checks
+- Golden regression MAY assert that `health.status` برای دیتاست‌های طلایی `OK` بماند یا شمارش issue_codeهای کلیدی پایدار باشد.
+- هر تغییر در رفتار Health باید با تغییر مستند در LAW/Technical SSoT توجیه شود، نه با تصمیمات موردی.

@@ -1814,6 +1814,13 @@ provides deterministic canonical import, and aligns code with LAW/TECH.
     - همهٔ stageها از همان `run_id` استفاده می‌کنند؛
     - سطح INFO برای شروع/پایان هر stage و WARN/ERROR برای issues ثبت می‌شود؛
     - جزئیات فرم ساخت‌یافته و JSON در پیوست C.2 تعریف شده است (شامل `trace_id`، `issue_code`, `row_index`, …).
+  - **Runtime Health Indicator (Infra/Shell):**
+    - HealthStatus از شمارش QA severity (`P0`, `P1`, `P2`) مشتق می‌شود: `P0>0 ⇒ ERROR (red)`, `P0=0 && P1>0 ⇒ WARN (yellow)`, در غیر این صورت `OK (green)`.
+    - Health یک لایهٔ observability است؛ Core از آن خبر ندارد و فقط خروجی‌های دترمینیستیک QA/Trace/History را ارائه می‌کند.
+    - محل استقرار Health در Infra/Shell است؛ UI فقط می‌تواند وضعیت را نمایش دهد.
+  - **LLMDebugReport (single JSON per run):**
+    - خروجی کوچک و دترمینیستیک برای دیباگ LLM شامل `meta` (از جمله `run_id` و versionها)، `HealthStatus`, خلاصهٔ issueها و چند sample row.
+    - گزارش باید privacy-safe بماند و صرفاً آینهٔ QA/History/Trace باشد؛ اجازهٔ افزودن semantics یا قواعد جدید ندارد.
   - **نمونهٔ SLO (قابل تنظیم):**
     - ۹۵٪ اجراها برای فایل‌های ≤۳۰k ردیف، در کمتر از N ثانیه (N در پیوست A؛ مثلاً ۱۰s در محیط مرجع)؛
     - نرخ خطای P0 در Golden Files = ۰؛

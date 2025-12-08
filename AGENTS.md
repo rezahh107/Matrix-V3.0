@@ -444,7 +444,19 @@ For any PR touching mentors or mentor import:
 - [ ] آیا ترتیب ranking (remaining_capacity ↓, allocations_new ↑, mentor_id ↑) و Trace ۸ مرحله‌ای حفظ شده است؟
 - [ ] آیا مسیر ایمپورت از MentorPipelineV3 عبور می‌کند و اسکیمای QA exports حفظ شده است؟
 
-## 11. Changelog
+## 11. HealthStatus و LLM Debug Report — قواعد Agentها
+
+- **MUST:**
+  - HealthStatus را فقط به‌عنوان Observability لایهٔ Infra/Shell ببینید؛ هیچ تغییر قانون دامنه از آن استخراج نکنید.
+  - Health و `LLMDebugReport` صرفاً برای دیباگ، QA و insights CI استفاده شوند؛ خروجی آنها نباید رفتار Core را تغییر دهد.
+- **MUST NOT:**
+  - ۶ کلید join، ترتیب ranking یا Trace هشت‌مرحله‌ای را هنگام کار روی Health/LLM دستکاری کنید.
+  - semantics جدید به لایهٔ Health یا گزارش LLM تزریق کنید یا آن را منبع قانون قرار دهید.
+- **Guidance:**
+  - کد Health در ماژول‌های Infra/Shell و UI integration قرار دارد؛ Core از Health بی‌اطلاع است.
+  - Health check جدید فقط با خواندن سیگنال‌های QA/History موجود یا قوانین مستند LAW/Technical SSoT مجاز است؛ business rule تازه در Health ممنوع است.
+
+## 12. Changelog
 
 **v3.1**
 
