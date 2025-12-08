@@ -221,7 +221,8 @@ eligible = school_match AND center_match
 **ظرفیت باقی‌مانده:**
 
 ```text
-remaining_capacity = capacity_limit - (assigned_baseline + allocations_new)
+total_allocations = assigned_baseline + allocations_new
+remaining_capacity = capacity_limit - total_allocations
 ```
 
 این مقدار باید همیشه **>= 0** بماند (CAPACITY-01).
