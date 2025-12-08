@@ -37,6 +37,72 @@ def test_header_pipeline_respects_existing_canonical_mentor_id() -> None:
     assert result.resolved_df["mentor_id"].tolist() == ["canonical", "alias"]
 
 
+def test_header_pipeline_prefers_canonical_over_alias_values() -> None:
+    pipeline = HeaderPipelineV3(alias_registry=HEADER_ALIASES_V3)
+    df = pd.DataFrame(
+        {
+            "employee_id": ["alias-1", "alias-2"],
+            "mentor_id": ["canonical-1", "canonical-2"],
+            "گروه آزمایشی": ["27", "27"],
+        }
+    )
+
+    result = pipeline.resolve(df, source="mentor")
+
+    assert result.resolved_df["mentor_id"].tolist() == ["canonical-1", "canonical-2"]
+
+
+def test_header_pipeline_uses_alias_when_canonical_missing() -> None:
+    pipeline = HeaderPipelineV3(alias_registry=HEADER_ALIASES_V3)
+    df = pd.DataFrame(
+        {
+            "employee_id": ["alias-only", None],
+            "mentor_id": [None, None],
+            "گروه آزمایشی": ["27", "27"],
+        }
+    )
+
+    result = pipeline.resolve(df, source="mentor")
+
+    mentor_ids = result.resolved_df["mentor_id"].tolist()
+
+    assert mentor_ids[0] == "alias-only"
+    assert pd.isna(mentor_ids[1])
+
+
+def test_header_pipeline_outputs_consistent_mentor_id_across_column_orders() -> None:
+    pipeline = HeaderPipelineV3(alias_registry=HEADER_ALIASES_V3)
+    base_data = {
+        "mentor_id": ["canonical-1", None],
+        "employee_id": ["alias-1", "alias-2"],
+        "گروه آزمایشی": ["27", "27"],
+    }
+
+    df_first = pd.DataFrame(base_data)
+    df_second = pd.DataFrame({key: base_data[key] for key in ["employee_id", "mentor_id", "گروه آزمایشی"]})
+
+    result_first = pipeline.resolve(df_first, source="mentor")
+    result_second = pipeline.resolve(df_second, source="mentor")
+
+    assert result_first.resolved_df["mentor_id"].tolist() == ["canonical-1", "alias-2"]
+    assert result_second.resolved_df["mentor_id"].tolist() == ["canonical-1", "alias-2"]
+
+
+def test_header_pipeline_leaves_single_mentor_id_source_intact() -> None:
+    pipeline = HeaderPipelineV3(alias_registry=HEADER_ALIASES_V3)
+    df = pd.DataFrame(
+        {
+            "mentor_id": ["canonical-1", "canonical-2"],
+            "گروه آزمایشی": ["27", "27"],
+        }
+    )
+
+    result = pipeline.resolve(df, source="mentor")
+
+    assert list(result.resolved_df.columns).count("mentor_id") == 1
+    assert result.resolved_df["mentor_id"].tolist() == ["canonical-1", "canonical-2"]
+
+
 def test_header_pipeline_reports_unknown_and_ambiguous_headers() -> None:
     pipeline = HeaderPipelineV3(
         alias_registry={"mentor": {"mentor_id": "mentor_id", "کد رشته": "کدرشته"}},
