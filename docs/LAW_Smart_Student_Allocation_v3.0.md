@@ -214,8 +214,8 @@ eligible = school_match AND center_match
 
 از `mentors-import-spec` و `allocation-policy.yml`:
 
-- `capacity_limit`: حداکثر ظرفیت قابل تخصیص (اگر خالی ⇒ مقدار پیش‌فرض policy، مثلاً 60).
-- `assigned_baseline`: تعداد دانش‌آموزان از قبل در پوشش پشتیبان.
+- `capacity_limit`: حداکثر ظرفیت قابل تخصیص و **سقف سخت** صندلی‌های یک پشتیبان (اگر خالی ⇒ مقدار پیش‌فرض policy، مثلاً 60).
+- `assigned_baseline`: تعداد دانش‌آموزان از قبل در پوشش پشتیبان، قبل از ران جاری.
 - `allocations_new`: تعداد تخصیص‌های جدید در همین run.
 
 **ظرفیت باقی‌مانده:**
@@ -227,6 +227,7 @@ remaining_capacity = capacity_limit - total_allocations
 
 این مقدار باید همیشه **>= 0** بماند (CAPACITY-01).
 اگر اطلاعات baseline وجود نداشته باشد، `assigned_baseline = 0` در نظر گرفته می‌شود و در نتیجه فرمول به حالت تخفیف‌یافتهٔ `capacity_limit - allocations_new` تبدیل می‌شود.
+این تعریف در LAW/CAPACITY-FIELDS-01 نیز بدون تغییر تکرار می‌شود تا معنا در تمام LAW یکدست بماند.
 
 ---
 
