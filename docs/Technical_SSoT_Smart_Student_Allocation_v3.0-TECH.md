@@ -238,6 +238,48 @@ conflict محسوب نمی‌شود.
   - MentorPoolBuilder فقط زمانی `pool` را برمی‌گرداند که `can_continue=true`; در غیر این صورت نتیجه صرفاً شامل متادیتای توقف است.
 - همهٔ entrypointهای ایمپورت در Infra باید MentorPipelineV3 را صدا بزنند و فقط `MentorPoolBuildResult.pool` را به Core تحویل دهند؛ Core هیچ منطق الحاق مستقلی ندارد و صرفاً مصرف‌کنندهٔ این SSoT است.
 
+### 4.6. GROUP-CODE-01 — تنها کلید «پایه+رشته» و جدول مرجع
+
+- `group_code` تنها کلید کاننیکال برای بعد «پایه+رشته» است و همیشه `int` از دامنهٔ معتبر تعریف‌شده در «group-code parser» است؛ هر مقدار خارج از این دامنه باید QA/Blocking شود.
+- مقطع (`stage`)، پایه (`grade`) و رشته/track از روی همین کد مشتق می‌شوند و خودشان کلید join نیستند.
+- یک جدول مرجع پایدار DB-backed برای گروه‌ها وجود دارد با ستون‌های حداقلی `group_code`, `stage`, `grade`, `track`, `display_name`; هم ایمپورت پشتیبان و هم دانش‌آموز از این جدول برای تفسیر `group_code` استفاده می‌کنند.
+- ستون ورودی `exam_groups_included` در Inspactor/Report یک فیلد SOURCE است؛ متن آن توسط group-code parser به `List[int]` (همه از دامنهٔ معتبر `group_code`) تبدیل می‌شود و خودش کلید join نیست.
+
+### 4.7. FINANCE-01 — نگاشت «وضعیت ثبت نام» به finance_code
+
+- دامنهٔ `finance_code` محدود به {0 (مالی)، 1 (حکمت)، 3 (بنیاد)} است و هر مقدار دیگری باید به QA با شدت مناسب منجر شود و نباید وارد ستون join شود.
+- نگاشت از ستون Report «وضعیت ثبت نام» به `finance_code` باید شفاف و صریح باشد؛ مثال جدول نگاشت مجاز:
+
+| وضعیت ثبت نام (raw) | finance_code |
+| --- | --- |
+| مالی | 0 |
+| حکمت | 1 |
+| بنیاد | 3 |
+
+- مقدار خارج از جدول بالا باید QA شود و `can_continue=false` اگر ستون join را پر نکند.
+- استخر پشتیبانان در حال حاضر سه حالت مالی را پوشش می‌دهد (پروفایل‌ها برای {0،1،3} طبق سیاست فعلی) و این رفتار نباید با مسیرهای میان‌بُر تغییر کند.
+
+### 4.8. ALIAS-01 — جزئیات کاننیکال و کانال‌ها
+
+- `alias` یک مفهوم واحد عددی برای الصاق دانش‌آموز → پشتیبان است و در Core/Infra با نام‌های `mentor_alias_code`، `alias_code` و `postal_code` بازنمایی می‌شود.
+- تشخیص نوع پشتیبان فقط از `schools_covered_count` انجام می‌شود (`>0` ⇒ School، `==0` ⇒ Normal)؛ هر heuristic قدیمی بر مبنای رنج alias/کدپستی صرفاً تاریخی است.
+- ورودی Inspactor برای پشتیبان عادی ستون «کدپستی» است که منبع `alias`/`alias_code` محسوب می‌شود؛ برای پشتیبان مدرسه‌ای `mentor_id` جایگزین می‌شود.
+- در خروجی Report، ستون «کپی کد جایگزین 39» در ورودی‌ها خالی است و موتور تخصیص با alias کاننیکال تخصیص‌یافته (طبق ALIAS-01) آن را پر می‌کند.
+
+### 4.9. SCHOOL-REF-01 — مدرسه به‌عنوان مرجع DB
+
+- `schools` یک جدول مرجع پایدار است (ورودی هر ران نیست) با ستون‌های حداقلی: `school_code` (PK عددی)، `school_name`, `education_district`, `school_type`, `school_stage` (نرمال‌شده از دبستان/راهنمایی/دبیرستان/هنرستان), `school_gender_code`.
+- دامنهٔ `school_gender_code`: `1` = پسرانه، `2` = دخترانه؛ مدرسه مختلط وجود ندارد. ردیف بدون جنسیت باید در ایمپورت اولیه حذف و به QA گزارش شود.
+- `school_stage` سطح مدرسه است و برای QA همسویی با `group_code` استفاده می‌شود؛ اما `group_code` و `school_code` دو کلید join مستقل می‌مانند.
+
+### 4.10. HEADER-PIPELINE-V3 — Concept vs Channel
+
+- لایهٔ **Concept** شامل فیلدهای کاننیکال (مثلاً `group_code`, `gender_code`, `finance_code`, `school_code`, `center_code`, `grad_status_code`, `mentor_id`, `alias`, `remaining_capacity`) است و تنها چیزی است که Core می‌شناسد.
+- **Canonical Frame** اسکیمای DataFrame/DB با همین نام‌های کاننیکال است؛ همهٔ ورودی/خروجی‌ها باید در نهایت به این فیلدها نگاشت شوند.
+- **Channel** لایهٔ هدرهای منبع/خروجی است (InspactorReport، Report، SchoolReport، DB/History/QA)؛ هر هدر خام باید از مسیر HeaderPipelineV3 عبور کند.
+- HeaderPipelineV3 (FieldRegistry + HeaderResolver + ValueCanonicalizer + registry) تنها SSoT نگاشت `(channel, raw_header, raw_value) → (canonical_field, canonical_value)` است؛ هیچ کد دیگری مجاز به hard-code کردن هدر یا bypass این نگاشت نیست.
+- QA الزامی: هدر ناشناخته یا غلط‌املایی باید به QA ساخت‌یافته (UNKNOWN_HEADER / UNMAPPED_HEADER) تبدیل شود و بی‌صدا حذف نشود. کمبود فیلدهای اجباری join-key همچنان P0 و با `can_continue=false` است.
+
 ---
 
 ## 5. اینورینت‌های هستهٔ Core
