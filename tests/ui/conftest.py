@@ -109,6 +109,11 @@ class _MiniQtBot:
 
         QTest.qWait(ms)
 
+    def mouseClick(self, widget: Any, button: Any, *, delay: int = 0) -> None:  # noqa: N802
+        from PySide6.QtTest import QTest
+
+        QTest.mouseClick(widget, button, delay=delay)
+
     def waitSignal(self, signal: Any, *, timeout: int | None = None) -> Any:  # noqa: N802
         return waitSignal(signal, timeout=timeout)
 
