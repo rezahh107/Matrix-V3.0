@@ -1077,6 +1077,8 @@ provides deterministic canonical import, and aligns code with LAW/TECH.
   - `school_code`
   - `school_name`
   - `center_code`
+  - `school_gender_code` (1 = پسرانه، 2 = دخترانه)
+  - `school_stage` (ابتدایی / متوسطه اول / متوسطه دوم نظری / هنرستان)
   - وضعیت فعال/غیرفعال (در صورت نیاز)
   - سایر اطلاعات مرجع (آدرس، نوع مدرسه و …) در صورت نیاز.
 
@@ -1084,7 +1086,14 @@ provides deterministic canonical import, and aligns code with LAW/TECH.
 
   - SCHOOL-01: هر `school_code` باید یکتا و معتبر باشد.
   - `center_code` برای هر مدرسه باید معتبر و با Center Entity سازگار باشد.
+  - مدرسهٔ مختلط نداریم؛ `school_gender_code` باید در دامنهٔ {1،2} باشد و ردیف بدون جنسیت در ایمپورت اولیه حذف و در QA ثبت شود.
+  - `school_stage` سطح مدرسه است و برای QA همسویی با `group_code` استفاده می‌شود؛ `group_code` و `school_code` کلیدهای join مستقل باقی می‌مانند.
   - اگر مدرسه غیرفعال باشد، Policy تعیین می‌کند دانش‌آموزان/منتورهای مرتبط چطور مدیریت شوند (مثلاً به QA یا استثنا تبدیل شوند).
+
+  **مرجع داده:**
+
+  - SchoolReport ورودی هر ران نیست؛ برای bootstrap/update جدول مرجع `schools` استفاده می‌شود و پس از بارگذاری موفق، Mentor/Student import فقط از DB می‌خوانند.
+  - School rows بدون جنسیت یا خارج از دامنه نباید وارد جدول مرجع شوند و باید QA شوند.
 
   این Refactor از School به‌عنوان منبع کد و constraint برای join mentors استفاده می‌کند
    (به‌خصوص برای MentorType= SCHOOL)، اما منطق اصلی School در اسناد پایه تعریف می‌شود.
@@ -1165,6 +1174,12 @@ provides deterministic canonical import, and aligns code with LAW/TECH.
   3. **Enums و کدهای دامنه‌ای**
      - `StudentType`, `MentorType`, `GraduationStatus`, `FinanceCode`, …
      - این‌ها Setهای مقادیر محدود هستند که در ValueCanonicalizer و Domain Validation استفاده می‌شوند.
+
+  #### 4.0.7. GroupCode Reference
+
+  - `group_code` تنها کلید کاننیکال برای بعد «پایه+رشته» است و باید از دامنهٔ مجاز فایل مشخصات group-code parser باشد؛ مقطع/پایه/رشته فقط از همین کد مشتق می‌شوند و خودشان join key نیستند.
+  - یک جدول مرجع پایدار DB-backed شامل ستون‌های `group_code`, `stage`, `grade`, `track`, `display_name` وجود دارد؛ هر دو pipeline دانش‌آموز و منتور برای تفسیر group_code به آن متکی هستند.
+  - فیلدهای منبع مانند «شامل گروه های آزمایشی» در Inspactor/Report به‌صورت متن وارد می‌شوند و با group-code parser به `List[int]` (همه در دامنهٔ معتبر `group_code`) تبدیل می‌شوند؛ این فیلدها خودشان join key نیستند.
 
   این Refactor Join Pipeline مستقیماً با Mentor Entity، Student Entity (برای سازگاری join)
    و Value Objectهای JoinKeyProfile / CapacitySnapshot درگیر است؛
@@ -1298,6 +1313,16 @@ provides deterministic canonical import, and aligns code with LAW/TECH.
   Refactor v3 pipeline دانش‌آموز را تغییر نمی‌دهد،
    اما هر تغییری در semantics join mentors باید با join دانش‌آموز سازگار باشد
    تا Allocation Entity بتواند این دو موجودیت را هم‌معنا به هم متصل کند.
+
+  ------
+
+  ### 4.4. Concept / Canonical Frame / Channel (HeaderPipelineV3)
+
+  - **Concept Layer:** فیلدهای کاننیکال (مثلاً `group_code`, `gender_code`, `finance_code`, `school_code`, `center_code`, `grad_status_code`, `mentor_id`, `alias`, `remaining_capacity`) که Core می‌شناسد.
+  - **Canonical Frame:** اسکیمای DataFrame/DB با همین نام‌های کاننیکال؛ تمام ورودی/خروجی‌ها باید در نهایت به این فیلدها نگاشت شوند.
+  - **Channel Layer:** هدرهای ورودی/خروجی در منابع مختلف (InspactorReport، Report، SchoolReport، DB/History/QA). هیچ هدر خامی بدون عبور از HeaderPipelineV3 قابل استفاده نیست.
+  - HeaderPipelineV3 (FieldRegistry + HeaderResolver + ValueCanonicalizer + registry) تنها SSoT نگاشت `(channel, raw_header, raw_value) → (canonical_field, canonical_value)` است؛ هر hard-code خارج از این مسیر ممنوع است.
+  - QA اجباری: هدر ناشناخته یا misspelled باید issue ساخت‌یافته (UNKNOWN_HEADER / UNMAPPED_HEADER) تولید کند، نه silent drop؛ نبود فیلدهای اجباری join-key همچنان P0 با `can_continue=false` است.
 
   ------
 
@@ -1844,6 +1869,13 @@ provides deterministic canonical import, and aligns code with LAW/TECH.
   - Dynamic config برای semantics join در v3 استفاده نمی‌شود؛
      هرگونه externalization در آینده باید در LAW/Technical SSoT و سند جداگانه طراحی شده
      و migration واضح داشته باشد.
+
+  ### 11.4. Reference DB برای GroupCode و School
+
+  - فایل‌های SchoolReport و crosswalk/group-code Excel ورودی هر ران نیستند؛ نقش‌شان bootstrap/update جداول مرجع DB است.
+  - پس از ایمپورت اولیهٔ موفق، داده‌های School و GroupCode در LocalDatabase نگه‌داری می‌شوند و pipeline‌های دانش‌آموز و پشتیبان فقط از این جداول مرجع می‌خوانند.
+  - اجرای معمول تخصیص نیاز به SchoolReport یا crosswalk ندارد مگر برای آپدیت مرجع؛ QA سلامت جدول مرجع باید قبل از ران بررسی شود.
+  - UI جایگزین تب Legacy Validation، یک تب Database/Reference دارد برای واردکردن/به‌روزرسانی دادهٔ School/GroupCode و نمایش زمان آخرین آپدیت و وضعیت QA.
 
   ------
 

@@ -57,9 +57,11 @@ The repository follows a layered Policy-First architecture: (certain) [TECH][AGE
 
 The high-level data flow of a full allocation run is: (certain) [LAW][TECH][AGENTS.md][code]
 
-1. **Policy & Inputs (UI/CLI + Infra)**  
-   - User selects Excel files (students, mentor pool / Inspactor matrix, crosswalk) and a Policy file via UI or CLI. (certain) [app/ui/main_window.py][app/infra/cli.py]  
+1. **Policy & Inputs (UI/CLI + Infra)**
+   - User selects Excel files (students, mentor pool / Inspactor matrix, crosswalk) and a Policy file via UI or CLI. (certain) [app/ui/main_window.py][app/infra/cli.py]
    - Policy is loaded and parsed into `PolicyConfig`. (certain) [app/core/policy_loader.py][TECH]
+   - SchoolReport و فایل‌های crosswalk/group-code فقط برای bootstrap/update جداول مرجع (School، GroupCode) در LocalDatabase استفاده می‌شوند؛ پس از بارگذاری موفق، اجرای عادی به این فایل‌ها نیاز ندارد مگر برای به‌روزرسانی مرجع. (TECH)
+   - UI تب Database/Reference را برای واردکردن/به‌روزرسانی دادهٔ مرجع و مشاهدهٔ زمان آخرین آپدیت/QA وضعیت نمایش می‌دهد. (TECH)
 
 2. **Infra Canonicalization (Excel → Infra frames)**  
    - Infra reads Excel files into DataFrames, performs initial header normalization and crosswalk merging. (certain) [app/infra/canonical_frames.py]  
