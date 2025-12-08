@@ -145,11 +145,11 @@ class HeaderPipelineV3:
         for column in df.columns:
             normalized_columns[_normalize_header(str(column))].append(str(column))
 
-        ordered_aliases: list[str] = []
-        for normalized in alias_priority:
-            ordered_aliases.extend(normalized_columns.get(normalized, []))
-
-        return ordered_aliases
+        return [
+            column
+            for normalized in alias_priority
+            for column in normalized_columns.get(normalized, [])
+        ]
 
     def _mentor_alias_priority(self, source: str) -> list[str]:
         alias_map = self._alias_registry.get(source, {})
