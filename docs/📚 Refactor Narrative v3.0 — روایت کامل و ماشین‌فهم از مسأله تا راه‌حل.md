@@ -2777,4 +2777,464 @@ def run_mentor_import_and_join(ctx: RunContext) -> MentorImportRunResult:
 
 ------
 
+پیوست F — نمای شی‌گرا (DDD View) برای Import & Join & Allocation v3
+این پیوست یک نمای شی‌گرا / Domain-Driven Design از همان معماری‌ای است که در بدنهٔ سند Refactor v3 تعریف شده است.
+منطق و اینورینت‌ها همچنان از LAW / Technical SSoT / بخش‌های ۳، ۴، ۷، ۸ و ۹ همین سند تبعیت می‌کنند؛ این پیوست فقط مدل ذهنی و ساختار شی‌گرا را رسمی می‌کند، بدون این‌که رفتار جدیدی تعریف کند. 
+
+F.1. هدف این پیوست
+
+
+فراهم کردن زبان مشترک شی‌گرا برای صحبت دربارهٔ موجودیت‌ها و سرویس‌ها؛
+
+
+هم‌راستا کردن مدل دامین با پیاده‌سازی DataFrame-محور موجود؛
+
+
+آماده‌کردن زمین برای پیاده‌سازی‌های آینده (مثلاً RuleSlot / MultiStrategyAllocator) بدون تغییر در semantics join/rank/trace.
+
+
+
+اصل کلیدی:
+این پیوست هیچ قانون جدیدی اضافه نمی‌کند؛ فقط همان مفاهیم بخش ۴ (Entities & Value Objects) و بخش‌های ۷–۹ را در قالب DDD مرتب می‌کند.
+
+
+F.2. موجودیت‌ها (Domain Entities)
+موجودیت‌ها اشیائی هستند که هویت (Identity) مستقل دارند و در طول زمان تغییر وضعیت می‌دهند. تعریف فیلدها و اینورینت‌ها باید با بخش ۴.۰ همین سند منطبق بماند.
+F.2.1. Student Entity
+
+
+هویت:
+student_key (شناسهٔ یکتای دانش‌آموز در run / سال هدف)
+
+
+ویژگی‌های کلیدی (هم‌راستا با 4.0.1):
+
+
+student_key
+
+
+student_type (عادی / مدرسه‌ای)
+
+
+۶ کلید الحاق (در سمت دانش‌آموز):
+
+
+group_code
+
+
+gender_code
+
+
+grad_status_code
+
+
+center_code
+
+
+finance_code
+
+
+school_code
+
+
+
+
+فیلدهای تکمیلی: وضعیت تحصیلی، وضعیت مالی، … مطابق LAW/TECH
+
+
+
+
+اینورینت‌ها (خلاصه):
+
+
+ترکیب (group_code, gender_code, grad_status_code) باید در دامنهٔ معتبر تعریف‌شده در LAW/TECH باشد؛
+
+
+student_type با school/center سازگار است؛
+
+
+از دید Allocation: هر student_key در هر run حداکثر یک تخصیص فعال دارد (ALLOCATION-01).
+
+
+
+
+در پیاده‌سازی فعلی، Student بیشتر به‌صورت DataFrame canonical دانش‌آموزان نمایش داده می‌شود؛ این Entity مدلی شی‌گرا روی همان frame است.
+
+F.2.2. Mentor Entity
+
+
+هویت:
+mentor_id
+
+
+ویژگی‌های کلیدی (هم‌راستا با 4.0.2 و 4.2):
+
+
+mentor_id
+
+
+mentor_type (NORMAL / SCHOOL)
+
+
+mentor_status (ACTIVE / FROZEN)
+
+
+join_profile: JoinKeyProfile (پروفایل رسمی ۶ کلید الحاق)
+
+
+ظرفیت:
+
+
+capacity_limit
+
+
+assigned_baseline
+
+
+allocations_new
+
+
+property مشتق‌شده: remaining_capacity
+
+
+
+
+فیلدهای تکمیلی: نام، عنوان، کد ملی، center/school مرجع، …
+
+
+
+
+اینورینت‌های مهم:
+
+
+فقط منتورهای mentor_status = ACTIVE وارد استخر تخصیص می‌شوند؛
+
+
+CAPACITY-01: remaining_capacity نباید منفی شود؛
+
+
+join این Mentor با Student فقط و فقط با ۶ کلید join و semantics LAW انجام می‌شود (نه فیلدهای دیگر).
+
+
+
+
+نمای فعلی در کد:
+یک DataFrame canonical mentors + type JoinKeyProfile (بخش 4.1) + property remaining_capacity (بخش 4.2). این پیوست Mentor را به‌عنوان یک Entity رسمی توصیف می‌کند، حتی اگر در v3 هنوز به‌صورت کلاس کامل پیاده‌سازی نشده باشد.
+
+F.2.3. School Entity
+
+
+هویت:
+school_code
+
+
+نقش:
+موجودیت مرجع برای اتصال دانش‌آموزان و منتورها به مدرسه.
+
+
+فیلدهای نمونه (هم‌راستا با 4.0.3):
+
+
+school_code
+
+
+school_name
+
+
+center_code
+
+
+وضعیت فعال/غیرفعال
+
+
+
+
+اینورینت‌ها (خلاصه):
+
+
+SCHOOL-01: school_code یکتا و معتبر؛
+
+
+center_code معتبر و سازگار با Center Entity.
+
+
+
+
+در v3، School به‌صورت دادهٔ مرجع در Import/Join استفاده می‌شود و ورودی JoinKeyResolver / QA است، نه جایی برای منطق اختصاصی.
+
+F.2.4. Center Entity
+
+
+هویت:
+center_code
+
+
+نقش:
+مرجع تجمیع مدارس و منتورها در سطح مرکز (هم‌راستا با 4.0.4).
+
+
+اینورینت‌ها:
+
+
+CENTER-01: center_code یکتا و معتبر؛
+
+
+نقش 0 به‌عنوان wildcard center طبق LAW/TECH تعریف شده است.
+
+
+
+
+
+F.2.5. Allocation Entity
+
+
+هویت:
+allocation_id یا کلید مرکب (student_key, mentor_id, year, run_id)
+
+
+ویژگی‌های کلیدی (هم‌راستا با 4.0.5):
+
+
+student_key
+
+
+mentor_id
+
+
+سال/دوره
+
+
+allocation_status (ACTIVE, CANCELLED, …)
+
+
+trace ۸ مرحله‌ای (type, group, gender, grad_status, center, finance, school, capacity_gate)
+
+
+
+
+اینورینت‌های اصلی:
+
+
+ALLOCATION-01: یک student_key در یک run فقط یک تخصیص فعال دارد؛
+
+
+ALLOCATION-TRACE-01: هر Allocation باید trace ۸ مرحله‌ای معتبر داشته باشد.
+
+
+
+
+در v3، این Entity بیشتر از طریق خروجی‌های Core/History و QA Workbooks دیده می‌شود.
+
+F.3. اشیاء ارزش (Value Objects)
+Value Objectها هویت مستقل ندارند، immutable هستند و بر اساس مقدارشان مقایسه می‌شوند. بسیاری از مفاهیم v3 در بخش 4.1 و 4.0.6 همین سند، دقیقاً Value Object هستند.
+F.3.1. JoinKeyProfile
+این Value Object در بخش 4.1 تعریف شده و قلب join در v3 است:
+
+
+۶ فیلد اصلی:
+
+
+group_code
+
+
+gender_code
+
+
+grad_status_code
+
+
+center_code
+
+
+finance_code
+
+
+school_code
+
+
+
+
+فیلدهای کمکی:
+
+
+mentor_type (NORMAL / SCHOOL)
+
+
+alias_code (در صورت نیاز)
+
+
+
+
+قاعدهٔ DDD:
+
+
+equality و hash فقط بر اساس ۶ کلید join؛
+
+
+هر تغییری در semantics این ۶ کلید باید در LAW / Technical SSoT و FieldRegistry منعکس شود (بخش ۵).
+
+
+این نوع همان چیزی است که در JoinKeyResolver ساخته می‌شود و در Mentor Entity مصرف می‌گردد.
+
+F.3.2. CapacitySnapshot
+CapacitySnapshot یک Value Object مفهومی است که در کد v3 به‌صورت inline در Mentor پیاده شده است (بخش 4.2):
+
+
+فیلدها:
+
+
+capacity_limit
+
+
+assigned_baseline
+
+
+allocations_new
+
+
+
+
+property مشتق‌شده:
+
+
+remaining_capacity = capacity_limit - (assigned_baseline + allocations_new)
+
+
+
+
+نکته:
+هر ستونی به نام remaining_capacity در DataFrame فقط بازتاب همین فرمول است و هیچ جای دیگری حق ندارد آن را با فرمول متفاوت محاسبه کند.
+
+F.3.3. سایر Value Objectها (Canonical Code / Enums)
+
+
+Domain enums مثل MentorType, MentorStatus, GraduationStatus, FinanceCode, …
+
+
+mappingهای canonical برای group/gender/finance/center/school که در ValueCanonicalizer اعمال می‌شوند.
+
+
+این‌ها در DDD به‌عنوان Value Objectهایی در نظر گرفته می‌شوند که در Student/Mentor و JoinKeyProfile استفاده می‌شوند.
+
+F.4. سرویس‌های دامنه (Domain Services)
+سرویس دامنه زمانی استفاده می‌شود که یک رفتار مهم دامین، به یک Entity مشخص تعلق ندارد یا به چند Entity و چند Value Object مربوط است.
+در v3، بسیاری از این سرویس‌ها به‌صورت stageهای functional (توابع pure) پیاده شده‌اند؛ این پیوست فقط نام‌گذاری DDD و رابطهٔ آن‌ها را روشن می‌کند.
+F.4.1. MentorImportService (Domain Service روی Import & Join)
+نقش مفهومی:
+
+تبدیل داده‌های خام Inspactor/… به MentorPool canonical + QA، طبق LAW/TECH و Refactor v3.
+
+در معماری v3، این سرویس به‌صورت ترکیب stageهای زیر پیاده شده است (بخش ۳.۳ و ۷–۸):
+
+
+FieldRegistry — SSoT فیلدها
+
+
+HeaderResolver — نگاشت هدرها
+
+
+ValueCanonicalizer — تبدیل به مقادیر canonical
+
+
+JoinKeyResolver — ساخت JoinKeyProfile و تشخیص issues
+
+
+MentorPoolBuilder — ساخت استخر canonical mentors + QA artifacts
+
+
+در DDD View، این پنج جزء در مجموع یک Domain Service برای «Mentor Import & Join» را تشکیل می‌دهند.
+در v3 نیازی نیست حتماً یک کلاس MentorImportService ساخته شود؛ همین ترکیب stageهای functional، پیاده‌سازی عملی این سرویس است.
+
+F.4.2. StudentImportService (خارج از محدوده‌ی تغییر در v3)
+برای دانش‌آموزان نیز به‌طور مفهومی سرویسی مشابه وجود دارد:
+
+StudentImportService داده‌های خام دانش‌آموزان را به student canonical frame تبدیل می‌کند.
+
+در v3، این pipeline تغییر نمی‌کند؛ فقط باید با ۶ کلید join و Domain Validation دانش‌آموز (بخش 4.0.1 و 4.3) سازگار بماند تا با MentorPool v3 هم‌معنا شود.
+
+F.4.3. AllocationService (Core Allocation / build_matrix)
+AllocationService همان رفتار Core است که در حال حاضر توسط build_matrix (و در آینده MultiStrategyAllocator / RuleSlot) پیاده می‌شود:
+
+
+ورودی:
+
+
+Student canonical pool (با ۶ join key و student_key)؛
+
+
+Mentor canonical pool (با ۶ join key، ظرفیت و MentorStatus)؛
+
+
+PolicyConfig (قوانین تخصیص و اولویت‌ها).
+
+
+
+
+خروجی:
+
+
+مجموعه‌ای از Allocation Entityها + QA / Trace ۸ مرحله‌ای.
+
+
+
+
+این سرویس باید اینورینت‌های زیر را حفظ کند:
+
+
+استفاده از ۶ join key طبق LAW؛
+
+
+ترتیب ranking ثابت (remaining_capacity ↓، allocations_new ↑، mentor_id ↑)؛
+
+
+Trace ۸ مرحله‌ای بدون تغییر ساختار.
+
+
+در DDD View، ممکن است این رفتار به شکل یک کلاس/ماژول AllocationService دیده شود، اما در v3 نام و امضای واقعی تابع Core (build_matrix) منبع حقیقت است؛ این پیوست فقط نقش مفهومی را توضیح می‌دهد.
+
+F.4.4. JoinKeyResolutionService
+در سطح DDD، JoinKeyResolver یک Domain Service صریح است که:
+
+
+۶ کلید join را از DataFrame canonical mentors استخراج می‌کند؛
+
+
+JoinKeyProfile می‌سازد؛
+
+
+all_profiles و usable_profiles را تولید می‌کند؛
+
+
+Issues مربوط به Law A / Law B (multi-profile, duplicate exact profile) را ثبت می‌کند.
+
+
+در v3 همین نقش توسط کلاس/ماژول JoinKeyResolver (بخش ۸) پیاده شده است؛ این پیوست فقط آن را به‌عنوان Domain Service رسمی نام‌گذاری می‌کند.
+
+F.5. ضدالگوها و محدودیت‌های شی‌گرایی در v3
+برای جلوگیری از «شتر گاو پلنگ شی‌گرا»، در v3 این محدودیت‌ها برقرار است:
+
+
+هیچ Entity/Service جدیدی که رفتار join/rank/trace را عوض کند، در این پیوست مجاز نیست.
+هر تغییری در semantics باید از مسیر LAW / Technical SSoT و بخش‌های اصلی سند بگذرد، نه از طریق اضافه‌کردن کلاس‌های جدید.
+
+
+Inheritance عمیق برای Entities ممنوع است.
+Student و Mentor و School و Center موجودیت‌های جدا هستند؛ بهتر است با composition (مثلاً نگه‌داشتن JoinKeyProfile و CapacitySnapshot) ساخته شوند، نه درخت ارث‌بری پیچیده.
+
+
+UI / تب دیباگ نباید Domain Service مستقل بسازد.
+UI فقط مصرف‌کنندهٔ خروجی سرویس‌های دامین Import/Join/Allocation/QA است (مطابق پیوست D و C).
+
+
+DataFrame همچنان مدل دادهٔ اصلی در v3 است.
+کلاس‌های شی‌گرا (اگر پیاده شوند) باید thin wrapper روی frames canonical باشند و اینورینت‌های LAW/TECH را تغییر ندهند.
+
+
+
+F.6. نگاشت بین DDD View و پیاده‌سازی v3
+برای وضوح، این جدول نشان می‌دهد هر مفهوم دامین در این پیوست به کدام بخش‌های سند و پیاده‌سازی v3 نگاشت می‌شود (نام فایل/ماژول دقیق می‌تواند در Repository Specification مشخص شود):
+مفهوم DDDنقش در این پیوستمعادل در این سند / پیاده‌سازی v3Student Entityدانش‌آموز با ۶ join key و student_keyبخش‌های 4.0.1 و 4.3؛ student canonical frame در Core/InfraMentor Entityپشتیبان با JoinKeyProfile و CapacitySnapshotبخش 4.0.2 و 4.2؛ DataFrame mentors + JoinKeyProfile + capacity fieldsSchool / Centerموجودیت مرجعبخش 4.0.3 و 4.0.4؛ جداول مرجع و mappings در Import/QAAllocation Entityتخصیص student→mentor با Traceبخش 4.0.5؛ خروجی Core (build_matrix + History/Trace)JoinKeyProfile VOپروفایل ۶ کلید joinبخش 4.1 و 8؛ خروجی JoinKeyResolver و ورودی MentorCapacitySnapshot VOوضعیت ظرفیت منتوربخش 4.0.6 و 4.2؛ property remaining_capacity و فیلدهای ظرفیتMentorImportServiceسرویس Import & Join منتورهاترکیب FieldRegistry + HeaderResolver + ValueCanonicalizer + JoinKeyResolver + MentorPoolBuilder (بخش‌های ۵–۸)StudentImportServiceسرویس Import دانش‌آموزpipeline فعلی students (خارج از محدوده‌ی تغییر در v3؛ باید با ۶ join key هماهنگ باشد)AllocationServiceسرویس تخصیصbuild_matrix (و در آینده MultiStrategyAllocator / RuleSlot) طبق بخش ۹JoinKeyResolutionServiceسرویس ساخت و QA پروفایل الحاقJoinKeyResolver و JoinKeyResolutionResult طبق بخش ۸
+این نگاشت تضمین می‌کند که هر بحث شی‌گرا دربارهٔ سیستم، مستقیم به اجزای موجود در Refactor v3 وصل شود و از ایجاد «مدل دوم موازی» جلوگیری گردد.
+
+این پیوست F، لایهٔ DDD / نمای شی‌گرا را به سند اضافه می‌کند بدون آن‌که قوانین join/rank/trace یا رفتار Import/Join را عوض کند؛ تنها کاری که می‌کند این است که همان معماری policy-first / SSoT-محور را در زبان شی‌گرا توضیح دهد تا هم برای انسان، هم برای LLM، تصویر دامنه شفاف‌تر و پایدارتر بماند.
 این پیوست E، ریفکتور را از سطح «طراحی و قانون» به سطح «کدنویسی روزمره و گردش‌کار توسعه» متصل می‌کند تا هر تغییری که روی سیستم اعمال می‌شود، از همان ابتدا با کیفیت، قابل‌ردیابی و در هماهنگی کامل با LAW / SSoT / Technical SSoT پیاده‌سازی شود.
