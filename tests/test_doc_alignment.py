@@ -4,7 +4,6 @@ from pathlib import Path
 
 import pytest
 
-
 DOC_EXPECTATIONS: dict[Path, list[str]] = {
     Path("docs/LAW_Smart_Student_Allocation_v3.0.md"): [
         "قانون GROUP-CODE-01",
