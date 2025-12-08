@@ -70,6 +70,7 @@ from app.core.counter import find_max_sequence_by_prefix, year_to_yy
 from app.core.policy_loader import get_policy
 from app.infra import cli
 from app.infra.errors import JoinKeyValidationError
+from app.infra.health import compute_run_health, export_llm_debug_report_to_file
 from app.infra.local_database import LocalDatabase
 from app.infra.year_database_manager import YearDatabaseInfo, YearDatabaseManager
 from app.ui.database_manager_dialog import DatabaseManagerDialog
@@ -107,6 +108,7 @@ from .theme import (
 )
 from .viewmodels.qa_dashboard_vm import QADashboardVM
 from .widgets import DatabaseStatusWidget, FilePicker, ThemedStatusBar
+from .widgets.health_indicator import HealthCallbacks, HealthIndicatorWidget
 
 logger = logging.getLogger(__name__)
 
@@ -344,6 +346,7 @@ class MainWindow(QMainWindow):
         self._current_action: str = self._translator.text("status.ready", "آماده")
         self._status_bar: ThemedStatusBar | None = None
         self._database_status: DatabaseStatusWidget | None = None
+        self._health_widget: HealthIndicatorWidget | None = None
         self._excel_loaders: set[ExcelLoader] = set()
         self._db_status_timer: QTimer | None = None
         policy_file = resource_path("config", "policy.json")
@@ -413,6 +416,12 @@ class MainWindow(QMainWindow):
         self._last_run_badge.setObjectName("lastRunBadge")
         self._last_run_badge.setWordWrap(True)
         status_column.addWidget(self._last_run_badge)
+        callbacks = HealthCallbacks(
+            fetch_summary=self._fetch_health_summary,
+            export_report=self._export_health_report,
+        )
+        self._health_widget = HealthIndicatorWidget(callbacks, self)
+        status_column.addWidget(self._health_widget)
         status_layout.addLayout(status_column, 1)
 
         self._progress = QProgressBar()
@@ -822,6 +831,39 @@ class MainWindow(QMainWindow):
         self._last_run_badge.setProperty("empty", "هنوز" in text)
         self._last_run_badge.style().unpolish(self._last_run_badge)
         self._last_run_badge.style().polish(self._last_run_badge)
+        self._refresh_health_widget()
+
+    def _latest_run_identifier(self) -> str | None:
+        if self._local_db is None:
+            return None
+        try:
+            runs = self._local_db.fetch_runs()
+        except Exception:
+            return None
+        if not runs:
+            return None
+        latest = runs[-1]
+        try:
+            return str(latest["id"])
+        except Exception:
+            return None
+
+    def _fetch_health_summary(self) -> object:
+        run_id = self._latest_run_identifier()
+        if run_id is None or self._local_db is None:
+            return None
+        return compute_run_health(run_id, db=self._local_db)
+
+    def _export_health_report(self) -> str | None:
+        run_id = self._latest_run_identifier()
+        if run_id is None or self._local_db is None:
+            raise RuntimeError("No run available for export")
+        path = export_llm_debug_report_to_file(run_id, db=self._local_db)
+        return str(path)
+
+    def _refresh_health_widget(self) -> None:
+        if self._health_widget is not None:
+            self._health_widget.refresh()
 
     def _create_page_hero(self, title: str, subtitle: str, badge: str) -> QFrame:
         """ساخت هدر Hero برای صفحات تب‌ها."""
