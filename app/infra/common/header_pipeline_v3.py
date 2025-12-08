@@ -109,18 +109,19 @@ class HeaderPipelineV3:
     @staticmethod
     def _merge_mentor_id_aliases(df: pd.DataFrame, aliases: list[str]) -> pd.DataFrame:
         candidates: list[pd.Series] = []
-        for column in aliases:
-            if column not in df.columns:
-                continue
-            candidate = df.loc[:, column]
+
+        if (df.columns == "mentor_id").any():
+            candidate = df.loc[:, df.columns == "mentor_id"]
             if isinstance(candidate, pd.DataFrame):
                 for idx in range(candidate.shape[1]):
                     candidates.append(candidate.iloc[:, idx])
             else:
                 candidates.append(candidate)
 
-        if (df.columns == "mentor_id").any():
-            candidate = df.loc[:, df.columns == "mentor_id"]
+        for column in aliases:
+            if column not in df.columns:
+                continue
+            candidate = df.loc[:, column]
             if isinstance(candidate, pd.DataFrame):
                 for idx in range(candidate.shape[1]):
                     candidates.append(candidate.iloc[:, idx])

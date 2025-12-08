@@ -47,11 +47,17 @@ class HeaderResolver:
 
         Uses the shared header alias SSoT to avoid maintaining any ad-hoc lists.
         """
-
         alias_map = HEADER_ALIASES_V3.get("mentor", {})
+
+        canonical_defined_aliases = alias_map.get("mentor_id", ())
+        if isinstance(canonical_defined_aliases, str):
+            canonical_defined_aliases = (canonical_defined_aliases,)
+
         mentor_aliases = {
             alias for alias, canonical in alias_map.items() if canonical == "mentor_id"
         }
+        mentor_aliases.update(canonical_defined_aliases)
+
         return self._pipeline._merge_mentor_id_aliases(df, sorted(mentor_aliases))
 
     def _missing_fields(self, columns: list[str] | pd.Index) -> list[str]:

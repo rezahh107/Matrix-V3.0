@@ -128,6 +128,24 @@ def test_ensure_mentor_id_coalesces_aliases() -> None:
     assert "mentor_code" not in ensured.columns
 
 
+def test_ensure_mentor_id_prefers_existing_canonical() -> None:
+    registry = FieldRegistry(policy.config)
+    resolver = HeaderResolver(registry)
+    df = pd.DataFrame(
+        {
+            "mentor_id": ["canonical-id"],
+            "employee_id": ["alias-id"],
+            "ظرفیت": [1],
+        }
+    )
+
+    ensured = resolver._ensure_mentor_id(df)
+
+    assert "mentor_id" in ensured.columns
+    assert ensured.loc[0, "mentor_id"] == "canonical-id"
+    assert "employee_id" not in ensured.columns
+
+
 def test_reference_repository_delegates_pipeline(monkeypatch: pytest.MonkeyPatch) -> None:
     class _FakeDB:
         def __init__(self) -> None:
