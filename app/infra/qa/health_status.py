@@ -5,9 +5,9 @@ This module lives in Infra to keep observability separate from domain rules.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum
-from typing import Mapping
 
 from app.core.qa.invariants import QaReport
 
