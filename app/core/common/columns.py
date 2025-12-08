@@ -149,6 +149,139 @@ CANON_FA_TO_EN: Mapping[str, str] = {
 
 
 # ---------------------------------------------------------------------------
+# Header aliases (v3 SSoT)
+# ---------------------------------------------------------------------------
+#
+# These alias maps are the single source of truth for header normalization
+# across mentor, student, school, crosswalk, and Inspactor/SchoolReport
+# payloads. Each physical header string maps to at most one canonical field
+# within a source to avoid ambiguity. Downstream pipelines may add
+# source-specific required/critical columns, but alias resolution must go
+# through this registry.
+HEADER_ALIASES_V3: Mapping[str, Mapping[str, str]] = {
+    "mentor": {
+        # join keys
+        "کدرشته": "کدرشته",
+        "کد رشته": "کدرشته",
+        "کد گروه": "کدرشته",
+        "کد گروه آزمایشی": "کدرشته",
+        "گروه آزمایشی": "گروه آزمایشی",
+        "جنسیت": "جنسیت",
+        "gender": "جنسیت",
+        "دانش آموز فارغ": "دانش آموز فارغ",
+        "مرکز گلستان صدرا": "مرکز گلستان صدرا",
+        "مالی حکمت بنیاد": "مالی حکمت بنیاد",
+        "کد مدرسه": "کد مدرسه",
+        "school code": "کد مدرسه",
+        # identifiers and metadata
+        "mentor_id": "mentor_id",
+        "mentorid": "mentor_id",
+        "mentor code": "mentor_id",
+        "mentor_code": "mentor_id",
+        "mentorcode": "mentor_id",
+        "employee_id": "mentor_id",
+        "employeeid": "mentor_id",
+        "کد کارمندی پشتیبان": "mentor_id",
+        "نام پشتیبان": "نام پشتیبان",
+        "mentor name": "نام پشتیبان",
+        "mentor": "نام پشتیبان",
+        "manager": "نام مدیر",
+        "manager name": "نام مدیر",
+        "manager_name": "نام مدیر",
+        "نام مدیر": "نام مدیر",
+        # capacity and coverage
+        "remaining_capacity": "remaining_capacity",
+        "تعداد داوطلبان تحت پوشش": "capacity_current",
+        "capacity_current": "capacity_current",
+        "تعداد تحت پوشش خاص": "capacity_special",
+        "capacity_special": "capacity_special",
+        "تعداد مدارس تحت پوشش": "schools_covered_count",
+        "schools_covered_count": "schools_covered_count",
+        "covered_students_count": "covered_students_count",
+        # school references
+        "نام مدرسه": "نام مدرسه",
+        "نام مدرسه 1": "نام مدرسه 1",
+        "نام مدرسه 2": "نام مدرسه 2",
+        "نام مدرسه 3": "نام مدرسه 3",
+        "نام مدرسه 4": "نام مدرسه 4",
+        "کد مدرسه 1": "کد مدرسه 1",
+        "کد مدرسه 2": "کد مدرسه 2",
+        "کد مدرسه 3": "کد مدرسه 3",
+        "کد مدرسه 4": "کد مدرسه 4",
+    },
+    "student": {
+        "کدرشته": "کدرشته",
+        "کد رشته": "کدرشته",
+        "گروه آزمایشی": "گروه آزمایشی",
+        "کد گروه": "گروه آزمایشی",
+        "جنسیت": "جنسیت",
+        "دانش آموز فارغ": "دانش آموز فارغ",
+        "مرکز گلستان صدرا": "مرکز گلستان صدرا",
+        "مالی حکمت بنیاد": "مالی حکمت بنیاد",
+        "کد مدرسه": "کد مدرسه",
+        "school code": "کد مدرسه",
+        "کد ملی": "کد ملی",
+        "کدملی": "کد ملی",
+        "student_national_code": "student_national_code",
+    },
+    "school": {
+        "کد مدرسه": "کد مدرسه",
+        "school code": "کد مدرسه",
+        "نام مدرسه": "نام مدرسه",
+        "province": "استان",
+        "city": "شهر",
+    },
+    "crosswalk": {
+        "گروه آزمایشی": "گروه آزمایشی",
+        "کد گروه": "کد گروه",
+        "کدرشته": "کدرشته",
+        "مقطع تحصیلی": "مقطع تحصیلی",
+        "grade_level": "مقطع تحصیلی",
+    },
+    "inspactor": {
+        # Inspector/SchoolReport aliases; reuse mentor/school semantics where possible
+        "کدرشته": "کدرشته",
+        "کد گروه آزمایشی": "کدرشته",
+        "گروه آزمایشی (شامل)": "شامل گروه های آزمایشی",
+        "شامل گروه آزمایشی": "شامل گروه های آزمایشی",
+        "شامل گروه‌های آزمایشی": "شامل گروه های آزمایشی",
+        "گروه‌های آزمایشی شامل": "شامل گروه های آزمایشی",
+        "exam groups included": "شامل گروه های آزمایشی",
+        "included exam groups": "شامل گروه های آزمایشی",
+        "گروه های آزمایشی": "گروه آزمایشی",
+        "گروه‌های آزمایشی": "گروه آزمایشی",
+        "کدپستی": "کدپستی",
+        "کد پستی": "کدپستی",
+        "mentor": "نام پشتیبان",
+        "mentor name": "نام پشتیبان",
+        "mentor_name": "نام پشتیبان",
+        "کد کارمندی پشتیبان": "mentor_id",
+        "mentor_id": "mentor_id",
+        "پشتیبان": "نام پشتیبان",
+        "نام و نام خانوادگی پشتیبان": "نام پشتیبان",
+        "مدیر": "نام مدیر",
+        "manager": "نام مدیر",
+        "manager name": "نام مدیر",
+        "manager_name": "نام مدیر",
+        "نام و نام خانوادگی مدیر": "نام مدیر",
+        "نام مدرسه 1": "نام مدرسه 1",
+        "نام مدرسه 2": "نام مدرسه 2",
+        "نام مدرسه 3": "نام مدرسه 3",
+        "نام مدرسه 4": "نام مدرسه 4",
+        "کد مدرسه 1": "کد مدرسه 1",
+        "کد مدرسه 2": "کد مدرسه 2",
+        "کد مدرسه 3": "کد مدرسه 3",
+        "کد مدرسه 4": "کد مدرسه 4",
+        "کد کامل مدرسه": "کد کامل مدرسه",
+        "تعداد مدارس تحت پوشش": "تعداد مدارس تحت پوشش",
+        "تعداد داوطلبان تحت پوشش": "capacity_current",
+        "capacity_current": "capacity_current",
+        "تعداد تحت پوشش خاص": "capacity_special",
+    },
+}
+
+
+# ---------------------------------------------------------------------------
 # Base alias maps (Policy-first; extensible via policy.column_aliases)
 # ---------------------------------------------------------------------------
 _INSPACTOR_ALIASES: Mapping[str, str] = {
