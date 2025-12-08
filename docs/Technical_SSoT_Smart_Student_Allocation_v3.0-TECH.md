@@ -238,6 +238,19 @@ conflict محسوب نمی‌شود.
   - MentorPoolBuilder فقط زمانی `pool` را برمی‌گرداند که `can_continue=true`; در غیر این صورت نتیجه صرفاً شامل متادیتای توقف است.
 - همهٔ entrypointهای ایمپورت در Infra باید MentorPipelineV3 را صدا بزنند و فقط `MentorPoolBuildResult.pool` را به Core تحویل دهند؛ Core هیچ منطق الحاق مستقلی ندارد و صرفاً مصرف‌کنندهٔ این SSoT است.
 
+#### 4.5.1. CAPACITY-FIELDS-01 — تعریف فنی capacity_current/limit/new/remaining در استخر منتورها
+
+- `capacity_current`: تعداد دانش‌آموزان فعلی تحت پوشش منتور است (load) و **سقف ظرفیت نیست**.
+- `capacity_limit`: سقف مجاز ظرفیت منتور است؛ می‌تواند از پیش‌فرض (مثلاً 80) و override ویژه (مثلاً capacity_special تا سقف سخت 250) مشتق شود.
+- `allocations_new`: تعداد تخصیص‌های جدید همین ران است.
+- `remaining_capacity`: به‌صورت `capacity_limit − allocations_new` برای رتبه‌بندی محاسبه می‌شود؛ این ستون منبع حقیقت ظرفیت اولیه نیست و صرفاً متریک مشتق است.
+- `capacity_limit` و `capacity_current` دو مفهوم جداگانه‌اند؛ **هیچ refactor یا تستی مجاز نیست** remaining_capacity یا capacity_current را به‌عنوان proxy ظرفیت ceiling استفاده کند.
+- مصرف `remaining_capacity` محدود به موارد زیر است:
+  - Ranking: `remaining_capacity ↓، allocations_new ↑، mentor_id ↑`.
+  - QA و گزارش‌دهی.
+  - هرگز به‌عنوان ظرفیت اولیه.
+- تست‌ها باید با این تعاریف منطبق باشند؛ اگر pytest توقعی خلاف این داشت (مثلاً remaining_capacity را capacity_current فرض کرد)، **تست اشتباه است و باید اصلاح شود** تا با LAW/CAPACITY-FIELDS-01 هم‌خوان شود.
+
 ### 4.6. GROUP-CODE-01 — تنها کلید «پایه+رشته» و جدول مرجع
 
 - `group_code` تنها کلید کاننیکال برای بعد «پایه+رشته» است و همیشه `int` از دامنهٔ معتبر تعریف‌شده در «group-code parser» است؛ هر مقدار خارج از این دامنه باید QA/Blocking شود.

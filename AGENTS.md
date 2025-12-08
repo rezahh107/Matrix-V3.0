@@ -470,5 +470,31 @@ For any PR touching mentors or mentor import:
   * Regulatory Coverage Map v1.0.
 * Stronger guidance for RISK_REFUSAL triggers and Core/Infra/UI boundaries.
 
+## 13. SSoT و ظرفیت — قواعد تکمیلی Agentها
+
+- **AGENT/SSOT-01 — تقدم LAW/Technical SSoT بر تست‌ها:**
+  - Agentها باید LAW v3.0 و Technical SSoT را منبع حقیقت معنایی بدانند.
+  - اگر انتظار تست با LAW/Technical تعارض داشت (مثلاً استفاده از `remaining_capacity` به‌عنوان ظرفیت اولیه یا تفسیر `capacity_current` به‌جای `capacity_limit`)، **تست باید اصلاح شود** و معنای دامنه نباید برای رضایت تست تغییر کند.
+  - «تست‌ها SSoT نیستند»؛ آن‌ها قراردادهایی هستند که در صورت انحراف از LAW/Technical باید بازبینی شوند.
+
+- **AGENT/CAPACITY-01 — ممنوعیت تغییر معنا برای فیلدهای ظرفیت:**
+  - Agentها حق ندارند معناهای `capacity_current`, `capacity_limit`, `remaining_capacity` یا `allocations_new` را برای سبز شدن تست‌ها تغییر دهند.
+  - به‌طور مشخص:
+    - `capacity_current` باید همان «load جاری» بماند.
+    - `capacity_limit` باید همان «ceiling ظرفیت» بماند.
+    - `remaining_capacity` باید همان «متریک مشتق = capacity_limit − allocations_new» بماند.
+  - اگر نیاز به مفهوم تازه‌ای (مثلاً ستون «ظرفیت» در ورودی/خروجی) باشد، باید به یک فیلد کاننیکال جدید مثل `capacity_limit` نگاشت شود و نه به سوءاستفاده از `capacity_current` یا `remaining_capacity`.
+  - هر تغییر رفتاری که این معانی را دگرگون کند نیازمند آپدیت قبلی LAW/Technical است و صرفاً با تغییر کد مجاز نیست.
+
+- **AGENT/HEADERS-01 — حفاظت از رجیستری هدرهای کاننیکال:**
+  - در `app/core/common/columns.py` (یا رجیستری کاننیکال هدرها)، Agentها می‌توانند:
+    - فیلد کاننیکال جدید و aliasهای آن را اضافه کنند.
+    - aliasهای تازه برای فیلدهای موجود اضافه کنند.
+  - Agentها نباید:
+    - نام‌های فارسی/انگلیسی کاننیکال یا معنای سطح‌بالای فیلدهای موجود (مثل `capacity_current`, `remaining_capacity`, `mentor_id` یا ۶ کلید join) را تغییر دهند مگر با آپدیت صریح LAW/Technical SSoT.
+  - اگر تست یا import به هدر تازه‌ای نیاز داشت (مثلاً «ظرفیت»)، این کار باید با:
+    - افزودن فیلد کاننیکال جدید (مثلاً `capacity_limit`) و نگاشت هدر جدید به آن، یا
+    - افزودن هدر جدید به‌عنوان alias فیلد موجود، در صورتی که با LAW/Technical SSoT تعارض نداشته باشد، انجام شود.
+
 ```
 ```

@@ -228,6 +228,31 @@ remaining_capacity = capacity_limit - (assigned_baseline + allocations_new)
 
 ---
 
+### 5.1.1. قانون LAW/CAPACITY-FIELDS-01 — نقش فیلدهای ظرفیت و ممنوعیت تغییر معنا
+
+- `capacity_current`:
+  - تعداد دانش‌آموزان تحت پوشش فعلی یک پشتیبان است (load جاری).
+  - «سقف ظرفیت» یا «حد نهایی» نیست و نباید به‌عنوان جایگزین capacity_limit استفاده شود.
+
+- `capacity_limit`:
+  - سقف مجاز ظرفیت برای یک پشتیبان است (ceiling).
+  - می‌تواند از پیش‌فرض‌ها و overrideها (مثلاً پیش‌فرض 80 و ظرفیت ویژه تا سقف سخت 250) طبق Technical SSoT مشتق شود.
+
+- `allocations_new`:
+  - تعداد تخصیص‌های جدید همین ران است.
+
+- `remaining_capacity`:
+  - به‌صورت `capacity_limit − allocations_new` تعریف می‌شود.
+  - یک متریک مشتق برای رتبه‌بندی است و منبع حقیقت ظرفیت اولیه نیست.
+
+**قیود:**
+
+- `capacity_current` **هرگز** نباید به‌جای `capacity_limit` استفاده شود.
+- `remaining_capacity` **هرگز** نباید به‌جای `capacity_limit` یا `capacity_current` استفاده شود.
+- هر تغییری در معنای این فیلدها نیازمند به‌روزرسانی صریح LAW/Technical است و **نمی‌تواند صرفاً بر اساس انتظار تست** انجام شود.
+
+---
+
 ### 5.2. قانون CAPACITY-01 — بدون ظرفیت منفی
 
 - اگر در هر لحظه `remaining_capacity < 0` شود ⇒ **خطای P0 (Critical)**.
