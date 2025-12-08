@@ -923,6 +923,12 @@ def normalize_capacity_values(
 ) -> tuple[int, int, int]:
     """نرمال‌سازی ستون‌های ظرفیت و محاسبهٔ ظرفیت باقی‌مانده.
 
+    این تابع صریحاً «ظرفیت فعلی» (capacity_current) را به‌عنوان **load موجود**
+    و «ظرفیت ویژه» (capacity_special) را به‌عنوان **capacity_limit** می‌گیرد و
+    از آن‌ها ``remaining_capacity = capacity_limit - capacity_current`` را مشتق
+    می‌کند. به‌این‌ترتیب capacity_current هرگز به‌عنوان سقف ظرفیت استفاده
+    نمی‌شود و remaining_capacity صرفاً متریک مشتق است (نه منبع حقیقت ظرفیت).
+
     مثال::
 
         >>> normalize_capacity_values("5", "12")
