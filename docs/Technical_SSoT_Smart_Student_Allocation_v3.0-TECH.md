@@ -622,6 +622,17 @@ Technical SSoT اینجا فقط **نام شیت‌ها و نقش‌شان** ر�
 
 Core از طریق ProgressCallback و return values، اطلاعات لازم را به Infra می‌دهد؛ Infra آن را به log/metric ساخت‌یافته تبدیل می‌کند (JSON, Prometheus, …).
 
+#### 9.1.1. Runtime Health Indicator (Infra/Shell)
+
+- HealthStatus بر پایه‌ی شمارش QA severity (`P0`, `P1`, `P2`) محاسبه می‌شود: `P0>0 ⇒ ERROR (red)`, `P0=0 && P1>0 ⇒ WARN (yellow)`, در غیر این صورت `OK (green)`.
+- Health فقط لایهٔ Observability است؛ **هیچ قانون دامنه‌ای در آن تعریف نمی‌شود**. Core فقط خروجی‌های دترمینیستیک QA/Trace/History را تولید می‌کند و از Health بی‌اطلاع است.
+- کد Health در Infra/Shell نگه داشته می‌شود و UI می‌تواند صرفاً وضعیت را نمایش دهد.
+
+#### 9.1.2. LLM Debug Report (single JSON)
+
+- هر اجرا حداکثر یک `LLMDebugReport` کوچک و دترمینیستیک می‌سازد؛ شامل `meta` (مثلاً `run_id`, نسخه‌ها)، `HealthStatus`, خلاصهٔ issueها و چند sample row.
+- گزارش باید privacy-safe باشد (بدون دادهٔ غیرضروری) و فقط بازتاب اطلاعات موجود در QA/History/Trace باشد؛ **نباید semantics جدید تعریف کند یا قوانین Core را جایگزین کند**.
+
 ---
 
 ### 9.2. Feature Flags & Rollout Strategy

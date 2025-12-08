@@ -338,6 +338,17 @@ remaining_capacity = capacity_limit - (assigned_baseline + allocations_new)
 
 ---
 
+### 6.5. Observability — Runtime Health و LLM Debug Report
+
+- **HealthStatus مینیمال (Infra/Shell-only):**
+  - منبع تنها شمارش QA severities است؛ نگاشت دترمینیستیک: اگر `P0>0` ⇒ `ERROR` (red)، اگر `P0=0` و `P1>0` ⇒ `WARN` (yellow)، در غیر این صورت ⇒ `OK` (green).
+  - Health صرفاً لایهٔ مشاهده است؛ **هیچ قانون دامنه‌ای تعریف نمی‌کند** و Core از Health بی‌اطلاع است (Core فقط خروجی‌های دترمینیستیک QA/Trace/History را می‌دهد).
+- **LLMDebugReport تک‌فایلی:**
+  - هر اجرا حداکثر یک JSON کوچک برای دیباگ LLM دارد که شامل meta، `HealthStatus`، خلاصهٔ issueها و چند sample row است.
+  - گزارش باید کوچک، دترمینیستیک و privacy-safe بماند و فقط آینهٔ QA/History باشد؛ **نباید منبع جدید semantics شود**.
+
+---
+
 ## 7. حاکمیت استخر پشتیبان‌ها (Mentor Governance)
 
 ### 7.0. قانون MENTOR-PIPELINE-01 — الحاق یکتا از طریق MentorPipelineV3
