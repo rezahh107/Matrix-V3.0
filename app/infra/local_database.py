@@ -647,6 +647,22 @@ class LocalDatabase:
             cursor = conn.execute("SELECT * FROM runs ORDER BY started_at ASC, id ASC")
             return cursor.fetchall()
 
+    def fetch_run_by_id(self, run_id: int) -> sqlite3.Row | None:
+        """بازیابی یک اجرا بر اساس شناسهٔ عددی."""
+
+        with self._open_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute("SELECT * FROM runs WHERE id = ?", (run_id,))
+            return cursor.fetchone()
+
+    def fetch_run_by_uuid(self, run_uuid: str) -> sqlite3.Row | None:
+        """بازیابی یک اجرا بر اساس run_uuid."""
+
+        with self._open_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute("SELECT * FROM runs WHERE run_uuid = ?", (run_uuid,))
+            return cursor.fetchone()
+
     def fetch_metrics_for_run(self, run_id: int) -> list[sqlite3.Row]:
         """بازیابی KPI تاریخچه برای یک شناسه اجرا."""
 
