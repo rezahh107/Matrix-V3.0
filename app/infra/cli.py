@@ -59,7 +59,6 @@ from app.core.qa.invariants import QaReport, run_all_invariants
 from app.infra import history_store
 from app.infra.audit_allocations import audit_allocations, summarize_report
 from app.infra.console import safe_print
-from app.infra.debug.qa_debug_engine import build_debug_stories
 from app.infra.errors import (
     DatabaseCorruptError,
     DatabasePreparationError,
@@ -1740,7 +1739,6 @@ def _run_build_matrix(args: argparse.Namespace, policy: PolicyConfig, progress: 
 
     inputs = {**pool_inputs, **ref_inputs}
     inputs_mtime = {**pool_inputs_mtime, **ref_inputs_mtime}
-    ui_overrides: dict[str, object] = getattr(args, "_ui_overrides", {}) or {}
 
     min_coverage = _normalize_min_coverage_arg(getattr(args, "min_coverage", None))
     expected_policy_version = getattr(args, "policy_version", None)
@@ -1834,13 +1832,6 @@ def _run_build_matrix(args: argparse.Namespace, policy: PolicyConfig, progress: 
         invalid_mentors=invalid_mentors,
         extras={"pool_join_conflicts": pd.DataFrame()},
     )
-    qa_debug_callback = ui_overrides.get("qa_debug_callback")
-    if callable(qa_debug_callback):
-        try:
-            stories = build_debug_stories(report=qa_report, matrix=matrix, policy=policy)
-            qa_debug_callback(stories)
-        except Exception:  # pragma: no cover - UI safety
-            logger.exception("Failed to deliver QA debug stories to UI")
     pool_join_key_duplicates = join_key_duplicates.copy()
     merged_extras = dict(getattr(qa_report, "extras", None) or {})
     merged_extras["pool_join_key_duplicates"] = pool_join_key_duplicates
@@ -2203,13 +2194,6 @@ def _allocate_and_write(
             pool=pool_base,
             history_info=history_info_df,
         )
-        qa_debug_callback = ui_overrides.get("qa_debug_callback")
-        if callable(qa_debug_callback) and qa_report is not None:
-            try:
-                stories = build_debug_stories(report=qa_report, matrix=None, policy=policy)
-                qa_debug_callback(stories)
-            except Exception:  # pragma: no cover - UI safety
-                logger.exception("Failed to deliver QA debug stories to UI")
         qa_meta = _build_qa_meta(
             run_uuid=run_uuid,
             command_name=command_name,
