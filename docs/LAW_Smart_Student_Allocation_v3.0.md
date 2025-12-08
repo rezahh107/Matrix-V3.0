@@ -214,17 +214,48 @@ eligible = school_match AND center_match
 
 از `mentors-import-spec` و `allocation-policy.yml`:
 
-- `capacity_limit`: حداکثر ظرفیت قابل تخصیص (اگر خالی ⇒ مقدار پیش‌فرض policy، مثلاً 60).
-- `assigned_baseline`: تعداد دانش‌آموزان از قبل در پوشش پشتیبان.
+- `capacity_limit`: حداکثر ظرفیت قابل تخصیص و **سقف سخت** صندلی‌های یک پشتیبان (اگر خالی ⇒ مقدار پیش‌فرض policy، مثلاً 60).
+- `assigned_baseline`: تعداد دانش‌آموزان از قبل در پوشش پشتیبان، قبل از ران جاری.
 - `allocations_new`: تعداد تخصیص‌های جدید در همین run.
 
 **ظرفیت باقی‌مانده:**
 
 ```text
-remaining_capacity = capacity_limit - (assigned_baseline + allocations_new)
+total_allocations = assigned_baseline + allocations_new
+remaining_capacity = capacity_limit - total_allocations
 ```
 
 این مقدار باید همیشه **>= 0** بماند (CAPACITY-01).
+اگر اطلاعات baseline وجود نداشته باشد، `assigned_baseline = 0` در نظر گرفته می‌شود و در نتیجه فرمول به حالت تخفیف‌یافتهٔ `capacity_limit - allocations_new` تبدیل می‌شود.
+این تعریف در LAW/CAPACITY-FIELDS-01 نیز بدون تغییر تکرار می‌شود تا معنا در تمام LAW یکدست بماند.
+
+---
+
+### 5.1.1. قانون LAW/CAPACITY-FIELDS-01 — نقش فیلدهای ظرفیت و ممنوعیت تغییر معنا
+
+- `capacity_current`:
+  - تعداد دانش‌آموزان تحت پوشش فعلی یک پشتیبان است (load جاری).
+  - «سقف ظرفیت» یا «حد نهایی» نیست و نباید به‌عنوان جایگزین capacity_limit استفاده شود.
+
+- `capacity_limit`:
+  - سقف مجاز ظرفیت برای یک پشتیبان است (ceiling).
+  - می‌تواند از پیش‌فرض‌ها و overrideها (مثلاً پیش‌فرض 80 و ظرفیت ویژه تا سقف سخت 250) طبق Technical SSoT مشتق شود.
+
+- `allocations_new`:
+  - تعداد تخصیص‌های جدید همین ران است.
+
+- `remaining_capacity`:
+  - به دو گام تعریف می‌شود:
+    1) `total_allocations = assigned_baseline + allocations_new`
+    2) `remaining_capacity = capacity_limit − total_allocations`
+  - فرم تخفیف‌یافتهٔ `capacity_limit − allocations_new` فقط زمانی معتبر است که `assigned_baseline = 0` باشد.
+  - یک متریک مشتق برای رتبه‌بندی است و منبع حقیقت ظرفیت اولیه نیست.
+
+**قیود:**
+
+- `capacity_current` **هرگز** نباید به‌جای `capacity_limit` استفاده شود.
+- `remaining_capacity` **هرگز** نباید به‌جای `capacity_limit` یا `capacity_current` استفاده شود.
+- هر تغییری در معنای این فیلدها نیازمند به‌روزرسانی صریح LAW/Technical است و **نمی‌تواند صرفاً بر اساس انتظار تست** انجام شود.
 
 ---
 
