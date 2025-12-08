@@ -225,6 +225,7 @@ remaining_capacity = capacity_limit - (assigned_baseline + allocations_new)
 ```
 
 این مقدار باید همیشه **>= 0** بماند (CAPACITY-01).
+اگر اطلاعات baseline وجود نداشته باشد، `assigned_baseline = 0` در نظر گرفته می‌شود و در نتیجه فرمول به حالت تخفیف‌یافتهٔ `capacity_limit - allocations_new` تبدیل می‌شود.
 
 ---
 
@@ -242,7 +243,10 @@ remaining_capacity = capacity_limit - (assigned_baseline + allocations_new)
   - تعداد تخصیص‌های جدید همین ران است.
 
 - `remaining_capacity`:
-  - به‌صورت `capacity_limit − allocations_new` تعریف می‌شود.
+  - به دو گام تعریف می‌شود:
+    1) `total_allocations = assigned_baseline + allocations_new`
+    2) `remaining_capacity = capacity_limit − total_allocations`
+  - فرم تخفیف‌یافتهٔ `capacity_limit − allocations_new` فقط زمانی معتبر است که `assigned_baseline = 0` باشد.
   - یک متریک مشتق برای رتبه‌بندی است و منبع حقیقت ظرفیت اولیه نیست.
 
 **قیود:**
