@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
 from dataclasses import dataclass
 
 import pandas as pd
 
-from app.core.common.columns import canonicalize_headers
+from app.core.common.columns import HEADER_ALIASES_V3
 from app.core.common.types import HeaderMode
+from app.infra.common.header_pipeline_v3 import HeaderPipelineV3
 
 from .field_registry import FieldRegistry
 
@@ -15,6 +15,7 @@ from .field_registry import FieldRegistry
 class HeaderResolutionResult:
     resolved_df: pd.DataFrame
     missing_fields: list[str]
+    issues: list
 
     @property
     def can_continue(self) -> bool:
@@ -27,47 +28,38 @@ class HeaderResolver:
     def __init__(self, registry: FieldRegistry, *, header_mode: HeaderMode = "fa") -> None:
         self._registry = registry
         self._header_mode = header_mode
+        self._pipeline = HeaderPipelineV3(
+            alias_registry=HEADER_ALIASES_V3,
+            required={"mentor": self._registry.required_fields},
+            critical_required={"mentor": self._registry.required_fields},
+        )
 
     def resolve(self, df: pd.DataFrame) -> HeaderResolutionResult:
-        resolved = canonicalize_headers(df, header_mode=self._header_mode)
-        resolved = self._ensure_mentor_id(resolved)
+        resolution = self._pipeline.resolve(df, source="mentor")
+        resolved = resolution.resolved_df
         missing = self._missing_fields(resolved.columns)
-        return HeaderResolutionResult(resolved_df=resolved, missing_fields=missing)
-
-    def _missing_fields(self, columns: Iterable[str]) -> list[str]:
-        column_set = {col for col in columns}
-        return [field for field in self._registry.required_fields if field not in column_set]
+        return HeaderResolutionResult(
+            resolved_df=resolved, missing_fields=missing, issues=resolution.issues
+        )
 
     def _ensure_mentor_id(self, df: pd.DataFrame) -> pd.DataFrame:
-        alias_map = {
-            "mentor_id": "mentor_id",
-            "کد کارمندی پشتیبان": "mentor_id",
-            "mentorcode": "mentor_id",
-            "mentor_code": "mentor_id",
-            "mentorid": "mentor_id",
-            "employee_id": "mentor_id",
-            "employeeid": "mentor_id",
+        """Coalesce mentor_id aliases into one canonical mentor_id column.
+
+        Uses the shared header alias SSoT to avoid maintaining any ad-hoc lists.
+        """
+        alias_map = HEADER_ALIASES_V3.get("mentor", {})
+
+        canonical_defined_aliases = alias_map.get("mentor_id", ())
+        if isinstance(canonical_defined_aliases, str):
+            canonical_defined_aliases = (canonical_defined_aliases,)
+
+        mentor_aliases = {
+            alias for alias, canonical in alias_map.items() if canonical == "mentor_id"
         }
+        mentor_aliases.update(canonical_defined_aliases)
 
-        candidate_columns = [
-            column for column in df.columns if str(column).strip().lower() in alias_map
-        ]
-        if not candidate_columns:
-            return df
+        return self._pipeline._merge_mentor_id_aliases(df, sorted(mentor_aliases))
 
-        series_list: list[pd.Series] = []
-        for column in candidate_columns:
-            candidate = df.loc[:, column]
-            if isinstance(candidate, pd.DataFrame):
-                candidate = candidate.iloc[:, 0]
-            series_list.append(candidate.astype("string").str.strip())
-
-        mentor_series = series_list[0].reindex(df.index)
-        for extra in series_list[1:]:
-            extra_aligned = extra.reindex(df.index)
-            mentor_series = mentor_series.fillna(extra_aligned)
-            mentor_series = mentor_series.mask(mentor_series.eq(""), extra_aligned)
-
-        remaining = df.drop(columns=candidate_columns, errors="ignore")
-        remaining["mentor_id"] = mentor_series
-        return remaining
+    def _missing_fields(self, columns: list[str] | pd.Index) -> list[str]:
+        column_set = {col for col in columns}
+        return [field for field in self._registry.required_fields if field not in column_set]

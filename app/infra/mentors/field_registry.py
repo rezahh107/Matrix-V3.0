@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import dataclass
 
+from app.core.common.columns import HEADER_ALIASES_V3
 from app.core.policy_loader import PolicyConfig
 
 
@@ -23,3 +24,7 @@ class FieldRegistry:
     def has_required_fields(self, columns: Iterable[str]) -> bool:
         column_set = {col for col in columns}
         return all(field in column_set for field in self.required_fields)
+
+    @property
+    def header_aliases(self) -> dict[str, str]:
+        return dict(HEADER_ALIASES_V3.get("mentor", {}))
