@@ -42,6 +42,18 @@ class HeaderResolver:
             resolved_df=resolved, missing_fields=missing, issues=resolution.issues
         )
 
+    def _ensure_mentor_id(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Coalesce mentor_id aliases into one canonical mentor_id column.
+
+        Uses the shared header alias SSoT to avoid maintaining any ad-hoc lists.
+        """
+
+        alias_map = HEADER_ALIASES_V3.get("mentor", {})
+        mentor_aliases = {
+            alias for alias, canonical in alias_map.items() if canonical == "mentor_id"
+        }
+        return self._pipeline._merge_mentor_id_aliases(df, sorted(mentor_aliases))
+
     def _missing_fields(self, columns: list[str] | pd.Index) -> list[str]:
         column_set = {col for col in columns}
         return [field for field in self._registry.required_fields if field not in column_set]

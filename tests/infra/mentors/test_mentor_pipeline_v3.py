@@ -9,6 +9,8 @@ import pytest
 from app.core.canonical_frames import canonicalize_headers, canonicalize_pool_frame
 from app.core.common.join_keys import validate_and_canonicalize_join_keys
 from app.core.policy_adapter import policy
+from app.infra.mentors.field_registry import FieldRegistry
+from app.infra.mentors.header_resolver import HeaderResolver
 from app.infra.mentors.pipeline_v3 import MentorPipelineV3, canonicalize_join_keys_for_cache
 from app.infra.reference_mentors_repository import (
     _POOL_JOIN_KEY_QA_ATTR,
@@ -112,6 +114,18 @@ def test_header_alias_resolved_and_forwarded() -> None:
 
     assert result.header_result.can_continue
     assert "mentor_id" in result.build_result.pool.columns
+
+
+def test_ensure_mentor_id_coalesces_aliases() -> None:
+    registry = FieldRegistry(policy.config)
+    resolver = HeaderResolver(registry)
+    df = pd.DataFrame({"mentor_code": ["m-1"], "employee_id": [None], "ظرفیت": [1]})
+
+    ensured = resolver._ensure_mentor_id(df)
+
+    assert "mentor_id" in ensured.columns
+    assert ensured.loc[0, "mentor_id"] == "m-1"
+    assert "mentor_code" not in ensured.columns
 
 
 def test_reference_repository_delegates_pipeline(monkeypatch: pytest.MonkeyPatch) -> None:
