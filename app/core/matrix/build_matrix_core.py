@@ -91,7 +91,7 @@ def build_matrix_core(
         return df
 
     join_key_list = list(schema.join_keys)
-    df[join_key_list] = df[join_key_list].apply(pd.to_numeric, errors="coerce").astype(int)
+    df[join_key_list] = df[join_key_list].apply(pd.to_numeric, errors="coerce").fillna(0).astype(int)
     df = df.sort_values(list(schema.ranking_fields), ascending=[False, True, True]).reset_index(
         drop=True
     )
