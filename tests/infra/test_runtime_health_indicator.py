@@ -9,8 +9,7 @@ from app.infra.qa.health_status import (
 
 def _report_with_levels(levels: list[str]) -> QaReport:
     violations = [
-        QaViolation(rule_id="QA_TEST", level=level, message="msg", details=None)
-        for level in levels
+        QaViolation(rule_id="QA_TEST", level=level, message="msg", details=None) for level in levels
     ]
     result = QaRuleResult(rule_id="QA_TEST", passed=not bool(levels), violations=violations)
     return QaReport(results=[result])
@@ -51,4 +50,3 @@ def test_unknown_levels_fall_back_to_p2() -> None:
 
     assert indicator.status is RuntimeHealthState.OK
     assert indicator.severity_counts == {"P0": 0, "P1": 0, "P2": 1}
-

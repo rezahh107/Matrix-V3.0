@@ -112,4 +112,3 @@ def test_header_pipeline_maps_student_required_headers() -> None:
 
     assert not result.missing_required
     assert result.can_continue
-

@@ -32,7 +32,9 @@ class SchoolHeaderResolver:
 
     def resolve(self, df: pd.DataFrame) -> HeaderResolutionResult:
         resolution = self._pipeline.resolve(df, source="school")
-        missing = [field for field in self._required_fields if field not in resolution.resolved_df.columns]
+        missing = [
+            field for field in self._required_fields if field not in resolution.resolved_df.columns
+        ]
         return HeaderResolutionResult(
             resolved_df=resolution.resolved_df, issues=resolution.issues, missing_fields=missing
         )

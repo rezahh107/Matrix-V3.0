@@ -69,11 +69,15 @@ from app.core.common.columns import canonicalize_headers
 from app.core.counter import find_max_sequence_by_prefix, year_to_yy
 from app.core.policy_loader import get_policy
 from app.infra import cli
+from app.infra.db import compute_reference_readiness
 from app.infra.errors import JoinKeyValidationError
+from app.infra.groupcode.groupcode_repository import GroupCodeRepository
 from app.infra.health import compute_run_health, export_llm_debug_report_to_file
 from app.infra.local_database import LocalDatabase
+from app.infra.schools.school_repository import SchoolRepository
 from app.infra.year_database_manager import YearDatabaseInfo, YearDatabaseManager
 from app.ui.database_manager_dialog import DatabaseManagerDialog
+from app.ui.database_tab import DatabaseTab
 from app.ui.dialogs.join_key_validation_dialog import JoinKeyValidationDialog
 from app.ui.dialogs.qa_dashboard_dialog import QADashboardDialog
 from app.ui.fonts import get_app_font
@@ -127,22 +131,19 @@ _EN_TEXT_DEFAULTS: dict[str, str] = {
     "status.restart_required": "Restart required to apply language.",
     "status.running": "Processing",
     "tabs.build": "Build",
+    "tabs.database": "Database",
     "tabs.allocate": "Allocate",
     "tabs.rule_engine": "Rule Engine",
-    "tabs.validate": "Validate",
     "tabs.explain": "Explain",
     "hero.build.title": "Build Matrix",
     "hero.build.subtitle": "Select inputs and build the eligibility matrix.",
-    "hero.build.badge": "Step 1 of 4",
+    "hero.build.badge": "Step 1 of 3",
     "hero.allocate.title": "Allocate",
     "hero.allocate.subtitle": "Pick student and mentor pools for allocation and Sabt exports.",
-    "hero.allocate.badge": "Step 2 of 4",
+    "hero.allocate.badge": "Step 2 of 3",
     "hero.rule.title": "Rule Engine",
     "hero.rule.subtitle": "Execute the rule engine to review policy and counters.",
-    "hero.rule.badge": "Step 3 of 4",
-    "hero.validate.title": "Quality Control",
-    "hero.validate.subtitle": "Review Sabt outputs and error reports before delivery.",
-    "hero.validate.badge": "Step 4 of 4",
+    "hero.rule.badge": "Step 3 of 3",
     "hero.explain.title": "Explain Report",
     "hero.explain.subtitle": "Quick access to decision explainability for audits and training.",
     "hero.explain.badge": "Appendix",
@@ -174,6 +175,12 @@ _EN_TEXT_DEFAULTS: dict[str, str] = {
     "tooltip.rule_engine": "Execute the rule engine for policy testing",
     "tooltip.output_folder": "Open the last generated output folder",
     "tooltip.preferences": "Change appearance and language",
+    "error.reference_not_ready.title": "Reference data not ready",
+    "error.reference_not_ready.detail": "Import or update School/GroupCode data via the Database tab before running.",
+    "error.reference_not_ready.counts": "Schools: {schools} | Group codes: {groupcodes}",
+    "reference.hint": "Runs use database-backed School/GroupCode data. Update from Excel only if you need to refresh references.",
+    "reference.update.schools": "Update schools",
+    "reference.update.groupcodes": "Update group codes",
     "group.inputs": "Inputs",
     "group.policy": "Policy",
     "group.output": "Output",
@@ -306,6 +313,8 @@ class MainWindow(QMainWindow):
         self._year_manager = YearDatabaseManager(Path.home() / ".smart_alloc" / "years")
         self._year_info: YearDatabaseInfo | None = None
         self._local_db: LocalDatabase | None = None
+        self._school_repository: SchoolRepository | None = None
+        self._groupcode_repository: GroupCodeRepository | None = None
         self._ensure_year_loaded()
 
         self._worker: Worker | None = None
@@ -346,6 +355,8 @@ class MainWindow(QMainWindow):
         self._current_action: str = self._translator.text("status.ready", "آماده")
         self._status_bar: ThemedStatusBar | None = None
         self._database_status: DatabaseStatusWidget | None = None
+        self._database_tab: DatabaseTab | None = None
+        self._database_tab_container: QWidget | None = None
         self._health_widget: HealthIndicatorWidget | None = None
         self._excel_loaders: set[ExcelLoader] = set()
         self._db_status_timer: QTimer | None = None
@@ -380,11 +391,16 @@ class MainWindow(QMainWindow):
             self._t("tabs.rule_engine", "موتور قواعد"),
         )
         self._tabs.addTab(
-            self._wrap_page(self._build_validate_page()), self._t("tabs.validate", "اعتبارسنجی")
-        )
-        self._tabs.addTab(
             self._wrap_page(self._build_explain_page()), self._t("tabs.explain", "توضیحات")
         )
+        self._database_tab = DatabaseTab(
+            self._translator,
+            self,
+            self._school_repository,
+            self._groupcode_repository,
+        )
+        self._database_tab_container = self._wrap_page(self._database_tab)
+        self._tabs.addTab(self._database_tab_container, self._t("tabs.database", "پایگاه داده"))
         self._tabs.currentChanged.connect(self._animate_tab_change)
         top_layout.addWidget(self._tabs, 1)
 
@@ -706,8 +722,8 @@ class MainWindow(QMainWindow):
             (0, self._t("tabs.build", "ساخت ماتریس")),
             (1, self._t("tabs.allocate", "تخصیص")),
             (2, self._t("tabs.rule_engine", "موتور قواعد")),
-            (3, self._t("tabs.validate", "اعتبارسنجی")),
-            (4, self._t("tabs.explain", "توضیحات")),
+            (3, self._t("tabs.explain", "توضیحات")),
+            (4, self._t("tabs.database", "پایگاه داده")),
         ]
         for index, text in labels:
             if index < self._tabs.count():
@@ -721,6 +737,8 @@ class MainWindow(QMainWindow):
         default_year = "current"
         db = self._year_manager.open_year(default_year)
         self._local_db = db
+        self._school_repository = SchoolRepository(db)
+        self._groupcode_repository = GroupCodeRepository(db)
         all_years_info = self._year_manager.list_years()
         self._year_info = next(
             (info for info in all_years_info if info.year_id == default_year), None
@@ -773,6 +791,20 @@ class MainWindow(QMainWindow):
         effect = widget.graphicsEffect()
         if isinstance(effect, SafeOpacityEffect):
             effect.setOpacity(1.0)
+
+    def _open_database_tab_and_import(self, kind: str) -> None:
+        """باز کردن تب پایگاه داده و اجرای import اختیاری."""
+
+        if self._tabs is not None and self._database_tab_container is not None:
+            index = self._tabs.indexOf(self._database_tab_container)
+            if index >= 0:
+                self._tabs.setCurrentIndex(index)
+        if self._database_tab is None:
+            return
+        if kind == "schools":
+            self._database_tab.import_schools_via_dialog()
+        elif kind == "groupcodes":
+            self._database_tab.import_groupcodes_via_dialog()
 
     def _wrap_page(self, page: QWidget) -> QScrollArea:
         """پیچیدن صفحات فرم در اسکرول برای نمایش بهتر در اندازه‌های کوچک."""
@@ -1087,6 +1119,36 @@ class MainWindow(QMainWindow):
         inputs_layout = QFormLayout(inputs_group)
         inputs_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
         inputs_layout.setFormAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
+
+        reference_hint = QLabel(
+            self._t(
+                "reference.hint",
+                "اجرای تخصیص از داده مرجع پایگاه داده استفاده می‌کند؛ در صورت نیاز می‌توانید مرجع را از اکسل به‌روزرسانی کنید.",
+            )
+        )
+        reference_hint.setWordWrap(True)
+        inputs_layout.addRow("", reference_hint)
+
+        reference_row = QWidget(page)
+        reference_row_layout = QHBoxLayout(reference_row)
+        reference_row_layout.setContentsMargins(0, 0, 0, 0)
+        reference_row_layout.setSpacing(8)
+        self._btn_update_schools = QPushButton(
+            self._t("reference.update.schools", "به‌روزرسانی مدارس"), reference_row
+        )
+        self._btn_update_schools.clicked.connect(
+            lambda *_: self._open_database_tab_and_import("schools")
+        )
+        self._btn_update_groupcodes = QPushButton(
+            self._t("reference.update.groupcodes", "به‌روزرسانی کد گروه"), reference_row
+        )
+        self._btn_update_groupcodes.clicked.connect(
+            lambda *_: self._open_database_tab_and_import("groupcodes")
+        )
+        reference_row_layout.addWidget(self._btn_update_schools)
+        reference_row_layout.addWidget(self._btn_update_groupcodes)
+        reference_row_layout.addStretch(1)
+        inputs_layout.addRow("", reference_row)
 
         self._picker_students = FilePicker(page, placeholder="دانش‌آموزان (*.xlsx یا *.csv)")
         self._picker_students.setObjectName("editStudents")
@@ -1442,52 +1504,6 @@ class MainWindow(QMainWindow):
 
         return page
 
-    def _build_validate_page(self) -> QWidget:
-        """صفحهٔ سبک اعتبارسنجی بدون اتصال به زیرساخت."""
-
-        page = QWidget(self)
-        page.setObjectName("pageValidate")
-        layout = QVBoxLayout(page)
-        layout.setContentsMargins(24, 24, 24, 24)
-        layout.setSpacing(12)
-        layout.addWidget(
-            self._create_page_hero(
-                "کنترل کیفیت",
-                "مرور خروجی‌های Sabt و گزارش‌های خطا پیش از تحویل نهایی.",
-                "گام ۴ از ۴",
-            )
-        )
-
-        intro = QLabel("این بخش برای یادآوری مراحل کنترل کیفیت خروجی‌های Sabt و تخصیص است.")
-        intro.setWordWrap(True)
-        layout.addWidget(intro)
-
-        guide = QLabel(
-            "<ol>"
-            "<li>فایل خروجی Sabt یا تخصیص را باز کنید و شیت‌های summary/error را بررسی کنید.</li>"
-            "<li>در شیت summary مطمئن شوید که تعداد ردیف‌های موفق با گزارش سامانه برابر است.</li>"
-            "<li>در شیت error، ستون توضیح خطا را مطالعه و در صورت نیاز به تیم فنی ارجاع دهید.</li>"
-            "<li>در نهایت پوشه خروجی را بایگانی و با برچسب تاریخ ذخیره کنید.</li>"
-            "</ol>"
-        )
-        guide.setWordWrap(True)
-        guide.setTextFormat(Qt.TextFormat.RichText)
-        layout.addWidget(guide)
-
-        self._btn_open_output_folder = QPushButton("بازکردن پوشه خروجی")
-        self._btn_open_output_folder.setObjectName("btnOpenOutputFolder")
-        self._btn_open_output_folder.clicked.connect(self._open_last_output_folder)
-        layout.addWidget(self._btn_open_output_folder, 0, Qt.AlignmentFlag.AlignRight)
-        self._update_output_folder_button_state()
-
-        self._btn_run_validate = QPushButton("اجرای کنترل (غیرفعال)")
-        self._btn_run_validate.setObjectName("btnRunValidate")
-        self._btn_run_validate.setEnabled(False)
-        layout.addWidget(self._btn_run_validate)
-
-        layout.addStretch(1)
-        return page
-
     def _build_explain_page(self) -> QWidget:
         """صفحهٔ سبک توضیح گزارش Explain."""
 
@@ -1556,6 +1572,8 @@ class MainWindow(QMainWindow):
             self._btn_rule_engine,
             self._btn_demo,
             self._btn_history_metrics,
+            self._btn_update_schools,
+            self._btn_update_groupcodes,
             self._picker_inspactor,
             self._picker_schools,
             self._picker_crosswalk,
@@ -1695,6 +1713,52 @@ class MainWindow(QMainWindow):
 
         if self._worker is not None and self._worker.isRunning():
             QMessageBox.warning(self, "تسک در حال اجرا", "لطفاً تا پایان عملیات جاری صبر کنید.")
+            return
+
+        self._ensure_year_loaded()
+        if self._school_repository is None or self._groupcode_repository is None:
+            QMessageBox.warning(
+                self,
+                self._t("error.reference_not_ready.title", "داده مرجع آماده نیست"),
+                self._t(
+                    "error.reference_not_ready.detail",
+                    "وارد کردن داده‌های مدارس و کد گروه از تب پایگاه داده ضروری است.",
+                ),
+            )
+            return
+
+        try:
+            readiness = compute_reference_readiness(
+                school_repo=self._school_repository, groupcode_repo=self._groupcode_repository
+            )
+        except Exception as exc:  # pragma: no cover - defensive guard
+            details = "\n".join(
+                [
+                    self._t(
+                        "error.reference_not_ready.detail",
+                        "لطفاً داده‌های مدارس و کد گروه را از تب پایگاه داده وارد کنید.",
+                    ),
+                    str(exc),
+                ]
+            )
+            QMessageBox.warning(
+                self,
+                self._t("error.reference_not_ready.title", "داده مرجع آماده نیست"),
+                details,
+            )
+            return
+
+        if not readiness.is_ready_for_run:
+            title = self._t("error.reference_not_ready.title", "داده مرجع آماده نیست")
+            detail = self._t(
+                "error.reference_not_ready.detail",
+                "لطفاً داده‌های مدارس و کد گروه را از تب پایگاه داده وارد یا به‌روزرسانی کنید.",
+            )
+            counts = self._t(
+                "error.reference_not_ready.counts",
+                f"مدارس: {readiness.schools.row_count} | کد گروه: {readiness.groupcodes.row_count}",
+            )
+            QMessageBox.warning(self, title, f"{detail}\n{counts}")
             return
 
         self._reset_history_metrics()

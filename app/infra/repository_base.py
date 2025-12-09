@@ -22,13 +22,24 @@ class ReferenceRefreshMeta:
     refreshed_at: datetime
     source: str | None
     row_count: int | None
+    version_tag: str | None
+    source_filename: str | None
+    imported_at: datetime | None
 
 
 @runtime_checkable
 class ReferenceRepository(Protocol):
     """قرارداد مشترک مخازن مرجع SQLite."""
 
-    def upsert_frame(self, df: pd.DataFrame, *, source: str | None = None) -> None:
+    def upsert_frame(
+        self,
+        df: pd.DataFrame,
+        *,
+        source: str | None = None,
+        version_tag: str | None = None,
+        source_filename: str | None = None,
+        imported_at: datetime | None = None,
+    ) -> None:
         """ذخیرهٔ دیتافریم مرجع با ایندکس‌های استاندارد و ثبت منبع."""
 
     def load_frame(self) -> pd.DataFrame:
@@ -61,7 +72,15 @@ class SQLiteReferenceRepository(ReferenceRepository):
         self._join_keys = tuple(join_keys)
         self._unique_columns = tuple(unique_columns)
 
-    def upsert_frame(self, df: pd.DataFrame, *, source: str | None = None) -> None:
+    def upsert_frame(
+        self,
+        df: pd.DataFrame,
+        *,
+        source: str | None = None,
+        version_tag: str | None = None,
+        source_filename: str | None = None,
+        imported_at: datetime | None = None,
+    ) -> None:
         if df is None:
             raise ValueError("دیتافریم مرجع تهی است؛ ورودی معتبر بدهید.")
         normalized = coerce_int_columns(df, list({*self._int_columns, *self._join_keys}))
@@ -83,6 +102,9 @@ class SQLiteReferenceRepository(ReferenceRepository):
                 table_name=self._table_name,
                 source=source,
                 row_count=int(normalized.shape[0]),
+                version_tag=version_tag,
+                source_filename=source_filename,
+                imported_at=imported_at,
                 conn=conn,
             )
 
@@ -100,11 +122,17 @@ class SQLiteReferenceRepository(ReferenceRepository):
         raw = self._db.fetch_reference_meta(self._table_name)
         if raw is None:
             return None
-        refreshed_at, source, row_count = raw
+        refreshed_at, source, row_count, version_tag, source_filename, imported_at = raw
         dt = datetime.fromisoformat(refreshed_at.replace("Z", "+00:00"))
+        imported_at_dt = None
+        if imported_at:
+            imported_at_dt = datetime.fromisoformat(imported_at.replace("Z", "+00:00"))
         return ReferenceRefreshMeta(
             table_name=self._table_name,
             refreshed_at=dt,
             source=source,
             row_count=row_count,
+            version_tag=version_tag,
+            source_filename=source_filename,
+            imported_at=imported_at_dt,
         )

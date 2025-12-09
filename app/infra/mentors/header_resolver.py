@@ -53,7 +53,10 @@ class HeaderResolver:
             alias for alias, canonical in alias_map.items() if canonical == "mentor_id"
         ]
         unique_aliases = list(dict.fromkeys(mentor_aliases))
-        ordered_aliases = ["mentor_id", *[alias for alias in unique_aliases if alias != "mentor_id"]]
+        ordered_aliases = [
+            "mentor_id",
+            *[alias for alias in unique_aliases if alias != "mentor_id"],
+        ]
 
         return self._pipeline._merge_mentor_id_aliases(df, ordered_aliases)
 

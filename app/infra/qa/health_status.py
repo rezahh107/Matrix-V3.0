@@ -61,4 +61,3 @@ def derive_runtime_health(report: QaReport) -> RuntimeHealthIndicator:
         status = RuntimeHealthState.OK
 
     return RuntimeHealthIndicator(status=status, severity_counts=counts)
-
