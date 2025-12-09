@@ -156,6 +156,7 @@ class StudentDomainValidationIssue:
     graduation_status: int | None
     allowed_statuses: tuple[int, ...]
     error_code: str
+    severity: str = "P1"
 
 
 @dataclass(frozen=True)
@@ -185,10 +186,15 @@ class StudentDomainValidationResult:
                     "graduation_status": issue.graduation_status,
                     "allowed_statuses": issue.allowed_statuses,
                     "error_code": issue.error_code,
+                    "severity": issue.severity,
                 }
                 for issue in self.issues
             ]
         )
+
+    @property
+    def can_continue(self) -> bool:
+        return not any(issue.severity == "P0" for issue in self.issues)
 
 
 @dataclass(frozen=True)

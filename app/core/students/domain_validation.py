@@ -65,6 +65,7 @@ def validate_student_domain(
                     graduation_status=status_value,
                     allowed_statuses=tuple(),
                     error_code=ERROR_MISSING_GROUP_CODE,
+                    severity="P0",
                 )
             )
             valid_mask.iat[row_index] = False
@@ -77,6 +78,7 @@ def validate_student_domain(
                     graduation_status=None,
                     allowed_statuses=tuple(),
                     error_code=ERROR_MISSING_GRADUATION_STATUS,
+                    severity="P0",
                 )
             )
             valid_mask.iat[row_index] = False
@@ -95,6 +97,7 @@ def validate_student_domain(
                     graduation_status=status_value,
                     allowed_statuses=allowed,
                     error_code=ERROR_INVALID_GRADUATION_FOR_GROUP,
+                    severity="P0",
                 )
             )
             valid_mask.iat[row_index] = False
