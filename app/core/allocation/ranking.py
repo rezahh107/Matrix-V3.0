@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, MutableMapping
 from dataclasses import dataclass
 
 import pandas as pd
@@ -34,13 +34,11 @@ class CapacityStateEntry:
 
 
 def _safe_int(value: object) -> int:
-    if isinstance(value, bool):
-        return int(value)
     if isinstance(value, int):
         return max(value, 0)
     try:
         numeric = int(float(str(value)))
-    except (ValueError, TypeError):
+    except (TypeError, ValueError):
         return 0
     return max(numeric, 0)
 
@@ -77,27 +75,21 @@ def apply_state_to_candidates(
     working = candidates.copy()
     working["mentor_id"] = working["mentor_id"].astype(int)
 
-    def _lookup_remaining(mentor_id: int) -> int:
+    def _lookup_field(mentor_id: int, attr: str) -> int:
         entry = state.get(mentor_id)
         if entry is None:
             return 0
-        return entry.remaining
+        return getattr(entry, attr)
 
-    def _lookup_allocations(mentor_id: int) -> int:
-        entry = state.get(mentor_id)
-        if entry is None:
-            return 0
-        return entry.allocations_new
-
-    def _lookup_total(mentor_id: int) -> int:
-        entry = state.get(mentor_id)
-        if entry is None:
-            return 0
-        return entry.total_allocations
-
-    working["remaining_capacity"] = working["mentor_id"].map(_lookup_remaining)
-    working["allocations_new"] = working["mentor_id"].map(_lookup_allocations)
-    working["total_allocations"] = working["mentor_id"].map(_lookup_total)
+    working["remaining_capacity"] = working["mentor_id"].map(
+        lambda mentor_id: _lookup_field(mentor_id, "remaining")
+    )
+    working["allocations_new"] = working["mentor_id"].map(
+        lambda mentor_id: _lookup_field(mentor_id, "allocations_new")
+    )
+    working["total_allocations"] = working["mentor_id"].map(
+        lambda mentor_id: _lookup_field(mentor_id, "total_allocations")
+    )
     return working
 
 
@@ -137,7 +129,9 @@ def rank_candidates(candidates: pd.DataFrame, *, schema: MatrixSchema | None = N
     return working.reset_index(drop=True)
 
 
-def apply_allocation(state: Mapping[int, CapacityStateEntry], mentor_id: int) -> None:
+def apply_allocation(
+    state: MutableMapping[int, CapacityStateEntry], mentor_id: int
+) -> None:
     """Consume one unit of capacity for mentor_id, raising on underflow."""
 
     if mentor_id not in state:
