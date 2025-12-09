@@ -10,6 +10,7 @@ side effects.
 from __future__ import annotations
 
 import argparse
+import csv
 import sys
 import tempfile
 from collections.abc import Iterable, Sequence
@@ -58,6 +59,15 @@ class MentorPipelineV3Scenario:
 
 
 Scenario = GoldenScenario | MentorPipelineV3Scenario
+
+
+MENTOR_ISSUE_COLUMNS: list[str] = [
+    "entity_type",
+    "row_index",
+    "column",
+    "raw_value",
+    "error_code",
+]
 
 
 @dataclass(frozen=True)
@@ -325,6 +335,14 @@ def _normalize_frame(df: pd.DataFrame, *, sort_columns: Sequence[str] | None = N
     return normalized
 
 
+def _mentor_issues_frame(frame: pd.DataFrame) -> pd.DataFrame:
+    normalized = frame.convert_dtypes()
+    normalized["row_index"] = pd.to_numeric(
+        normalized["row_index"], errors="raise"
+    ).astype("Int64")
+    return normalized
+
+
 def _compare_frames(label: str, expected: pd.DataFrame, current: pd.DataFrame) -> bool:
     expected_norm = _normalize_frame(expected)
     current_norm = _normalize_frame(current)
@@ -349,7 +367,7 @@ def _issues_to_frame(issues: Sequence[object]) -> pd.DataFrame:
                 "error_code": getattr(issue, "error_code", None),
             }
         )
-    frame = pd.DataFrame(payload).convert_dtypes()
+    frame = _mentor_issues_frame(pd.DataFrame(payload, columns=MENTOR_ISSUE_COLUMNS))
     if frame.empty:
         return frame
     return _normalize_frame(frame, sort_columns=["row_index", "column", "error_code"])
@@ -407,6 +425,46 @@ def _load_expected_frame(path: Path, *, kind: str) -> pd.DataFrame:
             f"Expected {kind} file must be CSV or Excel. Got extension: {suffix}"
         )
     return frame.convert_dtypes()
+
+
+def _load_expected_mentor_issues_frame(path: Path) -> pd.DataFrame:
+    """Load mentor issues golden file enforcing the canonical 5-column schema."""
+
+    if path.suffix.lower() == ".csv":
+        with path.open(newline="", encoding="utf-8") as csvfile:
+            reader = csv.reader(csvfile)
+            try:
+                header = next(reader)
+            except StopIteration:
+                raise GoldenRegressionError(
+                    f"Mentor issues golden file is empty: {path}"
+                ) from None
+            if header != MENTOR_ISSUE_COLUMNS:
+                raise GoldenRegressionError(
+                    "Mentor issues golden file must have header "
+                    f"{','.join(MENTOR_ISSUE_COLUMNS)}. Got: {header} at {path}"
+                )
+
+            rows: list[list[str]] = []
+            for line_number, row in enumerate(reader, start=2):
+                if len(row) != len(MENTOR_ISSUE_COLUMNS):
+                    raise GoldenRegressionError(
+                        "Mentor issues golden file has malformed row: "
+                        f"{path} line {line_number} expected {len(MENTOR_ISSUE_COLUMNS)} "
+                        f"columns, found {len(row)}"
+                    )
+                rows.append(row)
+        frame = pd.DataFrame(rows, columns=MENTOR_ISSUE_COLUMNS)
+        return _mentor_issues_frame(frame)
+
+    frame = _load_expected_frame(path, kind="expected_issues")
+    if list(frame.columns) != MENTOR_ISSUE_COLUMNS:
+        raise GoldenRegressionError(
+            "Mentor issues golden file must have columns "
+            f"{','.join(MENTOR_ISSUE_COLUMNS)} in order. Got: {list(frame.columns)} "
+            f"at {path}"
+        )
+    return _mentor_issues_frame(frame)
 
 
 def _run_mentor_pipeline_scenario(
@@ -467,11 +525,13 @@ def _run_mentor_pipeline_scenario(
 
     current_issues = _issues_to_frame(result.issues)
     if scenario.expected_issues_file is not None:
-        expected_issues_frame = _load_expected_frame(
-            config.resolve(scenario.expected_issues_file), kind="expected_issues"
+        expected_issues_frame = _load_expected_mentor_issues_frame(
+            config.resolve(scenario.expected_issues_file)
         )
     else:
-        expected_issues_frame = pd.DataFrame(scenario.expected_issues or []).convert_dtypes()
+        expected_issues_frame = _mentor_issues_frame(
+            pd.DataFrame(scenario.expected_issues or [], columns=MENTOR_ISSUE_COLUMNS)
+        )
     expected_cols = set(expected_issues_frame.columns)
     current_cols = set(current_issues.columns)
     if expected_cols != current_cols:

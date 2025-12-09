@@ -35,7 +35,10 @@ against committed, sanitized golden inputs without touching Core behavior.
         read expectations from CSV/Excel instead).
       - `expected_issues`: inline rows capturing expected join-key QA issues
         (`expected_issues_file` is available to load CSV/Excel expectations;
-        empty list when no issues are expected).
+        empty list when no issues are expected). Mentor issues goldens MUST follow
+        the canonical 5-column schema `entity_type,row_index,column,raw_value,error_code`.
+        The runner fails fast when headers differ or any row has the wrong column
+        count, reporting the offending file and line number.
 
 The scaffolded scenario points to the locked `docs/golden_datasets/phase01_lock_current_behavior`
 golden set; adjust `base_dir` and filenames to match your committed goldens.
