@@ -322,7 +322,7 @@ def _normalize_frame(df: pd.DataFrame, *, sort_columns: Sequence[str] | None = N
         normalized = normalized.sort_values(by=existing, kind="mergesort")
     normalized = normalized.sort_index(axis=1)
     normalized = normalized.reset_index(drop=True)
-    return normalized.where(lambda frame: ~frame.isna(), pd.NA)
+    return normalized
 
 
 def _compare_frames(label: str, expected: pd.DataFrame, current: pd.DataFrame) -> bool:
