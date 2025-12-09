@@ -399,8 +399,8 @@ class MainWindow(QMainWindow):
             self._school_repository,
             self._groupcode_repository,
         )
-        self._database_tab_container = self._wrap_page(self._database_tab)
-        self._tabs.addTab(self._database_tab_container, self._t("tabs.database", "پایگاه داده"))
+        self._database_tab_container = self._database_tab
+        self._tabs.addTab(self._database_tab, self._t("tabs.database", "پایگاه داده"))
         self._tabs.currentChanged.connect(self._animate_tab_change)
         top_layout.addWidget(self._tabs, 1)
 
