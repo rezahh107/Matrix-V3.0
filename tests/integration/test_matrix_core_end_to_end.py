@@ -58,7 +58,7 @@ def test_end_to_end_matrix_build() -> None:
 
     assert set(result.columns).issuperset({"mentor_id", "student_id", "trace"})
     assert all(column in result.columns for column in MatrixSchema().join_keys)
-    expected_rows = 6  # 3 mentors × 2 students
+    expected_rows = len(mentors_df) * len(students_df)
     assert len(result) == expected_rows
     assert result["capacity_ok"].all()
     assert {tuple(trace_step[0] for trace_step in trace[:4]) for trace in result["trace"]} == {
