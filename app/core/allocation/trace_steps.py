@@ -13,12 +13,9 @@ __all__ = [
 
 
 def _trace_mapping(trace: Iterable[tuple[str, str]] | None) -> dict[str, str]:
-    mapping: dict[str, str] = {}
     if trace is None:
-        return mapping
-    for stage, value in trace:
-        mapping[stage] = str(value)
-    return mapping
+        return {}
+    return {stage: str(value) for stage, value in trace}
 
 
 def normalize_trace_steps(
