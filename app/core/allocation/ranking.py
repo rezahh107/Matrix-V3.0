@@ -40,7 +40,7 @@ def _safe_int(value: object) -> int:
         return max(value, 0)
     try:
         numeric = int(float(str(value)))
-    except Exception:
+    except (ValueError, TypeError):
         return 0
     return max(numeric, 0)
 
