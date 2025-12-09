@@ -66,11 +66,11 @@ def build_matrix_core(
                 "ok" if capacity_outcome.capacity_ok else "blocked",
             )
 
-            record: dict[str, object] = {key: student.get(key, 0) for key in schema.join_keys}
+            record: dict[str, object] = {key: student[key] for key in schema.join_keys}
             record.update(
                 {
-                    "mentor_id": mentor.get("mentor_id", 0),
-                    "student_id": student.get("student_id", 0),
+                    "mentor_id": mentor["mentor_id"],
+                    "student_id": student["student_id"],
                     "eligibility_ok": eligibility_outcome.eligible,
                     "capacity_ok": capacity_outcome.capacity_ok,
                     "blocking_codes": eligibility_outcome.blocking_codes

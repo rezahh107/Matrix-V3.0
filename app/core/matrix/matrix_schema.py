@@ -40,6 +40,10 @@ class MatrixSchema:
 
     This schema keeps the canonical join keys, capacity fields, QA flags, and
     trace steps aligned with LAW/Technical SSoT without introducing new rules.
+
+    The ``ranking_fields`` tuple encodes the invariant 3-key ordering
+    (remaining_capacity ↓, allocations_new ↑, mentor_id ↑) from LAW/RANK-CORE-01
+    and MUST stay in this order.
     """
 
     join_keys: tuple[str, ...] = JOIN_KEY_COLUMNS
