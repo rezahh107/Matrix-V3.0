@@ -52,7 +52,7 @@ class GroupCodeRepository:
             normalized = normalized.copy()
             normalized["is_active"] = pd.Series([1] * len(normalized), dtype="Int64")
         imported_at = datetime.utcnow()
-        normalized = normalized.copy()
+        imported_at = datetime.utcnow()
         normalized["version_tag"] = version_tag or path.stem
         normalized["source_filename"] = path.name
         normalized["imported_at"] = imported_at.isoformat()
