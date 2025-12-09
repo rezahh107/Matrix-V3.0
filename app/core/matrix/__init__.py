@@ -1,6 +1,17 @@
 """ابزارهای دیباگ و گروهبندی ماتریس اهلیت."""
 
+from .build_matrix_core import build_matrix_core
+from .capacity_gates import evaluate_capacity
 from .coverage import compute_group_coverage_debug
+from .eligibility_rules import evaluate_eligibility
 from .grouping import build_candidate_group_keys
+from .matrix_schema import MatrixSchema
 
-__all__ = ["compute_group_coverage_debug", "build_candidate_group_keys"]
+__all__ = [
+    "build_candidate_group_keys",
+    "build_matrix_core",
+    "compute_group_coverage_debug",
+    "evaluate_capacity",
+    "evaluate_eligibility",
+    "MatrixSchema",
+]
