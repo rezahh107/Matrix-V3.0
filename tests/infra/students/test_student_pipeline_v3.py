@@ -4,24 +4,34 @@ import pandas as pd
 import pytest
 
 from app.core.common.types import StudentDomainValidationIssue, StudentDomainValidationResult
-from app.core.policy_loader import load_policy
+from app.core.policy_loader import PolicyConfig, load_policy
 from app.infra.students import pipeline_v3
 from app.infra.students.student_pipeline_v3 import StudentPipelineV3
 
 
-def _valid_student_frame(policy: object) -> pd.DataFrame:
-    policy_config = load_policy() if not hasattr(policy, "stage_column") else policy
+def _valid_student_frame(policy: PolicyConfig) -> pd.DataFrame:
     return pd.DataFrame(
         {
             "کدرشته": [1],
             "گروه آزمایشی": [1],
-            "جنسیت": [policy_config.gender_codes.male.value],
+            "جنسیت": [policy.gender_codes.male.value],
             "دانش آموز فارغ": [0],
             "مرکز گلستان صدرا": [1],
             "مالی حکمت بنیاد": [1],
             "کد مدرسه": [10],
         }
     )
+
+
+def test_student_pipeline_v3_happy_path() -> None:
+    policy = load_policy()
+    pipeline = StudentPipelineV3(policy=policy, reference_mode="excel")
+    df = _valid_student_frame(policy)
+
+    result = pipeline.run(df)
+
+    assert result.can_continue
+    assert not result.domain_result.issues
 
 
 def test_student_pipeline_v3_allows_non_blocking_domain(monkeypatch: pytest.MonkeyPatch) -> None:
