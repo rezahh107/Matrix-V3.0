@@ -88,13 +88,9 @@ class HeaderPipelineV3:
                     )
                 )
 
-        renamed = df.rename(columns=rename_map, errors="ignore").copy()
-
-        mentor_aliases = collisions.get("mentor_id", [])
-        if "mentor_id" in renamed.columns and "mentor_id" not in mentor_aliases:
-            mentor_aliases = [*mentor_aliases, "mentor_id"]
-
-        renamed = self._merge_mentor_id_aliases(renamed, mentor_aliases)
+        mentor_aliases = self._ordered_mentor_alias_columns(df, source)
+        merged = self._merge_mentor_id_aliases(df, mentor_aliases)
+        renamed = merged.rename(columns=rename_map, errors="ignore").copy()
 
         required = self._required.get(source, [])
         missing = [column for column in required if column not in renamed.columns]
@@ -139,6 +135,33 @@ class HeaderPipelineV3:
         remaining = remaining.loc[:, ~remaining.columns.duplicated(keep="first")]
         remaining["mentor_id"] = merged
         return remaining
+
+    def _ordered_mentor_alias_columns(
+        self, df: pd.DataFrame, source: str
+    ) -> list[str]:
+        alias_priority = self._mentor_alias_priority(source)
+        normalized_columns: dict[str, list[str]] = defaultdict(list)
+
+        for column in df.columns:
+            normalized_columns[_normalize_header(str(column))].append(str(column))
+
+        return [
+            column
+            for normalized in alias_priority
+            for column in normalized_columns.get(normalized, [])
+        ]
+
+    def _mentor_alias_priority(self, source: str) -> list[str]:
+        alias_map = self._alias_registry.get(source, {})
+        canonical_normalized = _normalize_header("mentor_id")
+        raw_aliases = [
+            alias for alias, canonical in alias_map.items() if canonical == "mentor_id"
+        ]
+        unique_aliases = list(dict.fromkeys(raw_aliases))
+        return [
+            canonical_normalized,
+            *[alias for alias in unique_aliases if alias != canonical_normalized],
+        ]
 
     @staticmethod
     def _normalize_registry(
