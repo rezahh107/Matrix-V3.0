@@ -472,15 +472,18 @@ def _run_mentor_pipeline_scenario(
         )
     else:
         expected_issues_frame = pd.DataFrame(scenario.expected_issues or []).convert_dtypes()
-    issue_columns = list(current_issues.columns) or list(expected_issues_frame.columns)
-    missing_issue_columns = [col for col in issue_columns if col not in expected_issues_frame.columns]
-    if missing_issue_columns:
+    expected_cols = set(expected_issues_frame.columns)
+    current_cols = set(current_issues.columns)
+    if expected_cols != current_cols:
         print("  status: mentor-issues-mismatch")
-        print(
-            "  details: expected_issues is missing columns: "
-            + ", ".join(sorted(missing_issue_columns))
-        )
+        details = []
+        if missing_cols := sorted(expected_cols - current_cols):
+            details.append(f"Current issues are missing columns: {', '.join(missing_cols)}")
+        if extra_cols := sorted(current_cols - expected_cols):
+            details.append(f"Current issues have extra columns: {', '.join(extra_cols)}")
+        print(f"  details: {' | '.join(details)}")
         return False
+    issue_columns = sorted(list(expected_cols))
     expected_issues = _normalize_frame(expected_issues_frame, sort_columns=issue_columns)
     if not _compare_frames("mentor-issues", expected_issues, current_issues):
         return False
