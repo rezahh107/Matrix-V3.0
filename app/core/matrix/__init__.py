@@ -8,8 +8,8 @@ from .grouping import build_candidate_group_keys
 from .matrix_schema import MatrixSchema
 
 __all__ = [
-    "build_matrix_core",
     "build_candidate_group_keys",
+    "build_matrix_core",
     "compute_group_coverage_debug",
     "evaluate_capacity",
     "evaluate_eligibility",
