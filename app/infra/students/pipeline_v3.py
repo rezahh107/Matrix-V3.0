@@ -41,7 +41,9 @@ class StudentPipelineResult:
 
     @property
     def can_continue(self) -> bool:
-        return not self.validation.join_keys.issues and not self.validation.domain.issues
+        if self.validation.join_keys.issues:
+            return False
+        return self.validation.domain.can_continue
 
 
 class StudentPipelineV3:
