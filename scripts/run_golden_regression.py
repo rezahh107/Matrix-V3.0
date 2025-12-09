@@ -11,10 +11,10 @@ from __future__ import annotations
 
 import argparse
 import sys
+import tempfile
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-import tempfile
 from typing import Any
 
 import pandas as pd
@@ -50,8 +50,10 @@ class MentorPipelineV3Scenario:
     name: str
     description: str | None
     input_path: Path
-    expected_pool_rows: list[dict[str, Any]]
-    expected_issues: list[dict[str, Any]]
+    expected_pool_rows: list[dict[str, Any]] | None
+    expected_pool_file: Path | None
+    expected_issues: list[dict[str, Any]] | None
+    expected_issues_file: Path | None
     requires: list[Path]
 
 
@@ -153,9 +155,11 @@ def _parse_cli_scenario(raw: Any) -> GoldenScenario:
 
 
 def _parse_expected_pool(raw: Any, scenario_name: str) -> list[dict[str, Any]]:
-    if not isinstance(raw, list) or not raw:
+    if raw is None:
+        return []
+    if not isinstance(raw, list):
         raise GoldenRegressionError(
-            f"Scenario '{scenario_name}' expected_pool must be a non-empty list of row mappings."
+            f"Scenario '{scenario_name}' expected_pool must be a list of row mappings."
         )
     rows: list[dict[str, Any]] = []
     for idx, row in enumerate(raw):
@@ -208,15 +212,27 @@ def _parse_mentor_pipeline_scenario(raw: Any) -> MentorPipelineV3Scenario:
 
     expected_pool_raw = raw.get("expected_pool")
     expected_pool_rows = _parse_expected_pool(expected_pool_raw, name)
+    expected_pool_file_raw = raw.get("expected_pool_file")
+    expected_pool_file = _as_path(expected_pool_file_raw, field="expected_pool_file") if expected_pool_file_raw else None
+
     expected_issues_raw = raw.get("expected_issues")
     expected_issues = _parse_expected_issues(expected_issues_raw, name)
+    expected_issues_file_raw = raw.get("expected_issues_file")
+    expected_issues_file = _as_path(expected_issues_file_raw, field="expected_issues_file") if expected_issues_file_raw else None
+
+    if not expected_pool_rows and expected_pool_file is None:
+        raise GoldenRegressionError(
+            f"Scenario '{name}' must provide expected_pool or expected_pool_file."
+        )
 
     return MentorPipelineV3Scenario(
         name=name,
         description=description,
         input_path=input_path,
         expected_pool_rows=expected_pool_rows,
+        expected_pool_file=expected_pool_file,
         expected_issues=expected_issues,
+        expected_issues_file=expected_issues_file,
         requires=requires,
     )
 
@@ -249,11 +265,17 @@ def _load_config(config_path: Path) -> GoldenConfig:
             "Add sanitized golden datasets under ci/golden_datasets/ and update the config."
         )
 
-    ci_golden_root = (config_path.parent.parent / "golden_datasets").resolve()
-    if ci_golden_root.exists() and not base_dir.is_relative_to(ci_golden_root):
+    project_root = config_path.parent.parent
+    allowed_roots = [
+        (project_root / "ci" / "golden_datasets").resolve(),
+        (project_root / "docs" / "golden_datasets").resolve(),
+    ]
+    allowed_existing = [root for root in allowed_roots if root.exists()]
+    if allowed_existing and not any(base_dir.is_relative_to(root) for root in allowed_existing):
         raise GoldenRegressionError(
-            f"base_dir must stay under the sanitized CI tree ({ci_golden_root}). "
-            f"Got: {base_dir}"
+            "base_dir must stay under a sanitized golden tree (allowed roots: "
+            + ", ".join(str(root) for root in allowed_existing)
+            + f"). Got: {base_dir}"
         )
 
     scenarios_raw = raw.get("scenarios")
@@ -368,13 +390,23 @@ def _run_cli_scenario(config: GoldenConfig, scenario: GoldenScenario, *, dry_run
 
 
 def _mentor_expected_pool(rows: list[dict[str, Any]], *, columns: Sequence[str]) -> pd.DataFrame:
-    expected = pd.DataFrame(rows).convert_dtypes()
-    missing_columns = [col for col in columns if col not in expected.columns]
-    if missing_columns:
-        raise GoldenRegressionError(
-            "expected_pool is missing columns: " + ", ".join(sorted(missing_columns))
-        )
+    expected = pd.DataFrame(rows, columns=columns).convert_dtypes()
     return _normalize_frame(expected, sort_columns=columns)
+
+
+def _load_expected_frame(path: Path, *, kind: str) -> pd.DataFrame:
+    if not path.exists():
+        raise GoldenRegressionError(f"Expected {kind} file not found: {path}")
+    suffix = path.suffix.lower()
+    if suffix == ".csv":
+        frame = pd.read_csv(path)
+    elif suffix in {".xlsx", ".xls"}:
+        frame = pd.read_excel(path)
+    else:
+        raise GoldenRegressionError(
+            f"Expected {kind} file must be CSV or Excel. Got extension: {suffix}"
+        )
+    return frame.convert_dtypes()
 
 
 def _run_mentor_pipeline_scenario(
@@ -420,13 +452,26 @@ def _run_mentor_pipeline_scenario(
         return False
 
     pool_columns = list(result.canonical_df.columns)
-    expected_pool = _mentor_expected_pool(scenario.expected_pool_rows, columns=pool_columns)
+    if scenario.expected_pool_file is not None:
+        expected_pool_frame = _load_expected_frame(
+            config.resolve(scenario.expected_pool_file), kind="expected_pool"
+        )
+        expected_pool = _normalize_frame(expected_pool_frame, sort_columns=pool_columns)
+    else:
+        expected_pool = _mentor_expected_pool(
+            scenario.expected_pool_rows or [], columns=pool_columns
+        )
     current_pool = _normalize_frame(result.canonical_df, sort_columns=pool_columns)
     if not _compare_frames("mentor-pool", expected_pool, current_pool):
         return False
 
     current_issues = _issues_to_frame(result.issues)
-    expected_issues_frame = pd.DataFrame(scenario.expected_issues).convert_dtypes()
+    if scenario.expected_issues_file is not None:
+        expected_issues_frame = _load_expected_frame(
+            config.resolve(scenario.expected_issues_file), kind="expected_issues"
+        )
+    else:
+        expected_issues_frame = pd.DataFrame(scenario.expected_issues or []).convert_dtypes()
     issue_columns = list(current_issues.columns) or list(expected_issues_frame.columns)
     missing_issue_columns = [col for col in issue_columns if col not in expected_issues_frame.columns]
     if missing_issue_columns:

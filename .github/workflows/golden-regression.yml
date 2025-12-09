@@ -9,6 +9,7 @@ on:
       - ci/configs/golden_regression.yml
       - scripts/run_golden_regression.py
       - ci/golden_datasets/**
+      - docs/golden_datasets/**
       - config/policy.json
 
 env:

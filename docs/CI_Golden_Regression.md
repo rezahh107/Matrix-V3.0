@@ -6,18 +6,19 @@ against committed, sanitized golden inputs without touching Core behavior.
 
 ## Where to store golden files
 - Place all committed golden mentor inputs/outputs under the sanitized
-  `ci/golden_datasets/**` tree. Keep the directory free of secrets; placeholder
-  files are fine until real goldens are ready. CSV inputs are preferred to avoid
-  committing binary Excel files; the runner will materialize temporary Excel
-  copies when needed for the Inspactor reader.
+  `docs/golden_datasets/**` (or `ci/golden_datasets/**`) tree. Keep the
+  directory free of secrets; placeholder files are fine until real goldens are
+  ready. CSV inputs are supported, but phase01 locks use the provided Excel
+  workbooks directly.
 
 ## Configure scenarios (YAML)
 - Edit `ci/configs/golden_regression.yml`.
 - Top-level keys:
-  - `base_dir`: root directory that contains your golden Excel files (for
-    example `ci/golden_datasets/mentors`). Relative paths in `requires` are
-    resolved against this directory. The runner fails fast if `base_dir` does
-    not exist or falls outside `ci/golden_datasets/**`.
+  - `base_dir`: root directory that contains your golden Excel/CSV files (for
+    example `docs/golden_datasets/phase01_lock_current_behavior`). Relative
+    paths in `requires` are resolved against this directory. The runner fails
+    fast if `base_dir` does not exist or falls outside the sanitized
+    `docs/golden_datasets/**` or `ci/golden_datasets/**` trees.
   - `scenarios`: list of named scenarios. Each scenario includes:
     - `type`: either `cli` (default) or `mentor-pipeline-v3`.
     - `name` (required) and optional `description`.
@@ -30,18 +31,20 @@ against committed, sanitized golden inputs without touching Core behavior.
         MentorPipelineV3 loader.
       - `requires`: files that must exist (defaults to `[input]`).
       - `expected_pool`: inline rows describing the canonicalized mentor pool
-        DataFrame expected from MentorPipelineV3.
+        DataFrame expected from MentorPipelineV3 (use `expected_pool_file` to
+        read expectations from CSV/Excel instead).
       - `expected_issues`: inline rows capturing expected join-key QA issues
-        (empty list when no issues are expected).
+        (`expected_issues_file` is available to load CSV/Excel expectations;
+        empty list when no issues are expected).
 
-The scaffolded scenario points to the sanitized `ci/golden_datasets/mentors`
+The scaffolded scenario points to the locked `docs/golden_datasets/phase01_lock_current_behavior`
 golden set; adjust `base_dir` and filenames to match your committed goldens.
 
 ## MentorPipelineV3 parity (mentors)
 - Golden regression باید سناریوهای parity بین مسیر legacy و **MentorPipelineV3** را شامل شود.
 - مقایسه‌ها باید روی تپّل‌های شش‌گانهٔ join key (`group_code`, `gender_code`, `grad_status_code`, `center_code`, `finance_code`, `school_code`) و ستون‌های ظرفیت (`capacity_limit`, `assigned_baseline`, `allocations_new`, `remaining_capacity`) strict باشد.
-- اگر `ci/golden_datasets/mentors/**` پیدا نشود یا فایل‌ها خراب باشند، runner باید fail-fast با پیام واضح برگرداند.
-- فقط از داده‌های سانیت‌شدهٔ زیر `ci/golden_datasets/mentors/**` استفاده کنید؛ سناریوهای دیگر نباید به دادهٔ حساس تکیه کنند.
+- اگر `docs/golden_datasets/phase01_lock_current_behavior/**` (یا سایر مسیرهای سانیت‌شده) پیدا نشود یا فایل‌ها خراب باشند، runner باید fail-fast با پیام واضح برگرداند.
+- فقط از داده‌های سانیت‌شدهٔ زیر `docs/golden_datasets/**` (یا `ci/golden_datasets/**`) استفاده کنید؛ سناریوهای دیگر نباید به دادهٔ حساس تکیه کنند.
 
 ## Run locally
 - Install dependencies (`pip install -r requirements.txt && pip install -e .`).
