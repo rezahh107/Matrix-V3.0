@@ -51,7 +51,7 @@ def _legacy_pool(df: pd.DataFrame) -> pd.DataFrame:
 
 def test_happy_path_parity_with_legacy_helpers() -> None:
     payload = _make_simple_df()
-    pipeline = MentorPipelineV3(policy=policy.config)
+    pipeline = MentorPipelineV3(policy=policy.config, reference_mode="excel")
 
     result = pipeline.run(payload)
 
@@ -73,7 +73,7 @@ def test_golden_parity_snapshot_pool() -> None:
         )
 
     payload = pd.read_csv(golden_path)
-    pipeline = MentorPipelineV3(policy=policy.config)
+    pipeline = MentorPipelineV3(policy=policy.config, reference_mode="excel")
 
     result = pipeline.run(payload)
     baseline = _legacy_pool(payload)
@@ -93,7 +93,7 @@ def test_edge_multi_profile_and_wildcards_exposes_qa() -> None:
     extra["کد مدرسه"] = 999
     payload = pd.concat([payload, extra], ignore_index=True)
 
-    pipeline = MentorPipelineV3(policy=policy.config)
+    pipeline = MentorPipelineV3(policy=policy.config, reference_mode="excel")
     result = pipeline.run(payload)
 
     assert not result.can_continue
@@ -109,7 +109,7 @@ def test_edge_multi_profile_and_wildcards_exposes_qa() -> None:
 def test_header_alias_resolved_and_forwarded() -> None:
     payload = _make_simple_df().rename(columns={"mentor_id": "کد کارمندی پشتیبان"})
 
-    pipeline = MentorPipelineV3(policy=policy.config)
+    pipeline = MentorPipelineV3(policy=policy.config, reference_mode="excel")
     result = pipeline.run(payload)
 
     assert result.header_result.can_continue
@@ -150,7 +150,7 @@ def test_pipeline_handles_canonical_mentor_id_with_alias_column() -> None:
     payload = _make_simple_df()
     payload["mentor_code"] = ["alias-m1", "alias-m2"]
 
-    pipeline = MentorPipelineV3(policy=policy.config)
+    pipeline = MentorPipelineV3(policy=policy.config, reference_mode="excel")
     result = pipeline.run(payload)
 
     assert result.can_continue
@@ -207,7 +207,7 @@ def test_db_derivation_and_cache_canonicalization(monkeypatch: pytest.MonkeyPatc
 
     monkeypatch.setattr("app.infra.mentors.pipeline_v3._derive_pool_join_keys", _fake_derive)
     payload = pd.DataFrame({"mentor_id": ["m-1"], "ظرفیت": [1]})
-    pipeline = MentorPipelineV3(policy=policy.config, db=object())
+    pipeline = MentorPipelineV3(policy=policy.config, db=object(), reference_mode="excel")
 
     result = pipeline.run(payload)
 
@@ -224,7 +224,7 @@ def test_qa_payload_schema_forwarded_via_attrs() -> None:
     payload.loc[1, "کد مدرسه"] = 0
     payload = pd.concat([payload, payload.iloc[[1]].assign(**{"کد مدرسه": 999})], ignore_index=True)
 
-    pipeline = MentorPipelineV3(policy=policy.config)
+    pipeline = MentorPipelineV3(policy=policy.config, reference_mode="excel")
     result = pipeline.run(payload)
 
     qa_payload = result.build_result.pool.attrs[_POOL_QA_PAYLOAD_ATTR]
@@ -246,7 +246,7 @@ def test_qa_attr_is_forwarded_into_result() -> None:
         {"reason": "CENTER_FALLBACK_WILDCARD", "row_index": 0, "column": "مرکز گلستان صدرا"}
     ]
 
-    pipeline = MentorPipelineV3(policy=policy.config)
+    pipeline = MentorPipelineV3(policy=policy.config, reference_mode="excel")
     result = pipeline.run(payload)
 
     assert not result.can_continue
@@ -282,7 +282,7 @@ def test_failure_missing_join_keys_in_headers_or_values() -> None:
             "جنسیت": [1],
         }
     )
-    pipeline = MentorPipelineV3(policy=policy.config)
+    pipeline = MentorPipelineV3(policy=policy.config, reference_mode="excel")
 
     result = pipeline.run(payload)
 
@@ -304,7 +304,7 @@ def test_missing_mentor_id_is_reported_not_crashing() -> None:
         }
     )
 
-    pipeline = MentorPipelineV3(policy=policy.config)
+    pipeline = MentorPipelineV3(policy=policy.config, reference_mode="excel")
     result = pipeline.run(payload)
 
     assert not result.can_continue

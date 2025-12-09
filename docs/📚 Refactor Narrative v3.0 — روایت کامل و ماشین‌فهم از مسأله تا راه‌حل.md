@@ -31,6 +31,7 @@
   6. school
 - سپس eligibility_matrix می‌سازد،
 - و در نهایت تخصیص mentor → student انجام می‌دهد.
+- از فاز REF-V3-PHASE-07 به بعد، **SSoT عملی School/GroupCode پایگاه دادهٔ محلی است**؛ فایل‌های SchoolReport/crosswalk فقط برای bootstrap یا به‌روزرسانی از طریق Database Tab استفاده می‌شوند و مسیر اجرای تخصیص به DB تکیه دارد.
 
 هر **اشتباه در join key یا import pipeline** می‌تواند کل سیستم را مختل کند.
 

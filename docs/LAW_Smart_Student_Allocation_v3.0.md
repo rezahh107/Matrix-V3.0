@@ -20,6 +20,12 @@
 
 اگر اختلافی بین این سند و سندی غیر از Policy/SSoT وجود داشت، **این سند درست است** و بقیه باید اصلاح شوند (یا به‌عنوان Legacy علامت‌گذاری شوند).
 
+### 0.1. منبع مرجع School/GroupCode پس از Bootstrap
+
+- **SSoT عملی برای School و GroupCode = پایگاه دادهٔ محلی (LocalDatabase)**؛ جدول‌های `schools` و `groupcodes` تنها منبع معتبر برای اجرای تخصیص هستند.
+- فایل‌های Excel (SchoolReport و crosswalk) فقط برای **bootstrap یا به‌روزرسانی** استفاده می‌شوند و پس از import، مسیر عملیاتی باید از DB خوانده شود.
+- **Database Tab** در UI سطح رسمی مشاهدهٔ وضعیت (row_count، imported_at، version_tag) و اجرای import/به‌روزرسانی است؛ هیچ مسیر اجرای تخصیص نباید وابسته به انتخاب Excel در هر run باشد.
+
 ---
 
 ## 1. انواع دانش‌آموز و پشتیبان (Normal / School / Dual)

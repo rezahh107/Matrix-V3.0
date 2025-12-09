@@ -52,8 +52,7 @@ class HeaderPipelineV3:
         )
         self._required = {key: list(value) for key, value in (required or {}).items()}
         self._critical_required = {
-            key: {value for value in values}
-            for key, values in (critical_required or {}).items()
+            key: {value for value in values} for key, values in (critical_required or {}).items()
         }
 
     def resolve(self, df: pd.DataFrame, source: str) -> HeaderResolution:
@@ -164,9 +163,7 @@ class HeaderPipelineV3:
         ]
 
     @staticmethod
-    def _normalize_registry(
-        registry: Mapping[str, Mapping[str, str]]
-    ) -> dict[str, dict[str, str]]:
+    def _normalize_registry(registry: Mapping[str, Mapping[str, str]]) -> dict[str, dict[str, str]]:
         normalized: dict[str, dict[str, str]] = {}
         for source, mapping in registry.items():
             normalized[source] = {_normalize_header(key): value for key, value in mapping.items()}
@@ -174,4 +171,7 @@ class HeaderPipelineV3:
 
     @staticmethod
     def _default_alias_registry() -> dict[str, dict[str, str]]:
-        return {source: {_normalize_header(k): v for k, v in mapping.items()} for source, mapping in HEADER_ALIASES_V3.items()}
+        return {
+            source: {_normalize_header(k): v for k, v in mapping.items()}
+            for source, mapping in HEADER_ALIASES_V3.items()
+        }

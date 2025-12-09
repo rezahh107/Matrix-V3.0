@@ -40,10 +40,14 @@ def test_import_and_load_managers_reference(tmp_path: Path) -> None:
         expected,
     )
 
-    refreshed_at, source_path, row_count = db.fetch_reference_meta("managers_reference")
+    meta = db.fetch_reference_meta("managers_reference")
+    assert meta is not None
+    refreshed_at, source_path, row_count, version_tag, source_filename, imported_at = meta
     assert refreshed_at
     assert source_path == str(path)
     assert int(row_count) == 2
+    assert version_tag is None
+    assert source_filename == path.name
 
 
 def test_duplicate_manager_center_raises(tmp_path: Path) -> None:

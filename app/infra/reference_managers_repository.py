@@ -118,7 +118,7 @@ def import_managers_from_excel(path: Path, db: LocalDatabase) -> pd.DataFrame:
 
     raw_df = read_excel_first_sheet(path)
     normalized = _normalize_manager_frame(raw_df)
-    _managers_repository(db).upsert_frame(normalized, source=str(path))
+    _managers_repository(db).upsert_frame(normalized, source=str(path), source_filename=path.name)
     return normalized
 
 

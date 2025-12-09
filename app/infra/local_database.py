@@ -45,7 +45,7 @@ from app.infra.sqlite_types import (
     coerce_int_like as _sqlite_coerce_int_like,
 )
 
-_SCHEMA_VERSION = 11
+_SCHEMA_VERSION = 12
 _POLICY_VERSION = "1.0.3"
 _SSOT_VERSION = "1.0.2"
 _ISO_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
@@ -1095,12 +1095,32 @@ class LocalDatabase:
                 table_name TEXT PRIMARY KEY,
                 refreshed_at TEXT NOT NULL,
                 source TEXT,
-                row_count INTEGER
+                row_count INTEGER,
+                version_tag TEXT,
+                source_filename TEXT,
+                imported_at TEXT
             );
 
             CREATE TABLE IF NOT EXISTS schools (
-                "کد مدرسه" INTEGER,
-                "نام مدرسه" TEXT
+                "کد مدرسه" INTEGER PRIMARY KEY,
+                "نام مدرسه" TEXT,
+                "مرکز گلستان صدرا" INTEGER,
+                "جنسیت" INTEGER,
+                "فعال" INTEGER DEFAULT 1,
+                version_tag TEXT,
+                source_filename TEXT,
+                imported_at TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS groupcodes (
+                group_code INTEGER PRIMARY KEY,
+                level TEXT,
+                grade INTEGER,
+                track TEXT,
+                is_active INTEGER DEFAULT 1,
+                version_tag TEXT,
+                source_filename TEXT,
+                imported_at TEXT
             );
 
             CREATE TABLE IF NOT EXISTS school_crosswalk_groups (
@@ -1171,6 +1191,12 @@ class LocalDatabase:
             CREATE INDEX IF NOT EXISTS idx_mentor_pool_cache_join_keys
             ON mentor_pool_cache("کدرشته", "جنسیت", "دانش آموز فارغ", "مرکز گلستان صدرا", "مالی حکمت بنیاد", "کد مدرسه");
             """
+        )
+        conn.execute(
+            'CREATE INDEX IF NOT EXISTS idx_schools_center_code ON schools("مرکز گلستان صدرا")'
+        )
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_groupcodes_code ON groupcodes(group_code)"
         )
         LocalDatabase._ensure_managers_reference_schema(conn)
 
@@ -1367,6 +1393,10 @@ class LocalDatabase:
                 self._migrate_v10_to_v11(conn)
                 version = 11
                 continue
+            if version == 11:
+                self._migrate_v11_to_v12(conn)
+                version = 12
+                continue
             raise SchemaVersionMismatchError(
                 expected_version=_SCHEMA_VERSION,
                 actual_version=version,
@@ -1532,6 +1562,55 @@ class LocalDatabase:
             (_POLICY_VERSION, _SSOT_VERSION),
         )
         conn.execute("UPDATE schema_meta SET schema_version = ? WHERE id = 1", (11,))
+
+    def _migrate_v11_to_v12(self, conn: sqlite3.Connection) -> None:
+        """افزودن متادیتای مرجع و جدول groupcodes برای نسخهٔ ۱۲."""
+
+        if _table_exists(conn, "reference_meta"):
+            existing_columns = _get_table_columns(conn, "reference_meta")
+            if "version_tag" not in existing_columns:
+                conn.execute("ALTER TABLE reference_meta ADD COLUMN version_tag TEXT")
+            if "source_filename" not in existing_columns:
+                conn.execute("ALTER TABLE reference_meta ADD COLUMN source_filename TEXT")
+            if "imported_at" not in existing_columns:
+                conn.execute("ALTER TABLE reference_meta ADD COLUMN imported_at TEXT")
+
+        if _table_exists(conn, "schools"):
+            existing_columns = _get_table_columns(conn, "schools")
+            for column, definition in (
+                ("مرکز گلستان صدرا", "INTEGER"),
+                ("جنسیت", "INTEGER"),
+                ("فعال", "INTEGER DEFAULT 1"),
+                ("version_tag", "TEXT"),
+                ("source_filename", "TEXT"),
+                ("imported_at", "TEXT"),
+            ):
+                if column not in existing_columns:
+                    _ensure_column_exists(
+                        conn,
+                        table="schools",
+                        column=_quote_identifier(column),
+                        definition=definition,
+                    )
+
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS groupcodes (
+                group_code INTEGER PRIMARY KEY,
+                level TEXT,
+                grade INTEGER,
+                track TEXT,
+                is_active INTEGER DEFAULT 1,
+                version_tag TEXT,
+                source_filename TEXT,
+                imported_at TEXT
+            );
+            """
+        )
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_groupcodes_code ON groupcodes(group_code)"
+        )
+        conn.execute("UPDATE schema_meta SET schema_version = ? WHERE id = 1", (12,))
 
     @staticmethod
     def _ensure_year_tables(conn: sqlite3.Connection) -> None:
@@ -1903,6 +1982,9 @@ class LocalDatabase:
         table_name: str,
         source: str | None,
         row_count: int | None,
+        version_tag: str | None = None,
+        source_filename: str | None = None,
+        imported_at: datetime | None = None,
         conn: sqlite3.Connection | None = None,
     ) -> None:
         """ثبت زمان به‌روزرسانی کش مرجع برای مصرف مخازن اشتراکی."""
@@ -1915,28 +1997,43 @@ class LocalDatabase:
         try:
             target_conn.execute(
                 """
-                INSERT OR REPLACE INTO reference_meta(table_name, refreshed_at, source, row_count)
-                VALUES (?, ?, ?, ?)
+                INSERT OR REPLACE INTO reference_meta(
+                    table_name, refreshed_at, source, row_count, version_tag, source_filename, imported_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (table_name, _to_iso(datetime.utcnow()), source, row_count),
+                (
+                    table_name,
+                    _to_iso(datetime.utcnow()),
+                    source,
+                    row_count,
+                    version_tag,
+                    source_filename,
+                    _to_iso(imported_at) if imported_at is not None else None,
+                ),
             )
             target_conn.commit()
         finally:
             if needs_close:
                 target_conn.close()
 
-    def fetch_reference_meta(self, table_name: str) -> tuple[str, str | None, int | None] | None:
+    def fetch_reference_meta(
+        self, table_name: str
+    ) -> tuple[str, str | None, int | None, str | None, str | None] | None:
         """بازیابی متادیتای کش مرجع (زمان، منبع، شمارش ردیف)."""
 
         with self._open_connection() as conn:
             cursor = conn.execute(
-                "SELECT refreshed_at, source, row_count FROM reference_meta WHERE table_name = ?",
+                """
+                SELECT refreshed_at, source, row_count, version_tag, source_filename, imported_at
+                FROM reference_meta WHERE table_name = ?
+                """,
                 (table_name,),
             )
             row = cursor.fetchone()
         if row is None:
             return None
-        return row[0], row[1], row[2]
+        return row[0], row[1], row[2], row[3], row[4], row[5]
 
     def list_tables_with_counts(self) -> pd.DataFrame:
         """فهرست جدول‌های SQLite همراه شمارش ردیف."""

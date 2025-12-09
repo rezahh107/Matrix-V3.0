@@ -82,6 +82,7 @@ def import_mentor_pool_from_dataframe(
         policy=policy,
         pool_source=pool_source,
         header_mode="fa",
+        reference_mode="excel",
         db=db,
     )
     result = pipeline.run(working_df)
