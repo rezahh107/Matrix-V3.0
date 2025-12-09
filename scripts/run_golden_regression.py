@@ -443,7 +443,7 @@ def _run_mentor_pipeline_scenario(
                 inspactor_path, Path(temp_dir)
             )
             policy = load_policy(policy_path)
-            result = import_mentor_pool_with_validation(
+            result = import_mentor_pool_with_validation(  # type: ignore[arg-type]
                 materialized_input, db=None, policy=policy, pool_source="inspactor"
             )
     except Exception as exc:  # pragma: no cover - runtime safety path
