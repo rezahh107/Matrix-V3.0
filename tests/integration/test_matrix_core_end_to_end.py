@@ -58,7 +58,9 @@ def test_end_to_end_matrix_build() -> None:
 
     assert set(result.columns).issuperset({"mentor_id", "student_id", "trace"})
     assert all(column in result.columns for column in MatrixSchema().join_keys)
-    assert result["capacity_ok"].sum() == len(result)
+    expected_rows = 6  # 3 mentors × 2 students
+    assert len(result) == expected_rows
+    assert result["capacity_ok"].all()
     assert {tuple(trace_step[0] for trace_step in trace[:4]) for trace in result["trace"]} == {
         ("type", "group", "gender", "graduation_status"),
     }
@@ -69,21 +71,10 @@ def test_end_to_end_matrix_build() -> None:
 
 
 def test_build_matrix_core_missing_mentor_id_raises() -> None:
-    mentors_df = pd.DataFrame(
-        [
-            {
-                "capacity_limit": 1,
-                "assigned_baseline": 0,
-                "allocations_new": 0,
-                "center_code": 1,
-                "school_code": 1,
-                "group_code": 1,
-                "gender_code": 1,
-                "grad_status_code": 1,
-                "finance_code": 1,
-            }
-        ]
-    )
+    mentor_row = _mentor_row(101, capacity_limit=1, center_code=1, school_code=1)
+    del mentor_row["mentor_id"]
+
+    mentors_df = pd.DataFrame([mentor_row])
     students_df = pd.DataFrame([_student_row(201, center_code=1, school_code=1)])
 
     with pytest.raises(KeyError):
@@ -94,18 +85,10 @@ def test_build_matrix_core_missing_student_id_raises() -> None:
     mentors_df = pd.DataFrame([
         _mentor_row(101, capacity_limit=1, center_code=1, school_code=1)
     ])
-    students_df = pd.DataFrame(
-        [
-            {
-                "center_code": 1,
-                "school_code": 1,
-                "group_code": 1,
-                "gender_code": 1,
-                "grad_status_code": 1,
-                "finance_code": 1,
-            }
-        ]
-    )
+    student_row = _student_row(201, center_code=1, school_code=1)
+    del student_row["student_id"]
+
+    students_df = pd.DataFrame([student_row])
 
     with pytest.raises(KeyError):
         build_matrix_core(mentors_df, students_df, schema=MatrixSchema())
