@@ -1,21 +1,32 @@
 # Golden regression scenarios for Smart Student Allocation
-# Update paths to point to committed golden Excel inputs and outputs.
+# Update paths to point to committed golden inputs/outputs.
 
-base_dir: docs/golden_datasets/phase01_lock_current_behavior
+base_dir: ../golden_datasets/mentors
 
 scenarios:
-  - name: phase01_lock_current_behavior
-    description: Run matrix build against the phase01 locked golden inputs.
-    commands:
-      - name: build-matrix
-        args:
-          - build-matrix
-          - --inspactor
-          - InspactorReport-1404_09_15-3570.xlsx
-          - --schools
-          - SchoolReport-1404_09_15-3570.xlsx
-          - --output
-          - output/phase01_matrix.xlsx
-        requires:
-          - InspactorReport-1404_09_15-3570.xlsx
-          - SchoolReport-1404_09_15-3570.xlsx
+  - name: mentor_pipeline_v3_small
+    type: mentor-pipeline-v3
+    description: Validate MentorPipelineV3 canonicalization against the sanitized mentor Inspactor golden dataset.
+    input: golden_inspactor.csv
+    requires:
+      - golden_inspactor.csv
+    expected_pool:
+      - ظرفیت: 3
+        کدرشته: 1
+        جنسیت: 1
+        دانش آموز فارغ: 0
+        مرکز گلستان صدرا: 10
+        مالی حکمت بنیاد: 0
+        کد مدرسه: 101
+        mentor_id: m-gold-1
+    expected_issues:
+      - entity_type: mentor
+        row_index: 1
+        column: کدرشته
+        raw_value: 2
+        error_code: DATA_INVALID
+      - entity_type: mentor
+        row_index: 2
+        column: جنسیت
+        raw_value: 2
+        error_code: DATA_MISSING

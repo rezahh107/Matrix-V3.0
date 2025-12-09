@@ -14,11 +14,15 @@ import sys
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+import tempfile
 from typing import Any
 
+import pandas as pd
 import yaml
 
+from app.core.policy_loader import load_policy
 from app.infra import cli
+from app.infra.reference_mentors_repository import import_mentor_pool_with_validation
 
 
 @dataclass(frozen=True)
@@ -40,11 +44,26 @@ class GoldenScenario:
 
 
 @dataclass(frozen=True)
+class MentorPipelineV3Scenario:
+    """Run MentorPipelineV3 on a golden Inspactor workbook and compare snapshots."""
+
+    name: str
+    description: str | None
+    input_path: Path
+    expected_pool_rows: list[dict[str, Any]]
+    expected_issues: list[dict[str, Any]]
+    requires: list[Path]
+
+
+Scenario = GoldenScenario | MentorPipelineV3Scenario
+
+
+@dataclass(frozen=True)
 class GoldenConfig:
     """Top-level configuration parsed from YAML."""
 
     base_dir: Path
-    scenarios: list[GoldenScenario]
+    scenarios: list[Scenario]
 
     def resolve(self, path: Path) -> Path:
         """Resolve paths relative to the declared base directory."""
@@ -112,7 +131,7 @@ def _parse_command(raw: Any, scenario_name: str) -> GoldenCommand:
     return GoldenCommand(name=name, args=args, requires=requires)
 
 
-def _parse_scenario(raw: Any) -> GoldenScenario:
+def _parse_cli_scenario(raw: Any) -> GoldenScenario:
     if not isinstance(raw, dict):
         raise GoldenRegressionError("Scenario entries must be mappings.")
 
@@ -133,6 +152,82 @@ def _parse_scenario(raw: Any) -> GoldenScenario:
     return GoldenScenario(name=name, description=description, commands=commands)
 
 
+def _parse_expected_pool(raw: Any, scenario_name: str) -> list[dict[str, Any]]:
+    if not isinstance(raw, list) or not raw:
+        raise GoldenRegressionError(
+            f"Scenario '{scenario_name}' expected_pool must be a non-empty list of row mappings."
+        )
+    rows: list[dict[str, Any]] = []
+    for idx, row in enumerate(raw):
+        if not isinstance(row, dict):
+            raise GoldenRegressionError(
+                f"Scenario '{scenario_name}' expected_pool[{idx}] must be a mapping of column values."
+            )
+        rows.append(row)
+    return rows
+
+
+def _parse_expected_issues(raw: Any, scenario_name: str) -> list[dict[str, Any]]:
+    if raw is None:
+        return []
+    if not isinstance(raw, list):
+        raise GoldenRegressionError(
+            f"Scenario '{scenario_name}' expected_issues must be a list when provided."
+        )
+    issues: list[dict[str, Any]] = []
+    for idx, entry in enumerate(raw):
+        if not isinstance(entry, dict):
+            raise GoldenRegressionError(
+                f"Scenario '{scenario_name}' expected_issues[{idx}] must be a mapping."
+            )
+        issues.append(entry)
+    return issues
+
+
+def _parse_mentor_pipeline_scenario(raw: Any) -> MentorPipelineV3Scenario:
+    if not isinstance(raw, dict):
+        raise GoldenRegressionError("Scenario entries must be mappings.")
+
+    name_raw = raw.get("name")
+    name = str(name_raw).strip() if name_raw is not None else ""
+    if not name:
+        raise GoldenRegressionError("Each scenario must have a non-empty name.")
+
+    description_raw = raw.get("description")
+    description = str(description_raw) if description_raw is not None else None
+
+    input_raw = raw.get("input")
+    input_path = _as_path(input_raw, field="input")
+
+    requires_raw = raw.get("requires", [input_path.as_posix()])
+    if not isinstance(requires_raw, Iterable) or isinstance(requires_raw, (str, bytes)):
+        raise GoldenRegressionError(
+            f"Scenario '{name}' requires must be a list of file paths."
+        )
+    requires = [_as_path(item, field=f"requires[{idx}]") for idx, item in enumerate(requires_raw)]
+
+    expected_pool_raw = raw.get("expected_pool")
+    expected_pool_rows = _parse_expected_pool(expected_pool_raw, name)
+    expected_issues_raw = raw.get("expected_issues")
+    expected_issues = _parse_expected_issues(expected_issues_raw, name)
+
+    return MentorPipelineV3Scenario(
+        name=name,
+        description=description,
+        input_path=input_path,
+        expected_pool_rows=expected_pool_rows,
+        expected_issues=expected_issues,
+        requires=requires,
+    )
+
+
+def _parse_scenario(raw: Any) -> Scenario:
+    scenario_type = raw.get("type", "cli") if isinstance(raw, dict) else "cli"
+    if scenario_type == "mentor-pipeline-v3":
+        return _parse_mentor_pipeline_scenario(raw)
+    return _parse_cli_scenario(raw)
+
+
 def _load_config(config_path: Path) -> GoldenConfig:
     if not config_path.exists():
         raise GoldenRegressionError(
@@ -148,6 +243,18 @@ def _load_config(config_path: Path) -> GoldenConfig:
     base_dir = _as_path(base_dir_raw, field="base_dir")
     if not base_dir.is_absolute():
         base_dir = (config_path.parent / base_dir).resolve()
+    if not base_dir.exists():
+        raise GoldenRegressionError(
+            f"Golden regression base_dir does not exist: {base_dir}. "
+            "Add sanitized golden datasets under ci/golden_datasets/ and update the config."
+        )
+
+    ci_golden_root = (config_path.parent.parent / "golden_datasets").resolve()
+    if ci_golden_root.exists() and not base_dir.is_relative_to(ci_golden_root):
+        raise GoldenRegressionError(
+            f"base_dir must stay under the sanitized CI tree ({ci_golden_root}). "
+            f"Got: {base_dir}"
+        )
 
     scenarios_raw = raw.get("scenarios")
     if not isinstance(scenarios_raw, list) or not scenarios_raw:
@@ -166,8 +273,68 @@ def _run_command(command: GoldenCommand) -> int:
     return cli.main(command.args)
 
 
-def _run_scenario(config: GoldenConfig, scenario: GoldenScenario, *, dry_run: bool) -> bool:
-    print(f"[SCENARIO] {scenario.name}")
+def _materialize_inspactor_input(source: Path, temp_dir: Path) -> Path:
+    """Create an Excel workbook if the input is provided as CSV."""
+
+    if source.suffix.lower() in {".xlsx", ".xls"}:
+        return source
+    if source.suffix.lower() == ".csv":
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        frame = pd.read_csv(source)
+        target = temp_dir / f"{source.stem}.xlsx"
+        with pd.ExcelWriter(target, engine="openpyxl") as writer:
+            frame.to_excel(writer, index=False, sheet_name="Sheet1")
+        return target
+    raise GoldenRegressionError(
+        "MentorPipelineV3 input must be a CSV or Excel file: " f"{source.suffix}"
+    )
+
+
+def _normalize_frame(df: pd.DataFrame, *, sort_columns: Sequence[str] | None = None) -> pd.DataFrame:
+    normalized = df.convert_dtypes()
+    if sort_columns:
+        existing = [col for col in sort_columns if col in normalized.columns]
+    else:
+        existing = sorted(normalized.columns)
+    if existing:
+        normalized = normalized.sort_values(by=existing, kind="mergesort")
+    normalized = normalized.sort_index(axis=1)
+    normalized = normalized.reset_index(drop=True)
+    return normalized.where(lambda frame: ~frame.isna(), pd.NA)
+
+
+def _compare_frames(label: str, expected: pd.DataFrame, current: pd.DataFrame) -> bool:
+    expected_norm = _normalize_frame(expected)
+    current_norm = _normalize_frame(current)
+    try:
+        pd.testing.assert_frame_equal(expected_norm, current_norm, check_dtype=False)
+    except AssertionError as exc:
+        print(f"  status: {label}-mismatch")
+        print(f"  details: {exc}")
+        return False
+    return True
+
+
+def _issues_to_frame(issues: Sequence[object]) -> pd.DataFrame:
+    payload: list[dict[str, object]] = []
+    for issue in issues:
+        payload.append(
+            {
+                "entity_type": getattr(issue, "entity_type", None),
+                "row_index": getattr(issue, "row_index", None),
+                "column": getattr(issue, "column", None),
+                "raw_value": getattr(issue, "raw_value", None),
+                "error_code": getattr(issue, "error_code", None),
+            }
+        )
+    frame = pd.DataFrame(payload).convert_dtypes()
+    if frame.empty:
+        return frame
+    return _normalize_frame(frame, sort_columns=["row_index", "column", "error_code"])
+
+
+def _run_cli_scenario(config: GoldenConfig, scenario: GoldenScenario, *, dry_run: bool) -> bool:
+    print(f"[SCENARIO] {scenario.name} (cli)")
     if scenario.description:
         print(f"  description: {scenario.description}")
 
@@ -200,6 +367,83 @@ def _run_scenario(config: GoldenConfig, scenario: GoldenScenario, *, dry_run: bo
     return True
 
 
+def _mentor_expected_pool(rows: list[dict[str, Any]], *, columns: Sequence[str]) -> pd.DataFrame:
+    expected = pd.DataFrame(rows).convert_dtypes()
+    missing_columns = [col for col in columns if col not in expected.columns]
+    if missing_columns:
+        raise GoldenRegressionError(
+            "expected_pool is missing columns: " + ", ".join(sorted(missing_columns))
+        )
+    return _normalize_frame(expected, sort_columns=columns)
+
+
+def _run_mentor_pipeline_scenario(
+    config: GoldenConfig, scenario: MentorPipelineV3Scenario, *, dry_run: bool
+) -> bool:
+    print(f"[SCENARIO] {scenario.name} (mentor-pipeline-v3)")
+    if scenario.description:
+        print(f"  description: {scenario.description}")
+
+    resolved_requires = [config.resolve(path) for path in scenario.requires]
+    missing = _missing_files(resolved_requires)
+    if missing:
+        missing_unique = sorted({path.as_posix() for path in missing})
+        missing_list = "\n".join(f"  - {path}" for path in missing_unique)
+        print("  status: missing-files")
+        print("  details: The following required golden files are absent:")
+        print(missing_list)
+        return False
+
+    if dry_run:
+        print("  status: dry-run-success (all referenced files are present)")
+        return True
+
+    policy_path = Path("config/policy.json")
+    if not policy_path.exists():
+        print("  status: missing-policy")
+        print(f"  details: policy file not found at {policy_path}")
+        return False
+
+    inspactor_path = config.resolve(scenario.input_path)
+    try:
+        with tempfile.TemporaryDirectory(prefix="golden_inspactor_") as temp_dir:
+            materialized_input = _materialize_inspactor_input(
+                inspactor_path, Path(temp_dir)
+            )
+            policy = load_policy(policy_path)
+            result = import_mentor_pool_with_validation(
+                materialized_input, db=None, policy=policy, pool_source="inspactor"
+            )
+    except Exception as exc:  # pragma: no cover - runtime safety path
+        print("  status: mentor-pipeline-error")
+        print(f"  details: {exc}")
+        return False
+
+    pool_columns = list(result.canonical_df.columns)
+    expected_pool = _mentor_expected_pool(scenario.expected_pool_rows, columns=pool_columns)
+    current_pool = _normalize_frame(result.canonical_df, sort_columns=pool_columns)
+    if not _compare_frames("mentor-pool", expected_pool, current_pool):
+        return False
+
+    current_issues = _issues_to_frame(result.issues)
+    expected_issues_frame = pd.DataFrame(scenario.expected_issues).convert_dtypes()
+    issue_columns = list(current_issues.columns) or list(expected_issues_frame.columns)
+    missing_issue_columns = [col for col in issue_columns if col not in expected_issues_frame.columns]
+    if missing_issue_columns:
+        print("  status: mentor-issues-mismatch")
+        print(
+            "  details: expected_issues is missing columns: "
+            + ", ".join(sorted(missing_issue_columns))
+        )
+        return False
+    expected_issues = _normalize_frame(expected_issues_frame, sort_columns=issue_columns)
+    if not _compare_frames("mentor-issues", expected_issues, current_issues):
+        return False
+
+    print("  status: success")
+    return True
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parse_args(argv)
     try:
@@ -210,7 +454,12 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     all_passed = True
     for scenario in config.scenarios:
-        scenario_passed = _run_scenario(config, scenario, dry_run=args.dry_run)
+        if isinstance(scenario, MentorPipelineV3Scenario):
+            scenario_passed = _run_mentor_pipeline_scenario(
+                config, scenario, dry_run=args.dry_run
+            )
+        else:
+            scenario_passed = _run_cli_scenario(config, scenario, dry_run=args.dry_run)
         all_passed = all_passed and scenario_passed
 
     if not all_passed:

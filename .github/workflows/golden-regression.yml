@@ -1,14 +1,23 @@
-name: Golden Regression
+name: Golden Regression (MentorPipelineV3)
 
 on:
   workflow_dispatch:
   pull_request:
-    types: [labeled, synchronize]
+    branches: ["main"]
+    paths:
+      - .github/workflows/golden-regression.yml
+      - ci/configs/golden_regression.yml
+      - scripts/run_golden_regression.py
+      - ci/golden_datasets/**
+      - config/policy.json
+
+env:
+  QT_QPA_PLATFORM: offscreen
+  PIP_DISABLE_PIP_VERSION_CHECK: 1
 
 jobs:
-  golden-regression:
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'golden'))
-    runs-on: ubuntu-latest
+  mentor-pipeline-golden:
+    runs-on: windows-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -16,7 +25,7 @@ jobs:
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
           cache: pip
           cache-dependency-path: |
             requirements.txt
@@ -28,5 +37,5 @@ jobs:
           pip install -r requirements.txt
           pip install -e .
 
-      - name: Run golden regression suite
-        run: python -m tools.ci.run_golden_regression
+      - name: Run golden regression (MentorPipelineV3)
+        run: python scripts/run_golden_regression.py --config ci/configs/golden_regression.yml
