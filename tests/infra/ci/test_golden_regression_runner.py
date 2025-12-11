@@ -2,12 +2,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pandas as pd
 import pytest
 
 from scripts.run_golden_regression import (
     MENTOR_ISSUE_COLUMNS,
     GoldenRegressionError,
     _load_expected_mentor_issues_frame,
+    _mentor_issues_frame,
 )
 
 
@@ -54,3 +56,19 @@ def test_load_expected_mentor_issues_rejects_bad_header(tmp_path: Path) -> None:
 
     assert ",".join(MENTOR_ISSUE_COLUMNS) in str(excinfo.value)
     assert str(csv_path) in str(excinfo.value)
+
+
+def test_mentor_issues_frame_normalizes_missing_raw_values() -> None:
+    frame = pd.DataFrame(
+        [
+            ["mentor", 1, "col", "", "E1"],
+            ["mentor", 2, "col", "nan", "E2"],
+            ["mentor", 3, "col", "NaN", "E3"],
+            ["mentor", 4, "col", None, "E4"],
+        ],
+        columns=MENTOR_ISSUE_COLUMNS,
+    )
+
+    normalized = _mentor_issues_frame(frame)
+
+    assert normalized["raw_value"].isna().tolist() == [True, True, True, True]

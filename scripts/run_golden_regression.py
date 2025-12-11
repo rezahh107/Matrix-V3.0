@@ -23,6 +23,7 @@ import yaml
 
 from app.core.policy_loader import load_policy
 from app.infra import cli
+from app.infra.qa.mentor_issues_loader import normalize_missing_raw_values
 from app.infra.reference_mentors_repository import import_mentor_pool_with_validation
 
 
@@ -336,7 +337,7 @@ def _normalize_frame(df: pd.DataFrame, *, sort_columns: Sequence[str] | None = N
 
 
 def _mentor_issues_frame(frame: pd.DataFrame) -> pd.DataFrame:
-    normalized = frame.convert_dtypes()
+    normalized = normalize_missing_raw_values(frame).convert_dtypes()
     normalized["row_index"] = pd.to_numeric(
         normalized["row_index"], errors="raise"
     ).astype("Int64")
