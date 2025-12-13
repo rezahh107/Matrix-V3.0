@@ -9,7 +9,7 @@ import pytest
 try:
     # Import Qt modules eagerly to detect missing system dependencies (e.g.,
     # libGL) and skip the entire UI test suite instead of failing collection.
-    from PySide6 import QtCore as _QtCore, QtGui as _QtGui, QtWidgets as _QtWidgets  # noqa: WPS433
+    from PySide6 import QtCore as _QtCore, QtGui as _QtGui, QtWidgets as _QtWidgets  # noqa: F401
 except Exception as exc:  # pragma: no cover - defensive skip for CI images without Qt
     pytest.skip(f"PySide6 unavailable or incomplete: {exc}", allow_module_level=True)
 
