@@ -88,14 +88,25 @@ def test_run_build_matrix_propagates_join_key_duplicates(monkeypatch, tmp_path: 
         return df
 
     monkeypatch.setattr(cli, "_resolve_local_db", fake_local_db)
+    monkeypatch.setattr(cli.cli_legacy, "_resolve_local_db", fake_local_db)
     monkeypatch.setattr(cli, "_resolve_reference_frames", fake_reference_frames)
+    monkeypatch.setattr(cli.cli_legacy, "_resolve_reference_frames", fake_reference_frames)
     monkeypatch.setattr(cli, "_resolve_mentor_pool_frame", fake_pool_frame)
+    monkeypatch.setattr(cli.cli_legacy, "_resolve_mentor_pool_frame", fake_pool_frame)
     monkeypatch.setattr(cli, "BuildConfig", DummyBuildConfig)
+    monkeypatch.setattr(cli.cli_legacy, "BuildConfig", DummyBuildConfig)
     monkeypatch.setattr(cli, "build_matrix", fake_build_matrix)
+    monkeypatch.setattr(cli.cli_legacy, "build_matrix", fake_build_matrix)
     monkeypatch.setattr(cli, "run_all_invariants", fake_run_all_invariants)
+    monkeypatch.setattr(cli.cli_legacy, "run_all_invariants", fake_run_all_invariants)
     monkeypatch.setattr(cli, "_export_qa_validation_workbook", fake_export_qa_validation_workbook)
+    monkeypatch.setattr(
+        cli.cli_legacy, "_export_qa_validation_workbook", fake_export_qa_validation_workbook
+    )
     monkeypatch.setattr(cli, "write_xlsx_atomic", fake_write_xlsx_atomic)
+    monkeypatch.setattr(cli.cli_legacy, "write_xlsx_atomic", fake_write_xlsx_atomic)
     monkeypatch.setattr(cli, "canonicalize_headers", identity_headers)
+    monkeypatch.setattr(cli.cli_legacy, "canonicalize_headers", identity_headers)
 
     args = argparse.Namespace(
         output=tmp_path / "matrix.xlsx",

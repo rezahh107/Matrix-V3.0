@@ -145,6 +145,7 @@ class LocalDatabase:
     def __init__(self, path: Path, *, academic_year: str | None = None) -> None:
         self.path = path
         self.academic_year = academic_year
+        self._open_connections: set[sqlite3.Connection] = set()
         self._required_tables: dict[str, list[str]] = {
             "students_cache": [
                 "student_id",
@@ -180,12 +181,33 @@ class LocalDatabase:
         """ایجاد اتصال پیکربندی‌شده با PRAGMA های یکسان."""
 
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        return configure_connection(sqlite3.connect(self.path))
+        connection = configure_connection(sqlite3.connect(self.path))
+        self._open_connections.add(connection)
+        return connection
 
     def connect(self) -> sqlite3.Connection:
         """برگشت اتصال SQLite با تنظیمات استاندارد."""
 
         return self._open_connection()
+
+    def close_all_connections(self) -> None:
+        """بستن تمام اتصال‌های باز برای آزادسازی هندل فایل (ویژه ویندوز)."""
+
+        errors: list[str] = []
+        while self._open_connections:
+            connection = self._open_connections.pop()
+            try:
+                connection.close()
+            except sqlite3.Error as exc:  # pragma: no cover - rare close failure
+                errors.append(str(exc))
+        if errors:
+            raise sqlite3.Error("; ".join(errors))
+
+    def __enter__(self) -> LocalDatabase:
+        return self
+
+    def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
+        self.close_all_connections()
 
     def get_schema_version(self) -> int | None:
         """بازگرداندن نسخهٔ Schema بدون نیاز به برون‌ریزی پرس‌وجو."""

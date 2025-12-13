@@ -204,13 +204,21 @@ def test_allocate_cli_passes_history_info_into_qa(
         raise CaptureHistoryInfoError()
 
     monkeypatch.setattr(cli, "_inject_student_ids", fake_inject_student_ids)
+    monkeypatch.setattr(cli.cli_legacy, "_inject_student_ids", fake_inject_student_ids)
     monkeypatch.setattr(cli, "allocate_batch", fake_allocate_batch)
+    monkeypatch.setattr(cli.cli_legacy, "allocate_batch", fake_allocate_batch)
     monkeypatch.setattr(cli, "build_selection_reason_rows", fake_selection_reasons)
+    monkeypatch.setattr(cli.cli_legacy, "build_selection_reason_rows", fake_selection_reasons)
     monkeypatch.setattr(cli, "write_selection_reasons_sheet", fake_selection_sheet)
+    monkeypatch.setattr(cli.cli_legacy, "write_selection_reasons_sheet", fake_selection_sheet)
     monkeypatch.setattr(cli, "validate_allocation_join_keys", fake_validate_join_keys)
+    monkeypatch.setattr(cli.cli_legacy, "validate_allocation_join_keys", fake_validate_join_keys)
     monkeypatch.setattr(cli, "build_join_key_audit_sheet", fake_audit_sheet)
+    monkeypatch.setattr(cli.cli_legacy, "build_join_key_audit_sheet", fake_audit_sheet)
     monkeypatch.setattr(cli, "build_join_key_summary_sheet", fake_audit_sheet)
+    monkeypatch.setattr(cli.cli_legacy, "build_join_key_summary_sheet", fake_audit_sheet)
     monkeypatch.setattr(cli, "run_all_invariants", fake_run_all_invariants)
+    monkeypatch.setattr(cli.cli_legacy, "run_all_invariants", fake_run_all_invariants)
 
     args = argparse.Namespace(
         _raw_argv=[],
@@ -224,6 +232,7 @@ def test_allocate_cli_passes_history_info_into_qa(
         strict_manager_validation=False,
         golestan_manager=None,
         sadra_manager=None,
+        academic_year=1402,
     )
 
     students_base = pd.DataFrame(

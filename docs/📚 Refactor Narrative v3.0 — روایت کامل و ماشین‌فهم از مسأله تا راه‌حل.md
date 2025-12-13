@@ -46,18 +46,14 @@
 
 رفتار مورد انتظار (طبق قانون جدید):
 
-- اگر included وجود دارد → باید از آن استفاده شود،
-- اگر وجود ندارد → از ستون قدیمی group استفاده شود،
-- اگر هیچ‌کدام نبود → باید خطا بدهد.
+- تنها ستون «شامل گروه های آزمایشی» منبع مجاز group_code است؛ هر نبود یا تهی بودن آن باید P0 ایجاد کند.
+- ستون legacy «گروه آزمایشی» صرفاً برای QA/دیباگ نگه داشته می‌شود و نباید برای join key مصرف شود.
 
 اما برنامه:
 
-❌ در سطح **parser** و `_prepare_base_rows`
- از included_col پشتیبانی می‌کرد،
+❌ در سطح **parser** و `_prepare_base_rows` هنوز در نبود included به legacy fallback می‌کرد.
 
-ولی
- ❌ در سطح **schema validation**
- ستون `COL_GROUP` را *اجباری* تعریف کرده بود.
+❌ در سطح **schema validation** ستون legacy را *اجباری* تعریف کرده بود و نبود included را به‌صورت P0 نمی‌دید.
 
 در نتیجه: Import قبل از رسیدن به منطق درست، شکست می‌خورد.
 
@@ -3278,3 +3274,9 @@ F.6. نگاشت بین DDD View و پیاده‌سازی v3
 
 این پیوست F، لایهٔ DDD / نمای شی‌گرا را به سند اضافه می‌کند بدون آن‌که قوانین join/rank/trace یا رفتار Import/Join را عوض کند؛ تنها کاری که می‌کند این است که همان معماری policy-first / SSoT-محور را در زبان شی‌گرا توضیح دهد تا هم برای انسان، هم برای LLM، تصویر دامنه شفاف‌تر و پایدارتر بماند.
 این پیوست E، ریفکتور را از سطح «طراحی و قانون» به سطح «کدنویسی روزمره و گردش‌کار توسعه» متصل می‌کند تا هر تغییری که روی سیستم اعمال می‌شود، از همان ابتدا با کیفیت، قابل‌ردیابی و در هماهنگی کامل با LAW / SSoT / Technical SSoT پیاده‌سازی شود.
+
+## Phase 06 — Cutover v3 Golden Regression & Rollback (Addendum)
+- Golden regression jobs run in two stages: `scripts/run_golden_regression_phase01.py` locks the current Inspactor+school golden inputs and fails fast when any sanitized file is missing; `scripts/run_golden_regression_phase02.py` executes the config-driven scenarios under `ci/configs/golden_regression.yml` with `SMART_ALLOC_PIPELINE_MODE` set to `v3` by default.
+- GOLDEN_DIFF_AUDITOR classification is enforced via `GOLDEN_DIFF_AUDITOR_DECISION` (BUG_FIX/REGRESSION/MIXED/BASELINE_OK) whenever phase02 reports drift; without a decision the workflow stops before any baseline rewrite.
+- Rollback: rerun phase02 with `--mode legacy` (sets `SMART_ALLOC_PIPELINE_MODE=legacy`) to confirm parity with the legacy path before re-enabling v3. No join-key/ranking/capacity/trace semantics change in this phase; toggles only select pipeline routes.
+- History/QA observability: `app.infra.history_store.persist_golden_run` appends a JSONL record under `ci/golden_runs/history.jsonl` so auditors can trace run status, auditor decisions, and timestamps without touching Core logic. The infra-only CLI entrypoint `app.infra.cli.cli_entrypoints_golden.run_phase06_golden` wraps the config-driven scenarios, sets `SMART_ALLOC_PIPELINE_MODE` (default `v3`, rollback `legacy`), and enforces fail-fast behavior when the config is missing or golden files are absent.

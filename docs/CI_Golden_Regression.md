@@ -62,6 +62,79 @@ golden set; adjust `base_dir` and filenames to match your committed goldens.
 - Exit codes: non-zero when the config is missing/malformed, when required files
   are absent, or when any CLI command fails.
 
+## Refreshing phase01 mentor pool snapshot (manual, gated)
+The phase01 mentor pool snapshot is intentionally locked under
+`ci/golden_snapshots/phase01_lock_current_behavior/mentor_pool.csv` to detect
+unexpected drift. Only refresh it after confirming current behavior matches
+LAW/Technical SSoT.
+
+1) Generate diagnostics
+   - Run:
+     ```bash
+     PYTHONPATH=. python scripts/ci_debug_phase01_mentor_pool_diff.py
+     ```
+   - This writes:
+     - `ci/artifacts/phase01_mentor_pool_current.csv` (current canonical pool)
+     - `ci/artifacts/phase01_mentor_pool_snapshot.csv` (copy of locked snapshot)
+     - `ci/artifacts/phase01_mentor_pool_diff_summary.md` (shape/column stats and
+       root-cause hypothesis)
+
+2) Manual review (Architect approval required)
+   - Compare the summary and both CSVs.
+   - Confirm the current pool follows LAW/Technical SSoT (six join keys, ranking
+     invariants) and that row/column differences are expected refactor behavior.
+
+3) If approved, refresh snapshot in a dedicated PR
+   - Replace the locked snapshot CSV with the current pool (for example, move
+     `ci/artifacts/phase01_mentor_pool_current.csv` into
+     `ci/golden_snapshots/phase01_lock_current_behavior/mentor_pool.csv`).
+   - Update any tests that assert shapes/columns to match the refreshed snapshot.
+   - Describe the PR as a "phase01 mentor pool snapshot refresh"; no domain rule
+     changes are allowed.
+
+4) Data fixes are separate
+   - Do not change join-key semantics or ranking when refreshing the snapshot.
+   - Use `scripts/ci_summarize_mentor_join_key_issues.py` to guide fixes to
+     golden Excel inputs; refresh the snapshot only after data is corrected and
+     validated.
+
+## Refreshing phase02 mentor pool snapshot (manual, gated)
+The phase02 mentor pool snapshot for the MentorPipelineV3 scenario is stored
+alongside the sanitized golden inputs at
+`docs/golden_datasets/phase01_lock_current_behavior/expected_mentor_pool.csv`
+and `expected_mentor_issues.csv`. Refresh it only when the canonical mentor
+pool produced by the v3 pipeline (Inspactor → LocalDatabase + school report →
+MentorPipelineV3) is LAW/Technical SSoT–compliant and the change is
+classified as **BUG_FIX** (or **MIXED** if explicitly justified).
+
+1) Generate the current canonical pool
+   - Run the phase02 mentor scenario to build the canonical pool via the v3
+     pipeline:
+     ```bash
+     PYTHONPATH=. python scripts/run_golden_regression_phase02.py \
+       --config ci/configs/golden_regression.yml --mode v3
+     ```
+     or run the mentor scenario directly via `app.infra.golden.regression_runner`
+     to capture the canonical pool/issue CSVs.
+
+2) Manual review (Architect approval required)
+   - Confirm the canonical pool has 6 join keys (int), 1 row per mentor, and
+     any issue CSV is empty or contains only LAW-justified rows.
+   - Verify the shape matches the expected canonical schema (currently 116×62)
+     and that group codes come only from «شامل گروه‌های آزمایشی».
+
+3) If approved, refresh the snapshot in a dedicated PR
+   - Replace `expected_mentor_pool.csv` (and the 5-column
+     `expected_mentor_issues.csv` if present) with the canonical outputs.
+   - Note in the PR description that this is a **phase02 mentor pool snapshot
+     refresh** classified as **BUG_FIX**; no domain rule changes are allowed.
+
+4) Auditor and baselines
+   - Diff auditor gating (`GOLDEN_DIFF_AUDITOR_DECISION`) remains in place for
+     baseline re-recording; set it to BUG_FIX or MIXED only after the refresh is
+     approved. Golden regression CI still fails on canonical drift or
+     join-key/gender blockers.
+
 ## CI usage (GitHub Actions)
 - The golden regression workflow is configured to run on the `windows-latest`
   GitHub Actions runner; the script itself remains OS-agnostic via

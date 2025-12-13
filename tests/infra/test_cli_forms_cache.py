@@ -38,6 +38,7 @@ def test_cli_sync_forms_and_import_students(tmp_path: Path, monkeypatch):
     client = _FakeFormsClient([_sample_entry()])
 
     monkeypatch.setattr(cli, "_resolve_forms_client", lambda args: client)
+    monkeypatch.setattr(cli.cli_legacy, "_resolve_forms_client", lambda args: client)
 
     sync_args = [
         "sync-forms",
@@ -67,6 +68,7 @@ def test_cli_sync_forms_idempotent(tmp_path: Path, monkeypatch):
     db_path = tmp_path / "forms.sqlite"
     client = _FakeFormsClient([_sample_entry()])
     monkeypatch.setattr(cli, "_resolve_forms_client", lambda args: client)
+    monkeypatch.setattr(cli.cli_legacy, "_resolve_forms_client", lambda args: client)
 
     args = ["sync-forms", "--local-db", str(db_path)]
     assert cli.main(args) == 0
@@ -87,6 +89,7 @@ def test_cli_sync_forms_cache_only_with_existing_cache(tmp_path: Path, monkeypat
     db_path = tmp_path / "forms.sqlite"
     client = _FakeFormsClient([_sample_entry()])
     monkeypatch.setattr(cli, "_resolve_forms_client", lambda args: client)
+    monkeypatch.setattr(cli.cli_legacy, "_resolve_forms_client", lambda args: client)
 
     args = ["sync-forms", "--local-db", str(db_path)]
     assert cli.main(args) == 0

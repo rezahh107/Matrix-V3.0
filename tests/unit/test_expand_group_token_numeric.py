@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import pandas as pd
+import pytest
 
 from app.core.build_matrix import (
     COL_GROUP,
+    COL_GROUP_INCLUDED,
     COL_MANAGER_NAME,
     COL_MENTOR_ID,
     COL_MENTOR_NAME,
@@ -45,7 +47,8 @@ def test_prepare_base_rows_accepts_numeric_group_code() -> None:
             COL_MENTOR_ID: ["EMP-1"],
             COL_MENTOR_NAME: ["پشتیبان الف"],
             COL_MANAGER_NAME: ["مدیر الف"],
-            "گروه آزمایشی": ["27"],
+            COL_GROUP: ["27"],
+            COL_GROUP_INCLUDED: ["27"],
         }
     )
 
@@ -61,7 +64,7 @@ def test_prepare_base_rows_accepts_numeric_group_code() -> None:
         group_cols=["گروه آزمایشی"],
         school_cols=[],
         gender_col=None,
-        included_col=None,
+        included_col=COL_GROUP_INCLUDED,
     )
 
     assert unseen_groups == []
@@ -79,7 +82,8 @@ def test_prepare_base_rows_ignores_invalid_when_valid_present() -> None:
             COL_MENTOR_ID: ["EMP-1"],
             COL_MENTOR_NAME: ["پشتیبان الف"],
             COL_MANAGER_NAME: ["مدیر الف"],
-            "گروه آزمایشی": ["27, نامعتبر"],
+            COL_GROUP: ["27, نامعتبر"],
+            COL_GROUP_INCLUDED: ["27"],
         }
     )
 
@@ -95,7 +99,7 @@ def test_prepare_base_rows_ignores_invalid_when_valid_present() -> None:
         group_cols=["گروه آزمایشی"],
         school_cols=[],
         gender_col=None,
-        included_col=None,
+        included_col=COL_GROUP_INCLUDED,
     )
 
     assert unseen_groups == []
@@ -113,7 +117,8 @@ def test_prepare_base_rows_reports_unseen_when_no_valid_group() -> None:
             COL_MENTOR_ID: ["EMP-2"],
             COL_MENTOR_NAME: ["پشتیبان ب"],
             COL_MANAGER_NAME: ["مدیر ب"],
-            "گروه آزمایشی": ["نامعتبر"],
+            COL_GROUP: ["نامعتبر"],
+            COL_GROUP_INCLUDED: [""],
         }
     )
 
@@ -129,13 +134,13 @@ def test_prepare_base_rows_reports_unseen_when_no_valid_group() -> None:
         group_cols=["گروه آزمایشی"],
         school_cols=[],
         gender_col=None,
-        included_col=None,
+        included_col=COL_GROUP_INCLUDED,
     )
 
     assert base_df.empty
     assert unmatched_schools == []
     assert unseen_groups == [
-        {"group_token": "نامعتبر", "supporter": "پشتیبان ب", "manager": "مدیر ب"}
+        {"group_token": "legacy:نامعتبر", "supporter": "پشتیبان ب", "manager": "مدیر ب"}
     ]
 
 
@@ -208,3 +213,32 @@ def test_prepare_base_rows_accepts_only_included_group_column() -> None:
     assert unseen_groups == []
     assert unmatched_schools == []
     assert base_df.iloc[0]["group_pairs"] == [("یازدهم ریاضی", 27)]
+
+
+def test_prepare_base_rows_raises_without_included_column() -> None:
+    name_to_code, code_to_name, buckets, synonyms = _sample_crosswalk()
+    cfg = BuildConfig()
+    insp = pd.DataFrame(
+        {
+            COL_MENTOR_ID: ["EMP-legacy"],
+            COL_MENTOR_NAME: ["پشتیبان legacy"],
+            COL_MANAGER_NAME: ["مدیر legacy"],
+            COL_GROUP: ["27"],
+        }
+    )
+
+    with pytest.raises(KeyError):
+        _prepare_base_rows(
+            insp,
+            cfg=cfg,
+            name_to_code=name_to_code,
+            code_to_name=code_to_name,
+            buckets=buckets,
+            synonyms=synonyms,
+            school_name_to_code={},
+            code_to_name_school={},
+            group_cols=[COL_GROUP],
+            school_cols=[],
+            gender_col=None,
+            included_col=COL_GROUP_INCLUDED,
+        )

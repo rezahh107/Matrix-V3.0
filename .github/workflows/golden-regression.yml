@@ -6,6 +6,8 @@ on:
     branches: ["main"]
     paths:
       - .github/workflows/golden-regression.yml
+      - scripts/run_golden_regression_phase01.py
+      - scripts/run_golden_regression_phase02.py
       - ci/configs/golden_regression.yml
       - scripts/run_golden_regression.py
       - ci/golden_datasets/**
@@ -38,5 +40,10 @@ jobs:
           pip install -r requirements.txt
           pip install -e .
 
-      - name: Run golden regression (MentorPipelineV3)
-        run: python scripts/run_golden_regression.py --config ci/configs/golden_regression.yml
+      - name: Phase01 lock_current_behavior (fail-fast on missing inputs)
+        run: python scripts/run_golden_regression_phase01.py
+
+      - name: Phase06 golden regression (v3 cutover, GOLDEN_DIFF_AUDITOR enforced)
+        env:
+          GOLDEN_DIFF_AUDITOR_DECISION: BASELINE_OK
+        run: python scripts/run_golden_regression_phase02.py --config ci/configs/golden_regression.yml

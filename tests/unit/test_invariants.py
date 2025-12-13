@@ -6,6 +6,9 @@ from app.core.allocate_students import allocate_batch
 from app.core.policy_loader import load_policy
 from app.infra.cli import _sanitize_pool_for_allocation
 
+# NOTE: This test encodes LAW invariants on pool schema; if the sanitizer moves,
+# update the import path and keep alignment with LAW/Technical SSoT.
+
 
 def _sample_students() -> pd.DataFrame:
     return pd.DataFrame(

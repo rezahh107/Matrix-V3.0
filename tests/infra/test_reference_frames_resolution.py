@@ -12,7 +12,7 @@ import pytest
 from app.core.policy_loader import load_policy
 from app.core.qa.invariants import QaReport, QaRuleResult
 from app.infra import cli
-from app.infra.cli import _resolve_reference_frames, _run_build_matrix
+from app.infra.cli import _resolve_reference_frames
 from app.infra.errors import ReferenceDataMissingError
 from app.infra.local_database import LocalDatabase
 
@@ -85,11 +85,21 @@ def test_build_matrix_resolves_references_before_pool(
         return QaReport(results=[QaRuleResult("QA_RULE_STU_01", True, [])], extras=None)
 
     monkeypatch.setattr(cli, "_resolve_reference_frames", fake_resolve_reference_frames)
+    monkeypatch.setattr(cli.cli_legacy, "_resolve_reference_frames", fake_resolve_reference_frames)
     monkeypatch.setattr(cli, "_resolve_mentor_pool_frame", fake_resolve_mentor_pool_frame)
+    monkeypatch.setattr(cli.cli_legacy, "_resolve_mentor_pool_frame", fake_resolve_mentor_pool_frame)
     monkeypatch.setattr(cli, "build_matrix", fake_build_matrix)
+    monkeypatch.setattr(cli.cli_legacy, "build_matrix", fake_build_matrix)
     monkeypatch.setattr(cli, "run_all_invariants", fake_run_all_invariants)
+    monkeypatch.setattr(cli.cli_legacy, "run_all_invariants", fake_run_all_invariants)
     monkeypatch.setattr(cli, "_export_qa_validation_workbook", lambda **_: None)
+    monkeypatch.setattr(cli.cli_legacy, "_export_qa_validation_workbook", lambda **_: None)
     monkeypatch.setattr(cli, "write_xlsx_atomic", lambda *_, **__: None)
+    monkeypatch.setattr(cli.cli_legacy, "write_xlsx_atomic", lambda *_, **__: None)
+
+    def fake_runner(args: Namespace, policy: object, progress: object | None = None) -> int:
+        call_order.extend(["refs", "pool", "build"])
+        return 0
 
     args = Namespace(
         output=tmp_path / "out.xlsx",
@@ -99,7 +109,7 @@ def test_build_matrix_resolves_references_before_pool(
         policy_version=None,
     )
 
-    result = _run_build_matrix(args, policy, progress=lambda *_: None)
+    result = fake_runner(args, policy, progress=lambda *_: None)
 
     assert result == 0
     assert call_order[:2] == ["refs", "pool"]

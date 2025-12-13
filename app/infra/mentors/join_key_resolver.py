@@ -141,6 +141,7 @@ class JoinKeyResolver:
         code = str(issue.get("reason", issue.get("error_code", ""))).upper()
         blocking_codes = {
             "MISSING_COLUMN",
+            "MISSING_INCLUDED_GROUP_COLUMN",
             "MISSING_JOIN_KEY",
             "MISSING_MENTOR_ID",
             "DATA_INVALID",

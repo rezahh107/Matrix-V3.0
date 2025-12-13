@@ -68,8 +68,11 @@ def test_allocate_uses_cached_students_and_pool(tmp_path: Path, monkeypatch) -> 
         return students_df, pool_df
 
     monkeypatch.setattr(cli, "_prepare_allocation_frames", fake_prepare)
+    monkeypatch.setattr(cli.cli_legacy, "_prepare_allocation_frames", fake_prepare)
     monkeypatch.setattr(cli, "_allocate_and_write", lambda *_, **__: 0)
+    monkeypatch.setattr(cli.cli_legacy, "_allocate_and_write", lambda *_, **__: 0)
     monkeypatch.setattr(cli, "_apply_mentor_pool_overrides", lambda pool, *_: pool)
+    monkeypatch.setattr(cli.cli_legacy, "_apply_mentor_pool_overrides", lambda pool, *_: pool)
 
     args = Namespace(
         students=None,
@@ -82,7 +85,7 @@ def test_allocate_uses_cached_students_and_pool(tmp_path: Path, monkeypatch) -> 
         _ui_overrides={},
         local_db_path=str(db.path),
         disable_local_db=False,
-        academic_year=None,
+        academic_year=1402,
         prior_roster=None,
         current_roster=None,
         export_profile="sabt",

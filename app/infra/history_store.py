@@ -362,3 +362,45 @@ def summarize_qa(qa_report: object | None) -> QaOutcome | None:
     except Exception:
         violation_count = 0
     return QaOutcome(passed=bool(passed), violation_count=int(violation_count))
+
+
+def persist_golden_run(
+    *,
+    phase: str,
+    phase01_exit: int,
+    phase02_exit: int,
+    auditor_decision: str | None,
+    mode: str | None = None,
+    config_path: Path | None = None,
+    dry_run: bool | None = None,
+    require_auditor: bool | None = None,
+    scenario_name: str | None = None,
+    target_path: Path | None = None,
+) -> None:
+    """Persist minimal metadata for golden regression runs.
+
+    This helper keeps infra-only observability about cutover runs without
+    altering Core behavior. The payload is appended to a repo-relative JSONL
+    file to avoid coupling CI to developer-specific paths.
+    """
+
+    record = {
+        "phase": phase,
+        "phase01_exit": phase01_exit,
+        "phase02_exit": phase02_exit,
+        "auditor_decision": auditor_decision,
+        "mode": mode,
+        "config_path": str(config_path) if config_path is not None else None,
+        "dry_run": dry_run,
+        "require_auditor": require_auditor,
+        "scenario_name": scenario_name,
+        "timestamp_utc": datetime.now(tz=UTC).isoformat(),
+    }
+    target = target_path or Path("ci/golden_runs/history.jsonl")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with target.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record, ensure_ascii=False))
+            handle.write("\n")
+    except Exception:  # pragma: no cover - non-blocking telemetry
+        logger.exception("Failed to persist golden regression record")

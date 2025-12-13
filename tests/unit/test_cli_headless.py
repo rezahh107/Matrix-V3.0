@@ -300,7 +300,15 @@ def test_run_build_matrix_raises_on_duplicate_threshold_exceeded(
         lambda *_args, **_kwargs: mentor_pool_with_duplicates,
     )
     monkeypatch.setattr(
+        cli.cli_legacy,
+        "import_mentor_pool_from_excel",
+        lambda *_args, **_kwargs: mentor_pool_with_duplicates,
+    )
+    monkeypatch.setattr(
         cli, "import_school_report_from_excel", lambda *_args, **_kwargs: schools_stub
+    )
+    monkeypatch.setattr(
+        cli.cli_legacy, "import_school_report_from_excel", lambda *_args, **_kwargs: schools_stub
     )
     monkeypatch.setattr(
         cli,
@@ -308,7 +316,17 @@ def test_run_build_matrix_raises_on_duplicate_threshold_exceeded(
         lambda *_args, **_kwargs: (crosswalk_stub, pd.DataFrame()),
     )
     monkeypatch.setattr(
+        cli.cli_legacy,
+        "import_school_crosswalk_from_excel",
+        lambda *_args, **_kwargs: (crosswalk_stub, pd.DataFrame()),
+    )
+    monkeypatch.setattr(
         cli,
+        "get_school_reference_frames",
+        lambda *_args, **_kwargs: (schools_stub, crosswalk_stub, pd.DataFrame()),
+    )
+    monkeypatch.setattr(
+        cli.cli_legacy,
         "get_school_reference_frames",
         lambda *_args, **_kwargs: (schools_stub, crosswalk_stub, pd.DataFrame()),
     )
@@ -345,7 +363,9 @@ def test_run_build_matrix_raises_on_duplicate_threshold_exceeded(
         return (empties, validation, empties, empties, empties, empties, duplicates, empties)
 
     monkeypatch.setattr(cli, "build_matrix", fake_build_matrix)
+    monkeypatch.setattr(cli.cli_legacy, "build_matrix", fake_build_matrix)
     monkeypatch.setattr(cli, "write_xlsx_atomic", lambda *_, **__: None)
+    monkeypatch.setattr(cli.cli_legacy, "write_xlsx_atomic", lambda *_, **__: None)
 
     with pytest.raises(ValueError) as excinfo:
         cli._run_build_matrix(args, policy, lambda *_args: None)
@@ -391,7 +411,15 @@ def test_run_build_matrix_verifies_policy_version(
         cli, "import_mentor_pool_from_excel", lambda *_args, **_kwargs: mentor_pool_empty
     )
     monkeypatch.setattr(
+        cli.cli_legacy,
+        "import_mentor_pool_from_excel",
+        lambda *_args, **_kwargs: mentor_pool_empty,
+    )
+    monkeypatch.setattr(
         cli, "import_school_report_from_excel", lambda *_args, **_kwargs: schools_stub
+    )
+    monkeypatch.setattr(
+        cli.cli_legacy, "import_school_report_from_excel", lambda *_args, **_kwargs: schools_stub
     )
     monkeypatch.setattr(
         cli,
@@ -399,7 +427,17 @@ def test_run_build_matrix_verifies_policy_version(
         lambda *_args, **_kwargs: (crosswalk_stub, pd.DataFrame()),
     )
     monkeypatch.setattr(
+        cli.cli_legacy,
+        "import_school_crosswalk_from_excel",
+        lambda *_args, **_kwargs: (crosswalk_stub, pd.DataFrame()),
+    )
+    monkeypatch.setattr(
         cli,
+        "get_school_reference_frames",
+        lambda *_args, **_kwargs: (schools_stub, crosswalk_stub, pd.DataFrame()),
+    )
+    monkeypatch.setattr(
+        cli.cli_legacy,
         "get_school_reference_frames",
         lambda *_args, **_kwargs: (schools_stub, crosswalk_stub, pd.DataFrame()),
     )
@@ -410,6 +448,7 @@ def test_run_build_matrix_verifies_policy_version(
         raise AssertionError("build_matrix should not be invoked on version mismatch")
 
     monkeypatch.setattr(cli, "build_matrix", _build_matrix_guard)
+    monkeypatch.setattr(cli.cli_legacy, "build_matrix", _build_matrix_guard)
 
     with pytest.raises(ValueError, match="policy version mismatch"):
         cli._run_build_matrix(args, policy, lambda *_args: None)
@@ -562,13 +601,23 @@ def test_inject_student_ids_ui_mode_disables_prompt(
             return True
 
     monkeypatch.setattr(cli, "canonicalize_headers", _clone)
+    monkeypatch.setattr(cli.cli_legacy, "canonicalize_headers", _clone)
     monkeypatch.setattr(cli, "enrich_school_columns_en", lambda df, empty_as_zero: df)
+    monkeypatch.setattr(cli.cli_legacy, "enrich_school_columns_en", lambda df, empty_as_zero: df)
     monkeypatch.setattr(cli, "assign_counters", fake_assign)
+    monkeypatch.setattr(cli.cli_legacy, "assign_counters", fake_assign)
     monkeypatch.setattr(
         cli, "find_duplicate_student_id_groups", lambda counters: {"STD-1": list(counters.index)}
     )
+    monkeypatch.setattr(
+        cli.cli_legacy,
+        "find_duplicate_student_id_groups",
+        lambda counters: {"STD-1": list(counters.index)},
+    )
     monkeypatch.setattr(cli, "_apply_counter_duplicate_strategy", fake_apply)
+    monkeypatch.setattr(cli.cli_legacy, "_apply_counter_duplicate_strategy", fake_apply)
     monkeypatch.setattr(cli, "assert_unique_student_ids", lambda *_: None)
+    monkeypatch.setattr(cli.cli_legacy, "assert_unique_student_ids", lambda *_: None)
     monkeypatch.setattr(cli.sys, "stdin", _DummyStdin())
 
     student_ids, summary, _ = cli._inject_student_ids(students_df.copy(), args, policy)

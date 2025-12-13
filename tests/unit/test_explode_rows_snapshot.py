@@ -8,6 +8,7 @@ import pandas.testing as pdt
 from app.core.build_matrix import (
     CAPACITY_CURRENT_COL,
     CAPACITY_SPECIAL_COL,
+    COL_GROUP_INCLUDED,
     BuildConfig,
     _explode_rows,
     _prepare_base_rows,
@@ -79,7 +80,7 @@ def _build_fixture_base() -> tuple[
         group_cols=["گروه آزمایشی"],
         school_cols=["نام مدرسه 1"],
         gender_col="جنسیت",
-        included_col=None,
+        included_col=COL_GROUP_INCLUDED,
     )
 
     cap_current_col = cfg.capacity_current_column or CAPACITY_CURRENT_COL
