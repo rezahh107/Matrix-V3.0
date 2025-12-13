@@ -6,34 +6,37 @@ import pandas as pd
 
 
 def normalize_missing_raw_values(frame: pd.DataFrame) -> pd.DataFrame:
-    """Return a copy where missing-like raw values are normalized to ``pd.NA``.
+    """Return a copy with missing-like raw values normalized to ``pd.NA``.
 
-    This is used for mentor issues QA artifacts so that golden regression
-    can compare NA masks reliably. Typical “missing” encodings we handle:
+    This helper is used by golden regression tests to keep raw_value semantics
+    stable. Any "empty" textual representation (empty string, "nan", "NaN",
+    "na", "none" with arbitrary spacing/case) and Python-level None must be
+    treated as missing.
 
-    - empty string: ""
-    - whitespace-only strings: "   "
-    - literal "nan" / "NaN" (case-insensitive)
-    - explicit None
-
-    Everything else (هر مقدار واقعی) دست‌نخورده می‌ماند.
+    Contract (enforced by tests):
+    - Input rows with raw_value in: "", "nan", "NaN", None
+      MUST become NA after normalization.
+    - If the ``raw_value`` column is absent, the frame must be returned
+      unchanged.
     """
 
-    # Work on a shallow copy so callers' frames نمی‌شکنند.
     normalized = frame.copy()
 
-    # اگر به هر دلیل ستون raw_value وجود نداشت، بی‌سروصدا همون فریم رو برگردون.
+    # If there is no raw_value column (e.g., in older or partial fixtures),
+    # don't touch the frame; callers can rely on this being a no-op.
     if "raw_value" not in normalized.columns:
         return normalized
 
-    # به nullable string تبدیل می‌کنیم تا NAها درست مدیریت شوند.
+    # Work in pandas "string" dtype so .str accessors behave consistently.
     raw = normalized["raw_value"].astype("string")
 
-    # تشخیص مقدارهای شبه-خالی (NA-like) به‌صورت case-insensitive و با trim.
+    # Normalize textual variants to a canonical lower-cased form.
     lowered = raw.str.strip().str.lower()
+
+    # Anything that "looks empty" should be treated as missing.
     missing_like = lowered.isin({"", "nan", "na", "none"})
 
-    # این مقدارها را به pd.NA تبدیل می‌کنیم؛ بقیه دست‌نخورده می‌مانند.
+    # Replace missing-like entries with proper NA; preserve already-null values.
     raw = raw.mask(missing_like, pd.NA)
 
     normalized["raw_value"] = raw
