@@ -501,9 +501,7 @@ def sanitize_pool_for_allocation(
             legacy_remaining = ensure_series(sanitized["remaining_capacity"])
             legacy_remaining = pd.to_numeric(legacy_remaining, errors="coerce").fillna(0)
             capacity_limit = legacy_remaining.add(allocations_new.fillna(0), fill_value=0)
-        capacity_limit = pd.to_numeric(capacity_limit, errors="coerce").fillna(0)
-        capacity_limit = pd.Series(capacity_limit, index=sanitized.index).clip(lower=0)
-        sanitized["capacity_limit"] = capacity_limit.astype("Int64")
+        sanitized["capacity_limit"] = capacity_limit.clip(lower=0).astype("Int64")
 
     capacity_limit = ensure_series(sanitized["capacity_limit"])
     assigned_baseline = _ensure_capacity_column(
@@ -514,10 +512,7 @@ def sanitize_pool_for_allocation(
         allocations_new.fillna(0), fill_value=0
     )
     derived_remaining = capacity_limit.subtract(total_allocations, fill_value=0)
-    derived_remaining = pd.to_numeric(derived_remaining, errors="coerce").fillna(0)
-    sanitized["remaining_capacity"] = (
-        pd.Series(derived_remaining, index=sanitized.index).clip(lower=0).astype("Int64")
-    )
+    sanitized["remaining_capacity"] = derived_remaining.clip(lower=0).astype("Int64")
 
     header_mode = output_header_mode or parse_header_mode(policy.excel.header_mode_internal)
     result = canonicalize_headers(sanitized, header_mode=header_mode)
