@@ -133,6 +133,8 @@ CANON_EN_TO_FA: Mapping[str, str] = {
     "schools_covered_count": "تعداد مدارس تحت پوشش",
     "covered_students_count": "تعداد داوطلبان تحت پوشش",
     "capacity_special": "تعداد تحت پوشش خاص",
+    "capacity_limit": "capacity_limit",
+    "assigned_baseline": "assigned_baseline",
     "capacity_current": "تعداد داوطلبان تحت پوشش",
     "remaining_capacity": "remaining_capacity",
     "alias": "جایگزین",
@@ -191,6 +193,8 @@ HEADER_ALIASES_V3: Mapping[str, Mapping[str, str]] = {
         "نام مدیر": "نام مدیر",
         # capacity and coverage
         "remaining_capacity": "remaining_capacity",
+        "capacity_limit": "capacity_limit",
+        "assigned_baseline": "assigned_baseline",
         "تعداد داوطلبان تحت پوشش": "capacity_current",
         "capacity_current": "capacity_current",
         "تعداد تحت پوشش خاص": "capacity_special",
