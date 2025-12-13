@@ -25,6 +25,7 @@ DOC_EXPECTATIONS: dict[Path, list[str]] = {
         "Database/Reference",
     ],
     Path("docs/📚 Refactor Narrative v3.0 — روایت کامل و ماشین‌فهم از مسأله تا راه‌حل.md"): [
+        "Refactor Narrative v3.0",
         "Reference DB",
         "Concept / Canonical Frame / Channel",
         "group_code",
