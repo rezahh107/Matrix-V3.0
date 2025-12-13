@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import sys
 from collections.abc import Sequence
 
 from app.infra.golden import regression_runner
@@ -10,9 +9,8 @@ from app.infra.golden import regression_runner
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Entrypoint proxy for golden regression scenarios."""
-
     return regression_runner.main(argv)
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())

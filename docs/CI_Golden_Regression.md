@@ -40,6 +40,17 @@ against committed, sanitized golden inputs without touching Core behavior.
         The runner fails fast when headers differ or any row has the wrong column
         count, reporting the offending file and line number.
 
+### Mentor issues CSV schema (golden files)
+- Header: `entity_type,row_index,column,raw_value,error_code` (no BOM/extra
+  spaces).
+- Rows: exactly 5 comma-separated fields; `row_index` must stay numeric.
+- Missing values (for example `MISSING_COLUMN`, `MISSING_JOIN_VALUE`) should keep
+  `raw_value` present as an empty field: `mentor,35,کدرشته,,MISSING_COLUMN`.
+- Encoding: UTF-8; keep Persian column names as-is.
+- Any deviation (extra/missing columns, stray whitespace around the header)
+  causes the schema-enforcing loader in `scripts/run_golden_regression.py` to
+  fail fast and point to the exact line number.
+
 The scaffolded scenario points to the locked `docs/golden_datasets/phase01_lock_current_behavior`
 golden set; adjust `base_dir` and filenames to match your committed goldens.
 
@@ -53,7 +64,7 @@ golden set; adjust `base_dir` and filenames to match your committed goldens.
 - Install dependencies (`pip install -r requirements.txt && pip install -e .`).
 - Dry run (validate YAML + file presence only):
   ```bash
-  python scripts/run_golden_regression.py --config ci/configs/golden_regression.yml --dry-run
+  PYTHONPATH=. python scripts/run_golden_regression.py --config ci/configs/golden_regression.yml --dry-run
   ```
 - Full run (executes CLI commands):
   ```bash
