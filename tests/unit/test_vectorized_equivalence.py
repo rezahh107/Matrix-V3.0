@@ -7,6 +7,7 @@ import pytest
 from app.core.build_matrix import (
     CAPACITY_CURRENT_COL,
     CAPACITY_SPECIAL_COL,
+    COL_GROUP_INCLUDED,
     BuildConfig,
     _prepare_base_rows,
     build_matrix,
@@ -24,6 +25,7 @@ def _create_sample_inputs() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
             "کد کارمندی پشتیبان": ["EMP-1", "EMP-2"],
             "ردیف پشتیبان": [1, 2],
             "گروه آزمایشی": ["27", "33"],
+            COL_GROUP_INCLUDED: ["27", "33"],
             "کدرشته": [27, 33],
             "جنسیت": ["دختر", "پسر"],
             "دانش آموز فارغ": [0, 1],
@@ -143,7 +145,7 @@ def test_vectorized_matrix_matches_reference() -> None:
         group_cols=["گروه آزمایشی"],
         school_cols=["نام مدرسه 1"],
         gender_col="جنسیت",
-        included_col=None,
+        included_col=COL_GROUP_INCLUDED,
     )
 
     manual = _build_reference_matrix(base_df, cfg, code_to_name_school)

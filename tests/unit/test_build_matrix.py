@@ -3,7 +3,7 @@ import pandas as pd
 from app.core.build_matrix import (
     CAPACITY_CURRENT_COL,
     CAPACITY_SPECIAL_COL,
-    COL_GROUP,
+    COL_GROUP_INCLUDED,
     COL_MANAGER_NAME,
     COL_MENTOR_ID,
     COL_MENTOR_NAME,
@@ -18,12 +18,14 @@ from app.core.policy_loader import load_policy
 
 def test_build_matrix_reports_key_level_join_key_duplicates() -> None:
     policy = load_policy()
+    # Inspactor inputs must use COL_GROUP_INCLUDED as the sole authoritative exam-group
+    # source; the legacy COL_GROUP is legacy/QA-only and omitted here by design.
     insp_df = pd.DataFrame(
         {
             COL_MENTOR_NAME: ["الف", "الف"],
             COL_MANAGER_NAME: ["مدیر", "مدیر"],
             COL_MENTOR_ID: ["EMP-1", "EMP-1"],
-            COL_GROUP: ["تجربی", "تجربی"],
+            COL_GROUP_INCLUDED: ["1", "1"],
             COL_POSTAL: ["1234", "2345"],
             COL_SCHOOL_COUNT: [0, 0],
             CAPACITY_CURRENT_COL: [0, 0],
@@ -83,12 +85,13 @@ def test_build_matrix_reports_key_level_join_key_duplicates() -> None:
 
 def test_build_matrix_allows_distinct_mentors_on_same_join_key() -> None:
     policy = load_policy()
+    # COL_GROUP_INCLUDED is the authoritative group source for Inspactor fixtures.
     insp_df = pd.DataFrame(
         {
             COL_MENTOR_NAME: ["الف", "ب"],
             COL_MANAGER_NAME: ["مدیر", "مدیر"],
             COL_MENTOR_ID: ["EMP-1", "EMP-2"],
-            COL_GROUP: ["تجربی", "تجربی"],
+            COL_GROUP_INCLUDED: ["1", "1"],
             COL_POSTAL: ["1234", "2345"],
             COL_SCHOOL_COUNT: [0, 0],
             CAPACITY_CURRENT_COL: [0, 0],

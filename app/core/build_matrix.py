@@ -122,7 +122,7 @@ REQUIRED_INSPACTOR_COLUMNS = {
     CAPACITY_SPECIAL_COL,
 }
 
-GROUP_SOURCE_COLUMNS: tuple[str, str] = (COL_GROUP, COL_GROUP_INCLUDED)
+GROUP_SOURCE_COLUMNS: tuple[str, ...] = (COL_GROUP_INCLUDED,)
 
 DERIVED_INSPACTOR_COLUMNS = frozenset(
     {
@@ -216,13 +216,16 @@ def assert_inspactor_schema(df: pd.DataFrame, policy: PolicyConfig) -> pd.DataFr
         default_cfg,
     )
 
-    has_group_source = any(column in prepared.columns for column in GROUP_SOURCE_COLUMNS)
-    if not has_group_source:
-        diagnostics = missing_inspactor_diagnostics(prepared, GROUP_SOURCE_COLUMNS)
+    has_included_group = any(
+        normalize_fa(column) == normalize_fa(COL_GROUP_INCLUDED)
+        for column in prepared.columns
+    )
+    if not has_included_group:
+        diagnostics = missing_inspactor_diagnostics(prepared, (COL_GROUP_INCLUDED,))
         message = (
             f"[policy {getattr(policy, 'version', '<unknown>')}] "
-            f"حداقل یکی از ستون‌های '{COL_GROUP}' یا '{COL_GROUP_INCLUDED}' باید در "
-            "گزارش Inspactor موجود باشد."
+            f"ستون الزامی '{COL_GROUP_INCLUDED}' در گزارش Inspactor وجود ندارد؛ ستون "
+            f"legacy '{COL_GROUP}' دیگر برای کدرشته استفاده نمی‌شود."
         ) + diagnostics
         raise KeyError(message)
 
@@ -1229,8 +1232,12 @@ def _prepare_base_rows(
     group_cols: list[str],
     school_cols: list[str],
     gender_col: str | None,
-    included_col: str | None,
+    included_col: str,
 ) -> tuple[pd.DataFrame, list[dict[str, Any]], list[dict[str, Any]]]:
+    if included_col not in insp.columns:
+        raise KeyError(
+            f"ستون الزامی '{COL_GROUP_INCLUDED}' در ورودی Inspactor وجود ندارد."
+        )
     records: list[dict[str, Any]] = []
     unseen_groups: list[dict[str, Any]] = []
     unmatched_schools: list[dict[str, Any]] = []
@@ -1287,36 +1294,24 @@ def _prepare_base_rows(
             else:
                 gender_codes.append(int(normalized))
 
-        raw_groups = ensure_list([row[c] for c in group_cols]) if group_cols else []
+        legacy_tokens = [
+            str(tok).strip()
+            for tok in (ensure_list([row[c] for c in group_cols]) if group_cols else [])
+            if str(tok).strip()
+        ]
         group_pairs: list[tuple[str, int]] = []
-        used_included = False
         row_unseen_tokens: list[str] = []
 
-        if included_col:
-            invalid_codes: list[int] = []
-            codes = parse_group_code_spec(
-                row.get(included_col),
-                valid_codes=code_to_name.keys(),
-                invalid_collector=invalid_codes,
-            )
-            if codes or invalid_codes:
-                used_included = True
-            for gc in codes:
-                group_pairs.append((code_to_name[gc], gc))
-            row_unseen_tokens.extend(f"code:{gc}" for gc in invalid_codes)
-
-        if not used_included:
-            expanded: list[tuple[str, int]] = []
-            for tok in raw_groups or []:
-                ex = expand_group_token(tok, name_to_code, code_to_name, buckets, synonyms)
-                if not ex:
-                    row_unseen_tokens.append(str(tok))
-                expanded.extend(ex)
-            seen_codes: set[int] = set()
-            for name, code in expanded:
-                if code not in seen_codes:
-                    group_pairs.append((name, code))
-                    seen_codes.add(code)
+        invalid_codes: list[int] = []
+        codes = parse_group_code_spec(
+            row.get(included_col),
+            valid_codes=code_to_name.keys(),
+            invalid_collector=invalid_codes,
+        )
+        for gc in codes:
+            group_pairs.append((code_to_name[gc], gc))
+        row_unseen_tokens.extend(f"code:{gc}" for gc in invalid_codes)
+        row_unseen_tokens.extend(f"legacy:{token}" for token in legacy_tokens)
 
         if not group_pairs:
             tokens = list(dict.fromkeys(row_unseen_tokens or [""]))
@@ -1925,16 +1920,17 @@ def build_matrix(
     # detect columns
     gender_col = COL_GENDER if COL_GENDER in insp.columns else None
     included_col = next(
-        (c for c in insp.columns if normalize_fa(c) == normalize_fa(COL_GROUP_INCLUDED)),
-        next(
-            (
-                c
-                for c in insp.columns
-                if all(k in normalize_fa(c) for k in ("شامل", "گروه", "آزمایشی"))
-            ),
-            None,
+        (
+            c
+            for c in insp.columns
+            if normalize_fa(c) == normalize_fa(COL_GROUP_INCLUDED)
         ),
+        None,
     )
+    if included_col is None:
+        raise KeyError(
+            f"ستون '{COL_GROUP_INCLUDED}' باید پس از آماده‌سازی گزارش Inspactor وجود داشته باشد."
+        )
     group_cols = [c for c in insp.columns if ("گروه آزمایشی" in str(c)) and (c != included_col)]
     school_cols = [
         c for c in [COL_SCHOOL1, COL_SCHOOL2, COL_SCHOOL3, COL_SCHOOL4] if c in insp.columns

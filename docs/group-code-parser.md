@@ -5,6 +5,7 @@ Grammar:
 - Accepts tokens separated by comma `,`, Persian comma `،`, or whitespace.
 - A range token `a:b` expands to all integers from a to b inclusive.
 - Single integers allowed. Persian/English digits allowed.
+- **Source column:** Only the Inspactor column «شامل گروه های آزمایشی» is authoritative for mentor `group_code`. The legacy «گروه آزمایشی» column may be retained for QA/debug but MUST NOT drive join keys.
 
 Examples:
 - "1,3,5,7:9"  -> [1,3,5,7,8,9]

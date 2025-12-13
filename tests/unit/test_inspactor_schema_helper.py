@@ -41,6 +41,9 @@ def _valid_inspactor_frame() -> pd.DataFrame:
             COL_SCHOOL_COUNT: [1],
             CAPACITY_CURRENT_COL: [10],
             CAPACITY_SPECIAL_COL: [0],
+            # COL_GROUP_INCLUDED is the authoritative exam-group source; COL_GROUP is kept
+            # only as a QA breadcrumb.
+            COL_GROUP_INCLUDED: ["ریاضی"],
             COL_GROUP: ["ریاضی"],
             "کدرشته": [101],
             COL_SCHOOL_CODE: [501],
@@ -161,6 +164,7 @@ def test_pipeline_ordering_requires_defaults_before_ensure() -> None:
             "نام و نام خانوادگی مدیر": ["ب"],
             "mentor_id": ["1001"],
             "گروه آزمایشی": ["ریاضی"],
+            COL_GROUP_INCLUDED: ["27"],
             "کد رشته": [101],
             "کد مدرسه": [501],
             "کد مدرسه 1": [501],
@@ -214,6 +218,7 @@ def test_inspactor_aliases_golden_headers() -> None:
         {
             "کد رشته": [101],
             "گروه آزمایشی": ["ریاضی"],
+            COL_GROUP_INCLUDED: ["27"],
             "جنسیت": [1],
             "دانش آموز فارغ": [0],
             "مرکز گلستان صدرا": [0],

@@ -16,6 +16,7 @@ from pandas._libs.missing import NAType
 from app.core.build_matrix import (  # type: ignore[attr-defined]
     COL_GENDER,
     COL_GROUP,
+    COL_GROUP_INCLUDED,
     COL_MANAGER_NAME,
     COL_MENTOR_ID,
     COL_SCHOOL1,
@@ -273,21 +274,49 @@ def _derive_pool_join_keys(
     center_map_norm = cfg.center_map_norm()
     wildcard_center = center_map_norm.get("*")
 
+    if COL_GROUP_INCLUDED not in pool.columns:
+        missing_issue = {
+            "reason": "MISSING_INCLUDED_GROUP_COLUMN",
+            "column": COL_GROUP_INCLUDED,
+            "row_index": -1,
+            "raw_value": None,
+            "entity_type": "mentor",
+        }
+        pool.attrs[_POOL_JOIN_KEY_QA_ATTR] = [missing_issue]
+        return pool, [missing_issue]
+
     for idx, row in pool.iterrows():
         manager_name = str(row.get(COL_MANAGER_NAME, ""))
         invalid_group_tokens: list[int] = []
         group_codes = parse_group_codes(
-            row.get(COL_GROUP, ""),
+            row.get(COL_GROUP_INCLUDED, ""),
             valid_codes=VALID_GROUP_CODES,
             invalid_collector=invalid_group_tokens,
+        )
+        legacy_group_raw = str(row.get(COL_GROUP, "")).strip()
+        legacy_group_codes = parse_group_codes(
+            legacy_group_raw,
+            valid_codes=VALID_GROUP_CODES,
+            invalid_collector=None,
         )
         group_code: int | NAType = pd.NA if not group_codes else int(group_codes[0])
         if not group_codes:
             _append_issue(
                 qa_issues,
                 reason="INVALID_GROUP_CODE",
+                column=COL_GROUP_INCLUDED,
+                raw_value=row.get(COL_GROUP_INCLUDED, ""),
+                row_index=idx,
+                mentor_id=row.get(COL_MENTOR_ID, ""),
+            )
+        elif legacy_group_raw and (
+            not legacy_group_codes or set(legacy_group_codes) != set(group_codes)
+        ):
+            _append_issue(
+                qa_issues,
+                reason="LEGACY_GROUP_CONFLICT",
                 column=COL_GROUP,
-                raw_value=row.get(COL_GROUP, ""),
+                raw_value=legacy_group_raw,
                 row_index=idx,
                 mentor_id=row.get(COL_MENTOR_ID, ""),
             )
