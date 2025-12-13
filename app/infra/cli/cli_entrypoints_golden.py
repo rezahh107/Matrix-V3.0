@@ -33,9 +33,7 @@ def _temporary_env(var: str, value: str) -> Generator[None, None, None]:
             os.environ[var] = previous
 
 
-def run_phase06_golden(
-    *, config_path: Path, mode: str = "v3", dry_run: bool = False
-) -> int:
+def _validate_and_get_argv(config_path: Path, mode: str, dry_run: bool) -> list[str]:
     if mode not in _VALID_MODES:
         raise GoldenCliError(
             message=(
@@ -54,6 +52,14 @@ def run_phase06_golden(
     argv: list[str] = ["--config", str(config_path)]
     if dry_run:
         argv.append("--dry-run")
+
+    return argv
+
+
+def run_phase06_golden(
+    *, config_path: Path, mode: str = "v3", dry_run: bool = False
+) -> int:
+    argv = _validate_and_get_argv(config_path, mode, dry_run)
 
     with _temporary_env("SMART_ALLOC_PIPELINE_MODE", mode):
         report = regression_runner.run_golden_regression(argv)
@@ -63,24 +69,7 @@ def run_phase06_golden(
 def run_phase06_golden_report(
     *, config_path: Path, mode: str = "v3", dry_run: bool = False
 ) -> GoldenRunReport:
-    if mode not in _VALID_MODES:
-        raise GoldenCliError(
-            message=(
-                f"Unsupported SMART_ALLOC_PIPELINE_MODE='{mode}'. "
-                f"Expected one of {sorted(_VALID_MODES)}."
-            )
-        )
-    if not config_path.exists():
-        raise GoldenCliError(
-            message=(
-                "Golden regression config not found. "
-                f"Expected at: {config_path}"  # pragma: no cover - straight failure path
-            )
-        )
-
-    argv: list[str] = ["--config", str(config_path)]
-    if dry_run:
-        argv.append("--dry-run")
+    argv = _validate_and_get_argv(config_path, mode, dry_run)
 
     with _temporary_env("SMART_ALLOC_PIPELINE_MODE", mode):
         return regression_runner.run_golden_regression(argv)
