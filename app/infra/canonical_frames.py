@@ -7,6 +7,8 @@ from typing import Final
 
 import pandas as pd
 
+# TODO(#refactor-narrative-v3-crosswalk): replace legacy build_matrix helper with
+# LocalDatabase-backed crosswalk repository as outlined in Refactor Narrative v3.
 from app.core.build_matrix import prepare_crosswalk_mappings
 from app.core.canonical_frames import canonicalize_students_frame
 from app.core.common.columns import canonicalize_headers

@@ -1,5 +1,15 @@
 #!/usr/bin/env python3
 """
+LEGACY MATRIX BUILDER (Policy v1.x / SSoT v1.x)
+
+This module is retained only for historical comparison, regression, and migration.
+The canonical Smart Student Allocation engine is Matrix v3
+(MentorPipelineV3, StudentPipelineV3, MatrixCore v3) as defined in:
+
+- docs/📚 Refactor Narrative v3.0 — روایت کامل و ماشین‌فهم از مسأله تا راه‌حل.md
+- LAW_Smart_Student_Allocation_v3.0.md
+- Technical_SSoT_Smart_Student_Allocation_v3.0-TECH.md
+
 build_matrix.py — Eligibility Matrix Builder (SSoT v1.0.2, script v1.0.4)
 
 Summary
