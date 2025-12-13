@@ -4,7 +4,7 @@ from dataclasses import replace
 
 import pandas as pd
 
-from app.core.build_matrix import DUAL_STATUS_GROUPS, build_matrix
+from app.core.build_matrix import COL_GROUP_INCLUDED, DUAL_STATUS_GROUPS, build_matrix
 from app.core.common.domain import (
     STUDENT_ONLY_GROUPS,
     BuildConfig,
@@ -43,6 +43,7 @@ def test_build_matrix_uses_mentor_type_rules() -> None:
             "تعداد مدارس تحت پوشش": [0, 1],
             "تعداد داوطلبان تحت پوشش": [5, 5],
             "تعداد تحت پوشش خاص": [0, 0],
+            COL_GROUP_INCLUDED: ["3", "3"],
             "گروه آزمایشی": [3, 3],
             "جنسیت": [1, 1],
             "وضعیت تحصیلی": [1, 1],
@@ -85,6 +86,7 @@ def test_build_matrix_accepts_policy_override_for_small_postal_alias() -> None:
             "تعداد مدارس تحت پوشش": [0],
             "تعداد داوطلبان تحت پوشش": [5],
             "تعداد تحت پوشش خاص": [0],
+            COL_GROUP_INCLUDED: ["3"],
             "گروه آزمایشی": [3],
             "جنسیت": [1],
             "وضعیت تحصیلی": [1],
@@ -126,7 +128,13 @@ def _crosswalk_for_groups() -> pd.DataFrame:
     )
 
 
-def _mentor_frame_for_group(group_name: str, *, school_count: int = 0) -> pd.DataFrame:
+def _mentor_frame_for_group(
+    group_name: str,
+    *,
+    school_count: int = 0,
+    group_code: int | None = None,
+) -> pd.DataFrame:
+    code = group_name if group_code is None else str(group_code)
     return pd.DataFrame(
         {
             "نام پشتیبان": [f"mentor-{group_name}"],
@@ -136,6 +144,7 @@ def _mentor_frame_for_group(group_name: str, *, school_count: int = 0) -> pd.Dat
             "تعداد مدارس تحت پوشش": [school_count],
             "تعداد داوطلبان تحت پوشش": [5],
             "تعداد تحت پوشش خاص": [0],
+            COL_GROUP_INCLUDED: [code],
             "گروه آزمایشی": [group_name],
             "جنسیت": [1],
             "وضعیت تحصیلی": [1],
@@ -149,7 +158,8 @@ def _mentor_frame_for_group(group_name: str, *, school_count: int = 0) -> pd.Dat
 
 def test_dual_status_group_allows_student_and_graduate() -> None:
     cfg = _policy_with_statuses([1, 0], [1, 0])
-    inspactor_df = _mentor_frame_for_group("dual")
+    group_code = next(iter(DUAL_STATUS_GROUPS))
+    inspactor_df = _mentor_frame_for_group("dual", group_code=group_code)
     schools_df = pd.DataFrame({"کد مدرسه": [0], "نام مدرسه 1": [""]})
 
     matrix, *_ = build_matrix(
@@ -165,7 +175,7 @@ def test_dual_status_group_allows_student_and_graduate() -> None:
 
 def test_non_dual_group_is_student_only() -> None:
     cfg = _policy_with_statuses([1, 0], [1, 0])
-    inspactor_df = _mentor_frame_for_group("nondual")
+    inspactor_df = _mentor_frame_for_group("nondual", group_code=27)
     schools_df = pd.DataFrame({"کد مدرسه": [0], "نام مدرسه 1": [""]})
 
     matrix, *_ = build_matrix(
@@ -182,7 +192,7 @@ def test_non_dual_group_is_student_only() -> None:
 def test_policy_override_blocks_graduate_for_restricted_groups() -> None:
     cfg = _policy_with_statuses([1, 0], [1, 0])
     restricted_group = next(iter(STUDENT_ONLY_GROUPS))
-    inspactor_df = _mentor_frame_for_group("restricted")
+    inspactor_df = _mentor_frame_for_group("restricted", group_code=restricted_group)
     schools_df = pd.DataFrame({"کد مدرسه": [0], "نام مدرسه 1": [""]})
 
     matrix, *_ = build_matrix(
@@ -204,7 +214,8 @@ def test_policy_override_blocks_graduate_for_restricted_groups() -> None:
 
 def test_school_branch_is_always_student_only() -> None:
     cfg = _policy_with_statuses([1, 0], [1, 0])
-    inspactor_df = _mentor_frame_for_group("dual", school_count=1)
+    group_code = next(iter(DUAL_STATUS_GROUPS))
+    inspactor_df = _mentor_frame_for_group("dual", school_count=1, group_code=group_code)
     schools_df = pd.DataFrame({"کد مدرسه": [5001], "نام مدرسه 1": ["مدرسه"]})
 
     matrix, *_ = build_matrix(

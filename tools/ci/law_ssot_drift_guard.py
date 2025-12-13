@@ -20,6 +20,20 @@ CODE_OR_TEST_PREFIXES: tuple[str, ...] = (
 )
 
 
+def check_doc_drift(changed_files: Iterable[str]) -> tuple[bool, list[str]]:
+    """Detect LAW/SSoT doc edits without matching code or test changes."""
+
+    law_docs, code_or_tests = classify_changes(changed_files)
+
+    if not law_docs:
+        return True, []
+
+    if code_or_tests:
+        return True, law_docs
+
+    return False, law_docs
+
+
 def parse_args(argv: Iterable[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Guard against LAW/SSoT doc changes without code or tests updates.",
@@ -82,12 +96,9 @@ def main(argv: Iterable[str]) -> int:
         return 0
 
     changed_files = get_changed_files(args.base_ref, args.head_ref)
-    law_docs, code_or_tests = classify_changes(changed_files)
+    ok, law_docs = check_doc_drift(changed_files)
 
-    if not law_docs:
-        return 0
-
-    if code_or_tests:
+    if ok:
         return 0
 
     print("Detected LAW/SSoT documentation changes without corresponding app/tests updates.")
