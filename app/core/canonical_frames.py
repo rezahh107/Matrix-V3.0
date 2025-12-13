@@ -106,6 +106,20 @@ def _coerce_capacity_series(series: pd.Series, stats: PoolCanonicalizationStats)
     return clipped.astype("Int64")
 
 
+def _ensure_capacity_column(
+    pool: pd.DataFrame, column: str, stats: PoolCanonicalizationStats
+) -> pd.Series:
+    """Ensure a capacity-like column exists and is coerced to non-negative Int64."""
+
+    if column in pool.columns:
+        source = ensure_series(pool[column])
+        coerced = _coerce_capacity_series(source, stats)
+    else:
+        coerced = pd.Series([0] * len(pool), dtype="Int64", index=pool.index)
+    pool[column] = coerced
+    return coerced
+
+
 def _safe_canonical_join_value(
     column: str,
     raw: object,
@@ -468,6 +482,42 @@ def sanitize_pool_for_allocation(
             else:
                 series = series.astype(dtype)
             sanitized[column] = series
+
+    allocations_new = _coerce_capacity_series(
+        ensure_series(sanitized["allocations_new"]), stats
+    )
+    sanitized["allocations_new"] = allocations_new
+
+    _ensure_capacity_column(sanitized, policy.columns.capacity_current, stats)
+    capacity_special = _ensure_capacity_column(
+        sanitized, policy.columns.capacity_special, stats
+    )
+
+    if "capacity_limit" in sanitized.columns:
+        capacity_limit = _ensure_capacity_column(sanitized, "capacity_limit", stats)
+    else:
+        capacity_limit = capacity_special
+        if capacity_special.fillna(0).eq(0).all():
+            legacy_remaining = ensure_series(sanitized["remaining_capacity"])
+            legacy_remaining = pd.to_numeric(legacy_remaining, errors="coerce").fillna(0)
+            capacity_limit = legacy_remaining.add(allocations_new.fillna(0), fill_value=0)
+        capacity_limit = pd.to_numeric(capacity_limit, errors="coerce").fillna(0)
+        capacity_limit = pd.Series(capacity_limit, index=sanitized.index).clip(lower=0)
+        sanitized["capacity_limit"] = capacity_limit.astype("Int64")
+
+    capacity_limit = ensure_series(sanitized["capacity_limit"])
+    assigned_baseline = _ensure_capacity_column(
+        sanitized, "assigned_baseline", stats
+    )
+
+    total_allocations = assigned_baseline.fillna(0).add(
+        allocations_new.fillna(0), fill_value=0
+    )
+    derived_remaining = capacity_limit.subtract(total_allocations, fill_value=0)
+    derived_remaining = pd.to_numeric(derived_remaining, errors="coerce").fillna(0)
+    sanitized["remaining_capacity"] = (
+        pd.Series(derived_remaining, index=sanitized.index).clip(lower=0).astype("Int64")
+    )
 
     header_mode = output_header_mode or parse_header_mode(policy.excel.header_mode_internal)
     result = canonicalize_headers(sanitized, header_mode=header_mode)

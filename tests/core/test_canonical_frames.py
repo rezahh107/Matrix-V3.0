@@ -98,3 +98,50 @@ def test_sanitize_pool_does_not_drop_alias_by_virtual_range() -> None:
     )
 
     assert len(sanitized) == 1
+
+
+def test_canonicalize_pool_frame_derives_remaining_capacity_with_baseline() -> None:
+    policy = load_policy()
+    pool = pd.DataFrame(
+        {
+            policy.stage_column("group"): [21],
+            policy.stage_column("gender"): [1],
+            policy.stage_column("graduation_status"): [0],
+            policy.stage_column("center"): [1],
+            policy.stage_column("finance"): [0],
+            policy.columns.school_code: [0],
+            "mentor_id": ["m1"],
+            "capacity_limit": [10],
+            "assigned_baseline": [2],
+            "allocations_new": [3],
+            "remaining_capacity": [99],
+        }
+    )
+
+    canonical = canonicalize_pool_frame(pool, policy=policy)
+
+    assert canonical["remaining_capacity"].iloc[0] == 5
+    assert pd.api.types.is_integer_dtype(canonical["remaining_capacity"])
+
+
+def test_canonicalize_pool_frame_reconstructs_capacity_limit_legacy_inputs() -> None:
+    policy = load_policy()
+    pool = pd.DataFrame(
+        {
+            policy.stage_column("group"): [21],
+            policy.stage_column("gender"): [1],
+            policy.stage_column("graduation_status"): [0],
+            policy.stage_column("center"): [1],
+            policy.stage_column("finance"): [0],
+            policy.columns.school_code: [0],
+            "mentor_id": ["m1"],
+            "remaining_capacity": [4],
+            "allocations_new": [1],
+        }
+    )
+
+    canonical = canonicalize_pool_frame(pool, policy=policy)
+
+    assert canonical["capacity_limit"].iloc[0] == 5
+    assert canonical["assigned_baseline"].iloc[0] == 0
+    assert canonical["remaining_capacity"].iloc[0] == 4
