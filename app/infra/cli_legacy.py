@@ -23,7 +23,7 @@ from collections.abc import Callable, Hashable, Mapping, Sequence
 from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, NoReturn, cast
 from uuid import uuid4
 
 import pandas as pd
@@ -1015,20 +1015,19 @@ def _write_mentor_type_offenders_artifact(
     return artifact_path, len(offender_records)
 
 
-def _raise_qa_invariant_failure(report: QaReport, *, output: Path) -> None:
-    failed_rules = {violation.rule_id for violation in report.violations}
+def _raise_qa_invariant_failure(report: QaReport, *, output: Path) -> NoReturn:
+    sorted_failed_rules = sorted(violation.rule_id for violation in report.violations)
     artifact = _write_mentor_type_offenders_artifact(report, output=output)
-    offender_count = artifact[1] if artifact is not None else 0
-    artifact_path = artifact[0] if artifact is not None else None
+    artifact_path, offender_count = artifact if artifact is not None else (None, 0)
     logger.warning(
         "QA invariants failed: rule_ids=%s offender_count=%s artifact=%s",
-        sorted(failed_rules),
+        sorted_failed_rules,
         offender_count,
         artifact_path,
     )
     detail = "; ".join(f"{v.rule_id}: {v.message}" for v in report.violations)
     raise ValueError(
-        "QA invariants failed: " f"rules={sorted(failed_rules)} details={detail or 'n/a'}"
+        "QA invariants failed: " f"rules={sorted_failed_rules} details={detail or 'n/a'}"
     )
 
 
