@@ -59,8 +59,6 @@ from app.core.common.columns import (
     resolve_aliases,
 )
 from app.core.common.domain import (
-    DUAL_STATUS_GROUPS,  # noqa: F401 - re-export for compatibility
-    BuildConfig,
     COL_SCHOOL_CODE_1,
     COL_SCHOOL_CODE_2,
     COL_SCHOOL_CODE_3,
@@ -69,6 +67,8 @@ from app.core.common.domain import (
     COL_SCHOOL_NAME_2,
     COL_SCHOOL_NAME_3,
     COL_SCHOOL_NAME_4,
+    DUAL_STATUS_GROUPS,  # noqa: F401 - re-export for compatibility
+    BuildConfig,
     MentorType,
     StudentBindingKind,
     _postal_valid,

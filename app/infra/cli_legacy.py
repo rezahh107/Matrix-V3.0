@@ -30,17 +30,17 @@ import pandas as pd
 from pandas import testing as pd_testing
 from pandas.api import types as pd_types
 
+import app.core.allocation.mentor_pool as mentor_pool
+import app.core.build_matrix as build_matrix_module
+import app.core.common.columns as columns_module
 from app.core.allocate_students import allocate_batch, build_selection_reason_rows
 from app.core.allocation.engine import enrich_summary_with_history
 from app.core.allocation.history_metrics import METRIC_COLUMNS, compute_history_metrics
-import app.core.allocation.mentor_pool as mentor_pool
-import app.core.build_matrix as build_matrix_module
 from app.core.canonical_frames import (
     canonicalize_allocation_frames,
     canonicalize_pool_frame,
     canonicalize_students_frame,
 )
-import app.core.common.columns as columns_module
 from app.core.common.join_keys import (
     JoinKeyCanonicalizationError,
     validate_and_canonicalize_join_keys,
