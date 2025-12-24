@@ -52,7 +52,7 @@ def test_prepare_base_rows_accepts_numeric_group_code() -> None:
         }
     )
 
-    base_df, unseen_groups, unmatched_schools = _prepare_base_rows(
+    base_df, unseen_groups, unmatched_schools, *_ = _prepare_base_rows(
         insp,
         cfg=cfg,
         name_to_code=name_to_code,
@@ -87,7 +87,7 @@ def test_prepare_base_rows_ignores_invalid_when_valid_present() -> None:
         }
     )
 
-    base_df, unseen_groups, unmatched_schools = _prepare_base_rows(
+    base_df, unseen_groups, unmatched_schools, *_ = _prepare_base_rows(
         insp,
         cfg=cfg,
         name_to_code=name_to_code,
@@ -122,7 +122,7 @@ def test_prepare_base_rows_reports_unseen_when_no_valid_group() -> None:
         }
     )
 
-    base_df, unseen_groups, unmatched_schools = _prepare_base_rows(
+    base_df, unseen_groups, unmatched_schools, *_ = _prepare_base_rows(
         insp,
         cfg=cfg,
         name_to_code=name_to_code,
@@ -160,7 +160,7 @@ def test_prepare_base_rows_prefers_included_group_column() -> None:
         }
     )
 
-    base_df, unseen_groups, unmatched_schools = _prepare_base_rows(
+    base_df, unseen_groups, unmatched_schools, *_ = _prepare_base_rows(
         insp,
         cfg=cfg,
         name_to_code=name_to_code,
@@ -195,7 +195,7 @@ def test_prepare_base_rows_accepts_only_included_group_column() -> None:
         }
     )
 
-    base_df, unseen_groups, unmatched_schools = _prepare_base_rows(
+    base_df, unseen_groups, unmatched_schools, *_ = _prepare_base_rows(
         insp,
         cfg=cfg,
         name_to_code=name_to_code,

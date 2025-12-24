@@ -133,7 +133,7 @@ def test_vectorized_matrix_matches_reference() -> None:
 
     name_to_code, code_to_name, buckets, synonyms = prepare_crosswalk_mappings(crosswalk_df)
     code_to_name_school, school_name_to_code = build_school_maps(schools_df)
-    base_df, unseen_ref, unmatched_ref = _prepare_base_rows(
+    base_df, unseen_ref, unmatched_ref, *_ = _prepare_base_rows(
         insp_df,
         cfg=cfg,
         name_to_code=name_to_code,
@@ -233,6 +233,7 @@ def test_validation_captures_unmatched_school_counts() -> None:
 def test_global_mentors_with_zero_school_values_remain_valid() -> None:
     insp_df, schools_df, crosswalk_df = _create_sample_inputs()
     insp_df.loc[:, "نام مدرسه 1"] = 0
+    insp_df.loc[:, "تعداد مدارس تحت پوشش"] = 0
 
     matrix, validation, _, _, _, invalid_df, _, _ = build_matrix(
         insp_df,

@@ -465,7 +465,26 @@ Dual تولید نمی‌شود. expand ماتریس نیز بر همین مبن
 - MentorType.NORMAL ⇒ تنها شاخهٔ عادی با `school_code = 0` و `alias = postal_code` (معتبر و غیرتهی)
 - MentorType.SCHOOL ⇒ تنها شاخهٔ مدرسه‌ای با `school_code > 0` و `alias = mentor_id`
 
+جزئیات استخراج مدرسه برای MentorType.SCHOOL:
+
+- ستون‌های ورودی: «نام مدرسه 1..4» با ترتیب ثابت.
+- اعتبار توکن: قابل تبدیل به int و مقدار `> 0`. سایر موارد (از جمله 0/خالی) **رد** می‌شوند.
+- اگر `تعداد مدارس تحت پوشش` حاضر باشد:
+  - `expected_n = int(count)`
+  - اگر `expected_n > len(valid_tokens)` ⇒ خطای قطعی با QA detail شامل mentor_id و expected/found.
+  - در غیر این‌صورت، فقط **اولین** `expected_n` توکن معتبر (به‌ترتیب ستون) استفاده می‌شود.
+- اگر count غایب باشد: همهٔ توکن‌های معتبر به‌ترتیب ستون‌ها استفاده می‌شوند.
+
+QA_RULE_MENTOR_TYPE_01 باید اطمینان دهد:
+
+- هر سطر مدرسه‌ای `school_code > 0` دارد.
+- وقتی count اعلام شده، mismatch بین expected_n و تعداد توکن معتبر باعث خطای سخت می‌شود.
+
 ---
+
+#### Change note (2025-02-14)
+
+- Formalized deterministic school token expansion to prevent false QA offenders from empty columns while preserving hard-stop on true missing schools.
 
 ### 6.5. ALIAS-01 — سازگاری alias در پیاده‌سازی
 
