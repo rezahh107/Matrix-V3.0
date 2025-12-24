@@ -174,10 +174,13 @@ Each allocation must be explainable via an 8-stage trace in the fixed order `typ
 School and center joins use wildcard semantics (`0` or policy-defined codes) and treat global mentors/students correctly, with AND-combination of constraints as specified in Policy. (certain) [LAW][TECH][app/core/common/join_keys.py][app/infra/qa/alloc_join_validation.py][app/core/qa/invariants.py]
 
 **MENTOR-TYPE-01 / MENTOR-STATUS-01 / POOL-GOVERNANCE-01**  
-Only mentors with allowed status/type (e.g., ACTIVE) should appear in the effective pool; FROZEN or INACTIVE mentors must be filtered or at least reported via QA. (certain) [LAW][TECH][app/core/allocation/mentor_pool.py][app/core/qa/invariants.py]
+Only mentors with allowed status/type (e.g., ACTIVE) should appear in the effective pool; FROZEN or INACTIVE mentors must be filtered or at least reported via QA. (certain) [LAW][TECH][app/core/allocation/mentor_pool.py][app/core/qa/invariants.py]  
+
+**MENTOR-SCHOOL-EXPANSION-01**  
+For school mentors, school tokens are read in column order (نام مدرسه 1..4) and only valid int>0 codes are expanded. If `تعداد مدارس تحت پوشش` is declared and exceeds available valid tokens, the run must hard-fail with QA detail (mentor_id + expected/found). (certain) [LAW][TECH][app/core/build_matrix.py][app/core/qa/invariants.py]  
 
 **ALIAS-01 / ALIAS-CONSISTENCY-01**  
-School and mentor aliases must not create conflicting six-key profiles. For each `mentor_id`, the join profile must be consistent across branches and exports. (certain) [LAW][TECH][app/core/canonical_frames.py][app/core/build_matrix.py]
+School and mentor aliases must not create conflicting six-key profiles. For each `mentor_id`, the join profile must be consistent across branches and exports. (certain) [LAW][TECH][app/core/canonical_frames.py][app/core/build_matrix.py]  
 
 **CENTER-MANAGEMENT-01**  
 Center management (strict manager, priority order, channel routing) must be deterministic, Policy-driven, and covered by QA where possible. (likely) [LAW][TECH][README][app/core/allocation/channels.py][app/core/qa/invariants.py]

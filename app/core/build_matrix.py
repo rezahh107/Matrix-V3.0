@@ -1074,6 +1074,32 @@ def to_int_str_or_none(value: Any) -> str | None:
     return str(parsed)
 
 
+def _is_empty_school_token(value: Any, *, binding_policy: MentorSchoolBindingPolicy) -> bool:
+    if value is None or (isinstance(value, float) and math.isnan(value)) or pd.isna(value):
+        return True
+    return binding_policy.is_empty_value(value)
+
+
+def _normalize_school_token(
+    raw_value: Any,
+    *,
+    name_to_code: Mapping[str, str],
+) -> int | None:
+    parsed = _coerce_int_like(raw_value)
+    if parsed is not None and parsed > 0:
+        return int(parsed)
+    normalized_name = normalize_fa(str(raw_value))
+    if not normalized_name:
+        return None
+    mapped = name_to_code.get(normalized_name)
+    if mapped is None:
+        return None
+    mapped_int = _coerce_int_like(mapped)
+    if mapped_int is not None and mapped_int > 0:
+        return int(mapped_int)
+    return None
+
+
 def collect_school_codes_from_row(
     r: pd.Series,
     name_to_code: dict[str, str],
@@ -1085,20 +1111,15 @@ def collect_school_codes_from_row(
     """استخراج کدهای مدرسه و تعیین mode (global/restricted)."""
 
     normalized_codes: list[int] = []
-    seen: set[int] = set()
     has_reference = False
     for col in school_cols:
         raw = r.get(col)
-        if binding_policy.is_empty_value(raw):
+        if _is_empty_school_token(raw, binding_policy=binding_policy):
             continue
         has_reference = True
-        candidate = to_int_str_or_none(raw)
-        if candidate is None:
-            candidate = name_to_code.get(normalize_fa(raw), None)
-        normalized = school_code_norm(candidate, cfg=cfg)
-        if normalized > 0 and normalized not in seen:
+        normalized = _normalize_school_token(raw, name_to_code=name_to_code)
+        if normalized is not None and normalized > 0:
             normalized_codes.append(normalized)
-            seen.add(normalized)
     return MentorSchoolBindingInfo(
         codes=normalized_codes,
         has_school_constraint=has_reference,
@@ -1243,7 +1264,12 @@ def _prepare_base_rows(
     school_cols: list[str],
     gender_col: str | None,
     included_col: str,
-) -> tuple[pd.DataFrame, list[dict[str, Any]], list[dict[str, Any]]]:
+) -> tuple[
+    pd.DataFrame,
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+]:
     if included_col not in insp.columns:
         raise KeyError(
             f"ستون الزامی '{COL_GROUP_INCLUDED}' در ورودی Inspactor وجود ندارد."
@@ -1260,7 +1286,14 @@ def _prepare_base_rows(
     capacity_special_col = cfg.capacity_special_column or CAPACITY_SPECIAL_COL
     binding_policy = cfg.policy.mentor_school_binding
 
-    for row in insp.to_dict(orient="records"):
+    missing_school_codes: list[dict[str, Any]] = []
+
+    def _has_school_count(value: Any) -> bool:
+        if value is None or (isinstance(value, float) and math.isnan(value)) or pd.isna(value):
+            return False
+        return bool(str(value).strip())
+
+    for idx, row in insp.iterrows():
         mentor_id_raw = row.get(COL_MENTOR_ID, "")
         mentor_id = str(mentor_id_raw).strip()
         if not mentor_id:
@@ -1276,15 +1309,34 @@ def _prepare_base_rows(
         postal_raw = row.get(postal_col, "")
 
         school_binding = collect_school_codes_from_row(
-            pd.Series(row),
+            row,
             school_name_to_code,
             school_cols,
             cfg=cfg,
             binding_policy=binding_policy,
         )
-        school_codes = school_binding.codes
+        raw_school_count = row.get(COL_SCHOOL_COUNT, 0)
+        school_count = safe_int_value(raw_school_count, default=0)
+        expected_count = school_count if _has_school_count(raw_school_count) else None
+        valid_school_codes = school_binding.codes
+        if expected_count is not None:
+            if expected_count > len(valid_school_codes):
+                missing_school_codes.append(
+                    {
+                        "row_index": int(idx) + 1,
+                        "پشتیبان": mentor_name,
+                        "مدیر": manager_name,
+                        "mentor_id": mentor_id,
+                        "expected_school_count": int(expected_count),
+                        "found_school_count": int(len(valid_school_codes)),
+                        "reason": "missing required school codes",
+                    }
+                )
+                continue
+            school_codes = valid_school_codes[:expected_count]
+        else:
+            school_codes = valid_school_codes
         has_school_constraint = school_binding.has_school_constraint
-        school_count = safe_int_value(row.get(COL_SCHOOL_COUNT, 0), default=0)
 
         covered_now, special_limit, remaining_capacity = normalize_capacity_values(
             row.get(capacity_current_col, 0),
@@ -1331,7 +1383,12 @@ def _prepare_base_rows(
                 )
             continue
 
-        mentor_mode = classify_mentor_type_from_school_count(school_count)
+        if expected_count is None:
+            mentor_mode = (
+                MentorType.SCHOOL if valid_school_codes else MentorType.NORMAL
+            )
+        else:
+            mentor_mode = classify_mentor_type_from_school_count(school_count)
         alias_value = mentor_alias_for_type(mentor_mode, postal_raw, mentor_id, cfg=cfg) or ""
 
         center = domain_center_from_manager(manager_name, cfg=cfg)
@@ -1380,7 +1437,7 @@ def _prepare_base_rows(
     for col, default in required_flags.items():
         if col not in base_df.columns:
             base_df[col] = default
-    return base_df, unseen_groups, unmatched_schools
+    return base_df, unseen_groups, unmatched_schools, missing_school_codes
 
 
 def _detect_school_lookup_mismatches(
@@ -1999,7 +2056,7 @@ def build_matrix(
             raise error
         progress(12, f"⚠️ {message}")
 
-    base_df, unseen_groups, unmatched_schools = _prepare_base_rows(
+    base_df, unseen_groups, unmatched_schools, missing_school_codes = _prepare_base_rows(
         insp_valid,
         cfg=cfg,
         name_to_code=name_to_code,
@@ -2013,6 +2070,19 @@ def build_matrix(
         gender_col=gender_col,
         included_col=included_col,
     )
+    if missing_school_codes:
+        missing_df = pd.DataFrame(missing_school_codes)
+        if invalid_mentors_df.empty:
+            invalid_mentors_df = missing_df.copy()
+        else:
+            invalid_mentors_df = pd.concat(
+                [invalid_mentors_df, missing_df], ignore_index=True, sort=False
+            )
+        error = ValueError("missing required school codes for school mentors")
+        setattr(error, "is_missing_school_codes_error", True)
+        setattr(error, "missing_school_codes_df", missing_df)
+        setattr(error, "invalid_mentors_df", invalid_mentors_df)
+        raise error
     base_df = apply_mentor_pool_governance(
         base_df,
         cfg.policy.mentor_pool_governance,

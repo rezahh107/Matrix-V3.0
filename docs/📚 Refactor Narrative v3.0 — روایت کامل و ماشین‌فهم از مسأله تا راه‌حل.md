@@ -1056,6 +1056,9 @@ provides deterministic canonical import, and aligns code with LAW/TECH.
 
   - فقط منتورهای `mentor_status = ACTIVE` وارد استخر تخصیص می‌شوند.
   - `mentor_type` باید با school/center سازگار باشد (مثلاً School Mentor باید school_code معتبر داشته باشد).
+  - استخراج school_code برای MentorType.SCHOOL از ستون‌های «نام مدرسه 1..4» با ترتیب ثابت انجام می‌شود؛
+    فقط توکن‌های قابل تبدیل به int و `> 0` معتبرند و در صورت اعلام `تعداد مدارس تحت پوشش`،
+    کمبود توکن معتبر باید باعث خطای سخت همراه با QA detail شود.
   - CAPACITY-01: مجموع تخصیص‌ها نباید از ظرفیت مجاز فراتر رود؛ تعریف دقیق ظرفیت به کمک Value Object `CapacitySnapshot` و فرمول LAW/TECH انجام می‌شود.
   - برای هر Mentor، رفتار join باید از روی ۶ کلید join و semantics LAW تعریف شود، نه روی فیلدهای پراکنده‌ی دیگر.
 
