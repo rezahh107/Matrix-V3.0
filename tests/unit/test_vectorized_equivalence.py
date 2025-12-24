@@ -189,6 +189,22 @@ def test_vectorized_matrix_matches_reference() -> None:
     assert not unmatched_ref
 
 
+def test_missing_school_token_does_not_create_na_placeholder() -> None:
+    insp_df, schools_df, crosswalk_df = _create_sample_inputs()
+    insp_df["کد مدرسه 1"] = pd.NA
+
+    _, _, _, _, _, invalid_df, _, _ = build_matrix(
+        insp_df,
+        schools_df,
+        crosswalk_df,
+        cfg=BuildConfig(min_coverage_ratio=0.0, school_lookup_mismatch_threshold=1.0),
+    )
+
+    assert invalid_df.empty
+    if "school_value" in invalid_df.columns:
+        assert not invalid_df["school_value"].astype(str).str.lower().eq("na").any()
+
+
 def test_duplicate_mentors_are_filtered_before_row_generation() -> None:
     insp_df, schools_df, crosswalk_df = _create_sample_inputs()
     duplicate_row = insp_df.iloc[[0]].copy()

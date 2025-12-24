@@ -107,6 +107,8 @@ class HeaderResolver:
             if code_header in resolved.columns:
                 resolved = resolved.drop(columns=[code_header])
             resolved[code_header] = combined.reindex(resolved.index)
+            if name_series is not None and name_header not in resolved.columns:
+                resolved[name_header] = name_series.reindex(resolved.index)
 
         return resolved
 

@@ -1139,10 +1139,28 @@ def to_int_str_or_none(value: Any) -> str | None:
     return str(parsed)
 
 
-def _is_empty_school_token(value: Any, *, binding_policy: MentorSchoolBindingPolicy) -> bool:
+def _is_missing_school_token(value: Any, *, binding_policy: MentorSchoolBindingPolicy) -> bool:
     if value is None or (isinstance(value, float) and math.isnan(value)) or pd.isna(value):
         return True
-    return binding_policy.is_empty_value(value)
+    text = str(value).strip()
+    if not text:
+        return True
+    if binding_policy.is_empty_value(value):
+        return True
+    normalized = normalize_fa(text)
+    return normalized in {"na", "n a", "nan"} or text.lower() in {
+        "na",
+        "n/a",
+        "nan",
+        "<na>",
+        "<nan>",
+        "<NA>",
+        "<NaN>",
+    }
+
+
+def _is_empty_school_token(value: Any, *, binding_policy: MentorSchoolBindingPolicy) -> bool:
+    return _is_missing_school_token(value, binding_policy=binding_policy)
 
 
 def _normalize_school_token(
@@ -1542,10 +1560,20 @@ def _detect_school_lookup_mismatches(
     row_positions = {idx: pos + 1 for pos, idx in enumerate(insp.index)}
     issues: list[dict[str, object]] = []
     total_refs = 0
+
+    def _paired_code_column(name_column: str) -> str | None:
+        normalized = normalize_fa(name_column)
+        if normalized == normalize_fa("نام مدرسه"):
+            return COL_SCHOOL_CODE
+        match = re.search(r"نام مدرسه\s*(\d+)$", name_column)
+        if match:
+            return f"کد مدرسه {match.group(1)}"
+        return None
+
     for column in columns:
         series = insp[column]
         for idx, raw_value in series.items():
-            if binding.is_empty_value(raw_value):
+            if _is_missing_school_token(raw_value, binding_policy=binding):
                 continue
             total_refs += 1
             reason: str | None = None
@@ -1561,6 +1589,12 @@ def _detect_school_lookup_mismatches(
                 normalized_display = normalized or text
                 if normalized and normalized not in school_name_to_code:
                     reason = f"unknown school name ({text})"
+            if candidate is not None:
+                paired_code = _paired_code_column(column)
+                if paired_code and paired_code in insp.columns:
+                    paired_value = insp.at[idx, paired_code]
+                    if not _is_missing_school_token(paired_value, binding_policy=binding):
+                        continue
             if reason is None:
                 continue
             mentor = insp.at[idx, COL_MENTOR_NAME] if COL_MENTOR_NAME in insp.columns else ""
