@@ -160,3 +160,21 @@ def test_v3_missing_school_codes_fails() -> None:
         )
 
     assert getattr(excinfo.value, "is_missing_school_codes_error", False)
+
+
+def test_v3_school_name_token_maps_to_code() -> None:
+    cfg = BuildConfig(enable_capacity_gate=False)
+    row = _base_inspactor_row(mentor_id="9006", school_count=1)
+    row.update({"نام مدرسه 1": ["مدرسه 1"], "نام مدرسه 2": [0]})
+    insp_df = pd.DataFrame(row)
+
+    matrix, *_ = cli_legacy.build_matrix_v3(
+        insp_df,
+        _schools_df(),
+        _minimal_crosswalk(),
+        cfg=cfg,
+        progress=lambda *_: None,
+    )
+
+    school_rows = matrix.loc[matrix["کد کارمندی پشتیبان"] == "9006"]
+    assert set(school_rows[cfg.policy.columns.school_code].unique()) == {5001}

@@ -371,6 +371,23 @@ def test_build_matrix_non_school_mentor_unchanged() -> None:
     assert set(normal_rows[cfg.policy.columns.school_code].unique()) == {0}
 
 
+def test_build_matrix_preserves_name_columns_in_legacy_path() -> None:
+    cfg = BuildConfig(enable_capacity_gate=False)
+    inspactor_df = _school_inspactor_row(
+        mentor_id="S_name",
+        school_count=1,
+        school_tokens=["مدرسه 1", 0, 0, 0],
+    )
+    inspactor_df = inspactor_df.drop(columns=["کد مدرسه 1"], errors="ignore")
+    schools_df = pd.DataFrame({"کد مدرسه": [5001], "نام مدرسه 1": ["مدرسه 1"]})
+
+    matrix, *_ = build_matrix(inspactor_df, schools_df, _minimal_crosswalk(), cfg=cfg)
+
+    school_rows = matrix.loc[matrix["کد کارمندی پشتیبان"] == "S_name"]
+    assert not school_rows.empty
+    assert set(school_rows[cfg.policy.columns.school_code].unique()) == {5001}
+
+
 def test_school_branch_is_always_student_only() -> None:
     cfg = _policy_with_statuses([1, 0], [1, 0])
     group_code = next(iter(DUAL_STATUS_GROUPS))

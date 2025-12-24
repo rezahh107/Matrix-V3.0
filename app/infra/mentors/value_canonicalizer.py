@@ -28,11 +28,7 @@ class ValueCanonicalizer:
 
     def canonicalize(self, df: pd.DataFrame) -> ValueCanonicalizationResult:
         join_fields = self._registry.join_fields
-        school_binding_fields = self._registry.school_binding_fields
-        fill_values = {field: 0 for field in school_binding_fields}
-        canonical = coerce_int_columns(
-            df, [*join_fields, *school_binding_fields], fill_values=fill_values
-        )
+        canonical = coerce_int_columns(df, join_fields)
         issues: list[dict[str, Any]] = []
         for column in join_fields:
             if column not in canonical.columns:

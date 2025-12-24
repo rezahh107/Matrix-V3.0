@@ -30,17 +30,17 @@ import pandas as pd
 from pandas import testing as pd_testing
 from pandas.api import types as pd_types
 
-import app.core.allocation.mentor_pool as mentor_pool
-import app.core.build_matrix as build_matrix_module
-import app.core.common.columns as columns_module
 from app.core.allocate_students import allocate_batch, build_selection_reason_rows
 from app.core.allocation.engine import enrich_summary_with_history
 from app.core.allocation.history_metrics import METRIC_COLUMNS, compute_history_metrics
+import app.core.allocation.mentor_pool as mentor_pool
+import app.core.build_matrix as build_matrix_module
 from app.core.canonical_frames import (
     canonicalize_allocation_frames,
     canonicalize_pool_frame,
     canonicalize_students_frame,
 )
+import app.core.common.columns as columns_module
 from app.core.common.join_keys import (
     JoinKeyCanonicalizationError,
     validate_and_canonicalize_join_keys,
@@ -55,12 +55,12 @@ from app.core.counter import (
     pick_counter_sheet_name,
     year_to_yy,
 )
-from app.core.policy_loader import MentorStatus, PolicyConfig, load_policy
-from app.core.qa.invariants import QaReport, run_all_invariants
 from app.core.inspactor_schema_helper import (
     InspactorDefaultConfig,
     with_default_inspactor_columns,
 )
+from app.core.policy_loader import MentorStatus, PolicyConfig, load_policy
+from app.core.qa.invariants import QaReport, run_all_invariants
 from app.infra import history_store
 from app.infra.audit_allocations import audit_allocations, summarize_report
 from app.infra.console import safe_print
@@ -110,6 +110,9 @@ from app.infra.io_utils import (
 )
 from app.infra.local_database import LocalDatabase
 from app.infra.logging import structured_event
+from app.infra.mentors.field_registry import FieldRegistry
+from app.infra.mentors.header_resolver import HeaderResolver
+from app.infra.mentors.value_canonicalizer import ValueCanonicalizer
 from app.infra.reference_managers_repository import import_managers_from_excel
 from app.infra.reference_mentors_repository import (
     import_mentor_pool_from_excel,
@@ -125,9 +128,6 @@ from app.infra.reference_students_repository import (
     load_students_from_cache,
 )
 from app.infra.validators.join_keys import JoinKeyAuditResult, validate_allocation_join_keys
-from app.infra.mentors.field_registry import FieldRegistry
-from app.infra.mentors.header_resolver import HeaderResolver
-from app.infra.mentors.value_canonicalizer import ValueCanonicalizer
 
 if TYPE_CHECKING:
     from app.core.common.domain import BuildConfig
