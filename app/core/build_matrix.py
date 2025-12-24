@@ -1087,7 +1087,7 @@ def _normalize_school_token(
 ) -> int | None:
     parsed = _coerce_int_like(raw_value)
     if parsed is not None and parsed > 0:
-        return int(parsed)
+        return parsed
     normalized_name = normalize_fa(str(raw_value))
     if not normalized_name:
         return None
@@ -1096,7 +1096,7 @@ def _normalize_school_token(
         return None
     mapped_int = _coerce_int_like(mapped)
     if mapped_int is not None and mapped_int > 0:
-        return int(mapped_int)
+        return mapped_int
     return None
 
 
