@@ -135,3 +135,4 @@ python -m app.cli allocate \
 - راهنمای کامل اپراتور GUI: [docs/SmartAlloc_GUI_Operator_Guide.fa.md](docs/SmartAlloc_GUI_Operator_Guide.fa.md)
 - چک‌لیست QA سرتاسری: [docs/SmartAlloc_E2E_QA_Checklist.fa.md](docs/SmartAlloc_E2E_QA_Checklist.fa.md)
 - نکات QA برای تیم توسعه: [docs/SmartAlloc_Dev_QA_Notes.md](docs/SmartAlloc_Dev_QA_Notes.md)
+- خروجی آرتیفکت QA برای خطای `QA_RULE_MENTOR_TYPE_01` در مسیر `artifacts/qa_offenders.json` کنار خروجی اجرا ذخیره می‌شود.

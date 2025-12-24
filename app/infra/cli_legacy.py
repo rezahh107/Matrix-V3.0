@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import logging
 import platform
@@ -894,6 +895,127 @@ def _safe_json_dumps(x: object) -> str:
         return json.dumps(x, ensure_ascii=False)
     except (TypeError, ValueError):
         return str(x)
+
+
+_QA_OFFENDER_SCHEMA_VERSION = "1.0"
+
+
+def _mentor_type_offenders_frame(report: QaReport) -> pd.DataFrame:
+    details = report.to_details_frame("QA_RULE_MENTOR_TYPE_01")
+    columns = [
+        "source_sheet",
+        "source_row_index",
+        "mentor_id",
+        "mentor_type",
+        "raw_school_token",
+        "resolved_school_code",
+        "reason",
+    ]
+    if details.empty or "offenders" not in details.columns:
+        return pd.DataFrame(columns=columns)
+
+    rows: list[dict[str, object]] = []
+    for offenders in details["offenders"]:
+        if isinstance(offenders, list):
+            for offender in offenders:
+                if isinstance(offender, Mapping):
+                    rows.append(dict(offender))
+    if not rows:
+        return pd.DataFrame(columns=columns)
+    frame = pd.DataFrame(rows)
+    for column in columns:
+        if column not in frame.columns:
+            frame[column] = pd.NA
+    frame = frame.loc[:, columns]
+    frame["mentor_id"] = frame["mentor_id"].astype("string").str.strip()
+    frame["source_sheet"] = frame["source_sheet"].astype("string").fillna("").str.strip()
+    if "source_row_index" in frame.columns:
+        frame["source_row_index"] = pd.to_numeric(frame["source_row_index"], errors="coerce")
+    frame = frame.sort_values(
+        by=["source_sheet", "source_row_index", "mentor_id"], kind="stable"
+    ).reset_index(drop=True)
+    return frame
+
+
+def _json_safe_value(value: object) -> object:
+    if value is None or value is pd.NA:
+        return None
+    try:
+        if pd.isna(value):
+            return None
+    except TypeError:
+        pass
+    if isinstance(value, (bool, int, float, str)):
+        return value
+    return str(value)
+
+
+def _canonicalize_offender_records(offenders: pd.DataFrame) -> list[dict[str, object]]:
+    columns = [
+        "source_sheet",
+        "source_row_index",
+        "mentor_id",
+        "mentor_type",
+        "raw_school_token",
+        "resolved_school_code",
+        "reason",
+    ]
+    normalized = offenders.copy()
+    for column in columns:
+        if column not in normalized.columns:
+            normalized[column] = pd.NA
+    normalized = normalized.loc[:, columns]
+    normalized["source_sheet"] = normalized["source_sheet"].astype("string").str.strip()
+    normalized["mentor_id"] = normalized["mentor_id"].astype("string").str.strip()
+    normalized["source_row_index"] = pd.to_numeric(
+        normalized["source_row_index"], errors="coerce"
+    )
+    normalized = normalized.sort_values(
+        by=["source_sheet", "source_row_index", "mentor_id"], kind="stable"
+    )
+
+    records: list[dict[str, object]] = []
+    for _, row in normalized.iterrows():
+        record: dict[str, object] = {}
+        for column in columns:
+            value = _json_safe_value(row[column])
+            if column == "source_sheet" and value == "":
+                value = None
+            record[column] = value
+        records.append(record)
+    return records
+
+
+def _fingerprint_offenders(offenders: list[dict[str, object]]) -> str:
+    canonical = json.dumps(
+        offenders, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _write_mentor_type_offenders_artifact(
+    report: QaReport, *, output: Path
+) -> tuple[Path, int] | None:
+    offenders = _mentor_type_offenders_frame(report)
+    if offenders.empty:
+        return None
+    offender_records = _canonicalize_offender_records(offenders)
+    fingerprint = _fingerprint_offenders(offender_records)
+    payload = {
+        "schema_version": _QA_OFFENDER_SCHEMA_VERSION,
+        "rule_id": "QA_RULE_MENTOR_TYPE_01",
+        "generated_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+        "offenders": offender_records,
+        "offender_count": len(offender_records),
+        "data_fingerprint": fingerprint,
+    }
+    artifact_path = output.parent / "artifacts" / "qa_offenders.json"
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    artifact_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    return artifact_path, len(offender_records)
 
 
 def _copy_with_attrs(df: pd.DataFrame, template: pd.DataFrame) -> pd.DataFrame:
@@ -1851,6 +1973,15 @@ def _run_build_matrix(args: argparse.Namespace, policy: PolicyConfig, progress: 
     )
     if not qa_report.passed:
         failed_rules = {violation.rule_id for violation in qa_report.violations}
+        artifact = _write_mentor_type_offenders_artifact(qa_report, output=output)
+        offender_count = artifact[1] if artifact is not None else 0
+        artifact_path = artifact[0] if artifact is not None else None
+        logger.warning(
+            "QA invariants failed: rule_ids=%s offender_count=%s artifact=%s",
+            sorted(failed_rules),
+            offender_count,
+            artifact_path,
+        )
         detail = "; ".join(f"{v.rule_id}: {v.message}" for v in qa_report.violations)
         raise ValueError(
             "QA invariants failed: " f"rules={sorted(failed_rules)} details={detail or 'n/a'}"
@@ -2232,6 +2363,15 @@ def _allocate_and_write(
             )
         if not qa_report.passed:
             failed_rules = {violation.rule_id for violation in qa_report.violations}
+            artifact = _write_mentor_type_offenders_artifact(qa_report, output=output)
+            offender_count = artifact[1] if artifact is not None else 0
+            artifact_path = artifact[0] if artifact is not None else None
+            logger.warning(
+                "QA invariants failed: rule_ids=%s offender_count=%s artifact=%s",
+                sorted(failed_rules),
+                offender_count,
+                artifact_path,
+            )
             detail = "; ".join(f"{v.rule_id}: {v.message}" for v in qa_report.violations)
             raise ValueError(
                 "QA invariants failed: " f"rules={sorted(failed_rules)} details={detail or 'n/a'}"

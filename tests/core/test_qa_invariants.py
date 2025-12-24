@@ -157,6 +157,74 @@ def test_mentor_type_invariant_detects_school_alias_or_code_errors() -> None:
     assert result.violations
 
 
+def test_mentor_type_invariant_reports_missing_school_code_offenders() -> None:
+    policy = _policy_with_school_codes()
+    school_col = policy.columns.school_code
+    matrix = pd.DataFrame(
+        {
+            "کد کارمندی پشتیبان": ["S2", "S1"],
+            "جایگزین": ["S2", "S1"],
+            "عادی مدرسه": ["مدرسه‌ای", "مدرسه‌ای"],
+            school_col: [pd.NA, 0],
+            "source_sheet": ["SheetB", "SheetA"],
+            "source_row_index": [5, 2],
+        }
+    )
+
+    result = check_MENTOR_TYPE_01(matrix=matrix, policy=policy)
+
+    assert not result.passed
+    violation = next(
+        item
+        for item in result.violations
+        if item.message == "سطر مدرسه‌ای بدون کد مدرسه معتبر"
+    )
+    offenders = violation.details["offenders"]
+    assert isinstance(offenders, list)
+    assert offenders[0]["source_sheet"] == "SheetA"
+    assert offenders[0]["source_row_index"] == 2
+    assert offenders[0]["mentor_id"] == "S1"
+    assert offenders[0]["mentor_type"] == "مدرسه‌ای"
+    assert offenders[0]["resolved_school_code"] == 0
+    assert offenders[0]["reason"] == "MISSING_SCHOOL_CODE"
+
+
+def test_mentor_type_invariant_accepts_school_rows_with_valid_code() -> None:
+    policy = _policy_with_school_codes()
+    school_col = policy.columns.school_code
+    matrix = pd.DataFrame(
+        {
+            "کد کارمندی پشتیبان": ["S1"],
+            "جایگزین": ["S1"],
+            "عادی مدرسه": ["مدرسه‌ای"],
+            school_col: [10],
+        }
+    )
+
+    result = check_MENTOR_TYPE_01(matrix=matrix, policy=policy)
+
+    assert result.passed
+    assert not result.violations
+
+
+def test_mentor_type_invariant_allows_normal_missing_school_code() -> None:
+    policy = _policy_with_school_codes()
+    school_col = policy.columns.school_code
+    matrix = pd.DataFrame(
+        {
+            "کد کارمندی پشتیبان": ["M1"],
+            "جایگزین": ["5000"],
+            "عادی مدرسه": ["عادی"],
+            school_col: [pd.NA],
+        }
+    )
+
+    result = check_MENTOR_TYPE_01(matrix=matrix, policy=policy)
+
+    assert result.passed
+    assert not result.violations
+
+
 def test_mentor_type_invariant_accepts_small_postal_within_policy_range() -> None:
     policy = replace(_policy_with_school_codes(), postal_valid_range=(1, 9999))
     school_col = policy.columns.school_code

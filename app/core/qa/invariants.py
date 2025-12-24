@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Hashable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 
 import pandas as pd
@@ -153,9 +153,14 @@ class QaReport:
         ordered_columns = base_columns + sorted(detail_keys)
         frame = pd.DataFrame(rows, columns=ordered_columns)
         if not frame.empty:
-            sort_keys = [
-                col for col in ordered_columns if col in frame.columns and col not in {"message"}
-            ]
+            sort_keys: list[str] = []
+            for col in ordered_columns:
+                if col not in frame.columns or col in {"message"}:
+                    continue
+                series = frame[col]
+                non_null = series[series.notna()]
+                if non_null.map(lambda v: isinstance(v, Hashable)).all():
+                    sort_keys.append(col)
             if sort_keys:
                 frame = frame.sort_values(by=sort_keys, kind="stable").reset_index(drop=True)
         return frame
@@ -527,6 +532,30 @@ def _normalize_str(value: object) -> str:
     return text
 
 
+def _source_sheet_series(matrix: pd.DataFrame) -> pd.Series:
+    candidates = ("source_sheet", "sheet_name", "sheet", "sheet_label")
+    for column in candidates:
+        if column in matrix.columns:
+            series = matrix[column].astype("string").fillna("")
+            return series.str.strip()
+    attr_sheet = matrix.attrs.get("sheet_name") or matrix.attrs.get("sheet_label")
+    if attr_sheet is None:
+        attr_sheet = matrix.attrs.get("source_sheet")
+    if attr_sheet is not None:
+        return pd.Series([attr_sheet] * len(matrix), index=matrix.index, dtype="string")
+    return pd.Series([""] * len(matrix), index=matrix.index, dtype="string")
+
+
+def _source_row_series(matrix: pd.DataFrame) -> pd.Series:
+    fallback = pd.Series(range(len(matrix)), index=matrix.index, dtype="Int64")
+    for column in ("source_row_index", "row_index", "pool_row_index"):
+        if column in matrix.columns:
+            series = pd.to_numeric(matrix[column], errors="coerce")
+            series = series.reindex(matrix.index)
+            return series.fillna(fallback).astype("Int64")
+    return fallback
+
+
 def check_MENTOR_TYPE_01(  # noqa: N802
     *, matrix: pd.DataFrame | None, policy: PolicyConfig
 ) -> QaRuleResult:
@@ -558,7 +587,8 @@ def check_MENTOR_TYPE_01(  # noqa: N802
     type_series = matrix[type_col].astype("string").str.strip()
     mentor_series = matrix[mentor_col].astype("string").str.strip()
     alias_series = matrix["جایگزین"].astype("string").str.strip()
-    school_series = pd.to_numeric(matrix[school_col], errors="coerce").fillna(0).astype(int)
+    raw_school_series = matrix[school_col]
+    school_series = pd.to_numeric(raw_school_series, errors="coerce").fillna(0).astype(int)
 
     allowed_types = {"عادی", "مدرسه‌ای"}
     invalid_types = type_series[~type_series.isin(allowed_types)]
@@ -608,12 +638,35 @@ def check_MENTOR_TYPE_01(  # noqa: N802
     school_zero = (school_series[school_mask] == 0).reindex(matrix.index, fill_value=False)
     if bool(school_zero.any()):
         offenders = mentor_series[school_mask & school_zero]
+        source_sheets = _source_sheet_series(matrix)
+        source_rows = _source_row_series(matrix)
+        offender_rows = pd.DataFrame(
+            {
+                "source_sheet": source_sheets[school_mask & school_zero],
+                "source_row_index": source_rows[school_mask & school_zero],
+                "mentor_id": offenders,
+                "mentor_type": type_series[school_mask & school_zero],
+                "raw_school_token": raw_school_series[school_mask & school_zero],
+                "resolved_school_code": school_series[school_mask & school_zero],
+                "reason": "MISSING_SCHOOL_CODE",
+            }
+        )
+        if not offender_rows.empty:
+            offender_rows["mentor_id"] = offender_rows["mentor_id"].astype("string").str.strip()
+            offender_rows = offender_rows.sort_values(
+                by=["source_sheet", "source_row_index", "mentor_id"], kind="stable"
+            )
+        offender_payload = offender_rows.to_dict("records")
         violations.append(
             QaViolation(
                 rule_id="QA_RULE_MENTOR_TYPE_01",
                 level="error",
                 message="سطر مدرسه‌ای بدون کد مدرسه معتبر",
-                details={"mentor_ids": tuple(_normalize_str(v) for v in offenders)},
+                details={
+                    "mentor_ids": tuple(_normalize_str(v) for v in offenders),
+                    "offenders": offender_payload,
+                    "offenders_count": int(len(offender_payload)),
+                },
             )
         )
 
