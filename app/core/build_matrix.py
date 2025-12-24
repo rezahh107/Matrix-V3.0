@@ -61,6 +61,14 @@ from app.core.common.columns import (
 from app.core.common.domain import (
     DUAL_STATUS_GROUPS,  # noqa: F401 - re-export for compatibility
     BuildConfig,
+    COL_SCHOOL_CODE_1,
+    COL_SCHOOL_CODE_2,
+    COL_SCHOOL_CODE_3,
+    COL_SCHOOL_CODE_4,
+    COL_SCHOOL_NAME_1,
+    COL_SCHOOL_NAME_2,
+    COL_SCHOOL_NAME_3,
+    COL_SCHOOL_NAME_4,
     MentorType,
     StudentBindingKind,
     _postal_valid,
@@ -108,10 +116,10 @@ COL_MANAGER_NAME = "نام مدیر"
 COL_MENTOR_ID = "کد کارمندی پشتیبان"  # mandatory; only trusted employee code
 COL_MENTOR_ROWID = "ردیف پشتیبان"
 COL_GROUP = "گروه آزمایشی"
-COL_SCHOOL1 = "نام مدرسه 1"
-COL_SCHOOL2 = "نام مدرسه 2"
-COL_SCHOOL3 = "نام مدرسه 3"
-COL_SCHOOL4 = "نام مدرسه 4"
+COL_SCHOOL1 = COL_SCHOOL_NAME_1
+COL_SCHOOL2 = COL_SCHOOL_NAME_2
+COL_SCHOOL3 = COL_SCHOOL_NAME_3
+COL_SCHOOL4 = COL_SCHOOL_NAME_4
 COL_SCHOOL_CODE = "کد مدرسه"
 COL_SCHOOL_COUNT = "تعداد مدارس تحت پوشش"
 COL_POSTAL = "کدپستی"
@@ -1020,22 +1028,32 @@ def capacity_gate(
     )
 
     keep_cols = [COL_MENTOR_NAME, COL_MANAGER_NAME, current_col, special_col]
-    if COL_SCHOOL1 in df.columns:
-        keep_cols.append(COL_SCHOOL1)
+    school_binding_columns = [
+        COL_SCHOOL_CODE_1,
+        COL_SCHOOL_CODE_2,
+        COL_SCHOOL_CODE_3,
+        COL_SCHOOL_CODE_4,
+    ]
+    school_binding_col = next(
+        (col for col in school_binding_columns if col in df.columns),
+        None,
+    )
+    if school_binding_col:
+        keep_cols.append(school_binding_col)
     if COL_GROUP in df.columns:
         keep_cols.append(COL_GROUP)
 
     removed = df.loc[removed_mask, keep_cols].copy()
-    removed = removed.rename(
-        columns={
-            current_col: "تحت پوشش فعلی",
-            special_col: "ظرفیت خاص",
-            COL_MENTOR_NAME: "پشتیبان",
-            COL_MANAGER_NAME: "مدیر",
-            COL_SCHOOL1: "مدرسه (خام)",
-            COL_GROUP: "گروه آزمایشی (خام)",
-        }
-    )
+    rename_map = {
+        current_col: "تحت پوشش فعلی",
+        special_col: "ظرفیت خاص",
+        COL_MENTOR_NAME: "پشتیبان",
+        COL_MANAGER_NAME: "مدیر",
+        COL_GROUP: "گروه آزمایشی (خام)",
+    }
+    if school_binding_col:
+        rename_map[school_binding_col] = "مدرسه (خام)"
+    removed = removed.rename(columns=rename_map)
     removed["دلیل حذف"] = "تعداد داوطلبان تحت پوشش ≥ تعداد تحت پوشش خاص"
 
     kept = df.loc[~removed_mask].copy()
@@ -1321,6 +1339,7 @@ def _prepare_base_rows(
         valid_school_codes = school_binding.codes
         if expected_count is not None:
             if expected_count > len(valid_school_codes):
+                raw_tokens = [row.get(col) for col in school_cols]
                 missing_school_codes.append(
                     {
                         "row_index": int(idx) + 1,
@@ -1329,6 +1348,7 @@ def _prepare_base_rows(
                         "mentor_id": mentor_id,
                         "expected_school_count": int(expected_count),
                         "found_school_count": int(len(valid_school_codes)),
+                        "school_tokens": raw_tokens,
                         "reason": "missing required school codes",
                     }
                 )
@@ -1805,6 +1825,7 @@ def build_matrix(
     crosswalk_synonyms_df: pd.DataFrame | None = None,
     cfg: BuildConfig = BuildConfig(),
     progress: ProgressFn = noop_progress,
+    precanonicalized_inspactor: bool = False,
 ) -> tuple[
     pd.DataFrame,
     pd.DataFrame,
@@ -1869,41 +1890,46 @@ def build_matrix(
 
         return _collector
 
-    try:
-        insp_df = assert_inspactor_schema(insp_df, cfg.policy)
-    except KeyError as exc:
-        schema_reason = str(exc)
-        schema_invalid = pd.DataFrame(
-            [
-                {
-                    "row_index": 0,
-                    "پشتیبان": "",
-                    "مدیر": "",
-                    "reason": schema_reason,
-                }
-            ]
+    if precanonicalized_inspactor:
+        insp_df = insp_df.copy()
+    else:
+        try:
+            insp_df = assert_inspactor_schema(insp_df, cfg.policy)
+        except KeyError as exc:
+            schema_reason = str(exc)
+            schema_invalid = pd.DataFrame(
+                [
+                    {
+                        "row_index": 0,
+                        "پشتیبان": "",
+                        "مدیر": "",
+                        "reason": schema_reason,
+                    }
+                ]
+            )
+            setattr(exc, "invalid_mentors_df", schema_invalid)
+            raise
+        insp_df, _ = normalize_input_columns(
+            insp_df,
+            kind="InspactorReport",
+            collector=_collect_normalization("inspactor"),
         )
-        setattr(exc, "invalid_mentors_df", schema_invalid)
-        raise
-    insp_df, _ = normalize_input_columns(
-        insp_df,
-        kind="InspactorReport",
-        collector=_collect_normalization("inspactor"),
-    )
-    school_name_columns = [
-        column for column in insp_df.columns if column.strip().startswith("نام مدرسه")
-    ]
-    insp_df = canonicalize_pool_frame(
-        insp_df,
-        policy=cfg.policy,
-        sanitize_pool=False,
-        pool_source="inspactor",
-        require_join_keys=False,
-        preserve_columns=school_name_columns,
-        # مطابق سیاست، تنها تکرار یک پشتیبان روی همان شش‌کلید ممنوع است؛
-        # حضور پشتیبان‌های متفاوت روی یک کلید مجاز است.
-        include_distinct_mentor_duplicates=False,
-    )
+        insp_df = canonicalize_pool_frame(
+            insp_df,
+            policy=cfg.policy,
+            sanitize_pool=False,
+            pool_source="inspactor",
+            require_join_keys=False,
+            preserve_columns=[
+                COL_SCHOOL_CODE_1,
+                COL_SCHOOL_CODE_2,
+                COL_SCHOOL_CODE_3,
+                COL_SCHOOL_CODE_4,
+            ],
+            # مطابق سیاست، تنها تکرار یک پشتیبان روی همان شش‌کلید ممنوع است؛
+            # حضور پشتیبان‌های متفاوت روی یک کلید مجاز است.
+            include_distinct_mentor_duplicates=False,
+        )
     pool_stats = insp_df.attrs.get("pool_canonicalization_stats")
     alias_autofill = int(getattr(pool_stats, "alias_autofill", 0) or 0) if pool_stats else 0
     alias_unmatched = int(getattr(pool_stats, "alias_unmatched", 0) or 0) if pool_stats else 0
@@ -1946,10 +1972,20 @@ def build_matrix(
         crosswalk_synonyms_df,
     )
     code_to_name_school, school_name_to_code = build_school_maps(schools_df, cfg=cfg)
+    school_binding_columns = [
+        column
+        for column in [
+            COL_SCHOOL_CODE_1,
+            COL_SCHOOL_CODE_2,
+            COL_SCHOOL_CODE_3,
+            COL_SCHOOL_CODE_4,
+        ]
+        if column in insp_df.columns
+    ]
     school_lookup_issues, school_mismatch_count, school_reference_count = (
         _detect_school_lookup_mismatches(
             insp_df,
-            school_columns=school_name_columns,
+            school_columns=school_binding_columns,
             code_to_name_school=code_to_name_school,
             school_name_to_code=school_name_to_code,
             binding_policy=cfg.policy.mentor_school_binding,
@@ -2000,7 +2036,14 @@ def build_matrix(
         )
     group_cols = [c for c in insp.columns if ("گروه آزمایشی" in str(c)) and (c != included_col)]
     school_cols = [
-        c for c in [COL_SCHOOL1, COL_SCHOOL2, COL_SCHOOL3, COL_SCHOOL4] if c in insp.columns
+        c
+        for c in [
+            COL_SCHOOL_CODE_1,
+            COL_SCHOOL_CODE_2,
+            COL_SCHOOL_CODE_3,
+            COL_SCHOOL_CODE_4,
+        ]
+        if c in insp.columns
     ]
 
     # generate rows
@@ -2078,7 +2121,11 @@ def build_matrix(
             invalid_mentors_df = pd.concat(
                 [invalid_mentors_df, missing_df], ignore_index=True, sort=False
             )
-        error = ValueError("missing required school codes for school mentors")
+        sample_tokens = missing_school_codes[0].get("school_tokens", [])
+        error = ValueError(
+            "missing required school codes for school mentors "
+            f"(columns={school_cols}, sample_tokens={sample_tokens})"
+        )
         setattr(error, "is_missing_school_codes_error", True)
         setattr(error, "missing_school_codes_df", missing_df)
         setattr(error, "invalid_mentors_df", invalid_mentors_df)
@@ -2607,8 +2654,8 @@ def validate_with_students(
     if school_column in stud_raw.columns:
         school_code_series = stud_raw[school_column]
 
-    if school_code_series is None and COL_SCHOOL1 in stud_raw.columns:
-        school_code_series = stud_raw[COL_SCHOOL1].apply(
+    if school_code_series is None and COL_SCHOOL_NAME_1 in stud_raw.columns:
+        school_code_series = stud_raw[COL_SCHOOL_NAME_1].apply(
             lambda x: school_name_to_code.get(normalize_fa(x), "")
         )
 

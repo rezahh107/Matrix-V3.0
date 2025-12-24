@@ -262,6 +262,65 @@ def test_build_matrix_expands_school_tokens_by_count() -> None:
     assert set(school_rows[cfg.policy.columns.school_code].unique()) == {5001, 5002}
 
 
+def test_school_binding_headers_name_family_maps_to_codes() -> None:
+    cfg = BuildConfig(enable_capacity_gate=False)
+    inspactor_df = _school_inspactor_row(
+        mentor_id="9001",
+        school_count=2,
+        school_tokens=[5001, 5002, 0, 0],
+    )
+    inspactor_df = inspactor_df.drop(columns=["کد مدرسه 1"], errors="ignore")
+    schools_df = pd.DataFrame(
+        {"کد مدرسه": [5001, 5002], "نام مدرسه 1": ["مدرسه 1", "مدرسه 2"]}
+    )
+
+    matrix, *_ = build_matrix(inspactor_df, schools_df, _minimal_crosswalk(), cfg=cfg)
+
+    school_rows = matrix.loc[matrix["کد کارمندی پشتیبان"] == "9001"]
+    assert not school_rows.empty
+    assert set(school_rows[cfg.policy.columns.school_code].unique()) == {5001, 5002}
+
+
+def test_school_binding_headers_code_family_works() -> None:
+    cfg = BuildConfig(enable_capacity_gate=False)
+    inspactor_df = _school_inspactor_row(
+        mentor_id="9002",
+        school_count=2,
+        school_tokens=[5001, 5002, 0, 0],
+    )
+    inspactor_df = inspactor_df.drop(
+        columns=["نام مدرسه 1", "نام مدرسه 2", "نام مدرسه 3", "نام مدرسه 4"],
+        errors="ignore",
+    )
+    inspactor_df["کد مدرسه 2"] = 5002
+    inspactor_df["کد مدرسه 3"] = 0
+    inspactor_df["کد مدرسه 4"] = 0
+    schools_df = pd.DataFrame(
+        {"کد مدرسه": [5001, 5002], "نام مدرسه 1": ["مدرسه 1", "مدرسه 2"]}
+    )
+
+    matrix, *_ = build_matrix(inspactor_df, schools_df, _minimal_crosswalk(), cfg=cfg)
+
+    school_rows = matrix.loc[matrix["کد کارمندی پشتیبان"] == "9002"]
+    assert not school_rows.empty
+    assert set(school_rows[cfg.policy.columns.school_code].unique()) == {5001, 5002}
+
+
+def test_school_mentor_missing_codes_fails_fast() -> None:
+    cfg = BuildConfig(enable_capacity_gate=False)
+    inspactor_df = _school_inspactor_row(
+        mentor_id="S_missing",
+        school_count=1,
+        school_tokens=[0, 0, 0, 0],
+    )
+    schools_df = pd.DataFrame({"کد مدرسه": [0], "نام مدرسه 1": [""]})
+
+    with pytest.raises(ValueError) as excinfo:
+        build_matrix(inspactor_df, schools_df, _minimal_crosswalk(), cfg=cfg)
+
+    assert getattr(excinfo.value, "is_missing_school_codes_error", False)
+
+
 def test_build_matrix_missing_required_school_codes_fails() -> None:
     cfg = BuildConfig(enable_capacity_gate=False)
     inspactor_df = _school_inspactor_row(

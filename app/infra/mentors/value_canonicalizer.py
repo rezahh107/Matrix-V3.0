@@ -27,9 +27,14 @@ class ValueCanonicalizer:
         self._registry = registry
 
     def canonicalize(self, df: pd.DataFrame) -> ValueCanonicalizationResult:
-        canonical = coerce_int_columns(df, self._registry.join_fields)
+        join_fields = self._registry.join_fields
+        school_binding_fields = self._registry.school_binding_fields
+        fill_values = {field: 0 for field in school_binding_fields}
+        canonical = coerce_int_columns(
+            df, [*join_fields, *school_binding_fields], fill_values=fill_values
+        )
         issues: list[dict[str, Any]] = []
-        for column in self._registry.join_fields:
+        for column in join_fields:
             if column not in canonical.columns:
                 issues.append({"reason": "MISSING_JOIN_KEY", "column": column, "row_index": None})
                 continue
