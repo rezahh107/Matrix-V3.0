@@ -23,7 +23,7 @@ from collections.abc import Callable, Hashable, Mapping, Sequence
 from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, NoReturn, cast
 from uuid import uuid4
 
 import pandas as pd
@@ -970,9 +970,6 @@ def _canonicalize_offender_records(offenders: pd.DataFrame) -> list[dict[str, ob
     normalized["source_row_index"] = pd.to_numeric(
         normalized["source_row_index"], errors="coerce"
     )
-    normalized = normalized.sort_values(
-        by=["source_sheet", "source_row_index", "mentor_id"], kind="stable"
-    )
 
     records: list[dict[str, object]] = []
     for _, row in normalized.iterrows():
@@ -1016,6 +1013,22 @@ def _write_mentor_type_offenders_artifact(
         encoding="utf-8",
     )
     return artifact_path, len(offender_records)
+
+
+def _raise_qa_invariant_failure(report: QaReport, *, output: Path) -> NoReturn:
+    sorted_failed_rules = sorted(violation.rule_id for violation in report.violations)
+    artifact = _write_mentor_type_offenders_artifact(report, output=output)
+    artifact_path, offender_count = artifact if artifact is not None else (None, 0)
+    logger.warning(
+        "QA invariants failed: rule_ids=%s offender_count=%s artifact=%s",
+        sorted_failed_rules,
+        offender_count,
+        artifact_path,
+    )
+    detail = "; ".join(f"{v.rule_id}: {v.message}" for v in report.violations)
+    raise ValueError(
+        "QA invariants failed: " f"rules={sorted_failed_rules} details={detail or 'n/a'}"
+    )
 
 
 def _copy_with_attrs(df: pd.DataFrame, template: pd.DataFrame) -> pd.DataFrame:
@@ -1972,20 +1985,7 @@ def _run_build_matrix(args: argparse.Namespace, policy: PolicyConfig, progress: 
         stem_override="matrix_vs_students_validation.xlsx",
     )
     if not qa_report.passed:
-        failed_rules = {violation.rule_id for violation in qa_report.violations}
-        artifact = _write_mentor_type_offenders_artifact(qa_report, output=output)
-        offender_count = artifact[1] if artifact is not None else 0
-        artifact_path = artifact[0] if artifact is not None else None
-        logger.warning(
-            "QA invariants failed: rule_ids=%s offender_count=%s artifact=%s",
-            sorted(failed_rules),
-            offender_count,
-            artifact_path,
-        )
-        detail = "; ".join(f"{v.rule_id}: {v.message}" for v in qa_report.violations)
-        raise ValueError(
-            "QA invariants failed: " f"rules={sorted(failed_rules)} details={detail or 'n/a'}"
-        )
+        _raise_qa_invariant_failure(qa_report, output=output)
     sheets = {
         "matrix": matrix,
         "validation": validation,
@@ -2362,20 +2362,7 @@ def _allocate_and_write(
                 extra={"structured": structured_event("qa.trace", **qa_meta)},
             )
         if not qa_report.passed:
-            failed_rules = {violation.rule_id for violation in qa_report.violations}
-            artifact = _write_mentor_type_offenders_artifact(qa_report, output=output)
-            offender_count = artifact[1] if artifact is not None else 0
-            artifact_path = artifact[0] if artifact is not None else None
-            logger.warning(
-                "QA invariants failed: rule_ids=%s offender_count=%s artifact=%s",
-                sorted(failed_rules),
-                offender_count,
-                artifact_path,
-            )
-            detail = "; ".join(f"{v.rule_id}: {v.message}" for v in qa_report.violations)
-            raise ValueError(
-                "QA invariants failed: " f"rules={sorted(failed_rules)} details={detail or 'n/a'}"
-            )
+            _raise_qa_invariant_failure(qa_report, output=output)
 
         # تبدیل نهایی به فرمت‌های قابل نوشتن در Excel
         allocations_df = _make_excel_safe(allocations_df)
