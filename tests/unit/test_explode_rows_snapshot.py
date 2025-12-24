@@ -68,7 +68,7 @@ def _build_fixture_base() -> tuple[
     cfg = BuildConfig()
     name_to_code, code_to_name, buckets, synonyms = prepare_crosswalk_mappings(crosswalk_df)
     code_to_name_school, school_name_to_code = build_school_maps(schools_df)
-    base_df, _, _ = _prepare_base_rows(
+    base_df, _, _, *_ = _prepare_base_rows(
         insp_df,
         cfg=cfg,
         name_to_code=name_to_code,
