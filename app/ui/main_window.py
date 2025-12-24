@@ -1655,6 +1655,7 @@ class MainWindow(QMainWindow):
             self._picker_output_matrix.text(),
             "--policy",
             policy_path,
+            "--use-v3-mentor-pipeline",
         ]
 
         def _remember_build_output() -> None:

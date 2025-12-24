@@ -55,6 +55,10 @@ from app.core.counter import (
     pick_counter_sheet_name,
     year_to_yy,
 )
+from app.core.inspactor_schema_helper import (
+    InspactorDefaultConfig,
+    with_default_inspactor_columns,
+)
 from app.core.policy_loader import MentorStatus, PolicyConfig, load_policy
 from app.core.qa.invariants import QaReport, run_all_invariants
 from app.infra import history_store
@@ -106,6 +110,9 @@ from app.infra.io_utils import (
 )
 from app.infra.local_database import LocalDatabase
 from app.infra.logging import structured_event
+from app.infra.mentors.field_registry import FieldRegistry
+from app.infra.mentors.header_resolver import HeaderResolver
+from app.infra.mentors.value_canonicalizer import ValueCanonicalizer
 from app.infra.reference_managers_repository import import_managers_from_excel
 from app.infra.reference_mentors_repository import (
     import_mentor_pool_from_excel,
@@ -147,6 +154,81 @@ _DEFAULT_ALLOC_PROFILE_PATH = DEFAULT_SABT_PROFILE_PATH
 _DEFAULT_LOCAL_DB_PATH = Path("smart_alloc.db")
 
 logger = logging.getLogger(__name__)
+
+
+def build_matrix_v3(
+    insp_df: pd.DataFrame,
+    schools_df: pd.DataFrame,
+    crosswalk_groups_df: pd.DataFrame,
+    *,
+    crosswalk_synonyms_df: pd.DataFrame | None = None,
+    cfg: BuildConfig,
+    progress: ProgressFn,
+) -> tuple[
+    pd.DataFrame,
+    pd.DataFrame,
+    pd.DataFrame,
+    pd.DataFrame,
+    pd.DataFrame,
+    pd.DataFrame,
+    pd.DataFrame,
+    pd.DataFrame,
+]:
+    """Build matrix using HeaderPipelineV3 for mentor header/value canonicalization."""
+
+    registry = FieldRegistry(cfg.policy)
+    resolver = HeaderResolver(registry, header_mode=cfg.policy.excel.header_mode_internal)
+    header_result = resolver.resolve(insp_df)
+    if not header_result.can_continue:
+        error = ValueError("mentor header resolution failed")
+        setattr(error, "header_issues", header_result.issues)
+        raise error
+
+    canonicalizer = ValueCanonicalizer(registry)
+    value_result = canonicalizer.canonicalize(header_result.resolved_df)
+    if not value_result.can_continue:
+        error = ValueError("mentor value canonicalization failed")
+        setattr(error, "value_issues", value_result.issues)
+        raise error
+
+    canonical_insp = value_result.canonical_df.rename(
+        columns={
+            "mentor_id": build_matrix_module.COL_MENTOR_ID,
+            "capacity_current": build_matrix_module.CAPACITY_CURRENT_COL,
+            "capacity_special": build_matrix_module.CAPACITY_SPECIAL_COL,
+            "schools_covered_count": build_matrix_module.COL_SCHOOL_COUNT,
+        },
+        errors="ignore",
+    )
+    default_cfg = InspactorDefaultConfig(
+        school_code_columns=(
+            build_matrix_module.COL_SCHOOL_CODE,
+            *registry.school_binding_fields,
+        ),
+        school_count_column=build_matrix_module.COL_SCHOOL_COUNT,
+        derived_factories={
+            build_matrix_module.COL_POSTAL: lambda frame: pd.Series(
+                [pd.NA] * len(frame), index=frame.index, dtype="string"
+            ),
+            build_matrix_module.CAPACITY_CURRENT_COL: lambda frame: pd.Series(
+                [0] * len(frame), index=frame.index, dtype="Int64"
+            ),
+            build_matrix_module.CAPACITY_SPECIAL_COL: lambda frame: pd.Series(
+                [0] * len(frame), index=frame.index, dtype="Int64"
+            ),
+        },
+    )
+    canonical_insp = with_default_inspactor_columns(canonical_insp, default_cfg)
+
+    return build_matrix_module.build_matrix(
+        canonical_insp,
+        schools_df,
+        crosswalk_groups_df,
+        crosswalk_synonyms_df=crosswalk_synonyms_df,
+        cfg=cfg,
+        progress=progress,
+        precanonicalized_inspactor=True,
+    )
 
 
 def _safe_row_index(raw: Hashable | None) -> int:
@@ -1891,6 +1973,8 @@ def _run_build_matrix(args: argparse.Namespace, policy: PolicyConfig, progress: 
             f"loaded='{cfg.policy_version}' expected='{cfg.expected_policy_version}'"
         )
 
+    use_v3_pipeline = bool(getattr(args, "use_v3_mentor_pipeline", False))
+    build_fn = build_matrix_v3 if use_v3_pipeline else build_matrix
     (
         matrix,
         validation,
@@ -1900,7 +1984,7 @@ def _run_build_matrix(args: argparse.Namespace, policy: PolicyConfig, progress: 
         invalid_mentors,
         join_key_duplicates,
         progress_log,
-    ) = build_matrix(
+    ) = build_fn(
         insp_df,
         schools_df,
         crosswalk_groups_df,
@@ -2781,6 +2865,11 @@ def _build_parser() -> argparse.ArgumentParser:
         "--mentor-overrides",
         default=None,
         help="JSON object نگاشت mentor_id→enabled برای اجرای جاری ماتریس",
+    )
+    build_cmd.add_argument(
+        "--use-v3-mentor-pipeline",
+        action="store_true",
+        help="استفاده از HeaderPipelineV3 برای کاننیکال‌سازی هدرهای پشتیبان",
     )
 
     refresh_cmd = sub.add_parser(
