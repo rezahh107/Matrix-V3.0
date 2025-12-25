@@ -31,6 +31,7 @@ from typing import cast
 import pandas as pd
 from pandas.api.types import is_integer_dtype
 
+from app.core.common.domain import EDUCATIONAL_STRUCTURE
 from app.infra.errors import (
     DatabaseCorruptError,
     DatabaseOperationError,
@@ -49,6 +50,20 @@ _SCHEMA_VERSION = 12
 _POLICY_VERSION = "1.0.3"
 _SSOT_VERSION = "1.0.2"
 _ISO_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
+
+_PERSIAN_GRADE_MAP: dict[str, int] = {
+    "دوم": 2,
+    "سوم": 3,
+    "چهارم": 4,
+    "پنجم": 5,
+    "ششم": 6,
+    "هفتم": 7,
+    "هشتم": 8,
+    "نهم": 9,
+    "دهم": 10,
+    "یازدهم": 11,
+    "دوازدهم": 12,
+}
 
 logger = logging.getLogger(__name__)
 
@@ -472,6 +487,7 @@ class LocalDatabase:
             self._ensure_year_meta(conn)
             self._validate_schema_version(conn)
             self._assert_required_schema(conn)
+            self._ensure_builtin_groupcodes(conn)
             conn.commit()
 
     def _repair_required_schema(
@@ -518,6 +534,64 @@ class LocalDatabase:
                     repaired = True
 
         return repaired
+
+    def _ensure_builtin_groupcodes(self, conn: sqlite3.Connection) -> None:
+        """Seed canonical groupcodes and meta for readiness gating."""
+
+        if not _table_exists(conn, "groupcodes"):
+            return
+
+        meta_row = conn.execute(
+            "SELECT row_count, version_tag FROM reference_meta WHERE table_name = ?",
+            ("groupcodes",),
+        ).fetchone()
+        existing_row_count = (
+            int(meta_row[0]) if meta_row is not None and meta_row[0] is not None else 0
+        )
+        existing_version_tag = meta_row[1] if meta_row else None
+
+        try:
+            cursor = conn.execute("SELECT COUNT(*) FROM groupcodes")
+            count_row = cursor.fetchone()
+            table_count = int(count_row[0]) if count_row and count_row[0] is not None else 0
+        except sqlite3.Error:
+            table_count = 0
+
+        expected_seed_count = len(EDUCATIONAL_STRUCTURE)
+
+        if table_count <= 0:
+            seed_frame = _build_groupcodes_seed_frame()
+            if seed_frame.empty:
+                return
+            seed_frame.to_sql("groupcodes", conn, if_exists="append", index=False)
+            table_count = int(seed_frame.shape[0])
+            self.record_reference_meta(
+                table_name="groupcodes",
+                source="builtin:ssot",
+                row_count=table_count,
+                version_tag="builtin:ssot",
+                source_filename=None,
+                imported_at=None,
+                conn=conn,
+            )
+            return
+
+        if existing_row_count == table_count and existing_row_count > 0 and existing_version_tag:
+            return
+
+        version_tag = existing_version_tag or (
+            "builtin:ssot" if table_count == expected_seed_count else None
+        )
+        source = "builtin:ssot" if version_tag == "builtin:ssot" else "table:detected"
+        self.record_reference_meta(
+            table_name="groupcodes",
+            source=source,
+            row_count=table_count,
+            version_tag=version_tag,
+            source_filename=None,
+            imported_at=None,
+            conn=conn,
+        )
 
     def _recover_corrupt_database(self) -> Path | None:
         """پشتیبان‌گیری از فایل خراب و بازسازی پایگاه داده.
@@ -2130,6 +2204,35 @@ class LocalDatabase:
             raise DatabaseOperationError(
                 f"جایگزینی جدول به‌صورت اتمیک با خطا مواجه شد: {exc}"
             ) from exc
+
+
+def _infer_grade_from_group(group: str) -> int | None:
+    for token, grade in _PERSIAN_GRADE_MAP.items():
+        if token in group:
+            return grade
+    return None
+
+
+def _build_groupcodes_seed_frame() -> pd.DataFrame:
+    rows: list[dict[str, object]] = []
+    for record in EDUCATIONAL_STRUCTURE:
+        rows.append(
+            {
+                "group_code": record.field_code,
+                "level": record.educational_level,
+                "grade": _infer_grade_from_group(record.experimental_group),
+                "track": record.experimental_group,
+                "is_active": 1,
+                "version_tag": "builtin:ssot",
+                "source_filename": None,
+                "imported_at": None,
+            }
+        )
+
+    frame = pd.DataFrame(rows)
+    frame["grade"] = pd.Series(frame["grade"], dtype="Int64")
+    frame["is_active"] = pd.Series(frame["is_active"], dtype="Int64")
+    return frame
 
 
 def _to_iso(dt: datetime) -> str:
