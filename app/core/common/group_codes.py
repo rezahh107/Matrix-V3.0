@@ -11,43 +11,9 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
 
-VALID_GROUP_CODES: frozenset[int] = frozenset(
-    {
-        1,
-        3,
-        5,
-        7,
-        8,
-        9,
-        11,
-        12,
-        14,
-        17,
-        18,
-        21,
-        22,
-        23,
-        24,
-        25,
-        26,
-        27,
-        29,
-        30,
-        31,
-        33,
-        35,
-        41,
-        43,
-        45,
-        46,
-        53,
-        55,
-        66,
-        69,
-        83,
-        89,
-    }
-)
+from app.core.common.domain import VALID_GROUP_CODES
+
+VALID_GROUP_CODES_SET: frozenset[int] = frozenset(VALID_GROUP_CODES)
 
 
 @dataclass(frozen=True)
@@ -208,7 +174,7 @@ def parse_group_codes(value: Any) -> GroupCodesParseResult:
         else:
             raw_codes.append(number)
 
-    valid_raw_codes = [number for number in raw_codes if number in VALID_GROUP_CODES]
+    valid_raw_codes = [number for number in raw_codes if number in VALID_GROUP_CODES_SET]
     unique_valid_codes = _deduplicate_preserve_order(valid_raw_codes)
     sorted_codes = sorted(unique_valid_codes)
 

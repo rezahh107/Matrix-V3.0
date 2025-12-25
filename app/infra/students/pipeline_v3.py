@@ -16,6 +16,7 @@ from app.core.common.types import (
 )
 from app.core.policy_loader import PolicyConfig
 from app.core.students.domain_validation import validate_student_domain
+from app.infra.canonical_frames import build_student_group_crosswalk
 from app.infra.errors import DatabasePreparationError
 from app.infra.groupcode.groupcode_repository import GroupCodeRepository
 from app.infra.io_utils import read_excel_first_sheet
@@ -115,10 +116,5 @@ class StudentPipelineV3:
                 reason="جدول مدارس یا کدگروه خالی است.",
                 hint="داده‌های مرجع را از فایل‌های Excel وارد کنید.",
             )
-        crosswalk_frame = self._groupcode_repo.load_canonical_frame()
-        if "group_code" not in crosswalk_frame.columns:
-            return {}
-        mapping: dict[str | int, int] = {}
-        for group_code in crosswalk_frame["group_code"].dropna().astype(int):
-            mapping[int(group_code)] = int(group_code)
-        return mapping
+        crosswalk_frame = self._groupcode_repo.load_crosswalk_groups_frame()
+        return build_student_group_crosswalk(crosswalk_frame)
