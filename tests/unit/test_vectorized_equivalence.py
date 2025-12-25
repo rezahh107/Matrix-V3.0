@@ -111,7 +111,7 @@ def _build_reference_matrix(
     manual["ردیف پشتیبان"] = manual["ردیف پشتیبان"].apply(
         lambda v: int(v) if str(v).strip().isdigit() else str(v).strip()
     )
-    manual["کد مدرسه"] = manual["کد مدرسه"].astype(int)
+    manual["کد مدرسه"] = manual["کد مدرسه"].astype("int32")
     manual["جایگزین"] = manual["جایگزین"].apply(
         lambda v: int(v) if str(v).strip().isdigit() else str(v).strip()
     )

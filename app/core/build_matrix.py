@@ -2356,7 +2356,7 @@ def build_matrix(
         matrix["ردیف پشتیبان"] = ensure_series(matrix["ردیف پشتیبان"]).map(_coerce_int_like)
         school_series = ensure_series(matrix[school_code_col])
         matrix[school_code_col] = school_series.map(lambda v: safe_int_value(v, default=0)).astype(
-            "int64"
+            "int32"
         )
         matrix["کد کارمندی پشتیبان"] = (
             ensure_series(matrix["کد کارمندی پشتیبان"])
