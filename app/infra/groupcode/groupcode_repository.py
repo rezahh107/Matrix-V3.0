@@ -140,12 +140,13 @@ class GroupCodeRepository:
         return canonical_en[columns].copy()
 
     def _validate_import_frame(self, df: pd.DataFrame) -> None:
-        invalid_codes = [code for code in df["group_code"] if int(code) not in VALID_GROUP_CODES]
-        if invalid_codes:
+        imported_codes = set(df["group_code"].dropna().astype(int))
+        invalid_codes_set = imported_codes - VALID_GROUP_CODES
+        if invalid_codes_set:
             raise DatabasePreparationError(
                 path="groupcodes.xlsx",
                 reason="کد گروه نامعتبر است.",
-                hint=", ".join(str(code) for code in sorted(set(invalid_codes))),
+                hint=", ".join(str(code) for code in sorted(invalid_codes_set)),
             )
         invalid_levels = [level for level in df["level"] if level not in self._ALLOWED_LEVELS]
         if invalid_levels:
