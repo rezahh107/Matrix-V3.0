@@ -116,11 +116,11 @@ class GroupCodeRepository:
 
     def _normalize_import_frame(self, df: pd.DataFrame) -> pd.DataFrame:
         canonical_fa = canonicalize_headers(df, header_mode="fa")
-        rename_map: dict[str, str] = {}
-        for column in canonical_fa.columns:
-            target = self._PERSIAN_HEADER_ALIASES.get(column)
-            if target:
-                rename_map[column] = target
+        rename_map = {
+            column: target
+            for column in canonical_fa.columns
+            if (target := self._PERSIAN_HEADER_ALIASES.get(column))
+        }
         normalized = canonical_fa.rename(columns=rename_map)
         canonical_en = canonicalize_headers(normalized, header_mode="en")
         missing = [col for col in self.REQUIRED_COLUMNS if col not in canonical_en.columns]
