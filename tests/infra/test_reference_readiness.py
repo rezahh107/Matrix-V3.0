@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from app.core.common.domain import EDUCATIONAL_STRUCTURE
 from app.infra.db.reference_readiness import compute_reference_readiness
 from app.infra.groupcode.groupcode_repository import GroupCodeRepository
 from app.infra.local_database import LocalDatabase
@@ -55,7 +56,7 @@ def test_readiness_true_when_both_tables_populated(tmp_path: Path) -> None:
     assert readiness.groupcodes.row_count == 2
 
 
-def test_readiness_false_when_groupcodes_missing(tmp_path: Path) -> None:
+def test_readiness_true_with_seeded_groupcodes_and_imported_schools(tmp_path: Path) -> None:
     db = LocalDatabase(tmp_path / "local.sqlite")
     school_repo = SchoolRepository(db)
     groupcode_repo = GroupCodeRepository(db)
@@ -77,12 +78,12 @@ def test_readiness_false_when_groupcodes_missing(tmp_path: Path) -> None:
     readiness = compute_reference_readiness(school_repo=school_repo, groupcode_repo=groupcode_repo)
 
     assert readiness.schools_ready is True
-    assert readiness.groupcodes_ready is False
-    assert readiness.is_ready_for_run is False
-    assert readiness.groupcodes.row_count == 0
+    assert readiness.groupcodes_ready is True
+    assert readiness.is_ready_for_run is True
+    assert readiness.groupcodes.row_count == len(EDUCATIONAL_STRUCTURE)
 
 
-def test_readiness_false_on_zero_row_import(tmp_path: Path) -> None:
+def test_groupcodes_reseeded_after_empty_import(tmp_path: Path) -> None:
     db = LocalDatabase(tmp_path / "local.sqlite")
     school_repo = SchoolRepository(db)
     groupcode_repo = GroupCodeRepository(db)
@@ -102,6 +103,30 @@ def test_readiness_false_on_zero_row_import(tmp_path: Path) -> None:
 
     readiness = compute_reference_readiness(school_repo=school_repo, groupcode_repo=groupcode_repo)
 
-    assert readiness.groupcodes_ready is False
-    assert readiness.is_ready_for_run is False
-    assert readiness.groupcodes.row_count == 0
+    assert readiness.groupcodes_ready is True
+    assert readiness.groupcodes.row_count == len(EDUCATIONAL_STRUCTURE)
+
+
+def test_groupcodes_seeded_with_meta_on_initialize(tmp_path: Path) -> None:
+    db = LocalDatabase(tmp_path / "local.sqlite")
+    db.initialize()
+    groupcode_repo = GroupCodeRepository(db)
+
+    status = groupcode_repo.status()
+
+    assert status.row_count == len(EDUCATIONAL_STRUCTURE)
+    assert status.version_tag == "builtin:ssot"
+
+
+def test_groupcode_status_falls_back_to_count_when_meta_missing(tmp_path: Path) -> None:
+    db = LocalDatabase(tmp_path / "local.sqlite")
+    db.initialize()
+    groupcode_repo = GroupCodeRepository(db)
+
+    with db.connect() as conn:
+        conn.execute("DELETE FROM reference_meta WHERE table_name = ?", ("groupcodes",))
+        conn.commit()
+
+    status = groupcode_repo.status()
+
+    assert status.row_count == len(EDUCATIONAL_STRUCTURE)

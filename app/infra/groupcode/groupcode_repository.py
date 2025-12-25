@@ -66,7 +66,28 @@ class GroupCodeRepository:
         return status_from_meta("groupcodes", self._repo.last_refresh_meta())
 
     def status(self) -> ReferenceTableStatus:
-        return status_from_meta("groupcodes", self._repo.last_refresh_meta())
+        self._db.initialize()
+        meta = self._repo.last_refresh_meta()
+        if meta is not None and meta.row_count > 0:
+            return status_from_meta("groupcodes", meta)
+
+        count = 0
+        try:
+            with self._db.connect() as conn:
+                cursor = conn.execute("SELECT COUNT(*) FROM groupcodes")
+                row = cursor.fetchone()
+                count = int(row[0]) if row and row[0] is not None else 0
+        except Exception:
+            count = 0
+
+        if count > 0:
+            return ReferenceTableStatus(
+                table_name="groupcodes",
+                row_count=count,
+                version_tag="builtin:ssot",
+            )
+
+        return status_from_meta("groupcodes", meta)
 
     @property
     def database(self) -> LocalDatabase:
