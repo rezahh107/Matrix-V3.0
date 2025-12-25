@@ -174,7 +174,7 @@ def parse_group_codes(value: Any) -> GroupCodesParseResult:
         else:
             raw_codes.append(number)
 
-    valid_raw_codes = [number for number in raw_codes if number in VALID_GROUP_CODES_SET]
+    valid_raw_codes = [number for number in raw_codes if number in VALID_GROUP_CODES]
     unique_valid_codes = _deduplicate_preserve_order(valid_raw_codes)
     sorted_codes = sorted(unique_valid_codes)
 
