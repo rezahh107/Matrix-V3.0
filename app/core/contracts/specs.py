@@ -9,6 +9,7 @@ import pandas as pd
 import pandera as pa
 
 from app.core.contracts.contract_errors import InputContractError, InputContractIssue
+from app.core.policy_loader import JOIN_KEY_HEADERS_FA, SCHOOL_CODE_HEADER_FA
 
 __all__ = [
     "InputContractSpec",
@@ -19,15 +20,6 @@ __all__ = [
     "CrosswalkGroupsSpec",
     "CrosswalkSynonymsSpec",
 ]
-
-JOIN_KEY_COLUMNS: tuple[str, ...] = (
-    "کدرشته",
-    "جنسیت",
-    "دانش آموز فارغ",
-    "مرکز گلستان صدرا",
-    "مالی حکمت بنیاد",
-    "کد مدرسه",
-)
 
 
 def _non_nullable_columns(columns: Sequence[str]) -> dict[str, pa.Column]:
@@ -109,8 +101,8 @@ class StudentReportSpec(InputContractSpec):
     def __init__(self) -> None:
         super().__init__(
             name="student_report",
-            required_columns=JOIN_KEY_COLUMNS,
-            schema=pa.DataFrameSchema(_non_nullable_columns(JOIN_KEY_COLUMNS), coerce=False, strict=False),
+            required_columns=JOIN_KEY_HEADERS_FA,
+            schema=pa.DataFrameSchema(_non_nullable_columns(JOIN_KEY_HEADERS_FA), coerce=False, strict=False),
         )
 
 
@@ -118,8 +110,8 @@ class PoolSpec(InputContractSpec):
     def __init__(self) -> None:
         super().__init__(
             name="pool",
-            required_columns=JOIN_KEY_COLUMNS,
-            schema=pa.DataFrameSchema(_non_nullable_columns(JOIN_KEY_COLUMNS), coerce=False, strict=False),
+            required_columns=JOIN_KEY_HEADERS_FA,
+            schema=pa.DataFrameSchema(_non_nullable_columns(JOIN_KEY_HEADERS_FA), coerce=False, strict=False),
         )
 
 
@@ -135,7 +127,7 @@ class InspactorSpec(InputContractSpec):
 
 class SchoolsSpec(InputContractSpec):
     def __init__(self) -> None:
-        required_columns = ("کد مدرسه",)
+        required_columns = (SCHOOL_CODE_HEADER_FA,)
         super().__init__(
             name="schools",
             required_columns=required_columns,

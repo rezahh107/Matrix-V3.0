@@ -100,6 +100,14 @@ _LEGACY_TRACE_DEFAULTS: Mapping[str, str] = {
     "capacity_gate": "remaining_capacity",
 }
 
+# Persian headers for the six canonical join keys, kept in the policy loader to avoid
+# hardcoding literals in Core modules that enforce contracts.
+JOIN_KEY_HEADERS_FA: tuple[str, ...] = tuple(
+    _LEGACY_TRACE_DEFAULTS[key]
+    for key in ("type", "gender", "graduation_status", "center", "finance", "school")
+)
+SCHOOL_CODE_HEADER_FA: str = _LEGACY_TRACE_DEFAULTS["school"]
+
 _RANKING_RULE_LIBRARY: Mapping[str, tuple[str, bool]] = {
     "max_remaining_capacity": ("remaining_capacity", False),
     "min_allocations_new": ("allocations_new", True),
