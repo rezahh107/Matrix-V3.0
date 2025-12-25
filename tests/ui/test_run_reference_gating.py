@@ -54,13 +54,11 @@ def test_run_blocked_when_references_missing(
 ) -> None:
     window = _build_window(tmp_path)
 
-    # حتی اگر کاربر فایل‌های مرجع را انتخاب کند، نبود داده در DB باید اجرا را مسدود کند.
+    # حتی اگر کاربر فایل‌های لازم را انتخاب کند/یا مسیرهای ورودی را پر کند، نبود داده در DB باید اجرا را مسدود کند.
     schools_path = tmp_path / "schools.xlsx"
-    crosswalk_path = tmp_path / "crosswalk.xlsx"
-    for path in (schools_path, crosswalk_path):
-        path.touch()
-    window._picker_schools.setText(str(schools_path))
-    window._picker_crosswalk.setText(str(crosswalk_path))
+    schools_path.touch()
+    if hasattr(window, "_picker_schools"):
+        window._picker_schools.setText(str(schools_path))
 
     warnings: list[tuple[str, str]] = []
 
