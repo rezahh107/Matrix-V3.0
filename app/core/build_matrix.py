@@ -44,7 +44,7 @@ import pandas as pd
 from app.core.allocation.mentor_pool import apply_mentor_pool_governance
 from app.core.canonical_frames import (
     POOL_DUPLICATE_SUMMARY_ATTR,
-    POOL_JOIN_KEY_DUPLICATES_ATTR,
+    build_join_key_duplicate_report,
     canonicalize_pool_frame,
 )
 from app.core.common.column_normalizer import (
@@ -80,11 +80,9 @@ from app.core.common.domain import (
     mentor_alias_for_type,
     school_code_norm,
 )
-from app.core.common.join_keys import (
-    VALID_GROUP_CODES,
-    parse_group_codes,
-)
+from app.core.common.join_keys import VALID_GROUP_CODES, parse_group_codes
 from app.core.common.normalization import normalize_header, resolve_group_code
+from app.core.common.payloads import build_frame_payload
 from app.core.debug.models import QABreadcrumb
 from app.core.inspactor_schema_helper import (
     InspactorDefaultConfig,
@@ -93,14 +91,8 @@ from app.core.inspactor_schema_helper import (
     schema_error_message,
     with_default_inspactor_columns,
 )
-from app.core.matrix.coverage import (
-    CoveragePolicyConfig,
-    compute_coverage_metrics,
-)
-from app.core.policy_loader import (
-    MentorSchoolBindingPolicy,
-    PolicyConfig,
-)
+from app.core.matrix.coverage import CoveragePolicyConfig, compute_coverage_metrics
+from app.core.policy_loader import MentorSchoolBindingPolicy, PolicyConfig
 from app.core.qa.coverage_validation import build_coverage_validation_fields
 
 # =============================================================================
@@ -2035,15 +2027,13 @@ def build_matrix(
     pool_stats = insp_df.attrs.get("pool_canonicalization_stats")
     alias_autofill = int(getattr(pool_stats, "alias_autofill", 0) or 0) if pool_stats else 0
     alias_unmatched = int(getattr(pool_stats, "alias_unmatched", 0) or 0) if pool_stats else 0
-    duplicate_join_keys_df = insp_df.attrs.get(POOL_JOIN_KEY_DUPLICATES_ATTR)
-    if duplicate_join_keys_df is None:
-        columns = list(cfg.policy.join_keys) + [
-            COL_MENTOR_ID,
-            "duplicate_group_size",
-            "pool_row_index",
-            "pool_source",
-        ]
-        duplicate_join_keys_df = pd.DataFrame(columns=columns)
+    duplicate_join_keys_df = build_join_key_duplicate_report(
+        insp_df,
+        cfg.policy.join_keys,
+        COL_MENTOR_ID,
+        include_distinct_mentors=False,
+        pool_source="inspactor",
+    )
     duplicate_summary = insp_df.attrs.get(POOL_DUPLICATE_SUMMARY_ATTR)
     duplicate_progress_message = _format_duplicate_progress_preview(
         duplicate_summary,
@@ -2583,7 +2573,7 @@ def build_matrix(
 
     progress_log = pd.DataFrame(progress_rows)
     progress_log.attrs["column_normalization_reports"] = normalization_meta
-    progress_log.attrs["group_coverage"] = group_coverage_df
+    progress_log.attrs["group_coverage"] = build_frame_payload(group_coverage_df)
     progress_log.attrs["group_coverage_summary"] = group_coverage_summary
     progress_log.attrs["coverage_metrics"] = coverage_metrics
 

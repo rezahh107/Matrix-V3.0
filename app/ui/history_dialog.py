@@ -232,12 +232,7 @@ class HistoryDialog(QDialog):
     ) -> tuple[
         pd.DataFrame | None, pd.DataFrame | None, pd.DataFrame | None, dict[str, pd.DataFrame]
     ]:
-        trace_df, summary_df, history_df = self._db.fetch_trace_snapshot(run_id)
-        if trace_df is not None:
-            if summary_df is not None:
-                trace_df.attrs["summary_df"] = summary_df
-            if history_df is not None:
-                trace_df.attrs["history_info_df"] = history_df
+        trace_df, _summary_df, _history_df = self._db.fetch_trace_snapshot(run_id)
         qa_summary_df, qa_details_df, qa_extras = self._db.fetch_qa_snapshot(run_id)
         return trace_df, qa_summary_df, qa_details_df, qa_extras
 

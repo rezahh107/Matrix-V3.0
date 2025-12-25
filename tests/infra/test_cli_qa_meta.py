@@ -24,7 +24,7 @@ def test_build_qa_meta_collects_counts() -> None:
     end = datetime(2024, 1, 1, 0, 1, tzinfo=UTC)
     join_audit = pd.DataFrame({"any_mismatch": [True, False, True]})
     trace_df = pd.DataFrame({"student_id": [1, 2, 3]})
-    trace_df.attrs["summary_df"] = pd.DataFrame({"student_id": [1, 2]})
+    trace_summary = pd.DataFrame({"student_id": [1, 2]})
     history_info = pd.DataFrame({"student_id": [1]})
     report = _make_report(False, "QA_RULE_TEST")
 
@@ -41,6 +41,7 @@ def test_build_qa_meta_collects_counts() -> None:
         qa_report=report,
         join_key_audit=join_audit,
         trace_df=trace_df,
+        trace_summary_df=trace_summary,
         history_info_df=history_info,
     )
 

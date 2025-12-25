@@ -217,9 +217,8 @@ def test_allocate_batch_outputs_match_counters() -> None:
         }
     )
 
-    allocations_df, updated_pool_df, logs_df, trace_df = allocate_batch(
-        students, pool, policy=policy, frames_already_canonical=True
-    )
+    result = allocate_batch(students, pool, policy=policy, frames_already_canonical=True)
+    allocations_df, updated_pool_df, logs_df, trace_df = result
 
     assert len(allocations_df) == 1
     assert not updated_pool_df.empty
@@ -259,14 +258,13 @@ def test_allocate_batch_zero_capacity_produces_no_allocations() -> None:
         }
     )
 
-    allocations_df, updated_pool_df, logs_df, trace_df = allocate_batch(
-        students, pool, policy=policy, frames_already_canonical=True
-    )
+    result = allocate_batch(students, pool, policy=policy, frames_already_canonical=True)
+    allocations_df, updated_pool_df, logs_df, trace_df = result
 
     assert allocations_df.empty
     assert logs_df.empty or len(logs_df) == 1
 
-    summary_df = trace_df.attrs.get("summary_df")
+    summary_df = result.trace_extras.summary_df
     assert summary_df is not None
     assert len(summary_df) == 1
     assert summary_df.iloc[0]["final_status"] == "NO_CAPACITY"

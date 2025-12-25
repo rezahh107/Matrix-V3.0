@@ -42,7 +42,6 @@ def _insert_run_with_snapshots(db: LocalDatabase) -> None:
 
     trace_df = pd.DataFrame({"student_id": [1], "step": ["type"], "candidates": [3]})
     summary_df = pd.DataFrame({"allocation_channel": ["SCHOOL"], "students_total": [2]})
-    trace_df.attrs["summary_df"] = summary_df
     db.insert_trace_snapshot(
         run_id=run_id, trace_df=trace_df, summary_df=summary_df, history_info_df=None
     )

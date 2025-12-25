@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 
 import pandas as pd
@@ -22,6 +22,7 @@ class HeaderIssue:
     header: str
     message: str
     canonical_field: str | None = None
+    extras: Mapping[str, object] | None = None
 
 
 @dataclass
@@ -58,7 +59,6 @@ class HeaderPipelineV3:
     def resolve(self, df: pd.DataFrame, source: str) -> HeaderResolution:
         normalized_aliases = self._alias_registry.get(source, {})
         issues: list[HeaderIssue] = []
-        rename_map: dict[str, str] = {}
         collisions: dict[str, list[str]] = defaultdict(list)
 
         for column in df.columns:
@@ -74,22 +74,72 @@ class HeaderPipelineV3:
                 )
                 continue
             collisions[canonical].append(str(column))
-            rename_map[str(column)] = canonical
+
+        mentor_aliases = self._ordered_mentor_alias_columns(df, source)
+        merged = self._merge_mentor_id_aliases(df, mentor_aliases)
+        mapped_columns: dict[str, list[str]] = defaultdict(list)
+        for column in merged.columns:
+            normalized = _normalize_header(str(column))
+            canonical = normalized_aliases.get(normalized)
+            if canonical is None:
+                continue
+            mapped_columns[canonical].append(str(column))
+
+        coalesced: dict[str, pd.Series] = {}
+        conflict_counts: dict[str, int] = {}
+        for canonical, headers in mapped_columns.items():
+            if len(headers) > 1:
+                merged_series, conflict_count = self._coalesce_columns(merged, headers)
+                coalesced[canonical] = merged_series
+                conflict_counts[canonical] = conflict_count
+
+        resolved_columns: list[str] = []
+        resolved_data: dict[str, pd.Series] = {}
+        for column in merged.columns:
+            normalized = _normalize_header(str(column))
+            canonical = normalized_aliases.get(normalized)
+            if canonical is None:
+                if column not in resolved_data:
+                    candidate = merged.loc[:, column]
+                    if isinstance(candidate, pd.DataFrame):
+                        candidate = candidate.iloc[:, 0]
+                    resolved_data[column] = candidate.reindex(merged.index)
+                    resolved_columns.append(str(column))
+                continue
+            if canonical in coalesced:
+                if canonical not in resolved_data:
+                    resolved_data[canonical] = coalesced[canonical].reindex(merged.index)
+                    resolved_columns.append(canonical)
+                continue
+            if canonical not in resolved_data:
+                resolved_data[canonical] = merged.loc[:, column].reindex(merged.index)
+                resolved_columns.append(canonical)
+
+        renamed = pd.DataFrame(resolved_data, index=merged.index).loc[:, resolved_columns].copy()
+        if df.attrs:
+            renamed.attrs.update(dict(df.attrs))
 
         for canonical, headers in collisions.items():
-            if len(headers) > 1 and canonical != "mentor_id":
+            if len(headers) > 1:
+                conflict_count = conflict_counts.get(canonical, 0)
+                resolution = "coalesce left-to-right (first non-null wins)"
+                if canonical == "mentor_id":
+                    resolution = "mentor_id alias merge (canonical preferred)"
+                    if canonical not in conflict_counts and mentor_aliases:
+                        _, conflict_count = self._coalesce_columns(df, mentor_aliases)
                 issues.append(
                     HeaderIssue(
                         severity="P1",
                         header=",".join(headers),
                         canonical_field=canonical,
                         message="AMBIGUOUS_HEADER",
+                        extras={
+                            "original_columns": headers,
+                            "resolution": resolution,
+                            "conflict_count": conflict_count,
+                        },
                     )
                 )
-
-        mentor_aliases = self._ordered_mentor_alias_columns(df, source)
-        merged = self._merge_mentor_id_aliases(df, mentor_aliases)
-        renamed = merged.rename(columns=rename_map, errors="ignore").copy()
 
         required = self._required.get(source, [])
         missing = [column for column in required if column not in renamed.columns]
@@ -105,6 +155,34 @@ class HeaderPipelineV3:
             )
 
         return HeaderResolution(resolved_df=renamed, issues=issues, missing_required=missing)
+
+    @staticmethod
+    def _coalesce_columns(
+        df: pd.DataFrame, columns: Sequence[str]
+    ) -> tuple[pd.Series, int]:
+        candidates: list[pd.Series] = []
+        for column in columns:
+            if column not in df.columns:
+                continue
+            candidate = df.loc[:, column]
+            if isinstance(candidate, pd.DataFrame):
+                for idx in range(candidate.shape[1]):
+                    candidates.append(candidate.iloc[:, idx])
+            else:
+                candidates.append(candidate)
+
+        if not candidates:
+            return pd.Series(index=df.index, dtype="object"), 0
+
+        merged = candidates[0].reindex(df.index)
+        conflict_count = 0
+        for extra in candidates[1:]:
+            extra_aligned = extra.reindex(df.index)
+            both_non_null = merged.notna() & extra_aligned.notna()
+            conflicts = both_non_null & merged.ne(extra_aligned)
+            conflict_count += int(conflicts.sum())
+            merged = merged.where(merged.notna(), extra_aligned)
+        return merged, conflict_count
 
     @staticmethod
     def _merge_mentor_id_aliases(df: pd.DataFrame, aliases: list[str]) -> pd.DataFrame:

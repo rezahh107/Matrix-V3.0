@@ -37,8 +37,6 @@ def test_trace_snapshot_round_trip(tmp_path) -> None:
     trace_df = pd.DataFrame({"student_id": [1, 2], "step": ["type", "group"], "candidates": [5, 3]})
     summary_df = pd.DataFrame({"allocation_channel": ["SCHOOL"], "students_total": [2]})
     history_info_df = pd.DataFrame({"student_id": [1, 2], "history_status": [1, 0]})
-    trace_df.attrs["summary_df"] = summary_df
-    trace_df.attrs["history_info_df"] = history_info_df
 
     db.insert_trace_snapshot(
         run_id=run_id,

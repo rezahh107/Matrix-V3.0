@@ -6,6 +6,7 @@ from typing import Any
 import pandas as pd
 
 from app.core.canonical_frames import POOL_JOIN_KEY_DUPLICATES_ATTR, canonicalize_pool_frame
+from app.core.common.payloads import build_frame_payload
 from app.core.policy_loader import PolicyConfig
 from app.infra.reference_mentors_repository import _POOL_JOIN_KEY_QA_ATTR, _POOL_QA_PAYLOAD_ATTR
 
@@ -40,7 +41,7 @@ class MentorPoolBuilder:
             sanitize_pool=False,
             pool_source=self._pool_source,
         )
-        canonical.attrs[POOL_JOIN_KEY_DUPLICATES_ATTR] = resolved.duplicates
+        canonical.attrs[POOL_JOIN_KEY_DUPLICATES_ATTR] = build_frame_payload(resolved.duplicates)
         qa_attr = resolved.canonical_df.attrs.get(_POOL_JOIN_KEY_QA_ATTR, [])
         qa_issues = [*qa_attr, *resolved.issues]
         canonical.attrs[_POOL_JOIN_KEY_QA_ATTR] = qa_attr
