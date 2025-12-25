@@ -542,7 +542,7 @@ class LocalDatabase:
             return
 
         try:
-            cursor = conn.execute("SELECT COUNT(*) FROM groupcodes")
+            cursor = conn.execute('SELECT COUNT(*) FROM "groupcodes"')
             count_row = cursor.fetchone()
             table_count = int(count_row[0]) if count_row and count_row[0] is not None else 0
         except (sqlite3.Error, TypeError, ValueError):
