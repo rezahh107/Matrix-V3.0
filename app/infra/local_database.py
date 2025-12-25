@@ -595,7 +595,7 @@ class LocalDatabase:
         )
 
     def _seed_groupcodes_if_empty(self, conn: sqlite3.Connection) -> None:
-        """Compatibility wrapper to seed built-in groupcodes if needed."""
+        """Compatibility wrapper to ensure built-in groupcodes and sync metadata."""
 
         self._ensure_builtin_groupcodes(conn)
 
