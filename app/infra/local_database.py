@@ -513,6 +513,15 @@ class LocalDatabase:
             )
             repaired = True
 
+        if table == "students_cache" and "کد ملی" in missing_columns:
+            _ensure_column_exists(
+                conn,
+                table="students_cache",
+                column='"کد ملی"',
+                definition="TEXT",
+            )
+            repaired = True
+
         if table == "mentor_pool_cache" and "گروه آزمایشی" in missing_columns:
             _ensure_column_exists(
                 conn,
