@@ -536,30 +536,28 @@ class LocalDatabase:
         return repaired
 
     def _ensure_builtin_groupcodes(self, conn: sqlite3.Connection) -> None:
-        """Seed canonical groupcodes and meta for readiness gating."""
+        """Ensure built-in groupcodes are present and metadata is synced."""
 
         if not _table_exists(conn, "groupcodes"):
             return
-
-        meta_row = conn.execute(
-            "SELECT row_count, version_tag FROM reference_meta WHERE table_name = ?",
-            ("groupcodes",),
-        ).fetchone()
-        existing_row_count = (
-            int(meta_row[0]) if meta_row is not None and meta_row[0] is not None else 0
-        )
-        existing_version_tag = meta_row[1] if meta_row else None
 
         try:
             cursor = conn.execute("SELECT COUNT(*) FROM groupcodes")
             count_row = cursor.fetchone()
             table_count = int(count_row[0]) if count_row and count_row[0] is not None else 0
-        except sqlite3.Error:
+        except (sqlite3.Error, TypeError, ValueError):
             table_count = 0
+
+        meta_row = conn.execute(
+            "SELECT row_count, version_tag FROM reference_meta WHERE table_name = ?",
+            ("groupcodes",),
+        ).fetchone()
+        meta_row_count = int(meta_row[0]) if meta_row and meta_row[0] is not None else 0
+        meta_version_tag = meta_row[1] if meta_row else None
 
         expected_seed_count = len(EDUCATIONAL_STRUCTURE)
 
-        if table_count <= 0:
+        if table_count == 0:
             seed_frame = _build_groupcodes_seed_frame()
             if seed_frame.empty:
                 return
@@ -576,10 +574,13 @@ class LocalDatabase:
             )
             return
 
-        if existing_row_count == table_count and existing_row_count > 0 and existing_version_tag:
+        needs_meta_refresh = (
+            meta_row is None or meta_row_count != table_count or not meta_version_tag
+        )
+        if not needs_meta_refresh:
             return
 
-        version_tag = existing_version_tag or (
+        version_tag = meta_version_tag or (
             "builtin:ssot" if table_count == expected_seed_count else None
         )
         source = "builtin:ssot" if version_tag == "builtin:ssot" else "table:detected"
@@ -592,6 +593,11 @@ class LocalDatabase:
             imported_at=None,
             conn=conn,
         )
+
+    def _seed_groupcodes_if_empty(self, conn: sqlite3.Connection) -> None:
+        """Compatibility wrapper to seed built-in groupcodes if needed."""
+
+        self._ensure_builtin_groupcodes(conn)
 
     def _recover_corrupt_database(self) -> Path | None:
         """پشتیبان‌گیری از فایل خراب و بازسازی پایگاه داده.
