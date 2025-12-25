@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -7,16 +8,19 @@ from typing import Literal
 import pandas as pd
 
 from app.core.canonical_frames import canonicalize_students_frame
-from app.core.common.columns import canonicalize_headers
+from app.core.common.columns import HEADER_ALIASES_V3, canonicalize_headers, coerce_semantics
 from app.core.common.join_keys import validate_and_canonicalize_join_keys
 from app.core.common.types import (
     HeaderMode,
+    JoinKeyValidationIssue,
+    JoinKeyValidationResult,
     StudentDomainValidationResult,
     StudentValidationBundle,
 )
 from app.core.policy_loader import PolicyConfig
 from app.core.students.domain_validation import validate_student_domain
 from app.infra.canonical_frames import build_student_group_crosswalk
+from app.infra.common.header_pipeline_v3 import HeaderPipelineV3
 from app.infra.errors import DatabasePreparationError
 from app.infra.groupcode.groupcode_repository import GroupCodeRepository
 from app.infra.io_utils import read_excel_first_sheet
@@ -66,6 +70,11 @@ class StudentPipelineV3:
         self._school_repo = school_repo
         self._groupcode_repo = groupcode_repo
         self._db = db or (school_repo.database if school_repo is not None else None)
+        self._header_pipeline = HeaderPipelineV3(
+            alias_registry=HEADER_ALIASES_V3,
+            required={"report": list(policy.join_keys)},
+            critical_required={"report": set(policy.join_keys)},
+        )
 
     def run_from_excel(self, path: Path) -> StudentPipelineResult:
         raw_df = read_excel_first_sheet(path)
@@ -73,10 +82,20 @@ class StudentPipelineV3:
 
     def run(self, df: pd.DataFrame) -> StudentPipelineResult:
         crosswalk = self._enforce_db_reference_mode()
-        canonical_headers = canonicalize_headers(df, header_mode=self._header_mode)
+        header_resolution = self._header_pipeline.resolve(df, source="report")
+        normalized_values = coerce_semantics(header_resolution.resolved_df, "report")
+        canonical_headers = canonicalize_headers(
+            normalized_values, header_mode=self._header_mode
+        )
         join_key_result = validate_and_canonicalize_join_keys(
             canonical_headers, policy=self._policy, entity_type="student"
         )
+        if header_resolution.missing_required:
+            join_key_result = _with_missing_header_guidance(
+                join_key_result,
+                header_resolution.missing_required,
+                HEADER_ALIASES_V3.get("report", {}),
+            )
         students = canonicalize_students_frame(
             join_key_result.canonical_df,
             policy=self._policy,
@@ -118,3 +137,27 @@ class StudentPipelineV3:
             )
         crosswalk_frame = self._groupcode_repo.load_crosswalk_groups_frame()
         return build_student_group_crosswalk(crosswalk_frame)
+
+
+def _with_missing_header_guidance(
+    result: JoinKeyValidationResult,
+    missing_required: list[str],
+    alias_registry: Mapping[str, str],
+) -> JoinKeyValidationResult:
+    guidance: list[JoinKeyValidationIssue] = []
+    for column in missing_required:
+        accepted_aliases = sorted({alias for alias, target in alias_registry.items() if target == column})
+        guidance.append(
+            JoinKeyValidationIssue(
+                entity_type="student",
+                row_index=-1,
+                column=column,
+                raw_value={"accepted_aliases": accepted_aliases},
+                error_code="MISSING_COLUMN",
+            )
+        )
+    if not guidance:
+        return result
+    return JoinKeyValidationResult(
+        canonical_df=result.canonical_df, issues=[*result.issues, *guidance]
+    )
