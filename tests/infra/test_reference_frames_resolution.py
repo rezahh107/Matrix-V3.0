@@ -30,9 +30,8 @@ def test_resolve_reference_frames_missing_tables_has_actionable_hint(
         _resolve_reference_frames(args=args, db=db)
 
     message = str(excinfo.value)
-    assert "جدول schools" in message
-    assert "--schools" in message and "--crosswalk" in message
-    assert "import-schools" in message and "import-crosswalk" in message
+    assert "groupcodes" in message
+    assert "import" in message
 
 
 def test_build_matrix_resolves_references_before_pool(

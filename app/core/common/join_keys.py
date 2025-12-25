@@ -10,6 +10,7 @@ from typing import Literal, TypedDict, cast
 import pandas as pd
 
 from app.core.common.columns import _GENDER_TOKEN_MAP, CANON_EN_TO_FA
+from app.core.common.domain import VALID_GROUP_CODES
 from app.core.common.normalization import normalize_fa
 from app.core.common.types import (
     CANONICAL_JOIN_KEYS,
@@ -32,7 +33,6 @@ __all__ = [
     "matches_school_with_wildcard",
     "normalize_join_key_name",
     "parse_group_codes",
-    "VALID_GROUP_CODES",
     "finance_variants_from_cell",
     "resolve_finance_variants",
     "validate_policy_join_keys",
@@ -411,42 +411,6 @@ for en_key in (
     if normalized not in _JOIN_KEY_LOOKUP:
         _JOIN_KEY_LOOKUP[normalized] = canonical_name
     _JOIN_KEY_LOOKUP.setdefault(normalize_fa(en_key), canonical_name)
-
-VALID_GROUP_CODES: tuple[int, ...] = (
-    1,
-    3,
-    5,
-    7,
-    8,
-    9,
-    11,
-    12,
-    14,
-    17,
-    18,
-    21,
-    22,
-    23,
-    24,
-    25,
-    26,
-    27,
-    29,
-    30,
-    31,
-    33,
-    35,
-    41,
-    43,
-    45,
-    46,
-    53,
-    55,
-    66,
-    69,
-    83,
-    89,
-)
 
 _RE_SPLIT_ITEMS = re.compile(r"[,\u060C\s]+")
 

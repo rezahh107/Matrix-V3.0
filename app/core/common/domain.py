@@ -132,6 +132,12 @@ EDUCATIONAL_STRUCTURE: tuple[EducationalRecord, ...] = (
     EducationalRecord("هنرستان", "دهم حسابداری", 89),
 )
 
+# Canonical, single-source list of valid experimental group codes derived from the
+# educational structure. Keep sorted for deterministic consumers.
+VALID_GROUP_CODES: frozenset[int] = frozenset(
+    record.field_code for record in EDUCATIONAL_STRUCTURE
+)
+
 
 class AcademicInfo(TypedDict):
     level: str

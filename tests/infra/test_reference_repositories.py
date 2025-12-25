@@ -50,10 +50,10 @@ def test_groupcode_repository_imports_and_records_meta(tmp_path: Path) -> None:
     repo = GroupCodeRepository(db)
     df = pd.DataFrame(
         {
-            "group_code": [11, 22],
-            "level": ["L1", "L2"],
-            "grade": [1, 2],
-            "track": ["T1", "T2"],
+            "group_code": [1, 24],
+            "level": ["کنکوری", "متوسطه دوم"],
+            "grade": [12, 10],
+            "track": ["ریاضی", "ریاضی"],
         }
     )
     path = tmp_path / "groupcodes.xlsx"
@@ -119,10 +119,10 @@ def test_groupcode_parity_between_db_and_excel(tmp_path: Path) -> None:
     repo = GroupCodeRepository(db)
     groupcodes_df = pd.DataFrame(
         {
-            "group_code": [11, 22],
-            "level": ["L1", "L2"],
-            "grade": [1, 2],
-            "track": ["T1", "T2"],
+            "group_code": [1, 24],
+            "level": ["کنکوری", "متوسطه دوم"],
+            "grade": [12, 10],
+            "track": ["ریاضی", "ریاضی"],
             "is_active": [1, 1],
         }
     )

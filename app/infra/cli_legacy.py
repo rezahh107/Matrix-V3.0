@@ -106,6 +106,7 @@ from app.infra.exporter_archive_repository import (
     ExporterArchiveRepository,
 )
 from app.infra.forms_repository import FormsRepository, WordPressFormsClient
+from app.infra.groupcode.groupcode_repository import GroupCodeRepository
 from app.infra.io_utils import (
     ALT_CODE_COLUMN,
     read_excel_first_sheet,
@@ -711,38 +712,37 @@ def _resolve_reference_frames(
         schools_df = import_school_report_from_excel(schools_path, db)
         inputs["schools"] = str(schools_path)
         inputs_mtime["schools"] = schools_path.stat().st_mtime
-    if getattr(args, "crosswalk", None):
-        crosswalk_path = Path(args.crosswalk)
-        crosswalk_groups_df, crosswalk_synonyms_df = import_school_crosswalk_from_excel(
-            crosswalk_path, db
-        )
-        inputs["crosswalk"] = str(crosswalk_path)
-        inputs_mtime["crosswalk"] = crosswalk_path.stat().st_mtime
 
-    if schools_df is None or crosswalk_groups_df is None:
+    groupcode_repo = GroupCodeRepository(db)
+    try:
+        crosswalk_groups_df = groupcode_repo.load_crosswalk_groups_frame()
+        inputs.setdefault("groupcodes", f"sqlite://{db.path}")
+        inputs_mtime.setdefault("groupcodes", db.path.stat().st_mtime if db.path.exists() else 0.0)
+    except DatabasePreparationError:
+        crosswalk_groups_df = None
+
+    if schools_df is None:
         try:
-            schools_db, crosswalk_db, crosswalk_synonyms_db = get_school_reference_frames(db)
+            schools_db, _, _ = get_school_reference_frames(db)
         except ReferenceDataMissingError as exc:
             raise ReferenceDataMissingError(
                 table=exc.table,
                 message=(
                     f"جدول {exc.table} در پایگاه داده یافت نشد؛ «build-matrix» را با "
-                    "گزینه‌های --schools و --crosswalk اجرا کنید یا ابتدا «import-schools»/"
-                    "«import-crosswalk» را برای پر کردن کش SQLite اجرا نمایید."
+                    "گزینه‌های --schools اجرا کنید یا ابتدا «import-schools» را برای پر کردن کش SQLite اجرا نمایید."
                 ),
             ) from exc
-        if schools_df is None:
-            schools_df = schools_db
-            inputs.setdefault("schools", f"sqlite://{db.path}")
-            inputs_mtime.setdefault("schools", db.path.stat().st_mtime if db.path.exists() else 0.0)
-        if crosswalk_groups_df is None:
-            crosswalk_groups_df = crosswalk_db
-            inputs.setdefault("crosswalk", f"sqlite://{db.path}")
-            inputs_mtime.setdefault(
-                "crosswalk", db.path.stat().st_mtime if db.path.exists() else 0.0
-            )
-        if crosswalk_synonyms_df is None:
-            crosswalk_synonyms_df = crosswalk_synonyms_db
+        schools_df = schools_db
+        inputs.setdefault("schools", f"sqlite://{db.path}")
+        inputs_mtime.setdefault("schools", db.path.stat().st_mtime if db.path.exists() else 0.0)
+
+    if crosswalk_groups_df is None:
+        raise ReferenceDataMissingError(
+            table="groupcodes",
+            message=(
+                "جدول groupcodes خالی است؛ فایل کدگروه را از تب Database وارد کنید یا دستور import-groupcodes را اجرا نمایید."
+            ),
+        )
 
     return schools_df, crosswalk_groups_df, crosswalk_synonyms_df, inputs, inputs_mtime
 

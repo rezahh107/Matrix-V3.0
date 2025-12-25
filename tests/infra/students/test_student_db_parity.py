@@ -36,10 +36,10 @@ def _seed_reference_data(
     )
     groupcodes_df = pd.DataFrame(
         {
-            "group_code": [1, 2],
-            "level": ["L1", "L2"],
-            "grade": [1, 2],
-            "track": ["T1", "T2"],
+            "group_code": [1, 24],
+            "level": ["کنکوری", "متوسطه دوم"],
+            "grade": [12, 10],
+            "track": ["ریاضی", "ریاضی"],
             "is_active": [1, 1],
         }
     )
@@ -58,8 +58,8 @@ def _student_payload() -> pd.DataFrame:
     return pd.DataFrame(
         {
             "student_id": ["s1", "s2"],
-            "کدرشته": [1, 2],
-            "گروه آزمایشی": ["G1", "G2"],
+            "کدرشته": [1, 24],
+            "گروه آزمایشی": ["دوازدهم ریاضی", "دهم ریاضی"],
             "جنسیت": [1, 1],
             "دانش آموز فارغ": [0, 0],
             "مرکز گلستان صدرا": [10, 11],

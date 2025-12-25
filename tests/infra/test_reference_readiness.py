@@ -32,10 +32,10 @@ def test_readiness_true_when_both_tables_populated(tmp_path: Path) -> None:
     )
     groupcodes_df = pd.DataFrame(
         {
-            "group_code": [11, 22],
-            "level": ["L1", "L2"],
-            "grade": [1, 2],
-            "track": ["T1", "T2"],
+            "group_code": [1, 24],
+            "level": ["کنکوری", "متوسطه دوم"],
+            "grade": [12, 10],
+            "track": ["ریاضی", "ریاضی"],
             "is_active": [1, 1],
         }
     )

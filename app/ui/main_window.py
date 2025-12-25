@@ -1634,7 +1634,6 @@ class MainWindow(QMainWindow):
         required = [
             (self._picker_inspactor, "گزارش Inspactor"),
             (self._picker_schools, "گزارش مدارس"),
-            (self._picker_crosswalk, "Crosswalk"),
             (self._picker_output_matrix, "خروجی ماتریس"),
         ]
         if not self._ensure_filled(required):
@@ -1649,8 +1648,6 @@ class MainWindow(QMainWindow):
             self._picker_inspactor.text(),
             "--schools",
             self._picker_schools.text(),
-            "--crosswalk",
-            self._picker_crosswalk.text(),
             "--output",
             self._picker_output_matrix.text(),
             "--policy",

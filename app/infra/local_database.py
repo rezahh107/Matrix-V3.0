@@ -31,7 +31,7 @@ from typing import cast
 import pandas as pd
 from pandas.api.types import is_integer_dtype
 
-from app.core.common.domain import EDUCATIONAL_STRUCTURE
+from app.core.common.domain import EDUCATIONAL_STRUCTURE, EducationalRecord
 from app.infra.errors import (
     DatabaseCorruptError,
     DatabaseOperationError,
@@ -64,6 +64,7 @@ _PERSIAN_GRADE_MAP: dict[str, int] = {
     "یازدهم": 11,
     "دوازدهم": 12,
 }
+_GRADE_WORD_BY_NUMBER: dict[int, str] = {value: key for key, value in _PERSIAN_GRADE_MAP.items()}
 
 logger = logging.getLogger(__name__)
 
@@ -2219,15 +2220,47 @@ def _infer_grade_from_group(group: str) -> int | None:
     return None
 
 
+def _infer_track_from_group(level: str, group: str, grade_word: str | None) -> str:
+    remainder = group
+    if grade_word:
+        remainder = remainder.replace(grade_word, "", 1).strip()
+    if level == "دبستان":
+        remainder = remainder.replace("دبستان", "", 1).strip()
+    if level == "متوسطه اول":
+        return ""
+    return remainder.strip()
+
+
+def _derive_grade_and_track(record: EducationalRecord) -> tuple[int, str]:
+    level = record.educational_level
+    group = record.experimental_group
+
+    if level == "کنکوری" and group in {"هنر", "منحصرا زبان"}:
+        return 12, group
+
+    grade_word: str | None = None
+    for token, grade_value in _PERSIAN_GRADE_MAP.items():
+        if token in group:
+            grade_word = token
+            grade = grade_value
+            break
+    else:
+        grade = 12 if level == "کنکوری" else 0
+
+    track = _infer_track_from_group(level, group, grade_word)
+    return grade, track
+
+
 def _build_groupcodes_seed_frame() -> pd.DataFrame:
     rows: list[dict[str, object]] = []
     for record in EDUCATIONAL_STRUCTURE:
+        grade, track = _derive_grade_and_track(record)
         rows.append(
             {
                 "group_code": record.field_code,
                 "level": record.educational_level,
-                "grade": _infer_grade_from_group(record.experimental_group),
-                "track": record.experimental_group,
+                "grade": grade,
+                "track": track,
                 "is_active": 1,
                 "version_tag": "builtin:ssot",
                 "source_filename": None,
