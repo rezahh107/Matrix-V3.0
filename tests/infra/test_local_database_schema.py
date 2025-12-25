@@ -200,6 +200,37 @@ def test_initialize_raises_on_newer_schema(tmp_path: Path) -> None:
         db.initialize()
 
 
+def test_initialize_repairs_missing_national_id(tmp_path: Path) -> None:
+    db_path = tmp_path / "legacy_students_cache.sqlite"
+    db = LocalDatabase(db_path)
+
+    with sqlite3.connect(db_path) as conn:
+        LocalDatabase._ensure_schema_meta_table(conn)
+        LocalDatabase._ensure_schema_meta_row(conn, version=_SCHEMA_VERSION)
+        conn.execute(
+            """
+            CREATE TABLE students_cache (
+                student_id TEXT,
+                "کدرشته" INTEGER,
+                "گروه آزمایشی" TEXT,
+                "جنسیت" INTEGER,
+                "دانش آموز فارغ" INTEGER,
+                "مرکز گلستان صدرا" INTEGER,
+                "مالی حکمت بنیاد" INTEGER,
+                "کد مدرسه" INTEGER
+            );
+            """
+        )
+        conn.commit()
+
+    db.initialize()
+
+    with db.connect() as conn:
+        student_cols = {row[1] for row in conn.execute("PRAGMA table_info(students_cache)").fetchall()}
+
+    assert "کد ملی" in student_cols
+
+
 def test_upsert_schools_rebuilds_indexes_without_conflict(tmp_path: Path) -> None:
     db = LocalDatabase(tmp_path / "schools_replace.sqlite")
     initial = pd.DataFrame({"کد مدرسه": [1, 2], "نام مدرسه": ["الف", "ب"]})

@@ -11,18 +11,12 @@ from pathlib import Path
 
 import pandas as pd
 
-from app.core.canonical_frames import canonicalize_students_frame
-from app.core.common.columns import canonicalize_headers
-from app.core.common.join_keys import validate_and_canonicalize_join_keys
-from app.core.common.types import (
-    StudentDomainValidationResult,
-    StudentValidationBundle,
-)
+from app.core.common.types import StudentValidationBundle
 from app.core.policy_loader import PolicyConfig
-from app.core.students.domain_validation import validate_student_domain
 from app.infra.errors import JoinKeyValidationError
 from app.infra.io_utils import read_excel_first_sheet
 from app.infra.local_database import LocalDatabase, _coerce_int_columns
+from app.infra.students.pipeline_v3 import StudentPipelineV3
 
 
 def _read_student_source(path: Path) -> pd.DataFrame:
@@ -42,17 +36,10 @@ def import_student_report_with_validation(
     """
 
     raw_df = _read_student_source(path)
-    raw_df = canonicalize_headers(raw_df, header_mode="fa")
-    validation = validate_and_canonicalize_join_keys(raw_df, policy=policy, entity_type="student")
-    if validation.issues:
-        return StudentValidationBundle(
-            join_keys=validation,
-            domain=StudentDomainValidationResult(canonical_df=validation.canonical_df, issues=[]),
-        )
-    normalized = canonicalize_students_frame(validation.canonical_df, policy=policy)
-    domain_result = validate_student_domain(normalized, policy=policy)
-    db.upsert_students_cache(domain_result.canonical_df, join_keys=policy.join_keys)
-    return StudentValidationBundle(join_keys=validation, domain=domain_result)
+    pipeline = StudentPipelineV3(policy=policy, header_mode="fa", reference_mode="excel")
+    result = pipeline.run(raw_df)
+    db.upsert_students_cache(result.canonical_df, join_keys=policy.join_keys)
+    return result.validation
 
 
 def import_student_report_from_excel(
