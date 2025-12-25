@@ -58,6 +58,7 @@ def test_run_blocked_when_references_missing(
     schools_path = tmp_path / "schools.xlsx"
     schools_path.touch()
     if hasattr(window, "_picker_schools"):
+        # Set only the schools picker, not the optional crosswalk picker.
         window._picker_schools.setText(str(schools_path))
 
     warnings: list[tuple[str, str]] = []
