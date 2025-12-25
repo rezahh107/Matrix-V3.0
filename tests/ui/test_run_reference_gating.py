@@ -98,24 +98,11 @@ def test_run_allowed_when_references_ready(
             "فعال": [1, 1],
         }
     )
-    groupcodes_df = pd.DataFrame(
-        {
-            "group_code": [11, 22],
-            "level": ["L1", "L2"],
-            "grade": [1, 2],
-            "track": ["T1", "T2"],
-            "is_active": [1, 1],
-        }
-    )
     schools_path = tmp_path / "schools.xlsx"
-    groupcodes_path = tmp_path / "groupcodes.xlsx"
     _write_excel(schools_df, schools_path)
-    _write_excel(groupcodes_df, groupcodes_path)
 
     assert window._school_repository is not None
-    assert window._groupcode_repository is not None
     window._school_repository.import_from_excel(schools_path)
-    window._groupcode_repository.import_from_excel(groupcodes_path)
 
     launches: list[tuple[object, ...]] = []
 
