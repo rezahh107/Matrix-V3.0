@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Callable, Hashable, Mapping, Sequence
+from collections.abc import Callable, Hashable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from numbers import Number, Real
 from typing import Any, Literal, SupportsFloat, SupportsInt, TypedDict, TypeVar, cast
@@ -84,10 +84,35 @@ class JoinMismatch(TypedDict):
 __all__ = [
     "ProgressFn",
     "AllocationResult",
+    "AllocationBatchResult",
+    "TraceDebugFrames",
     "allocate_student",
     "allocate_batch",
     "build_selection_reason_rows",
 ]
+
+
+@dataclass(frozen=True)
+class TraceDebugFrames:
+    summary_df: pd.DataFrame | None
+    unallocated_summary: pd.DataFrame | None
+    policy_violations: pd.DataFrame | None
+    final_status_counts: pd.Series | None
+
+
+@dataclass(frozen=True)
+class AllocationBatchResult:
+    allocations_df: pd.DataFrame
+    pool_output: pd.DataFrame
+    logs_df: pd.DataFrame
+    trace_df: pd.DataFrame
+    trace_extras: TraceDebugFrames
+
+    def __iter__(self) -> Iterator[pd.DataFrame]:
+        yield self.allocations_df
+        yield self.pool_output
+        yield self.logs_df
+        yield self.trace_df
 
 _STUDENT_NATIONAL_KEYS: tuple[str, ...] = (
     "student_national_code",
@@ -2003,8 +2028,8 @@ def allocate_batch(
     center_priority: Sequence[int] | None = None,
     ui_center_manager_map: Mapping[int, Sequence[str]] | None = None,
     strict_center_validation: bool = False,
-) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """تخصیص دسته‌ای دانش‌آموزان و بازگشت خروجی‌های چهارتایی مطابق §3 Technical SSoT."""
+) -> AllocationBatchResult:
+    """تخصیص دسته‌ای دانش‌آموزان و بازگشت خروجی‌های چهارتایی + تریس مطابق §3 Technical SSoT."""
     if policy is None:
         policy = load_policy()
     resolved_capacity_column = _resolve_capacity_column(policy, capacity_column)
@@ -2305,6 +2330,10 @@ def allocate_batch(
     if run_warnings:
         logs_df.attrs["warnings"] = tuple(run_warnings)
     trace_df = pd.DataFrame(trace_rows)
+    trace_summary_df: pd.DataFrame | None = None
+    unallocated_summary_df: pd.DataFrame | None = None
+    policy_violations_df: pd.DataFrame | None = None
+    final_status_counts: pd.Series | None = None
 
     # پردازش نتایج Trace
     if trace_outcomes:
@@ -2327,7 +2356,11 @@ def allocate_batch(
                 trace_summary_df = (
                     trace_summary_df.set_index("student_id").reindex(ordered_ids).reset_index()
                 )
-        if "student_id" in trace_summary_df.columns and "student_id" in students.columns:
+        if (
+            trace_summary_df is not None
+            and "student_id" in trace_summary_df.columns
+            and "student_id" in students.columns
+        ):
             student_indexed = students.set_index("student_id", drop=False)
             for column in (
                 "student_national_code",
@@ -2341,18 +2374,20 @@ def allocate_batch(
                         student_indexed[column]
                     )
 
-        trace_summary_df = attach_allocation_channel(trace_summary_df, students_norm, policy=policy)
-        trace_df.attrs["summary_df"] = trace_summary_df
-        trace_df.attrs["unallocated_summary"] = build_unallocated_summary(
-            trace_summary_df,
-            policy=policy,
-        )
-        trace_df.attrs["final_status_counts"] = trace_summary_df["final_status"].value_counts()
-        trace_df.attrs["policy_violations"] = find_allocation_policy_violations(
-            trace_summary_df,
-            pool_with_ids,
-            policy=policy,
-        )
+        if trace_summary_df is not None:
+            trace_summary_df = attach_allocation_channel(
+                trace_summary_df, students_norm, policy=policy
+            )
+            unallocated_summary_df = build_unallocated_summary(
+                trace_summary_df,
+                policy=policy,
+            )
+            final_status_counts = trace_summary_df["final_status"].value_counts()
+            policy_violations_df = find_allocation_policy_violations(
+                trace_summary_df,
+                pool_with_ids,
+                policy=policy,
+            )
 
     # آماده‌سازی خروجی استخر
     pool_output = pool_with_ids.copy()
@@ -2385,7 +2420,20 @@ def allocate_batch(
     if (internal_remaining < 0).any():
         raise ValueError("Pool capacity column contains negative values after allocation")
 
-    return allocations_df, pool_output, logs_df, trace_df
+    trace_extras = TraceDebugFrames(
+        summary_df=trace_summary_df,
+        unallocated_summary=unallocated_summary_df,
+        policy_violations=policy_violations_df,
+        final_status_counts=final_status_counts,
+    )
+
+    return AllocationBatchResult(
+        allocations_df=allocations_df,
+        pool_output=pool_output,
+        logs_df=logs_df,
+        trace_df=trace_df,
+        trace_extras=trace_extras,
+    )
 
 
 def build_selection_reason_rows(
@@ -2396,14 +2444,9 @@ def build_selection_reason_rows(
     policy: PolicyConfig,
     logs: pd.DataFrame | None = None,
     trace: pd.DataFrame | None = None,
+    summary_df: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """واسطهٔ سازگار برای ساخت شیت دلایل انتخاب پشتیبان."""
-    summary_df = None
-    if trace is not None:
-        summary_attr = getattr(trace, "attrs", {}) or {}
-        maybe_summary = summary_attr.get("summary_df")
-        if isinstance(maybe_summary, pd.DataFrame) and not maybe_summary.empty:
-            summary_df = maybe_summary
 
     students_enriched = students
     if summary_df is not None and "student_id" in summary_df.columns:

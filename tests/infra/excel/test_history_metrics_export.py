@@ -106,12 +106,7 @@ def _build_history_info_df() -> pd.DataFrame:
 
 
 def _build_trace(summary_df: pd.DataFrame) -> pd.DataFrame:
-    trace_df = pd.DataFrame({"student_id": summary_df["student_id"]})
-    trace_df.attrs["summary_df"] = summary_df
-    trace_df.attrs["final_status_counts"] = summary_df["final_status"].value_counts()
-    trace_df.attrs["unallocated_summary"] = pd.DataFrame()
-    trace_df.attrs["policy_violations"] = pd.DataFrame()
-    return trace_df
+    return pd.DataFrame({"student_id": summary_df["student_id"]})
 
 
 def test_collect_trace_debug_sheets_emits_history_metrics() -> None:
@@ -126,6 +121,10 @@ def test_collect_trace_debug_sheets_emits_history_metrics() -> None:
         students_df=students_df,
         history_info_df=history_info_df,
         policy=policy,
+        summary_df=summary_df,
+        unallocated_summary=pd.DataFrame(),
+        policy_violations=pd.DataFrame(),
+        final_status_counts=summary_df["final_status"].value_counts(),
     )
 
     assert "HistoryMetrics" in sheets
@@ -150,6 +149,10 @@ def test_collect_trace_debug_sheets_without_history_info_returns_empty_sheet() -
         students_df=students_df,
         history_info_df=None,
         policy=policy,
+        summary_df=summary_df,
+        unallocated_summary=pd.DataFrame(),
+        policy_violations=pd.DataFrame(),
+        final_status_counts=summary_df["final_status"].value_counts(),
     )
 
     metrics = sheets["HistoryMetrics"]
@@ -169,12 +172,20 @@ def test_collect_trace_debug_sheets_history_metrics_idempotent() -> None:
         students_df=students_df,
         history_info_df=history_info_df,
         policy=policy,
+        summary_df=summary_df,
+        unallocated_summary=pd.DataFrame(),
+        policy_violations=pd.DataFrame(),
+        final_status_counts=summary_df["final_status"].value_counts(),
     )["HistoryMetrics"]
     second = collect_trace_debug_sheets(
         trace_df,
         students_df=students_df,
         history_info_df=history_info_df,
         policy=policy,
+        summary_df=summary_df,
+        unallocated_summary=pd.DataFrame(),
+        policy_violations=pd.DataFrame(),
+        final_status_counts=summary_df["final_status"].value_counts(),
     )["HistoryMetrics"]
 
     assert_frame_equal(first, second)

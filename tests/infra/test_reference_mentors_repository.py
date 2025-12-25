@@ -4,7 +4,10 @@ import pandas as pd
 import pytest
 from pandas.testing import assert_frame_equal
 
-from app.core.canonical_frames import POOL_JOIN_KEY_DUPLICATES_ATTR, canonicalize_pool_frame
+from app.core.canonical_frames import (
+    POOL_JOIN_KEY_DUPLICATES_ATTR,
+    canonicalize_pool_frame,
+)
 from app.core.policy_loader import load_policy
 from app.infra.errors import JoinKeyValidationError
 from app.infra.local_database import LocalDatabase
@@ -318,10 +321,9 @@ def test_import_pool_reports_duplicate_composite_keys(tmp_path: Path) -> None:
 
     duplicates = normalized.attrs.get(POOL_JOIN_KEY_DUPLICATES_ATTR)
     assert duplicates is not None
-    assert isinstance(duplicates, pd.DataFrame)
-    assert len(duplicates) == 2
-    mentor_column = "mentor_id" if "mentor_id" in duplicates.columns else "کد کارمندی پشتیبان"
-    assert set(duplicates[mentor_column]) == {"m1"}
+    assert duplicates["count"] == 2
+    assert duplicates["sample"]
+    assert any(row.get("mentor_id") == "m1" for row in duplicates["sample"])
 
 
 def test_import_pool_allows_same_mentor_multiple_join_keys(tmp_path: Path) -> None:

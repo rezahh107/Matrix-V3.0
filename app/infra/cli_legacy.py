@@ -33,7 +33,11 @@ from pandas.api import types as pd_types
 import app.core.allocation.mentor_pool as mentor_pool
 import app.core.build_matrix as build_matrix_module
 import app.core.common.columns as columns_module
-from app.core.allocate_students import allocate_batch, build_selection_reason_rows
+from app.core.allocate_students import (
+    TraceDebugFrames,
+    allocate_batch,
+    build_selection_reason_rows,
+)
 from app.core.allocation.engine import enrich_summary_with_history
 from app.core.allocation.history_metrics import METRIC_COLUMNS, compute_history_metrics
 from app.core.canonical_frames import (
@@ -308,6 +312,7 @@ def _build_qa_meta(
     qa_report: QaReport | None,
     join_key_audit: pd.DataFrame | None,
     trace_df: pd.DataFrame | None,
+    trace_summary_df: pd.DataFrame | None,
     history_info_df: pd.DataFrame | None,
 ) -> dict[str, object]:
     """Summarize QA and trace observability for logging and exports."""
@@ -345,9 +350,8 @@ def _build_qa_meta(
 
     if trace_df is not None:
         meta["trace_rows"] = int(trace_df.shape[0])
-        summary_df_attr = trace_df.attrs.get("summary_df")
-        if isinstance(summary_df_attr, pd.DataFrame):
-            meta["trace_summary_rows"] = int(summary_df_attr.shape[0])
+    if isinstance(trace_summary_df, pd.DataFrame):
+        meta["trace_summary_rows"] = int(trace_summary_df.shape[0])
     if history_info_df is not None:
         meta["history_info_rows"] = int(history_info_df.shape[0])
 
@@ -2290,10 +2294,11 @@ def _allocate_and_write(
     updated_pool_df: pd.DataFrame | None = None
     logs_df: pd.DataFrame | None = None
     trace_df: pd.DataFrame | None = None
+    trace_extras: TraceDebugFrames | None = None
     sabt_allocations_df: pd.DataFrame | None = None
 
     try:
-        allocations_df, updated_pool_df, logs_df, trace_df = allocate_batch(
+        batch_result = allocate_batch(
             students_base.copy(deep=True),
             pool_base.copy(deep=True),
             policy=policy,
@@ -2305,6 +2310,11 @@ def _allocate_and_write(
             center_priority=center_priority,
             strict_center_validation=strict_validation,
         )
+        allocations_df = batch_result.allocations_df
+        updated_pool_df = batch_result.pool_output
+        logs_df = batch_result.logs_df
+        trace_df = batch_result.trace_df
+        trace_extras = batch_result.trace_extras
 
         header_internal: HeaderMode = _coerce_header_mode(policy.excel.header_mode_internal)
 
@@ -2339,7 +2349,7 @@ def _allocate_and_write(
                 allocations_df,
                 students_for_export,
                 profile=sabt_profile,
-                summary_df=trace_df.attrs.get("summary_df"),
+                summary_df=trace_extras.summary_df if trace_extras else None,
             )
 
         # --- پاک‌سازی جامع خروجی قبل از نوشتن ---
@@ -2356,6 +2366,7 @@ def _allocate_and_write(
             policy=policy,
             logs=logs_df,
             trace=trace_df,
+            summary_df=trace_extras.summary_df if trace_extras else None,
         )
         selection_reasons_df = _ensure_valid_dataframe(selection_reasons_df, "selection_reasons")
         counter_summary = _sync_counter_summary_with_allocations(
@@ -2422,6 +2433,7 @@ def _allocate_and_write(
             qa_report=qa_report,
             join_key_audit=join_key_audit.audit_frame,
             trace_df=trace_df,
+            trace_summary_df=trace_extras.summary_df if trace_extras else None,
             history_info_df=history_info_df,
         )
         merged_extras = dict(qa_report.extras or {})
@@ -2474,7 +2486,7 @@ def _allocate_and_write(
         sheets[sheet_name] = selection_reasons_df
         sheets["allocation_vs_pool_audit"] = join_key_audit_sheet
 
-        summary_df_attr = trace_df.attrs.get("summary_df")
+        summary_df_attr = trace_extras.summary_df if trace_extras else None
         ui_overrides = getattr(args, "_ui_overrides", {}) or {}
         history_metrics_df = _empty_history_metrics_df()
         if (
@@ -2513,6 +2525,10 @@ def _allocate_and_write(
             students_df=students_base,
             history_info_df=history_info_df,
             policy=policy,
+            summary_df=summary_df_attr,
+            unallocated_summary=trace_extras.unallocated_summary if trace_extras else None,
+            policy_violations=trace_extras.policy_violations if trace_extras else None,
+            final_status_counts=trace_extras.final_status_counts if trace_extras else None,
         )
         for name, df in debug_sheets.items():
             sheets[name] = _make_excel_safe(df)
@@ -2602,6 +2618,7 @@ def _allocate_and_write(
                 qa_report=qa_report,
                 join_key_audit=join_key_audit_frame,
                 trace_df=trace_df,
+                trace_summary_df=trace_extras.summary_df if trace_extras else None,
                 history_info_df=history_info_df,
             )
         final_meta = dict(qa_meta or {})
@@ -2637,6 +2654,7 @@ def _allocate_and_write(
             qa_outcome=qa_outcome,
             qa_report=qa_report,
             trace_snapshot=trace_df if success else None,
+            trace_summary_df=trace_extras.summary_df if trace_extras else None,
             qa_extras=getattr(qa_report, "extras", None),
             db=db,
         )

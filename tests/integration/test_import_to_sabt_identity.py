@@ -43,8 +43,9 @@ def test_allocations_sabt_and_reasons_preserve_identity() -> None:
         }
     )
 
-    allocations, _, logs, trace = allocate_batch(students, pool, policy=policy)
-    summary_df = trace.attrs.get("summary_df")
+    result = allocate_batch(students, pool, policy=policy)
+    allocations, _, logs, trace = result
+    summary_df = result.trace_extras.summary_df
 
     profile = [
         AllocationExportColumn(
@@ -82,6 +83,7 @@ def test_allocations_sabt_and_reasons_preserve_identity() -> None:
         policy=policy,
         logs=logs,
         trace=trace,
+        summary_df=summary_df,
     )
     assert {"student_id", "کدملی", "نام", "نام خانوادگی"}.issubset(reasons.columns)
     joined = sabt_df.merge(

@@ -65,12 +65,13 @@ def test_trace_summary_includes_unallocated_and_allocated() -> None:
     policy = load_policy()
     students, pool = _build_basic_frames(policy)
 
-    allocations, updated_pool, logs, trace = allocate_batch(students, pool, policy=policy)
+    result = allocate_batch(students, pool, policy=policy)
+    allocations, updated_pool, logs, trace = result
 
     assert allocations.shape[0] == 1
     assert int(updated_pool[policy.columns.remaining_capacity].iloc[0]) == 0
 
-    summary_df = trace.attrs.get("summary_df")
+    summary_df = result.trace_extras.summary_df
     assert summary_df is not None
     assert summary_df.shape[0] == students.shape[0]
     assert set(summary_df["final_status"].unique()) <= {status.value for status in FinalStatus}
@@ -94,14 +95,15 @@ def test_trace_summary_includes_unallocated_and_allocated() -> None:
         unallocated_summary.columns
     )
     assert policy.join_keys[0] in unallocated_summary.columns
-    assert trace.attrs.get("policy_violations") is not None
-    assert trace.attrs.get("final_status_counts") is not None
+    assert result.trace_extras.policy_violations is not None
+    assert result.trace_extras.final_status_counts is not None
 
 
 def test_selection_reason_contains_join_keys() -> None:
     policy = load_policy()
     students, pool = _build_basic_frames(policy)
-    allocations, _, logs, trace = allocate_batch(students, pool, policy=policy)
+    result = allocate_batch(students, pool, policy=policy)
+    allocations, _, logs, trace = result
 
     reasons = build_selection_reason_rows(
         allocations,
@@ -110,6 +112,7 @@ def test_selection_reason_contains_join_keys() -> None:
         policy=policy,
         logs=logs,
         trace=trace,
+        summary_df=result.trace_extras.summary_df,
     )
 
     assert "student_id" in reasons.columns

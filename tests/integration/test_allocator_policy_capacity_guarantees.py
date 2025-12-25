@@ -44,8 +44,9 @@ def test_policy_violation_detector_is_empty_for_basic_run() -> None:
     policy = load_policy()
     students, pool = _basic_frames(policy)
 
-    allocations, updated_pool, _, trace = allocate_batch(students, pool, policy=policy)
-    summary_df = trace.attrs["summary_df"]
+    result = allocate_batch(students, pool, policy=policy)
+    allocations, updated_pool, _, _ = result
+    summary_df = result.trace_extras.summary_df
     assert allocations.shape[0] == 1
     violations = find_allocation_policy_violations(summary_df, updated_pool, policy=policy)
     assert violations.empty

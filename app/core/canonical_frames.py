@@ -28,6 +28,7 @@ from .common.join_keys import (
     canonicalize_join_key_value,
 )
 from .common.normalization import normalize_fa, parse_int_safe
+from .common.payloads import build_frame_payload, json_safe_value
 from .common.types import HeaderMode, parse_header_mode
 from .policy_loader import PolicyConfig
 
@@ -35,6 +36,7 @@ __all__ = [
     "PoolCanonicalizationStats",
     "POOL_DUPLICATE_SUMMARY_ATTR",
     "POOL_JOIN_KEY_DUPLICATES_ATTR",
+    "build_join_key_duplicate_report",
     "canonicalize_students_frame",
     "canonicalize_pool_frame",
     "canonicalize_allocation_frames",
@@ -357,31 +359,25 @@ def _build_join_key_duplicate_report(
     return report.reset_index(drop=True)
 
 
-def _json_safe_value(value: object) -> object:
-    """تبدیل مقادیر pandas/numpy به انواع قابل‌سریال JSON."""
+def build_join_key_duplicate_report(
+    frame: pd.DataFrame,
+    join_keys: Sequence[str],
+    mentor_column: str,
+    *,
+    include_distinct_mentors: bool = False,
+    pool_source: str | None = None,
+) -> pd.DataFrame:
+    """Public wrapper for building join-key duplicate reports."""
 
-    if value is None or value is pd.NA:
-        return None
-    try:
-        if pd.isna(value):
-            return None
-    except TypeError:
-        pass
-    if isinstance(value, (bool, int, float, str)):
-        return value
-    item_getter = getattr(value, "item", None)
-    if callable(item_getter):  # pragma: no branch - رفتار numpy scalar
-        try:
-            return item_getter()
-        except Exception:  # pragma: no cover - نگهبان دفاعی
-            return str(value)
-    iso_getter = getattr(value, "isoformat", None)
-    if callable(iso_getter):
-        try:
-            return iso_getter()
-        except Exception:  # pragma: no cover - نگهبان دفاعی
-            return str(value)
-    return str(value)
+    report = _build_join_key_duplicate_report(
+        frame,
+        join_keys,
+        mentor_column,
+        include_distinct_mentors=include_distinct_mentors,
+        pool_source=pool_source,
+    )
+    report.attrs["duplicate_scope"] = "per_key" if include_distinct_mentors else "per_mentor"
+    return report
 
 
 def _build_duplicate_summary(
@@ -396,7 +392,7 @@ def _build_duplicate_summary(
         return {"total": 0, "sample": [], "duplicate_scope": duplicate_scope}
     sample_rows = report.head(sample_size).to_dict(orient="records")
     safe_rows = [
-        {key: _json_safe_value(value) for key, value in row.items()} for row in sample_rows
+        {key: json_safe_value(value) for key, value in row.items()} for row in sample_rows
     ]
     return {
         "total": int(len(report)),
@@ -901,7 +897,10 @@ def canonicalize_pool_frame(
     )
     duplicate_report.attrs["duplicate_scope"] = duplicate_scope
     stats.join_key_duplicates = int(len(duplicate_report))
-    pool.attrs[POOL_JOIN_KEY_DUPLICATES_ATTR] = duplicate_report
+    pool.attrs[POOL_JOIN_KEY_DUPLICATES_ATTR] = {
+        **build_frame_payload(duplicate_report),
+        "duplicate_scope": duplicate_scope,
+    }
     pool.attrs["pool_duplicate_scope"] = duplicate_scope
     pool.attrs[POOL_DUPLICATE_SUMMARY_ATTR] = _build_duplicate_summary(
         duplicate_report, duplicate_scope=duplicate_scope

@@ -110,7 +110,8 @@ def test_reason_sheet_schema_and_snapshot(tmp_path: Path, monkeypatch: pytest.Mo
     )
 
     sanitized_pool = _sanitize_pool_for_allocation(pool_raw, policy=policy)
-    allocations, _, logs, trace = allocate_batch(students, sanitized_pool, policy=policy)
+    result = allocate_batch(students, sanitized_pool, policy=policy)
+    allocations, _, logs, trace = result
 
     reasons = build_selection_reason_rows(
         allocations,
@@ -119,6 +120,7 @@ def test_reason_sheet_schema_and_snapshot(tmp_path: Path, monkeypatch: pytest.Mo
         policy=policy,
         logs=logs,
         trace=trace,
+        summary_df=result.trace_extras.summary_df,
     )
     assert list(reasons.columns) == expected_columns
     assert reasons["شمارنده"].tolist() == list(range(1, len(reasons) + 1))

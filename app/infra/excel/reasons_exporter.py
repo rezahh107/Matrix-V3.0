@@ -75,6 +75,7 @@ def export_selection_reasons_with_sources(
         policy=policy,
         logs=logs,
         trace=trace,
+        summary_df=summary_df,
     )
     if extra_attrs:
         reasons_df.attrs.update(dict(extra_attrs))

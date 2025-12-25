@@ -112,11 +112,12 @@ def test_allocator_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
     sanitized_pool = _sanitize_pool_for_allocation(pool_raw, policy=policy)
     assert "mentor_name" in sanitized_pool.columns
 
-    allocations, updated_pool, logs, trace = allocate_batch(
+    result = allocate_batch(
         students,
         sanitized_pool,
         policy=policy,
     )
+    allocations, updated_pool, logs, trace = result
 
     header_internal = policy.excel.header_mode_internal
     reasons = build_selection_reason_rows(
@@ -126,6 +127,7 @@ def test_allocator_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
         policy=policy,
         logs=logs,
         trace=trace,
+        summary_df=result.trace_extras.summary_df,
     )
     sheet_name, reasons = write_selection_reasons_sheet(
         reasons,

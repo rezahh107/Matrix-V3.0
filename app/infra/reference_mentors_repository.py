@@ -40,6 +40,7 @@ from app.core.common.domain import _coerce_finance, _num_to_int_safe
 from app.core.common.errors import InvalidCenterMappingError
 from app.core.common.join_keys import VALID_GROUP_CODES, parse_group_codes
 from app.core.common.normalization import normalize_fa
+from app.core.common.payloads import build_frame_payload
 from app.core.common.types import JoinKeyValidationIssue, JoinKeyValidationResult
 from app.core.policy_loader import PolicyConfig
 from app.infra.errors import JoinKeyValidationError
@@ -99,13 +100,12 @@ def import_mentor_pool_from_dataframe(
     normalized.attrs[_POOL_QA_PAYLOAD_ATTR] = normalized.attrs.get(
         _POOL_QA_PAYLOAD_ATTR, result.build_result.qa_payload
     )
-    existing_duplicates = normalized.attrs.get(POOL_JOIN_KEY_DUPLICATES_ATTR)
-    if not isinstance(existing_duplicates, pd.DataFrame) or existing_duplicates.empty:
-        normalized.attrs[POOL_JOIN_KEY_DUPLICATES_ATTR] = _detect_duplicate_mentor_join_profiles(
-            normalized, policy=policy, pool_source=pool_source
-        )
+    duplicate_report = _detect_duplicate_mentor_join_profiles(
+        normalized, policy=policy, pool_source=pool_source
+    )
+    normalized.attrs[POOL_JOIN_KEY_DUPLICATES_ATTR] = build_frame_payload(duplicate_report)
     cache_payload = normalized
-    if isinstance(existing_duplicates, pd.DataFrame) and not existing_duplicates.empty:
+    if not duplicate_report.empty:
         cache_payload = normalized.drop_duplicates(
             subset=["mentor_id", *policy.join_keys], keep="first"
         ).copy()
@@ -163,7 +163,7 @@ def load_mentor_pool_from_cache(*, db: LocalDatabase, policy: PolicyConfig) -> p
 
     cached = db.load_mentor_pool_cache(join_keys=policy.join_keys)
     duplicates = _detect_duplicate_mentor_join_profiles(cached, policy=policy, pool_source="cache")
-    cached.attrs[POOL_JOIN_KEY_DUPLICATES_ATTR] = duplicates
+    cached.attrs[POOL_JOIN_KEY_DUPLICATES_ATTR] = build_frame_payload(duplicates)
     cached.attrs.setdefault(_POOL_QA_PAYLOAD_ATTR, {}).setdefault(
         "duplicates", duplicates.to_dict("records")
     )

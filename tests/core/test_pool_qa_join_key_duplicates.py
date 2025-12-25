@@ -1,6 +1,6 @@
 import pandas as pd
 
-from app.core.canonical_frames import POOL_JOIN_KEY_DUPLICATES_ATTR, canonicalize_pool_frame
+from app.core.canonical_frames import build_join_key_duplicate_report, canonicalize_pool_frame
 from app.core.policy_loader import load_policy
 
 
@@ -26,7 +26,13 @@ def test_pool_join_key_duplicates_frame_contains_all_columns() -> None:
         pool_source="inspactor",
     )
 
-    duplicate_report = canonical.attrs[POOL_JOIN_KEY_DUPLICATES_ATTR]
+    duplicate_report = build_join_key_duplicate_report(
+        canonical,
+        policy.join_keys,
+        "کد کارمندی پشتیبان",
+        include_distinct_mentors=False,
+        pool_source="inspactor",
+    )
     prefix = list(duplicate_report.columns)[: len(policy.join_keys) + 1]
     assert prefix[: len(policy.join_keys)] == list(policy.join_keys)
     assert prefix[-1] in {"mentor_id", "کد کارمندی پشتیبان"}

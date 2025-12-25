@@ -178,3 +178,22 @@ def test_header_pipeline_maps_student_required_headers() -> None:
 
     assert not result.missing_required
     assert result.can_continue
+
+
+def test_header_pipeline_resolves_join_key_collisions() -> None:
+    pipeline = HeaderPipelineV3(alias_registry=HEADER_ALIASES_V3)
+    df = pd.DataFrame(
+        {
+            "کد رشته": [1, None],
+            "کدرشته": [None, 2],
+            "گروه آزمایشی": ["27", "27"],
+        }
+    )
+
+    result = pipeline.resolve(df, source="mentor")
+
+    assert not result.resolved_df.columns.duplicated().any()
+    resolved = result.resolved_df["کدرشته"]
+    assert isinstance(resolved, pd.Series)
+    assert resolved.tolist() == [1, 2]
+    assert any(issue.message == "AMBIGUOUS_HEADER" for issue in result.issues)

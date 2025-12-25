@@ -380,13 +380,17 @@ def collect_trace_debug_sheets(
     students_df: pd.DataFrame | None = None,
     history_info_df: pd.DataFrame | None = None,
     policy: PolicyConfig | None = None,
+    summary_df: pd.DataFrame | None = None,
+    unallocated_summary: pd.DataFrame | None = None,
+    policy_violations: pd.DataFrame | None = None,
+    final_status_counts: pd.Series | None = None,
 ) -> dict[str, pd.DataFrame]:
     """ساخت شیت‌های تشخیصی از تریس برای خروجی Excel بدون تغییر رفتار اصلی.
 
-    اگر ``trace_df.attrs`` شامل ``summary_df``، ``unallocated_summary`` یا
-    ``policy_violations`` باشد، آن‌ها را در یک دیکشنری با کلیدهای ایمن برمی‌گرداند
-    تا توسط :func:`write_xlsx_atomic` روی شیت‌های مجزا (summary_df،
-    unallocated_summary، policy_violations، FinalStatus_counts) نوشته شوند.
+    اگر ``summary_df``، ``unallocated_summary`` یا ``policy_violations`` داده شوند،
+    آن‌ها را در یک دیکشنری با کلیدهای ایمن برمی‌گرداند تا توسط
+    :func:`write_xlsx_atomic` روی شیت‌های مجزا (summary_df، unallocated_summary،
+    policy_violations، FinalStatus_counts) نوشته شوند.
     زمانی که ``students_df``، ``history_info_df`` و ``policy`` مهیا باشند، این تابع
     خلاصهٔ تاریخچه را با :func:`enrich_summary_with_history` تکمیل کرده و شیت
     «HistoryMetrics» را با استفاده از :func:`compute_history_metrics` تولید می‌کند.
@@ -398,12 +402,11 @@ def collect_trace_debug_sheets(
         return {}
 
     sheets: dict[str, pd.DataFrame] = {}
-    summary_df = trace_df.attrs.get("summary_df")
     history_metrics_df = _empty_history_metrics_df()
     if isinstance(summary_df, pd.DataFrame) and not summary_df.empty:
         sheets["summary_df"] = summary_df.copy()
-        value_counts = trace_df.attrs.get("final_status_counts")
-        if hasattr(value_counts, "reset_index"):
+        value_counts = final_status_counts
+        if isinstance(value_counts, pd.Series):
             counts_df = value_counts.reset_index()
             counts_df.columns = ["final_status", "count"]
             sheets["FinalStatus_counts"] = counts_df
@@ -414,11 +417,9 @@ def collect_trace_debug_sheets(
             policy=policy,
         )
 
-    unallocated_summary = trace_df.attrs.get("unallocated_summary")
     if isinstance(unallocated_summary, pd.DataFrame) and not unallocated_summary.empty:
         sheets["unallocated_summary"] = unallocated_summary.copy()
 
-    policy_violations = trace_df.attrs.get("policy_violations")
     if isinstance(policy_violations, pd.DataFrame) and not policy_violations.empty:
         sheets["policy_violations"] = policy_violations.copy()
 

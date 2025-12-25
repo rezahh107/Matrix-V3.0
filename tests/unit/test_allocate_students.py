@@ -19,6 +19,7 @@ from app.core.canonical_frames import (
     POOL_DUPLICATE_SUMMARY_ATTR,
     POOL_JOIN_KEY_DUPLICATES_ATTR,
     _build_join_key_duplicate_report,
+    build_join_key_duplicate_report,
     canonicalize_allocation_frames,
     canonicalize_pool_frame,
     canonicalize_students_frame,
@@ -500,12 +501,21 @@ def test_canonicalize_pool_frame_reports_join_key_duplicates(
     duplicated = pd.concat([_base_pool, _base_pool.iloc[[0]].copy()], ignore_index=True)
 
     normalized = canonicalize_pool_frame(duplicated, policy=policy, sanitize_pool=False)
-    duplicate_report = normalized.attrs[POOL_JOIN_KEY_DUPLICATES_ATTR]
+    duplicate_payload = normalized.attrs[POOL_JOIN_KEY_DUPLICATES_ATTR]
+    duplicate_report = build_join_key_duplicate_report(
+        normalized,
+        policy.join_keys,
+        "کد کارمندی پشتیبان",
+        include_distinct_mentors=False,
+        pool_source="inspactor",
+    )
     stats = normalized.attrs["pool_canonicalization_stats"]
     summary = normalized.attrs[POOL_DUPLICATE_SUMMARY_ATTR]
 
     assert not duplicate_report.empty
     assert duplicate_report["کد کارمندی پشتیبان"].tolist() == ["EMP-001", "EMP-001"]
+    assert duplicate_payload["duplicate_scope"] == "per_mentor"
+    assert duplicate_payload["count"] == len(duplicate_report)
     assert summary["duplicate_scope"] == "per_mentor"
     assert normalized.attrs.get("pool_duplicate_scope") == "per_mentor"
     assert stats.join_key_duplicates == len(duplicate_report)
@@ -519,9 +529,17 @@ def test_canonicalize_pool_frame_allows_distinct_mentors_same_join_keys(
     policy = load_policy()
 
     normalized = canonicalize_pool_frame(_base_pool, policy=policy, sanitize_pool=False)
-    duplicate_report = normalized.attrs[POOL_JOIN_KEY_DUPLICATES_ATTR]
+    duplicate_payload = normalized.attrs[POOL_JOIN_KEY_DUPLICATES_ATTR]
+    duplicate_report = build_join_key_duplicate_report(
+        normalized,
+        policy.join_keys,
+        "کد کارمندی پشتیبان",
+        include_distinct_mentors=False,
+        pool_source="inspactor",
+    )
 
     assert duplicate_report.empty
+    assert duplicate_payload["count"] == 0
     assert normalized.attrs["pool_duplicate_scope"] == "per_mentor"
     summary = normalized.attrs[POOL_DUPLICATE_SUMMARY_ATTR]
     assert summary["duplicate_scope"] == "per_mentor"
@@ -536,7 +554,14 @@ def test_canonicalize_pool_frame_reports_key_level_duplicates_when_requested(
     normalized = canonicalize_pool_frame(
         _base_pool, policy=policy, sanitize_pool=False, include_distinct_mentor_duplicates=True
     )
-    duplicate_report = normalized.attrs[POOL_JOIN_KEY_DUPLICATES_ATTR]
+    duplicate_payload = normalized.attrs[POOL_JOIN_KEY_DUPLICATES_ATTR]
+    duplicate_report = build_join_key_duplicate_report(
+        normalized,
+        policy.join_keys,
+        "کد کارمندی پشتیبان",
+        include_distinct_mentors=True,
+        pool_source="inspactor",
+    )
     summary = normalized.attrs[POOL_DUPLICATE_SUMMARY_ATTR]
 
     assert not duplicate_report.empty
@@ -544,6 +569,7 @@ def test_canonicalize_pool_frame_reports_key_level_duplicates_when_requested(
     assert duplicate_report["duplicate_group_size"].dropna().unique().tolist() == [2]
     assert duplicate_report.attrs.get("duplicate_scope") == "per_key"
     assert normalized.attrs.get("pool_duplicate_scope") == "per_key"
+    assert duplicate_payload["duplicate_scope"] == "per_key"
     assert summary["duplicate_scope"] == "per_key"
 
 
@@ -1463,7 +1489,8 @@ def test_allocation_outputs_excel_openable(tmp_path: Path, _base_pool: pd.DataFr
     )
 
     policy = load_policy()
-    allocations, updated_pool, logs, trace = allocate_batch(students, _base_pool, policy=policy)
+    result = allocate_batch(students, _base_pool, policy=policy)
+    allocations, updated_pool, logs, trace = result
     reasons = build_selection_reason_rows(
         allocations,
         students,
@@ -1471,6 +1498,7 @@ def test_allocation_outputs_excel_openable(tmp_path: Path, _base_pool: pd.DataFr
         policy=policy,
         logs=logs,
         trace=trace,
+        summary_df=result.trace_extras.summary_df,
     )
     _, reasons = write_selection_reasons_sheet(reasons, writer=None, policy=policy)
 

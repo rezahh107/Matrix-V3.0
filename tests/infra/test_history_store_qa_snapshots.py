@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 from pandas.testing import assert_frame_equal
 
+from app.core.allocate_students import AllocationBatchResult, TraceDebugFrames
 from app.core.policy_loader import load_policy
 from app.core.qa.invariants import QaReport, QaRuleResult, run_all_invariants
 from app.infra import cli
@@ -166,15 +167,24 @@ def test_allocate_cli_passes_history_info_into_qa(
         ids = pd.Series(["s-1"] * len(students_df))
         return ids, {}, students_df
 
-    def fake_allocate_batch(
-        *_: object, **__: object
-    ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    def fake_allocate_batch(*_: object, **__: object) -> AllocationBatchResult:
         allocations = pd.DataFrame({"student_id": ["s-1"], "mentor_id": ["m-1"]})
         updated_pool = pd.DataFrame({"mentor_id": ["m-1"]})
         logs = pd.DataFrame({"student_id": ["s-1"]})
         trace = pd.DataFrame({"student_id": ["s-1"]})
         trace.attrs["history_info_df"] = history_info_df
-        return allocations, updated_pool, logs, trace
+        return AllocationBatchResult(
+            allocations_df=allocations,
+            pool_output=updated_pool,
+            logs_df=logs,
+            trace_df=trace,
+            trace_extras=TraceDebugFrames(
+                summary_df=None,
+                unallocated_summary=None,
+                policy_violations=None,
+                final_status_counts=None,
+            ),
+        )
 
     def fake_selection_reasons(*_: object, **__: object) -> pd.DataFrame:
         return pd.DataFrame()
