@@ -87,19 +87,20 @@ def _map_schema_errors(exc: pa.errors.SchemaErrors) -> Sequence[InputContractIss
                     ),
                 )
             )
-            continue
 
-        failures_text = "، ".join(sorted({str(value) for value in group["failure_case"]}))
-        issues.append(
-            InputContractIssue(
-                code="invalid_value",
-                column=column_name,
-                message=(
-                    f"اعتبارسنجی ستون «{column_name or 'نامشخص'}» ناموفق بود: "
-                    f"{failures_text or 'مقدار نامعتبر'}"
-                ),
+        non_null_group = group.loc[~null_mask]
+        if not non_null_group.empty:
+            failures_text = "، ".join(sorted({str(value) for value in non_null_group["failure_case"]}))
+            issues.append(
+                InputContractIssue(
+                    code="invalid_value",
+                    column=column_name,
+                    message=(
+                        f"اعتبارسنجی ستون «{column_name or 'نامشخص'}» ناموفق بود: "
+                        f"{failures_text or 'مقدار نامعتبر'}"
+                    ),
+                )
             )
-        )
 
     return issues
 
