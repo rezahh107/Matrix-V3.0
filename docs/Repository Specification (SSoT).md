@@ -47,7 +47,7 @@ The repository follows a layered Policy-First architecture: (certain) [TECH][AGE
   - `history_dialog.py`, `history_metrics_dialog.py` → browsing past runs and metrics from LocalDatabase. (certain) [app/ui/history_dialog.py][app/ui/history_metrics_dialog.py]
   - `widgets/database_status_widget.py`, `widgets/status_bar.py`, `widgets/file_picker.py` → DB health indicator, status bar, and unified file picker. (certain) [app/ui/widgets/*]
 
-- **Policy Layer** — Policy is injected only via `policy/policy.json` (or YAML) and `PolicyConfig` in Core: (certain) [TECH][policy/policy.json][app/core/policy_loader.py]
+- **Policy Layer** — Policy is injected only via `config/policy.json` (or YAML) and `PolicyConfig` in Core: (certain) [TECH][config/policy.json][app/core/policy_loader.py]
 
   - All configurable behavior (column names, mappings, capacity rules, trace stage names, center management, governance overrides) is read from Policy, not hard-coded. (certain) [TECH][code]
 
@@ -77,7 +77,7 @@ The high-level data flow of a full allocation run is: (certain) [LAW][TECH][AGEN
 
 5. **Pool Governance & Center Management (Core)**  
    - `allocation/mentor_pool.py` applies `MentorPoolGovernanceConfig` to filter mentors based on type/status (ACTIVE / INACTIVE / FROZEN) and overrides. (certain) [app/core/allocation/mentor_pool.py][LAW][TECH]  
-   - Center management (center manager, priority order, strict_manager_validation, school vs center channels) is read from Policy and applied via channels/governance logic. (likely) [README][policy/policy.json][app/core/allocation/channels.py]
+  - Center management (center manager, priority order, strict_manager_validation, school vs center channels) is read from Policy and applied via channels/governance logic. (likely) [README][config/policy.json][app/core/allocation/channels.py]
 
 6. **Allocation with 8-Stage Trace (Core)**  
    - For each student:
@@ -127,7 +127,7 @@ The high-level data flow of a full allocation run is: (certain) [LAW][TECH][AGEN
   A logical allocation channel (e.g., SCHOOL or CENTER) derived from the student’s attributes and Policy; influences which mentors are eligible and how history metrics are aggregated. (likely) [app/core/allocation/channels.py][app/core/allocation/engine.py][TECH]
 
 - **Center Management**  
-  Policy-driven multi-center management (center manager, priority order, strict manager validation, school vs center routing) applied on top of the core allocation logic. (likely) [README][policy/policy.json][app/core/allocation/channels.py][app/core/allocation/mentor_pool.py]
+  Policy-driven multi-center management (center manager, priority order, strict manager validation, school vs center routing) applied on top of the core allocation logic. (likely) [README][config/policy.json][app/core/allocation/channels.py][app/core/allocation/mentor_pool.py]
 
 - **Remaining Capacity**  
   The allocatable capacity per mentor (`capacity_limit − (baseline + new_allocations)`), which must never become negative (`CAPACITY-01`). (certain) [LAW][TECH][app/core/common/ranking.py][app/core/allocate_students.py]
@@ -458,7 +458,7 @@ This section summarizes the roles and responsibilities of key modules. For line-
    - **Gap**: A formal LAW-sheet → exporter-function mapping table in docs would close this.
 
 3. **Center management semantics (Docs vs Implementation, P0.5/P1)**  
-   - README and Policy describe center management (center manager, priority, strict manager) in detail; channels/mentor_pool implement part of this behavior, but not all cases are formally mapped to QA rules. (hypothesis) [README][policy/policy.json][app/core/allocation/channels.py][app/core/qa/invariants.py][no direct evidence]
+  - README and Policy describe center management (center manager, priority, strict manager) in detail; channels/mentor_pool implement part of this behavior, but not all cases are formally mapped to QA rules. (hypothesis) [README][config/policy.json][app/core/allocation/channels.py][app/core/qa/invariants.py][no direct evidence]
 
 ---
 
@@ -486,7 +486,7 @@ These are primarily suggested inspection points for CodeSurgeon:
   - Docstrings say DB failures must not break the run; exact logging levels and retry policies are inferred from code patterns, not fully specified. (hypothesis) [app/infra/history_store.py][no direct evidence]
 
 - **Full mapping of AllocationChannel values to Policy center rules**  
-  - The mapping between all `AllocationChannel` values and Policy-specified center rules appears split across code and docs; a formal table would remove ambiguity. (hypothesis) [app/core/allocation/channels.py][README][policy/policy.json][no direct evidence]
+  - The mapping between all `AllocationChannel` values and Policy-specified center rules appears split across code and docs; a formal table would remove ambiguity. (hypothesis) [app/core/allocation/channels.py][README][config/policy.json][no direct evidence]
 
 ---
 

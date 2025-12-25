@@ -107,6 +107,8 @@ def test_import_pool_derives_join_keys_from_alias_inputs(tmp_path: Path) -> None
         assert str(normalized[join_key].dtype) == "Int64"
     assert int(normalized["کدرشته"].iloc[0]) == 27
     assert int(normalized["کد مدرسه"].iloc[0]) == 3581
+    for helper_col in {"school_name_1", "school_name_2", "school_name_3", "school_name_4"}:
+        assert helper_col not in normalized.columns
 
 
 def test_import_pool_reports_unmapped_group(tmp_path: Path) -> None:

@@ -36,6 +36,7 @@ from app.core.canonical_frames import (  # type: ignore[attr-defined]
     POOL_JOIN_KEY_DUPLICATES_ATTR,
     canonicalize_headers,
 )
+from app.core.common.columns import CANON_EN_TO_FA
 from app.core.common.domain import _coerce_finance, _num_to_int_safe
 from app.core.common.errors import InvalidCenterMappingError
 from app.core.common.join_keys import VALID_GROUP_CODES, parse_group_codes
@@ -429,6 +430,30 @@ def _derive_pool_join_keys(
         derived[school_key].append(int(school_code))
 
     enriched = pool.assign(**derived)
+    helper_school_name_columns = [
+        *[
+            column
+            for column in (
+                "school_name_1",
+                "school_name_2",
+                "school_name_3",
+                "school_name_4",
+            )
+            if column in enriched.columns
+        ],
+        *[
+            column
+            for column in (
+                CANON_EN_TO_FA["school_name_1"],
+                CANON_EN_TO_FA["school_name_2"],
+                CANON_EN_TO_FA["school_name_3"],
+                CANON_EN_TO_FA["school_name_4"],
+            )
+            if column in enriched.columns
+        ],
+    ]
+    if helper_school_name_columns:
+        enriched = enriched.drop(columns=helper_school_name_columns, errors="ignore")
     enriched = _coerce_int_columns(enriched, policy.join_keys)
     enriched.attrs[_POOL_JOIN_KEY_QA_ATTR] = qa_issues
     return enriched, qa_issues
