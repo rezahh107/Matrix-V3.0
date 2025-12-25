@@ -6,8 +6,8 @@ from app.core.contracts.contract_errors import InputContractError, InputContract
 from app.core.contracts.specs import (
     CrosswalkGroupsSpec,
     CrosswalkSynonymsSpec,
-    InspactorSpec,
     InputContractSpec,
+    InspactorSpec,
     PoolSpec,
     SchoolsSpec,
     StudentReportSpec,
