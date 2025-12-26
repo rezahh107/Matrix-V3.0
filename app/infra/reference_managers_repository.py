@@ -82,9 +82,8 @@ def _normalize_manager_frame(df: pd.DataFrame) -> pd.DataFrame:
     )
     resolution = pipeline.resolve(df, source="manager")
     canonical = _drop_pii_columns(resolution.resolved_df, pii_columns=_PII_COLUMNS)
-    missing = [_MANAGER_COLUMN, _CENTER_COLUMN]
-    if not set(missing).issubset(set(canonical.columns)):
-        raise ValueError("ستون‌های موردنیاز ManagerReport یافت نشد: نام مدیر و مرکز گلستان صدرا")
+    if not resolution.can_continue:
+        raise ValueError(f"ستون‌های موردنیاز ManagerReport یافت نشد: {', '.join(resolution.missing_required)}")
 
     normalized = canonical[
         [
