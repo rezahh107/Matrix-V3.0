@@ -1726,7 +1726,9 @@ def allocate_student(
     progress(30, "capacity")
 
     state_frame = pool_state_view if pool_state_view is not None else candidate_pool
-    state_view_en = dedupe_columns(canonicalize_headers(state_frame, header_mode="en"))
+    state_view_en = dedupe_columns(
+        canonicalize_headers(state_frame, header_mode="en"), copy=False
+    )
 
     with measure_time("capacity_gate", perf_tracker):
         capacity_candidates: list[str] = []
