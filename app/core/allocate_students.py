@@ -2461,7 +2461,7 @@ def allocate_batch(
             allocation_status = result.log.get("allocation_status")
             is_success = allocation_status == "success"
 
-            if not debug_trace and result.trace is not None and is_success:
+            if not debug_trace and is_success:
                 summary_trace = result.trace
             else:
                 summary_trace, _, _, _ = _build_tracker_trace_with_reasons(
