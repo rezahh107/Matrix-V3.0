@@ -6,10 +6,12 @@ from pathlib import Path
 
 import pandas as pd
 
-from app.core.common.columns import canonicalize_headers
+from app.infra.errors import DatabasePreparationError
 from app.infra.io_utils import ALT_CODE_COLUMN, read_crosswalk_workbook, read_excel_first_sheet
 from app.infra.local_database import LocalDatabase
 from app.infra.reference_repository import SQLiteReferenceRepository
+from app.infra.schools.header_resolver import SchoolHeaderResolver
+from app.infra.schools.school_repository import SchoolRepository
 from app.infra.sqlite_types import coerce_int_columns, coerce_int_series
 
 
@@ -19,10 +21,20 @@ def _coerce_school_code(series: pd.Series, *, fill_value: int | None = None) -> 
     return coerce_int_series(series, fill_value=fill_value)
 
 
-def _normalize_schools_frame(df: pd.DataFrame) -> pd.DataFrame:
+def _normalize_schools_frame(df: pd.DataFrame, *, path: Path | str | None = None) -> pd.DataFrame:
     """نرمال‌سازی دیتافریم مدارس برای ذخیره‌سازی قابل‌اتکا در SQLite."""
 
-    canonical = canonicalize_headers(df, header_mode="fa")
+    resolver = SchoolHeaderResolver(
+        required_fields=list(SchoolRepository.REQUIRED_COLUMNS), header_mode="fa"
+    )
+    resolution = resolver.resolve(df)
+    if not resolution.can_continue:
+        raise DatabasePreparationError(
+            path=str(path) if path is not None else "SchoolReport",
+            reason="ستون‌های الزامی مدارس در فایل موجود نیست.",
+            hint=", ".join(resolution.missing_fields),
+        )
+    canonical = resolution.resolved_df
     code_col = "کد مدرسه"
     if code_col in canonical.columns:
         canonical = canonical.copy()
@@ -48,7 +60,7 @@ def import_school_report_from_excel(path: Path, db: LocalDatabase) -> pd.DataFra
     """
 
     raw_df = read_excel_first_sheet(path)
-    normalized = _normalize_schools_frame(raw_df)
+    normalized = _normalize_schools_frame(raw_df, path=path)
     _schools_repository(db).upsert_frame(normalized, source=str(path))
     return normalized
 

@@ -45,6 +45,28 @@ def test_school_repository_imports_and_records_meta(tmp_path: Path) -> None:
     assert imported_at is not None
 
 
+def test_school_repository_accepts_alias_headers(tmp_path: Path) -> None:
+    db = LocalDatabase(tmp_path / "local.sqlite")
+    repo = SchoolRepository(db)
+    df = pd.DataFrame(
+        {
+            "school code": [11],
+            "school_name": ["Alias"],
+            "مرکز ثبت نام": [21],
+            "gender": [1],
+        }
+    )
+    path = tmp_path / "schools_alias.xlsx"
+    _write_excel(df, path)
+
+    status = repo.import_from_excel(path, version_tag="v_alias")
+
+    assert status.row_count == 1
+    stored = repo.load_canonical_frame()
+    assert "کد مدرسه" in stored.columns
+    assert stored.loc[0, "کد مدرسه"] == 11
+
+
 def test_groupcode_repository_imports_and_records_meta(tmp_path: Path) -> None:
     db = LocalDatabase(tmp_path / "local.sqlite")
     repo = GroupCodeRepository(db)
@@ -70,6 +92,29 @@ def test_groupcode_repository_imports_and_records_meta(tmp_path: Path) -> None:
     assert version_tag == "gx"
     assert source_filename == path.name
     assert imported_at is not None
+
+
+def test_groupcode_import_accepts_alias_headers(tmp_path: Path) -> None:
+    db = LocalDatabase(tmp_path / "local.sqlite")
+    repo = GroupCodeRepository(db)
+    df = pd.DataFrame(
+        {
+            "کد گروه": [24],
+            "مقطع تحصیلی": ["متوسطه دوم"],
+            "پایه": [10],
+            "رشته": ["ریاضی"],
+            "فعال": [1],
+        }
+    )
+    path = tmp_path / "groupcodes_alias.xlsx"
+    _write_excel(df, path)
+
+    status = repo.import_from_excel(path, version_tag="v_alias")
+
+    assert status.row_count == 1
+    stored = repo.load_canonical_frame()
+    assert "group_code" in stored.columns
+    assert stored.loc[0, "group_code"] == 24
 
 
 def test_missing_required_columns_raise(tmp_path: Path) -> None:
