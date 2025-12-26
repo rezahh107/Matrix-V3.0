@@ -1,7 +1,9 @@
 import pandas as pd
+import pytest
 
 from app.core.policy_loader import load_policy
 from app.infra.cli import attach_student_id_column
+from app.infra.cli_legacy import AllocationConsistencyError, _validate_allocated_student_ids
 from app.infra.excel.qa_export import (
     build_join_key_audit_sheet,
     build_join_key_summary_sheet,
@@ -175,3 +177,32 @@ def test_attach_student_id_column_fills_missing_and_nan():
 
     assert result["student_id"].tolist() == ["S-1", "S-2", "S-3"]
     assert "value" in result.columns
+
+
+def test_attach_student_id_column_preserves_existing_values():
+    frame = pd.DataFrame(
+        {
+            "student_id": ["S-1", "S-2"],
+            "mentor_id": ["M-1", "M-2"],
+        },
+        index=[10, 11],
+    )
+    ids = pd.Series(["S-10", "S-11"], index=[11, 10])
+
+    result = attach_student_id_column(frame, ids, header_mode="en", ensure_existing=True)
+
+    assert result["student_id"].tolist() == ["S-1", "S-2"]
+    assert result["mentor_id"].tolist() == ["M-1", "M-2"]
+
+
+def test_validate_allocated_student_ids_raises_on_mismatch():
+    allocations = pd.DataFrame({"student_id": ["S-1"]})
+    logs = pd.DataFrame(
+        {
+            "student_id": ["S-2"],
+            "allocation_status": ["success"],
+        }
+    )
+
+    with pytest.raises(AllocationConsistencyError):
+        _validate_allocated_student_ids(allocations_df=allocations, logs_df=logs)

@@ -675,6 +675,54 @@ def _validate_allocation_consistency(
         _assert_non_empty(sabt_allocations_df, "allocations_sabt")
 
 
+def _validate_allocated_student_ids(
+    *, allocations_df: pd.DataFrame, logs_df: pd.DataFrame
+) -> None:
+    """Ensure allocation and logs student_ids stay consistent before export."""
+
+    alloc_en = canonicalize_headers(allocations_df, header_mode="en")
+    logs_en = canonicalize_headers(logs_df, header_mode="en")
+
+    if "student_id" not in alloc_en.columns:
+        raise AllocationConsistencyError("allocations_df is missing student_id column.")
+    student_ids = alloc_en["student_id"].astype("string").str.strip()
+    missing_mask = student_ids.eq("") | student_ids.str.lower().eq("nan") | student_ids.isna()
+    if bool(missing_mask.any()):
+        missing_count = int(missing_mask.sum())
+        sample = student_ids[missing_mask].head(5).tolist()
+        raise AllocationConsistencyError(
+            "allocations_df contains missing student_id values after attachment: "
+            f"{missing_count} missing (sample={sample})."
+        )
+
+    duplicates = student_ids[student_ids.duplicated()].unique().tolist()
+    if duplicates:
+        raise AllocationConsistencyError(
+            "allocations_df contains duplicate student_id values: "
+            f"sample={duplicates[:5]}."
+        )
+
+    status_series = logs_en.get("allocation_status")
+    if status_series is None:
+        success_logs = logs_en
+    else:
+        success_logs = logs_en.loc[status_series.astype("string").str.lower() == "success"]
+    success_ids = success_logs.get("student_id", pd.Series(dtype="string")).astype("string").str.strip()
+    success_ids = success_ids[~success_ids.eq("") & ~success_ids.str.lower().eq("nan") & ~success_ids.isna()]
+
+    allocated_set = set(student_ids.tolist())
+    success_set = set(success_ids.tolist())
+
+    if allocated_set != success_set:
+        only_in_alloc = sorted(allocated_set - success_set)[:5]
+        only_in_logs = sorted(success_set - allocated_set)[:5]
+        raise AllocationConsistencyError(
+            "Mismatch between allocated student_ids and successful log entries: "
+            f"allocations={len(allocated_set)} success_logs={len(success_set)}; "
+            f"only_in_allocations={only_in_alloc} only_in_success_logs={only_in_logs}."
+        )
+
+
 def _load_forms_repository(args: argparse.Namespace, db: LocalDatabase) -> FormsRepository:
     """ساخت FormsRepository با توجه به حالت online/offline."""
 
@@ -2312,22 +2360,29 @@ def _allocate_and_write(
 
         header_internal: HeaderMode = _coerce_header_mode(policy.excel.header_mode_internal)
 
-        def _attach_student_id(frame: pd.DataFrame, ensure_existing: bool = False) -> pd.DataFrame:
-            en_frame = canonicalize_headers(frame, header_mode="en")
-            aligned = student_ids.reindex(en_frame.index)
-            aligned_string = aligned.astype("string")
-            if ensure_existing and "student_id" in en_frame.columns:
-                existing = en_frame["student_id"].astype("string")
-                existing_mask = existing.str.strip().eq("") | existing.isna()
-                en_frame.loc[existing_mask, "student_id"] = aligned_string.reindex(en_frame.index)
-                en_frame.loc[~existing_mask, "student_id"] = existing.loc[~existing_mask]
-            else:
-                en_frame["student_id"] = aligned_string
-            return canonicalize_headers(en_frame, header_mode=header_internal)
+        allocations_df = attach_student_id_column(
+            allocations_df,
+            student_ids,
+            header_mode=header_internal,
+            ensure_existing=True,
+        )
+        logs_df = attach_student_id_column(
+            logs_df,
+            student_ids,
+            header_mode=header_internal,
+            ensure_existing=True,
+        )
+        trace_df = attach_student_id_column(
+            trace_df,
+            student_ids,
+            header_mode=header_internal,
+            ensure_existing=True,
+        )
 
-        allocations_df = _attach_student_id(allocations_df)
-        logs_df = _attach_student_id(logs_df, ensure_existing=True)
-        trace_df = _attach_student_id(trace_df, ensure_existing=True)
+        _validate_allocated_student_ids(
+            allocations_df=allocations_df,
+            logs_df=logs_df,
+        )
 
         export_profile_choice = _resolve_optional_override(args, "export_profile", "sabt") or "sabt"
         export_profile_path = _resolve_optional_override(
