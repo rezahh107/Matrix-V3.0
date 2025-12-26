@@ -882,11 +882,13 @@ def _enforce_allocation_export_invariants(
 
     # Prefer unallocated_summary if present, otherwise fall back to logs where status != success.
     unallocated_set: set[str] = set()
+    summary_was_used = False
     if isinstance(unallocated_summary, pd.DataFrame) and not unallocated_summary.empty:
         unalloc_en = canonicalize_headers(unallocated_summary, header_mode="en")
         if "student_id" in unalloc_en.columns:
             unallocated_set = _get_student_id_set_from_series(unalloc_en["student_id"])
-    else:
+            summary_was_used = True
+    if not summary_was_used:
         logs_en = canonicalize_headers(logs_df, header_mode="en")
         if "student_id" in logs_en.columns and "allocation_status" in logs_en.columns:
             status = logs_en["allocation_status"].astype("string").str.lower()
