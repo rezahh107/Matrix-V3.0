@@ -38,7 +38,7 @@ jobs:
       - name: Lint with ruff
         run: ruff check .
 
-      - name: Run core pytest suite (Windows)
+      - name: Run core pytest suite (Windows, includes CI guard tests)
         run: pytest tests/unit tests/infra tests/integration --maxfail=1 -q
 
   ui-windows:
