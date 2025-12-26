@@ -503,7 +503,7 @@ def attach_student_id_column(
 
         students_nid_norm = students_en["national_id"].apply(normalize_national_id)
         duplicated = students_nid_norm.dropna().duplicated(keep=False)
-        if bool(duplicated.any()):
+        if duplicated.any():
             dup_ids = students_nid_norm.loc[duplicated].unique().tolist()
             raise AllocationConsistencyError(
                 "Duplicate national_id values detected in students_df; "
