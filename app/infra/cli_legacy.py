@@ -693,7 +693,7 @@ def _validate_allocated_student_ids(
     if "student_id" not in alloc_en.columns:
         raise AllocationConsistencyError("allocations_df is missing student_id column.")
     student_ids = _normalize_student_id(alloc_en["student_id"])
-    missing_mask = _student_id_missing_mask(alloc_en["student_id"])
+    missing_mask = _student_id_missing_mask(student_ids)
     if bool(missing_mask.any()):
         missing_count = int(missing_mask.sum())
         sample = student_ids[missing_mask].head(5).tolist()
