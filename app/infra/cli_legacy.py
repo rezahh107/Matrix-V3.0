@@ -876,7 +876,7 @@ def _enforce_allocation_export_invariants(
                 for _, row in bad_rows.head(5).iterrows():
                     parts: list[str] = []
                     sid = row.get("student_id")
-                    if sid is not None and not (isinstance(sid, float) and pd.isna(sid)):
+                    if pd.notna(sid):
                         parts.append(str(sid))
                     mismatch = row.get("mismatch_summary")
                     if isinstance(mismatch, str) and mismatch:
