@@ -111,6 +111,7 @@ from app.infra.logging import structured_event
 from app.infra.mentors.field_registry import FieldRegistry
 from app.infra.mentors.header_resolver import HeaderResolver
 from app.infra.mentors.value_canonicalizer import ValueCanonicalizer
+from app.infra.qa.alloc_join_validation import validate_allocation_join_keys_with_wildcard
 from app.infra.reference_managers_repository import import_managers_from_excel
 from app.infra.reference_mentors_repository import (
     import_mentor_pool_from_excel,
@@ -126,7 +127,10 @@ from app.infra.reference_students_repository import (
     load_students_from_cache,
 )
 from app.infra.students.pipeline_v3 import StudentPipelineV3
-from app.infra.validators.join_keys import JoinKeyAuditResult, validate_allocation_join_keys
+from app.infra.validators.join_keys import (
+    JoinKeyAuditResult,
+    validate_allocation_join_keys,  # noqa: F401
+)
 
 if TYPE_CHECKING:
     from app.core.common.domain import BuildConfig
@@ -2629,9 +2633,13 @@ def _allocate_and_write(
             policy=policy,
         )
 
-        join_key_audit = validate_allocation_join_keys(
+        students_for_audit = students_base.copy()
+        if "student_id" not in students_for_audit.columns:
+            students_for_audit["student_id"] = student_ids.reindex(students_for_audit.index)
+
+        join_key_audit = validate_allocation_join_keys_with_wildcard(
             allocations_df,
-            students_base,
+            students_for_audit,
             pool_base,
             policy=policy,
         )
