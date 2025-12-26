@@ -96,9 +96,7 @@ def run_perf_suite(dataset_dir: Path, output_dir: Path | None = None) -> PerfRun
         allocations=allocations,
         metrics_path=metrics_path,
         decisions_path=decisions_path,
-        total_runtime_seconds=total_runtime_seconds,
-        peak_memory_bytes=peak,
-        stage_timings=stage_timings,
+        metrics=metrics,
     )
 
 
