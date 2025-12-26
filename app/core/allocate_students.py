@@ -11,7 +11,7 @@ from typing import Any, Literal, SupportsFloat, SupportsInt, TypedDict, TypeVar,
 import pandas as pd
 from pandas.api import types as pd_types
 
-from .allocation.trace import attach_allocation_channel
+from .allocation.trace import attach_allocation_channel, build_stage_summary
 from .canonical_frames import canonicalize_pool_frame, canonicalize_students_frame
 from .center_manager import resolve_center_manager_config, validate_center_config
 from .common.columns import CANON_EN_TO_FA, canonicalize_headers, dedupe_columns, ensure_series
@@ -47,6 +47,8 @@ from .common.rules import (
 from .common.trace import (
     TraceOutcome,
     TraceStagePlan,
+    _apply_stage_rule,
+    _coerce_optional_int,
     build_allocation_trace,
     build_trace_plan,
     build_unallocated_summary,
@@ -508,6 +510,127 @@ def _canonical_stage_counts(
 ) -> dict[TraceStageName, int]:
     """بازگردانی شمارنده‌ها روی ترتیب ۸ مرحلهٔ استاندارد."""
     return {stage: int(stage_candidate_counts.get(stage, 0)) for stage in CANONICAL_TRACE_ORDER}
+
+
+def _student_value_for_trace(student: Mapping[str, object], column: str) -> object:
+    normalized = column.replace(" ", "_")
+    if column in student:
+        return student[column]
+    if normalized in student:
+        return student[normalized]
+    return None
+
+
+def _build_tracker_trace(
+    student: Mapping[str, object],
+    stage_plan: Sequence[TraceStagePlan],
+    stage_counts: Mapping[TraceStageName, int],
+    *,
+    initial_candidates: int,
+    stage_rules: Mapping[TraceStageName, Rule],
+    policy: PolicyConfig,
+) -> list[TraceStageRecord]:
+    """ساخت Trace بر پایه شمارندهٔ tracker بدون اجرای مجدد فیلترها."""
+
+    stage_sequence = [ensure_trace_stage_name(plan.stage) for plan in stage_plan]
+    if tuple(stage_sequence) != CANONICAL_TRACE_ORDER:
+        raise ValueError("Trace stage plan must follow canonical order")
+
+    summaries = build_stage_summary(stage_counts, initial_candidates=initial_candidates)
+    summary_by_stage = {ensure_trace_stage_name(item["stage"]): item for item in summaries}
+    trace: list[TraceStageRecord] = []
+
+    for plan in stage_plan:
+        stage = ensure_trace_stage_name(plan.stage)
+        summary = summary_by_stage.get(stage, {})
+        total_before = int(summary.get("total_before", 0))
+        total_after = int(summary.get("total_after", 0))
+
+        expected_value: object = None
+        expected_op: str | None = "="
+        expected_threshold: object | None = None
+        extras: dict[str, object] = {}
+
+        if stage == "capacity_gate":
+            expected_value = ">0"
+            expected_op = ">"
+            expected_threshold = 0
+            extras.update(
+                {
+                    "capacity_before": total_before,
+                    "capacity_after": total_after,
+                    "expected_op": expected_op,
+                    "expected_threshold": expected_threshold,
+                }
+            )
+        else:
+            value = _student_value_for_trace(student, plan.column)
+            expected_value = value
+            extras["join_value_raw"] = value
+            extras["join_value_norm"] = _coerce_optional_int(value)
+            if stage == "school":
+                expected_op = ">"
+                expected_threshold = 0
+                school_code = resolve_student_school_code(student, policy)
+                extras["school_code_raw"] = student.get(plan.column)
+                extras["school_code_norm"] = school_code.value
+            extras["expected_op"] = expected_op
+            extras["expected_threshold"] = expected_threshold
+
+        record = TraceStageRecord(
+            stage=stage,
+            column=plan.column,
+            expected_value=expected_value,
+            total_before=total_before,
+            total_after=total_after,
+            matched=total_after > 0,
+            expected_op=expected_op,
+            expected_threshold=expected_threshold,
+            extras=extras,
+        )
+        _apply_stage_rule(record, stage_rules, student)
+        trace.append(record)
+
+    return trace
+
+
+def _build_tracker_trace_with_reasons(
+    student: Mapping[str, object],
+    stage_plan: Sequence[TraceStagePlan],
+    stage_counts: Mapping[TraceStageName, int],
+    *,
+    initial_candidates: int,
+    stage_rules: Mapping[TraceStageName, Rule],
+    policy: PolicyConfig,
+) -> tuple[list[TraceStageRecord], str | None, str | None, list[dict[str, object]]]:
+    tracker_trace = _build_tracker_trace(
+        student,
+        stage_plan,
+        stage_counts,
+        initial_candidates=initial_candidates,
+        stage_rules=stage_rules,
+        policy=policy,
+    )
+    rule_reason_code, rule_reason_text, rule_details = _derive_rule_reason(tracker_trace)
+    return tracker_trace, rule_reason_code, rule_reason_text, rule_details
+
+
+def _apply_capacity_totals(
+    records: Sequence[TraceStageRecord], *, before: int, after: int
+) -> None:
+    """همسان‌سازی شمارنده‌های ظرفیت روی رکوردهای Trace موجود."""
+
+    for stage_entry in records:
+        if stage_entry.get("stage") != "capacity_gate":
+            continue
+        stage_entry["total_before"] = int(before)
+        stage_entry["total_after"] = int(after)
+        stage_entry["matched"] = bool(after)
+        extras = dict(stage_entry.get("extras") or {})
+        extras["capacity_before"] = int(before)
+        extras["capacity_after"] = int(after)
+        stage_entry["extras"] = extras
+        break
 
 
 def _derive_error_type_from_stage_counts(
@@ -1520,6 +1643,7 @@ def allocate_student(
     pool_state_view: pd.DataFrame | None = None,
     alert_progress: ProgressFn | None = None,
     perf_tracker: PerfTracker | None = None,
+    debug_trace: bool = False,
 ) -> AllocationResult:
     """تخصیص تک‌دانش‌آموز با حفظ Trace و لاگ کامل مطابق §5 Technical SSoT."""
     if policy is None:
@@ -1535,6 +1659,8 @@ def allocate_student(
     candidate_pool = _ensure_type_group_alignment_frame(candidate_pool, policy)
     if pool_state_view is not None:
         pool_state_view = _ensure_type_group_alignment_frame(pool_state_view, policy)
+
+    initial_candidates = int(candidate_pool.shape[0])
 
     student_row = cast(StudentRow, _ensure_type_group_alignment_student(dict(student), policy))
 
@@ -1569,6 +1695,7 @@ def allocate_student(
                 "stage_candidate_counts": _canonical_stage_counts({}),
             }
         )
+        log["initial_candidate_count"] = initial_candidates
         return AllocationResult(None, trace, log)
 
     if pool_state_view is not None:
@@ -1612,16 +1739,6 @@ def allocate_student(
         )
         stage_candidate_counts = _canonical_stage_counts(stage_candidate_counts)
 
-    trace = build_allocation_trace(
-        student_row,
-        candidate_pool,
-        policy=policy,
-        stage_plan=trace_plan,
-        capacity_column=resolved_capacity_column,
-        stage_rules=stage_rules,
-    )
-    rule_reason_code, rule_reason_text, rule_details = _derive_rule_reason(trace)
-
     try:
         log = _build_log_base(
             student,
@@ -1630,6 +1747,20 @@ def allocate_student(
             missing=missing_columns,
         )
     except JoinKeyDataMissingError as exc:
+        stage_candidate_counts = _canonical_stage_counts(stage_candidate_counts)
+        (
+            tracker_trace,
+            rule_reason_code,
+            rule_reason_text,
+            rule_details,
+        ) = _build_tracker_trace_with_reasons(
+            student_row,
+            trace_plan,
+            stage_candidate_counts,
+            initial_candidates=initial_candidates,
+            stage_rules=stage_rules,
+            policy=policy,
+        )
         log = _build_log_from_join_map(student, exc.join_map)
         log.update(
             {
@@ -1639,7 +1770,8 @@ def allocate_student(
             }
         )
         log["candidate_count"] = int(eligible.shape[0])
-        log["stage_candidate_counts"] = _canonical_stage_counts(stage_candidate_counts)
+        log["stage_candidate_counts"] = stage_candidate_counts
+        log["initial_candidate_count"] = initial_candidates
         missing_text = ", ".join(exc.missing_columns)
         log.update(
             {
@@ -1654,13 +1786,49 @@ def allocate_student(
         if center_alert_payload is not None and not center_alert_payload.get("student_id"):
             center_alert_payload["student_id"] = log.get("student_id")
         _append_invalid_center_alert(log, center_alert_payload, center_fallback)
-        return AllocationResult(None, trace, log)
+        return AllocationResult(None, tracker_trace, log)
 
     pool_mismatch_detected = _detect_pool_mismatch(
         candidate_pool=eligible,
         pool_view=candidate_pool,
         pool_state_view=pool_state_view,
     )
+
+    stage_candidate_counts = _canonical_stage_counts(stage_candidate_counts)
+    (
+        tracker_trace,
+        rule_reason_code,
+        rule_reason_text,
+        rule_details,
+    ) = _build_tracker_trace_with_reasons(
+        student_row,
+        trace_plan,
+        stage_candidate_counts,
+        initial_candidates=initial_candidates,
+        stage_rules=stage_rules,
+        policy=policy,
+    )
+
+    detailed_trace: list[TraceStageRecord] | None = None
+
+    def _ensure_detailed_trace() -> list[TraceStageRecord]:
+        nonlocal detailed_trace
+
+        if detailed_trace is None:
+            detailed_trace = build_allocation_trace(
+                student_row,
+                candidate_pool,
+                policy=policy,
+                stage_plan=trace_plan,
+                capacity_column=resolved_capacity_column,
+                stage_rules=stage_rules,
+            )
+            _apply_capacity_totals(
+                detailed_trace,
+                before=int(capacity_series.shape[0]),
+                after=int(capacity_mask.sum()),
+            )
+        return detailed_trace
 
     def _fail_allocation(
         detailed_reason: str,
@@ -1677,7 +1845,7 @@ def allocate_student(
         }
         alerts = _derive_failure_alerts(
             stage_candidate_counts,
-            trace,
+            tracker_trace,
             error_type=error_type,
         )
         if alerts:
@@ -1690,10 +1858,13 @@ def allocate_student(
         if extra_updates:
             payload.update(cast(AllocationLogRecord, dict(extra_updates)))
         log.update(payload)
-        return AllocationResult(None, trace, log)
+
+        trace_output = _ensure_detailed_trace()
+        return AllocationResult(None, trace_output, log)
 
     log["candidate_count"] = int(eligible.shape[0])
-    log["stage_candidate_counts"] = _canonical_stage_counts(stage_candidate_counts)
+    log["stage_candidate_counts"] = stage_candidate_counts
+    log["initial_candidate_count"] = initial_candidates
     log["rule_reason_code"] = rule_reason_code
     log["rule_reason_text"] = rule_reason_text
     log["rule_reason_details"] = rule_details
@@ -1760,19 +1931,32 @@ def allocate_student(
         stage_candidate_counts = _canonical_stage_counts(stage_candidate_counts)
         log["stage_candidate_counts"] = stage_candidate_counts
 
-    for stage_entry in trace:
-        if stage_entry["stage"] != "capacity_gate":
-            continue
-        total_before_capacity = int(capacity_series.shape[0])
-        total_after_capacity = int(capacity_mask.sum())
-        stage_entry["total_before"] = total_before_capacity
-        stage_entry["total_after"] = total_after_capacity
-        stage_entry["matched"] = bool(total_after_capacity)
-        extras = dict(stage_entry.get("extras") or {})
-        extras["capacity_before"] = total_before_capacity
-        extras["capacity_after"] = total_after_capacity
-        stage_entry["extras"] = extras
-        break
+    (
+        tracker_trace,
+        rule_reason_code,
+        rule_reason_text,
+        rule_details,
+    ) = _build_tracker_trace_with_reasons(
+        student_row,
+        trace_plan,
+        stage_candidate_counts,
+        initial_candidates=initial_candidates,
+        stage_rules=stage_rules,
+        policy=policy,
+    )
+    _apply_capacity_totals(
+        tracker_trace,
+        before=int(capacity_series.shape[0]),
+        after=int(capacity_mask.sum()),
+    )
+    log["rule_reason_code"] = rule_reason_code
+    log["rule_reason_text"] = rule_reason_text
+    log["rule_reason_details"] = rule_details
+
+    def _get_trace_output(force_detailed: bool = False) -> list[TraceStageRecord]:
+        if force_detailed or debug_trace:
+            return _ensure_detailed_trace()
+        return tracker_trace
 
     pool_mismatch_detected = pool_mismatch_detected or _detect_pool_mismatch(
         candidate_pool=capacity_filtered,
@@ -1943,7 +2127,7 @@ def allocate_student(
                 ],
             }
         )
-        return AllocationResult(None, trace, log)
+        return AllocationResult(None, _get_trace_output(force_detailed=True), log)
     except ValueError as exc:
         error_code = str(exc) or "CAPACITY_UNDERFLOW"
         known_errors: set[AllocationErrorLiteral] = {
@@ -1983,7 +2167,7 @@ def allocate_student(
                 ],
             }
         )
-        return AllocationResult(None, trace, log)
+        return AllocationResult(None, _get_trace_output(force_detailed=True), log)
 
     mentor_name = chosen_row.get("پشتیبان", chosen_row.get("mentor_name", ""))
     mentor_id_text = chosen_row.get("کد کارمندی پشتیبان", chosen_en.get("mentor_id", ""))
@@ -2023,7 +2207,7 @@ def allocate_student(
     if join_mismatch_details:
         log["join_key_mismatches"] = list(join_mismatch_details)
 
-    return AllocationResult(selected_row, trace, log)
+    return AllocationResult(selected_row, _get_trace_output(), log)
 
 
 def allocate_batch(
@@ -2039,6 +2223,7 @@ def allocate_batch(
     ui_center_manager_map: Mapping[int, Sequence[str]] | None = None,
     strict_center_validation: bool = False,
     perf_tracker: PerfTracker | None = None,
+    debug_trace: bool = False,
 ) -> AllocationBatchResult:
     """تخصیص دسته‌ای دانش‌آموزان و بازگشت خروجی‌های چهارتایی + تریس مطابق §3 Technical SSoT."""
     if policy is None:
@@ -2206,6 +2391,7 @@ def allocate_batch(
                 pool_state_view=pool_state_view_local,
                 alert_progress=progress,
                 perf_tracker=perf_tracker,
+                debug_trace=debug_trace,
             )
 
             if invalid_center_payload is not None:
@@ -2251,10 +2437,33 @@ def allocate_batch(
             result.log["phase_rule_trace"] = phase_trace
             logs.append(result.log)
 
-            for stage in result.trace:
+            stage_counts = _canonical_stage_counts(
+                cast(Mapping[str, int], result.log.get("stage_candidate_counts", {}))
+            )
+            initial_count = int(
+                _coerce_optional_int(result.log.get("initial_candidate_count"))
+                or pool_with_ids.shape[0]
+            )
+            allocation_status = result.log.get("allocation_status")
+            is_success = allocation_status == "success"
+
+            if not debug_trace and result.trace is not None and is_success:
+                summary_trace = result.trace
+            else:
+                summary_trace, _, _, _ = _build_tracker_trace_with_reasons(
+                    student_dict,
+                    trace_plan,
+                    stage_counts,
+                    initial_candidates=initial_count,
+                    stage_rules=stage_rules,
+                    policy=policy,
+                )
+
+            trace_for_storage = result.trace if debug_trace or not is_success else summary_trace
+            for stage in trace_for_storage:
                 trace_rows.append({"student_id": result.log["student_id"], **stage})
 
-            outcome = summarize_trace_outcome(student_dict, result.trace, result.log, policy=policy)
+            outcome = summarize_trace_outcome(student_dict, summary_trace, result.log, policy=policy)
             trace_outcomes.append(outcome)
             result.log["trace_final_status"] = outcome.final_status
             result.log["trace_failure_stage"] = outcome.failure_stage

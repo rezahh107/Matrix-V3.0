@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 import pandas as pd
 
+from app.core.common.types import CANONICAL_TRACE_ORDER, TraceStageName
 from app.core.policy_loader import PolicyConfig
 
 from .dedupe import HISTORY_SNAPSHOT_COLUMNS
@@ -164,4 +167,31 @@ __all__ = [
     "attach_history_flags",
     "attach_history_snapshot",
     "attach_same_history_mentor",
+    "build_stage_summary",
 ]
+
+
+def build_stage_summary(
+    stage_counts: Mapping[TraceStageName, int], *, initial_candidates: int
+) -> list[dict[str, int | str]]:
+    """Build ordered before/after counts for the canonical 8 trace stages.
+
+    The output list always contains exactly eight dictionaries following
+    ``CANONICAL_TRACE_ORDER``. Each entry has ``stage``, ``total_before`` and
+    ``total_after`` keys and is derived purely from the provided ``stage_counts``
+    tracker data without re-running any filters.
+    """
+
+    total_before = int(initial_candidates)
+    summary: list[dict[str, int | str]] = []
+    for stage in CANONICAL_TRACE_ORDER:
+        after = int(stage_counts.get(stage, 0))
+        summary.append(
+            {
+                "stage": stage,
+                "total_before": total_before,
+                "total_after": after,
+            }
+        )
+        total_before = after
+    return summary
