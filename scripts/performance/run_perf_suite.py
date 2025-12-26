@@ -35,8 +35,8 @@ def _load_dataset(base_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame, dict[str,
     with meta_path.open("r", encoding="utf-8") as handle:
         meta = json.load(handle)
 
-    students_path = base_dir / meta.get("students", "students.csv")
-    mentors_path = base_dir / meta.get("mentors", "mentors.csv")
+    students_path = base_dir / (meta.get("students") or "students.csv")
+    mentors_path = base_dir / (meta.get("mentors") or "mentors.csv")
     if not students_path.exists():
         raise FileNotFoundError(f"Missing students dataset at {students_path}")
     if not mentors_path.exists():
