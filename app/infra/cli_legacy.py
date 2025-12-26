@@ -399,9 +399,9 @@ def normalize_national_id(value: Any) -> str | None:
     digits_only = "".join(ch for ch in normalized if ch.isdigit())
     if not digits_only:
         return None
-    if len(digits_only) < 10 and digits_only.isdigit():
+    if len(digits_only) < 10:
         digits_only = digits_only.zfill(10)
-    if len(digits_only) != 10 or not digits_only.isdigit():
+    if len(digits_only) != 10:
         return None
     return digits_only
 
