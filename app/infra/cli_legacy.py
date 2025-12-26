@@ -370,6 +370,19 @@ def _coerce_header_mode(value: str | None) -> HeaderMode:
     return cast(HeaderMode, normalized)
 
 
+def _normalize_student_id(series: pd.Series) -> pd.Series:
+    """Return a trimmed string Series for student IDs."""
+
+    return series.astype("string").str.strip()
+
+
+def _student_id_missing_mask(series: pd.Series) -> pd.Series:
+    """Identify empty, NA, or 'nan' student_id values in a Series."""
+
+    normalized = _normalize_student_id(series)
+    return normalized.eq("") | normalized.str.lower().eq("nan") | normalized.isna()
+
+
 def attach_student_id_column(
     frame: pd.DataFrame,
     student_ids: pd.Series,
@@ -405,16 +418,11 @@ def attach_student_id_column(
     """
 
     en_frame = canonicalize_headers(frame, header_mode="en")
-    aligned = student_ids.reindex(en_frame.index).astype("string").str.strip()
-
-    def _clean_mask(series: pd.Series) -> pd.Series:
-        series_str = series.astype("string")
-        stripped = series_str.str.strip()
-        return stripped.eq("") | stripped.str.lower().eq("nan") | series_str.isna()
+    aligned = _normalize_student_id(student_ids.reindex(en_frame.index))
 
     if ensure_existing and "student_id" in en_frame.columns:
         existing = en_frame["student_id"].astype("string")
-        mask = _clean_mask(existing)
+        mask = _student_id_missing_mask(existing)
         filled = existing.copy()
         filled.loc[mask] = aligned.reindex(en_frame.index)
         en_frame["student_id"] = filled
@@ -685,8 +693,8 @@ def _validate_allocated_student_ids(
 
     if "student_id" not in alloc_en.columns:
         raise AllocationConsistencyError("allocations_df is missing student_id column.")
-    student_ids = alloc_en["student_id"].astype("string").str.strip()
-    missing_mask = student_ids.eq("") | student_ids.str.lower().eq("nan") | student_ids.isna()
+    student_ids = _normalize_student_id(alloc_en["student_id"])
+    missing_mask = _student_id_missing_mask(alloc_en["student_id"])
     if bool(missing_mask.any()):
         missing_count = int(missing_mask.sum())
         sample = student_ids[missing_mask].head(5).tolist()
@@ -707,8 +715,9 @@ def _validate_allocated_student_ids(
         success_logs = logs_en
     else:
         success_logs = logs_en.loc[status_series.astype("string").str.lower() == "success"]
-    success_ids = success_logs.get("student_id", pd.Series(dtype="string")).astype("string").str.strip()
-    success_ids = success_ids[~success_ids.eq("") & ~success_ids.str.lower().eq("nan") & ~success_ids.isna()]
+    success_series = success_logs.get("student_id", pd.Series(dtype="string"))
+    success_ids = _normalize_student_id(success_series)
+    success_ids = success_ids[~_student_id_missing_mask(success_series)]
 
     allocated_set = set(student_ids.tolist())
     success_set = set(success_ids.tolist())
