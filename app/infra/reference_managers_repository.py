@@ -81,9 +81,13 @@ def _normalize_manager_frame(df: pd.DataFrame) -> pd.DataFrame:
         critical_required={"manager": {_MANAGER_COLUMN, _CENTER_COLUMN}},
     )
     resolution = pipeline.resolve(df, source="manager")
-    canonical = _drop_pii_columns(resolution.resolved_df, pii_columns=_PII_COLUMNS)
-    if not resolution.can_continue:
-        raise ValueError(f"ستون‌های موردنیاز ManagerReport یافت نشد: {', '.join(resolution.missing_required)}")
+    canonical = _drop_pii_columns(
+        resolution.require_can_continue(
+            path="manager.xlsx",
+            reason_fa="ستون‌های موردنیاز ManagerReport یافت نشد.",
+        ),
+        pii_columns=_PII_COLUMNS,
+    )
 
     normalized = canonical[
         [

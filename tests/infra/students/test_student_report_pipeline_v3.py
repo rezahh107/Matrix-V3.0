@@ -1,8 +1,10 @@
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from app.core.policy_loader import load_policy
+from app.infra.errors import DatabasePreparationError
 from app.infra.local_database import LocalDatabase
 from app.infra.reference_students_repository import import_student_report_with_validation
 
@@ -73,15 +75,10 @@ def test_student_report_missing_alias_surfaces_missing_column(tmp_path):
     excel_path = tmp_path / "students.xlsx"
     _write_excel(raw, excel_path)
 
-    bundle = import_student_report_with_validation(excel_path, db=db, policy=policy)
+    with pytest.raises(DatabasePreparationError) as excinfo:
+        import_student_report_with_validation(excel_path, db=db, policy=policy)
 
-    missing_columns = {issue.column for issue in bundle.join_keys.issues if issue.error_code == "MISSING_COLUMN"}
-    assert "کدرشته" in missing_columns
-    hint_issue = next(
-        issue for issue in bundle.join_keys.issues if issue.column == "کدرشته" and issue.row_index == -1
-    )
-    assert "accepted_aliases" in str(hint_issue.raw_value)
-    assert bundle.join_keys.canonical_df.empty
+    assert "کدرشته" in (excinfo.value.hint or "")
 
 
 def test_student_report_registration_status_alias_used_for_finance(tmp_path):

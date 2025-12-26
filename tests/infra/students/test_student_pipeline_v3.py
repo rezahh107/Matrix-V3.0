@@ -5,6 +5,7 @@ import pytest
 
 from app.core.common.types import StudentDomainValidationIssue, StudentDomainValidationResult
 from app.core.policy_loader import PolicyConfig, load_policy
+from app.infra.errors import DatabasePreparationError
 from app.infra.students import pipeline_v3
 from app.infra.students.student_pipeline_v3 import StudentPipelineV3
 
@@ -83,8 +84,8 @@ def test_student_pipeline_v3_missing_join_key_blocks() -> None:
         }
     )
 
-    result = pipeline.run(df)
+    with pytest.raises(DatabasePreparationError) as excinfo:
+        pipeline.run(df)
 
-    assert not result.can_continue
-    assert result.validation.join_keys.issues
+    assert "کدرشته" in (excinfo.value.hint or "")
 
