@@ -1,0 +1,21 @@
+--- a/app/infra/cli_legacy.py
++++ b/app/infra/cli_legacy.py
+@@ -126,7 +126,8 @@
+     load_students_from_cache,
+ )
+ from app.infra.students.pipeline_v3 import StudentPipelineV3
+-from app.infra.validators.join_keys import JoinKeyAuditResult, validate_allocation_join_keys
++from app.infra.qa.alloc_join_validation import validate_allocation_join_keys_with_wildcard
++from app.infra.validators.join_keys import JoinKeyAuditResult
+ 
+ if TYPE_CHECKING:
+     from app.core.common.domain import BuildConfig
+@@ -2629,7 +2630,7 @@
+             policy=policy,
+         )
+ 
+-        join_key_audit = validate_allocation_join_keys(
++        join_key_audit = validate_allocation_join_keys_with_wildcard(
+             allocations_df,
+             students_base,
+             pool_base,
