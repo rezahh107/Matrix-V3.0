@@ -83,7 +83,12 @@ class StudentPipelineV3:
     def run(self, df: pd.DataFrame) -> StudentPipelineResult:
         crosswalk = self._enforce_db_reference_mode()
         header_resolution = self._header_pipeline.resolve(df, source="report")
-        normalized_values = coerce_semantics(header_resolution.resolved_df, "report")
+        normalized_values = coerce_semantics(
+            header_resolution.require_can_continue(
+                path="StudentReport", reason_fa="ستون‌های الزامی StudentReport موجود نیست."
+            ),
+            "report",
+        )
         canonical_headers = canonicalize_headers(
             normalized_values, header_mode=self._header_mode
         )

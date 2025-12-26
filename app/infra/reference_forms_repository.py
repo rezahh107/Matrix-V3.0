@@ -33,7 +33,10 @@ def import_forms_with_validation(
 
     df = read_excel_first_sheet(path)
     resolution = _build_forms_header_pipeline(policy).resolve(df, source="report")
-    normalized = resolution.resolved_df
+    normalized = resolution.require_can_continue(
+        path=str(path),
+        reason_fa="ستون‌های کلیدی فرم‌ها موجود نیست.",
+    )
     if "entry_id" not in normalized.columns or "received_at" not in normalized.columns:
         normalized = normalized.copy()
         if "entry_id" not in normalized.columns:
@@ -54,7 +57,14 @@ def load_forms_with_validation(
 
     repo = FormsRepository(client=None, db=db)
     cached: pd.DataFrame = repo.load_entries()
-    normalized = _build_forms_header_pipeline(policy).resolve(cached, source="report").resolved_df
+    normalized = (
+        _build_forms_header_pipeline(policy)
+        .resolve(cached, source="report")
+        .require_can_continue(
+            path="forms_cache",
+            reason_fa="ستون‌های کلیدی فرم‌ها در کش موجود نیست.",
+        )
+    )
     validation = validate_and_canonicalize_join_keys(
         normalized, policy=policy, entity_type="form"
     )

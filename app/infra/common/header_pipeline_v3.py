@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 import pandas as pd
 
 from app.core.common.columns import HEADER_ALIASES_V3, normalize_fa
+from app.infra.errors import DatabasePreparationError
 
 
 def _normalize_header(text: str) -> str:
@@ -36,6 +37,13 @@ class HeaderResolution:
         return not self.missing_required and not any(
             issue.severity == "P0" for issue in self.issues
         )
+
+    def require_can_continue(self, *, path: str, reason_fa: str) -> pd.DataFrame:
+        if self.can_continue:
+            return self.resolved_df
+
+        hint = ", ".join(self.missing_required) if self.missing_required else None
+        raise DatabasePreparationError(path=path, reason=reason_fa, hint=hint)
 
 
 class HeaderPipelineV3:

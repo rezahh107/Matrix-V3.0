@@ -113,13 +113,10 @@ class GroupCodeRepository:
 
     def _normalize_import_frame(self, df: pd.DataFrame) -> pd.DataFrame:
         resolution = self._header_pipeline.resolve(df, source="groupcode")
-        if not resolution.can_continue:
-            raise DatabasePreparationError(
-                path="groupcodes.xlsx",
-                reason="ستون‌های الزامی group_code موجود نیست.",
-                hint=", ".join(resolution.missing_required),
-            )
-        canonical_en = resolution.resolved_df
+        canonical_en = resolution.require_can_continue(
+            path="groupcodes.xlsx",
+            reason_fa="ستون‌های الزامی group_code موجود نیست.",
+        )
         columns = [
             "group_code",
             "level",

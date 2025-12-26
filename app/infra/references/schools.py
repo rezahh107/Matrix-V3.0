@@ -6,7 +6,6 @@ from pathlib import Path
 
 import pandas as pd
 
-from app.infra.errors import DatabasePreparationError
 from app.infra.io_utils import ALT_CODE_COLUMN, read_crosswalk_workbook, read_excel_first_sheet
 from app.infra.local_database import LocalDatabase
 from app.infra.reference_repository import SQLiteReferenceRepository
@@ -28,13 +27,10 @@ def _normalize_schools_frame(df: pd.DataFrame, *, path: Path | str | None = None
         required_fields=list(SchoolRepository.REQUIRED_COLUMNS), header_mode="fa"
     )
     resolution = resolver.resolve(df)
-    if not resolution.can_continue:
-        raise DatabasePreparationError(
-            path=str(path) if path is not None else "SchoolReport",
-            reason="ستون‌های الزامی مدارس در فایل موجود نیست.",
-            hint=", ".join(resolution.missing_fields),
-        )
-    canonical = resolution.resolved_df
+    canonical = resolution.require_can_continue(
+        path=str(path) if path is not None else "SchoolReport",
+        reason_fa="ستون‌های الزامی مدارس در فایل موجود نیست.",
+    )
     code_col = "کد مدرسه"
     if code_col in canonical.columns:
         canonical = canonical.copy()

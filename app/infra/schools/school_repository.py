@@ -6,7 +6,6 @@ from pathlib import Path
 import pandas as pd
 
 from app.infra.db.reference_tables import ReferenceTableStatus, status_from_meta
-from app.infra.errors import DatabasePreparationError
 from app.infra.io_utils import read_excel_first_sheet
 from app.infra.local_database import LocalDatabase
 from app.infra.reference_repository import SQLiteReferenceRepository
@@ -43,14 +42,12 @@ class SchoolRepository:
     ) -> ReferenceTableStatus:
         df = read_excel_first_sheet(path)
         resolution = self._header_resolver.resolve(df)
-        if not resolution.can_continue:
-            raise DatabasePreparationError(
-                path=str(path),
-                reason="ستون‌های الزامی مدارس در فایل موجود نیست.",
-                hint=", ".join(resolution.missing_fields),
-            )
+        normalized = resolution.require_can_continue(
+            path=str(path),
+            reason_fa="ستون‌های الزامی مدارس در فایل موجود نیست.",
+        )
         normalized = coerce_int_columns(
-            resolution.resolved_df, ["کد مدرسه", "مرکز گلستان صدرا", "جنسیت"]
+            normalized, ["کد مدرسه", "مرکز گلستان صدرا", "جنسیت"]
         )
         if "فعال" not in normalized.columns:
             normalized = normalized.copy()
