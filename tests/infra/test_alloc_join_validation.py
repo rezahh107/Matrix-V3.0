@@ -318,6 +318,41 @@ def test_validate_allocation_join_keys_with_center_and_school_mismatch() -> None
     assert wildcard.invalid_count == 1
 
 
+def test_validate_allocation_join_keys_with_finance_variants() -> None:
+    policy = load_policy()
+    allocations = pd.DataFrame({"student_id": ["s1"], "mentor_id": ["m1"]})
+    students = pd.DataFrame(
+        {
+            "student_id": ["s1"],
+            policy.stage_column("group"): [1],
+            policy.stage_column("gender"): [1],
+            policy.stage_column("graduation_status"): [0],
+            policy.stage_column("center"): [1],
+            policy.stage_column("finance"): [1],
+            policy.columns.school_code: [0],
+        }
+    )
+    mentors = pd.DataFrame(
+        {
+            "mentor_id": ["m1"],
+            policy.stage_column("group"): [1],
+            policy.stage_column("gender"): [1],
+            policy.stage_column("graduation_status"): [0],
+            policy.stage_column("center"): [1],
+            policy.stage_column("finance"): [3],
+            policy.columns.school_code: [0],
+        }
+    )
+
+    base = validate_allocation_join_keys(allocations, students, mentors, policy=policy)
+    wildcard = validate_allocation_join_keys_with_wildcard(
+        allocations, students, mentors, policy=policy
+    )
+
+    assert base.invalid_count == 1
+    assert wildcard.invalid_count == 0
+
+
 def test_validate_allocation_join_keys_handles_farsi_tokens_and_localized_digits() -> None:
     policy = load_policy()
     allocations = pd.DataFrame({"student_id": ["s1"], "mentor_id": ["m1"]})

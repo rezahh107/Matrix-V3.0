@@ -8,8 +8,10 @@ import pandas as pd
 
 from app.core.common.join_keys import (
     center_wildcard_value,
+    finance_variants_from_cell,
     matches_center_with_wildcard,
     matches_school_with_wildcard,
+    resolve_finance_variants,
 )
 from app.core.policy_loader import PolicyConfig
 from app.infra.validators.join_keys import JoinKeyAuditResult, validate_allocation_join_keys
@@ -38,6 +40,7 @@ def validate_allocation_join_keys_with_wildcard(
     audit = base_result.audit_frame.copy()
     school_col = policy.columns.school_code
     center_col = policy.stage_column("center")
+    finance_col = policy.stage_column("finance")
     wildcard_center = center_wildcard_value(policy)
 
     constraint_column = "has_school_constraint"
@@ -119,6 +122,15 @@ def validate_allocation_join_keys_with_wildcard(
         f"{center_col}_mentor",
         lambda student_value, mentor_value, _constraint: matches_center_with_wildcard(
             student_value, mentor_value, wildcard_center
+        ),
+    )
+    _fix_match_column(
+        finance_col,
+        f"{finance_col}_mentor",
+        lambda student_value, mentor_value, _constraint: bool(
+            resolve_finance_variants(student_value, policy).intersection(
+                finance_variants_from_cell(mentor_value, policy)
+            )
         ),
     )
 
