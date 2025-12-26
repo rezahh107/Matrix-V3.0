@@ -23,4 +23,4 @@ def test_golden_parity_matches_baseline(tmp_path: Path) -> None:
 
     aligned_expected = _normalize(expected)
     aligned_actual = _normalize(result.allocations)
-    pd.testing.assert_frame_equal(aligned_expected, aligned_actual, check_like=True, check_dtype=False)
+    pd.testing.assert_frame_equal(aligned_expected, aligned_actual, check_dtype=False)
