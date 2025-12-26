@@ -22,9 +22,7 @@ class PerfRunResult:
     allocations: pd.DataFrame
     metrics_path: Path
     decisions_path: Path
-    total_runtime_seconds: float
-    peak_memory_bytes: int
-    stage_timings: dict[str, float]
+    metrics: dict[str, Any]
 
 
 def _load_dataset(base_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, Any]]:
