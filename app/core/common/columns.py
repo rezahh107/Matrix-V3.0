@@ -82,7 +82,7 @@ def ensure_series(values: pd.Series | pd.DataFrame) -> pd.Series:
     return values
 
 
-def dedupe_columns(df: pd.DataFrame) -> pd.DataFrame:
+def dedupe_columns(df: pd.DataFrame, *, copy: bool = True) -> pd.DataFrame:
     """حذف ستون‌های تکراری با حفظ اولین وقوع.
 
     این تابع برای مراحل کاننیکال‌سازی که به خروجی بدون ستون هم‌نام نیاز
@@ -97,14 +97,20 @@ def dedupe_columns(df: pd.DataFrame) -> pd.DataFrame:
 
     Args:
         df: دیتافریم ورودی با احتمال وجود ستون تکراری.
+        copy: در صورت True (پیش‌فرض) نسخهٔ کپی بازمی‌گرداند تا رفتار قبلی حفظ شود.
+            در صورت False در مسیرهای صرفاً خواندنی می‌توان نمای بدون کپی دریافت کرد
+            تا هزینهٔ حافظه کاهش یابد.
 
     Returns:
-        نسخهٔ جدید دیتافریم با ستون‌های یکتا (اولین تکرار حفظ می‌شود).
+        نسخهٔ جدید یا نمای دیتافریم با ستون‌های یکتا (اولین تکرار حفظ می‌شود).
     """
 
     if df.columns.duplicated().any():
-        return df.loc[:, ~df.columns.duplicated()].copy()
-    return df.copy()
+        deduped = df.loc[:, ~df.columns.duplicated()]
+        if copy:
+            return deduped.copy()
+        return deduped.copy(deep=False)
+    return df.copy() if copy else df
 
 
 # ---------------------------------------------------------------------------
