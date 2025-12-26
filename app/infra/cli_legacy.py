@@ -871,8 +871,20 @@ def _enforce_allocation_export_invariants(
         if isinstance(audit_en, pd.DataFrame) and "student_id" in audit_en.columns:
             any_mismatch = audit_en.get("any_mismatch")
             if any_mismatch is not None:
-                bad = audit_en.loc[any_mismatch == True, "student_id"]  # noqa: E712
-                sample = _normalize_student_id(bad).dropna().head(5).tolist()
+                bad_rows = audit_en.loc[any_mismatch == True].copy()  # noqa: E712
+                bad_rows["student_id"] = _normalize_student_id(bad_rows["student_id"])
+                for _, row in bad_rows.head(5).iterrows():
+                    parts: list[str] = []
+                    sid = row.get("student_id")
+                    if sid is not None and not (isinstance(sid, float) and pd.isna(sid)):
+                        parts.append(str(sid))
+                    mismatch = row.get("mismatch_summary")
+                    if isinstance(mismatch, str) and mismatch:
+                        parts.append(mismatch)
+                    mode = row.get("mentor_lookup_mode")
+                    if isinstance(mode, str) and mode:
+                        parts.append(f"mentor={mode}")
+                    sample.append(" | ".join(parts))
         raise AllocationConsistencyError(
             "INV-QA-ALLOC-JOIN-02 failed: allocation join-key audit has "
             f"invalid_count={int(join_key_audit.invalid_count)} of total={int(join_key_audit.total)} "

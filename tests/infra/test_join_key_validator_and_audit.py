@@ -89,6 +89,21 @@ def test_validate_allocation_join_keys_flags_mismatch():
     assert result.duplicate_columns == {key: 0 for key in policy.join_keys}
 
 
+def test_validate_allocation_join_keys_does_not_require_alias_when_mentor_id_present() -> None:
+    policy, students, pool, allocations = _sample_frames()
+    # Ensure no real join-key mismatch exists.
+    pool.loc[1, "جنسیت"] = 0
+
+    # Alias code might be blank/missing in allocations even when mentor_id is present.
+    allocations.loc[0, "mentor_alias_code"] = pd.NA
+
+    result = validate_allocation_join_keys(allocations, students, pool, policy=policy)
+
+    assert result.invalid_count == 0
+    row = result.audit_frame.loc[result.audit_frame["student_id"] == "S-1"].iloc[0]
+    assert str(row.get("mentor_lookup_mode", "")) in {"mentor_id", "mentor_alias", "missing"}
+
+
 def test_validate_allocation_join_keys_handles_duplicate_join_columns_gender():
     policy, students, pool, allocations = _sample_frames()
 
