@@ -382,6 +382,12 @@ def _student_id_missing_mask(series: pd.Series) -> pd.Series:
     return series.eq("") | series.str.lower().eq("nan") | series.isna()
 
 
+def _get_student_id_set_from_series(series: pd.Series) -> set[str]:
+    ids = _normalize_student_id(series)
+    ids = ids[~_student_id_missing_mask(ids)]
+    return set(ids.tolist())
+
+
 def normalize_national_id(value: Any) -> str | None:
     """Normalize national_id for stable joins.
 
@@ -448,10 +454,15 @@ def attach_student_id_column(
     students_en = None
     student_ids_normalized: pd.Series | None = None
     if students_df is not None:
-        students_en = canonicalize_headers(students_df, header_mode="en")
-        student_ids_normalized = _normalize_student_id(
-            student_ids.reindex(students_en.index)
-        )
+        students_en = canonicalize_headers(students_df, header_mode="en").copy()
+        # Prefer the student_id column in students_df as the single source of truth.
+        # This prevents accidental positional/index-based desync when a caller passes
+        # a misaligned student_ids Series.
+        if "student_id" in students_en.columns:
+            student_ids_normalized = _normalize_student_id(students_en["student_id"])
+            students_en["student_id"] = student_ids_normalized
+        else:
+            student_ids_normalized = _normalize_student_id(student_ids.reindex(students_en.index))
 
     existing = None
     if "student_id" in en_frame.columns:
@@ -814,11 +825,8 @@ def _validate_allocated_student_ids(
     else:
         success_logs = logs_en.loc[status_series.astype("string").str.lower() == "success"]
     success_series = success_logs.get("student_id", pd.Series(dtype="string"))
-    success_ids = _normalize_student_id(success_series)
-    success_ids = success_ids[~_student_id_missing_mask(success_ids)]
-
-    allocated_set = set(student_ids.tolist())
-    success_set = set(success_ids.tolist())
+    allocated_set = _get_student_id_set_from_series(student_ids)
+    success_set = _get_student_id_set_from_series(success_series)
 
     if allocated_set != success_set:
         only_in_alloc = sorted(allocated_set - success_set)[:5]
@@ -828,6 +836,72 @@ def _validate_allocated_student_ids(
             f"allocations={len(allocated_set)} success_logs={len(success_set)}; "
             f"only_in_allocations={only_in_alloc} only_in_success_logs={only_in_logs}."
         )
+
+
+def _enforce_allocation_export_invariants(
+    *,
+    allocations_df: pd.DataFrame,
+    logs_df: pd.DataFrame,
+    join_key_audit: JoinKeyAuditResult | None,
+    unallocated_summary: pd.DataFrame | None,
+) -> None:
+    """Hard guardrails for export integrity (P0, fail-fast).
+
+    Invariants:
+    - INV-EXPORT-01: allocations.student_id == success logs student_id set.
+    - INV-EXPORT-02: allocations and unallocated are disjoint by student_id.
+    - INV-QA-ALLOC-JOIN-02: join-key audit invalid_count == 0.
+    """
+
+    # Re-check right before writing any output files.
+    _validate_allocated_student_ids(allocations_df=allocations_df, logs_df=logs_df)
+
+    if join_key_audit is not None and int(join_key_audit.invalid_count) > 0:
+        audit = join_key_audit.audit_frame
+        audit_en = (
+            canonicalize_headers(audit, header_mode="en")
+            if isinstance(audit, pd.DataFrame)
+            else None
+        )
+        sample: list[str] = []
+        if isinstance(audit_en, pd.DataFrame) and "student_id" in audit_en.columns:
+            any_mismatch = audit_en.get("any_mismatch")
+            if any_mismatch is not None:
+                bad = audit_en.loc[any_mismatch == True, "student_id"]  # noqa: E712
+                sample = _normalize_student_id(bad).dropna().head(5).tolist()
+        raise AllocationConsistencyError(
+            "INV-QA-ALLOC-JOIN-02 failed: allocation join-key audit has "
+            f"invalid_count={int(join_key_audit.invalid_count)} of total={int(join_key_audit.total)} "
+            f"(sample_student_id={sample})."
+        )
+
+    alloc_en = canonicalize_headers(allocations_df, header_mode="en")
+    allocated_set = _get_student_id_set_from_series(
+        alloc_en.get("student_id", pd.Series(dtype="string"))
+    )
+
+    # Prefer unallocated_summary if present, otherwise fall back to logs where status != success.
+    unallocated_set: set[str] = set()
+    if isinstance(unallocated_summary, pd.DataFrame) and not unallocated_summary.empty:
+        unalloc_en = canonicalize_headers(unallocated_summary, header_mode="en")
+        if "student_id" in unalloc_en.columns:
+            unallocated_set = _get_student_id_set_from_series(unalloc_en["student_id"])
+    else:
+        logs_en = canonicalize_headers(logs_df, header_mode="en")
+        if "student_id" in logs_en.columns and "allocation_status" in logs_en.columns:
+            status = logs_en["allocation_status"].astype("string").str.lower()
+            unalloc_rows = logs_en.loc[status != "success", "student_id"]
+            unallocated_set = _get_student_id_set_from_series(unalloc_rows)
+
+    if unallocated_set:
+        overlap = allocated_set.intersection(unallocated_set)
+        if overlap:
+            overlap_sample = sorted(overlap)[:5]
+            raise AllocationConsistencyError(
+                "INV-EXPORT-02 failed: allocations and unallocated overlap by student_id; "
+                f"overlap_count={len(overlap)} sample={overlap_sample}."
+            )
+
 
 
 def _load_forms_repository(args: argparse.Namespace, db: LocalDatabase) -> FormsRepository:
@@ -2058,7 +2132,7 @@ def _inject_student_ids(
         "next_female_start={next_female_start}".format(**summary)
     )
 
-    return counters, summary, students_df
+    return student_ids, summary, students_df
 
 
 def _run_build_matrix(args: argparse.Namespace, policy: PolicyConfig, progress: ProgressFn) -> int:
@@ -2499,9 +2573,14 @@ def _allocate_and_write(
             args, "export_profile_path", str(_DEFAULT_ALLOC_PROFILE_PATH)
         ) or str(_DEFAULT_ALLOC_PROFILE_PATH)
         students_for_export = canonicalize_headers(students_base, header_mode=header_internal)
-        students_for_export["student_id"] = student_ids.reindex(students_for_export.index).astype(
-            "string"
-        )
+        if "student_id" in students_for_export.columns:
+            students_for_export["student_id"] = _normalize_student_id(
+                students_for_export["student_id"]
+            )
+        else:
+            students_for_export["student_id"] = _normalize_student_id(
+                student_ids.reindex(students_for_export.index)
+            )
         if export_profile_choice == "sabt":
             sabt_profile = load_sabt_export_profile(Path(export_profile_path))
             sabt_allocations_df = build_sabt_export_frame(
@@ -2618,6 +2697,13 @@ def _allocate_and_write(
             )
         if not qa_report.passed:
             _raise_qa_invariant_failure(qa_report, output=output)
+
+        _enforce_allocation_export_invariants(
+            allocations_df=allocations_df,
+            logs_df=logs_df,
+            join_key_audit=join_key_audit,
+            unallocated_summary=trace_extras.unallocated_summary if trace_extras else None,
+        )
 
         # تبدیل نهایی به فرمت‌های قابل نوشتن در Excel
         allocations_df = _make_excel_safe(allocations_df)

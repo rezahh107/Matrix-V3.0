@@ -339,3 +339,28 @@ def test_validate_allocated_student_ids_filters_success_status():
 
     with pytest.raises(AllocationConsistencyError):
         _validate_allocated_student_ids(allocations_df=allocations, logs_df=logs)
+
+
+def test_attach_student_id_prefers_students_df_student_id_column() -> None:
+    # If students_df carries student_id (SSoT), we must NOT trust a potentially
+    # misaligned/incorrect student_ids Series.
+    students_df = pd.DataFrame(
+        {
+            "student_key": ["A", "B"],
+            "student_id": ["S-1", "S-2"],
+        }
+    )
+    allocations_df = pd.DataFrame({"student_key": ["A", "B"], "x": [1, 2]})
+
+    # Deliberately wrong series (values + index) to simulate desync risk.
+    wrong_student_ids = pd.Series(["WRONG-1", "WRONG-2"], index=[100, 200])
+
+    out = attach_student_id_column(
+        allocations_df,
+        wrong_student_ids,
+        header_mode="en",
+        ensure_existing=False,
+        students_df=students_df,
+    )
+
+    assert out["student_id"].tolist() == ["S-1", "S-2"]
