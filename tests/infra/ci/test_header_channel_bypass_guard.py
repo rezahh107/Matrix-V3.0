@@ -33,7 +33,7 @@ def _load_ast(path: Path) -> tuple[ast.AST | None, str | None]:
         with tokenize.open(path) as handle:
             source = handle.read()
         method = "tokenize"
-    except UnicodeDecodeError:
+    except (UnicodeDecodeError, SyntaxError):
         data = path.read_bytes()
         try:
             source = data.decode("utf-8-sig")
