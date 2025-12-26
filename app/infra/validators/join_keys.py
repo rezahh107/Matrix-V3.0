@@ -177,19 +177,91 @@ def validate_allocation_join_keys(
             ensure_series(allocations[alloc_alias_column]).astype("string").str.strip()
         )
 
-    merged = base.merge(student_subset, on="student_id", how="left", suffixes=("", "_student"))
-    mentor_merge_keys: list[str] = []
+    merged = base.merge(
+        student_subset,
+        on="student_id",
+        how="left",
+        suffixes=("", "_student"),
+        indicator="merge_student",
+    )
+    merged["__audit_row_id"] = range(len(merged))
+
+    # Mentor lookup is best-effort and must be robust to missing/dirty alias codes.
+    # Prefer mentor_id when available, then fall back to alias for rows that could not be resolved.
     if mentor_id_column and "mentor_id" in base.columns:
-        mentor_merge_keys.append("mentor_id")
-    if alias_column and "mentor_alias_code" in base.columns:
-        mentor_merge_keys.append("mentor_alias_code")
-    if mentor_merge_keys:
         merged = merged.merge(
             mentor_subset,
-            on=mentor_merge_keys,
+            on="mentor_id",
             how="left",
             suffixes=("", "_mentor"),
+            indicator="merge_mentor_id",
         )
+
+        if (
+            alias_column
+            and "mentor_alias_code" in base.columns
+            and "mentor_alias_code" in mentor_subset.columns
+        ):
+            alias_series = ensure_series(merged["mentor_alias_code"]).astype("string").str.strip()
+            merged["mentor_alias_code"] = alias_series
+            missing_mask = (merged["merge_mentor_id"] == "left_only") & alias_series.notna() & (
+                alias_series != ""
+            )
+            if bool(missing_mask.any()):
+                alias_lookup = merged.loc[
+                    missing_mask, ["__audit_row_id", "mentor_alias_code"]
+                ].merge(
+                    mentor_subset,
+                    on="mentor_alias_code",
+                    how="left",
+                    suffixes=("", "_mentor_fill"),
+                    indicator="merge_mentor_alias",
+                )
+                rename_map = {
+                    col: f"{col}_mentor_fill" for col in mentor_keys if col in alias_lookup.columns
+                }
+                alias_lookup = alias_lookup.rename(columns=rename_map)
+
+                keep_cols = ["__audit_row_id", "merge_mentor_alias", *rename_map.values()]
+                alias_lookup = alias_lookup[[col for col in keep_cols if col in alias_lookup.columns]].copy()
+
+                merged = merged.merge(alias_lookup, on="__audit_row_id", how="left")
+                for col in mentor_keys:
+                    primary_col = f"{col}_mentor"
+                    fill_col = f"{col}_mentor_fill"
+                    if primary_col in merged.columns and fill_col in merged.columns:
+                        merged[primary_col] = merged[primary_col].where(
+                            merged[primary_col].notna(), merged[fill_col]
+                        )
+
+                merged["mentor_lookup_mode"] = merged["merge_mentor_id"].map(
+                    {"both": "mentor_id", "left_only": "missing"}
+                )
+                filled_by_alias = (merged["merge_mentor_id"] == "left_only") & (
+                    merged.get("merge_mentor_alias") == "both"
+                )
+                merged.loc[filled_by_alias, "mentor_lookup_mode"] = "mentor_alias"
+            else:
+                merged["mentor_lookup_mode"] = merged["merge_mentor_id"].map(
+                    {"both": "mentor_id", "left_only": "missing"}
+                )
+        else:
+            merged["mentor_lookup_mode"] = merged["merge_mentor_id"].map(
+                {"both": "mentor_id", "left_only": "missing"}
+            )
+    elif alias_column and "mentor_alias_code" in base.columns and "mentor_alias_code" in mentor_subset.columns:
+        merged = merged.merge(
+            mentor_subset,
+            on="mentor_alias_code",
+            how="left",
+            suffixes=("", "_mentor"),
+            indicator="merge_mentor_alias",
+        )
+        merged["mentor_lookup_mode"] = merged["merge_mentor_alias"].map(
+            {"both": "mentor_alias", "left_only": "missing"}
+        )
+    else:
+        merged["mentor_lookup_mode"] = "missing"
 
     match_flags: dict[str, pd.Series] = {}
     for column in policy.join_keys:
@@ -205,6 +277,11 @@ def validate_allocation_join_keys(
             match_flags[f"match_{column}"] = pd.Series([False] * len(merged), index=merged.index)
 
     audit = merged.copy()
+    if "__audit_row_id" in audit.columns:
+        audit = audit.drop(columns=["__audit_row_id"])
+    fill_cols = [col for col in audit.columns if col.endswith("_mentor_fill")]
+    if fill_cols:
+        audit = audit.drop(columns=fill_cols)
     for name, series in match_flags.items():
         audit[name] = series
     mismatch_columns = [name for name in audit.columns if name.startswith("match_")]
