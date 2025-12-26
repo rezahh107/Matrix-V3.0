@@ -34,7 +34,7 @@ class SchoolRepository:
             unique_columns=("کد مدرسه",),
         )
         self._header_resolver = SchoolHeaderResolver(
-            required_fields=list(self.REQUIRED_COLUMNS), header_mode="fa"
+            required_fields=list(self.REQUIRED_COLUMNS)
         )
 
     def import_from_excel(

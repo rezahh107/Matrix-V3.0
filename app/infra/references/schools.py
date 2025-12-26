@@ -24,7 +24,7 @@ def _normalize_schools_frame(df: pd.DataFrame, *, path: Path | str | None = None
     """نرمال‌سازی دیتافریم مدارس برای ذخیره‌سازی قابل‌اتکا در SQLite."""
 
     resolver = SchoolHeaderResolver(
-        required_fields=list(SchoolRepository.REQUIRED_COLUMNS), header_mode="fa"
+        required_fields=list(SchoolRepository.REQUIRED_COLUMNS)
     )
     resolution = resolver.resolve(df)
     canonical = resolution.require_can_continue(
