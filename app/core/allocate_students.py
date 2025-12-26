@@ -68,6 +68,7 @@ from .common.types import (
     ensure_trace_stage_name,
 )
 from .counter import normalize_digits, strip_hidden_chars
+from .perf import PerfTracker, measure_time
 from .policy_loader import PolicyConfig, load_policy
 from .reason.selection_reason import build_selection_reason_rows as _build_selection_reason_rows
 
@@ -1518,6 +1519,7 @@ def allocate_student(
     state: Mapping[Hashable, MentorCapacityState] | None = None,
     pool_state_view: pd.DataFrame | None = None,
     alert_progress: ProgressFn | None = None,
+    perf_tracker: PerfTracker | None = None,
 ) -> AllocationResult:
     """تخصیص تک‌دانش‌آموز با حفظ Trace و لاگ کامل مطابق §5 Technical SSoT."""
     if policy is None:
@@ -1584,27 +1586,31 @@ def allocate_student(
         stage_candidate_counts[stage_name] = int(count)
 
     # اعمال فیلترهای join
-    eligible = apply_join_filters(
-        candidate_pool,
-        student,
-        policy=policy,
-        student_join_map=join_map,
-        tracker=_record_stage,
-    )
+    with measure_time("join_filters", perf_tracker):
+        eligible = apply_join_filters(
+            candidate_pool,
+            student,
+            policy=policy,
+            student_join_map=join_map,
+            tracker=_record_stage,
+        )
 
     # بهبود برای OBS_JOIN_01 - همیشه جمع‌آوری mismatches
-    eligible, join_mismatch_details = _filter_candidates_by_join_map(
-        eligible,
-        join_map=join_map,
-        policy=policy,
-    )
-    _, prefilter_mismatches = _filter_candidates_by_join_map(
-        candidate_pool,
-        join_map=join_map,
-        policy=policy,
-    )
-    join_mismatch_details = _merge_join_mismatches(join_mismatch_details, prefilter_mismatches)
-    stage_candidate_counts = _canonical_stage_counts(stage_candidate_counts)
+    with measure_time("mismatch_detail", perf_tracker):
+        eligible, join_mismatch_details = _filter_candidates_by_join_map(
+            eligible,
+            join_map=join_map,
+            policy=policy,
+        )
+        _, prefilter_mismatches = _filter_candidates_by_join_map(
+            candidate_pool,
+            join_map=join_map,
+            policy=policy,
+        )
+        join_mismatch_details = _merge_join_mismatches(
+            join_mismatch_details, prefilter_mismatches
+        )
+        stage_candidate_counts = _canonical_stage_counts(stage_candidate_counts)
 
     trace = build_allocation_trace(
         student_row,
@@ -1722,34 +1728,35 @@ def allocate_student(
     state_frame = pool_state_view if pool_state_view is not None else candidate_pool
     state_view_en = dedupe_columns(canonicalize_headers(state_frame, header_mode="en"))
 
-    capacity_candidates: list[str] = []
-    if "remaining_capacity" in state_view_en.columns:
-        capacity_candidates.append("remaining_capacity")
-    capacity_candidates.append(resolved_capacity_column)
-    derived_name = canonicalize_headers(
-        pd.DataFrame(columns=[resolved_capacity_column]),
-        header_mode="en",
-    ).columns[0]
-    if derived_name not in capacity_candidates:
-        capacity_candidates.append(derived_name)
+    with measure_time("capacity_gate", perf_tracker):
+        capacity_candidates: list[str] = []
+        if "remaining_capacity" in state_view_en.columns:
+            capacity_candidates.append("remaining_capacity")
+        capacity_candidates.append(resolved_capacity_column)
+        derived_name = canonicalize_headers(
+            pd.DataFrame(columns=[resolved_capacity_column]),
+            header_mode="en",
+        ).columns[0]
+        if derived_name not in capacity_candidates:
+            capacity_candidates.append(derived_name)
 
-    capacity_column_name: str | None = None
-    for candidate in capacity_candidates:
-        if candidate in state_view_en.columns:
-            capacity_column_name = candidate
-            break
-    if capacity_column_name is None:
-        raise KeyError(
-            f"Capacity column '{resolved_capacity_column}' not found after canonicalization"
-        )
+        capacity_column_name: str | None = None
+        for candidate in capacity_candidates:
+            if candidate in state_view_en.columns:
+                capacity_column_name = candidate
+                break
+        if capacity_column_name is None:
+            raise KeyError(
+                f"Capacity column '{resolved_capacity_column}' not found after canonicalization"
+            )
 
-    capacity_series = ensure_series(state_view_en.loc[eligible.index, capacity_column_name])
-    capacity_numeric = pd.to_numeric(capacity_series, errors="coerce").fillna(0).astype(int)
-    capacity_mask = capacity_numeric > 0
-    capacity_filtered = eligible.loc[capacity_mask.values]
-    stage_candidate_counts["capacity_gate"] = int(capacity_mask.sum())
-    stage_candidate_counts = _canonical_stage_counts(stage_candidate_counts)
-    log["stage_candidate_counts"] = stage_candidate_counts
+        capacity_series = ensure_series(state_view_en.loc[eligible.index, capacity_column_name])
+        capacity_numeric = pd.to_numeric(capacity_series, errors="coerce").fillna(0).astype(int)
+        capacity_mask = capacity_numeric > 0
+        capacity_filtered = eligible.loc[capacity_mask.values]
+        stage_candidate_counts["capacity_gate"] = int(capacity_mask.sum())
+        stage_candidate_counts = _canonical_stage_counts(stage_candidate_counts)
+        log["stage_candidate_counts"] = stage_candidate_counts
 
     for stage_entry in trace:
         if stage_entry["stage"] != "capacity_gate":
@@ -1799,7 +1806,8 @@ def allocate_student(
     )
 
     # ابتدا سیاست رتبه‌بندی رسمی اجرا می‌شود
-    ranked = apply_ranking_policy(ranking_input, state=ranking_state, policy=policy)
+    with measure_time("ranking", perf_tracker):
+        ranked = apply_ranking_policy(ranking_input, state=ranking_state, policy=policy)
 
     fairness_reason = ranked.attrs.get("fairness_reason")
     if fairness_reason is not None:
@@ -2028,6 +2036,7 @@ def allocate_batch(
     center_priority: Sequence[int] | None = None,
     ui_center_manager_map: Mapping[int, Sequence[str]] | None = None,
     strict_center_validation: bool = False,
+    perf_tracker: PerfTracker | None = None,
 ) -> AllocationBatchResult:
     """تخصیص دسته‌ای دانش‌آموزان و بازگشت خروجی‌های چهارتایی + تریس مطابق §3 Technical SSoT."""
     if policy is None:
@@ -2194,6 +2203,7 @@ def allocate_batch(
                 state=cast(Mapping[Hashable, MentorCapacityState], mentor_state),
                 pool_state_view=pool_state_view_local,
                 alert_progress=progress,
+                perf_tracker=perf_tracker,
             )
 
             if invalid_center_payload is not None:
@@ -2329,65 +2339,67 @@ def allocate_batch(
     logs_df = pd.DataFrame(logs)
     if run_warnings:
         logs_df.attrs["warnings"] = tuple(run_warnings)
-    trace_df = pd.DataFrame(trace_rows)
+    with measure_time("trace_detail", perf_tracker):
+        trace_df = pd.DataFrame(trace_rows)
     trace_summary_df: pd.DataFrame | None = None
     unallocated_summary_df: pd.DataFrame | None = None
     policy_violations_df: pd.DataFrame | None = None
     final_status_counts: pd.Series | None = None
 
     # پردازش نتایج Trace
-    if trace_outcomes:
-        outcome_records: list[dict[str, object]] = []
-        for outcome in trace_outcomes:
-            record: dict[str, object] = {
-                "student_id": outcome.student_id,
-                "final_status": outcome.final_status,
-                "failure_stage": outcome.failure_stage,
-                "final_reason": outcome.final_reason,
-            }
-            record.update({f"passed_{k}": v for k, v in outcome.stage_flags.items()})
-            record.update(outcome.metadata)
-            outcome_records.append(record)
-        trace_summary_df = pd.DataFrame(outcome_records)
-        if "student_id" in trace_summary_df.columns:
-            trace_summary_df = trace_summary_df.drop_duplicates(subset=["student_id"], keep="last")
-            if "student_id" in students.columns:
-                ordered_ids = students["student_id"].tolist()
-                trace_summary_df = (
-                    trace_summary_df.set_index("student_id").reindex(ordered_ids).reset_index()
-                )
-        if (
-            trace_summary_df is not None
-            and "student_id" in trace_summary_df.columns
-            and "student_id" in students.columns
-        ):
-            student_indexed = students.set_index("student_id", drop=False)
-            for column in (
-                "student_national_code",
-                "student_registration_status",
-                "student_educational_status",
-                "student_first_name",
-                "student_last_name",
-            ):
-                if column in student_indexed.columns and column not in trace_summary_df.columns:
-                    trace_summary_df[column] = trace_summary_df["student_id"].map(
-                        student_indexed[column]
+    with measure_time("trace_summary", perf_tracker):
+        if trace_outcomes:
+            outcome_records: list[dict[str, object]] = []
+            for outcome in trace_outcomes:
+                record: dict[str, object] = {
+                    "student_id": outcome.student_id,
+                    "final_status": outcome.final_status,
+                    "failure_stage": outcome.failure_stage,
+                    "final_reason": outcome.final_reason,
+                }
+                record.update({f"passed_{k}": v for k, v in outcome.stage_flags.items()})
+                record.update(outcome.metadata)
+                outcome_records.append(record)
+            trace_summary_df = pd.DataFrame(outcome_records)
+            if "student_id" in trace_summary_df.columns:
+                trace_summary_df = trace_summary_df.drop_duplicates(subset=["student_id"], keep="last")
+                if "student_id" in students.columns:
+                    ordered_ids = students["student_id"].tolist()
+                    trace_summary_df = (
+                        trace_summary_df.set_index("student_id").reindex(ordered_ids).reset_index()
                     )
+            if (
+                trace_summary_df is not None
+                and "student_id" in trace_summary_df.columns
+                and "student_id" in students.columns
+            ):
+                student_indexed = students.set_index("student_id", drop=False)
+                for column in (
+                    "student_national_code",
+                    "student_registration_status",
+                    "student_educational_status",
+                    "student_first_name",
+                    "student_last_name",
+                ):
+                    if column in student_indexed.columns and column not in trace_summary_df.columns:
+                        trace_summary_df[column] = trace_summary_df["student_id"].map(
+                            student_indexed[column]
+                        )
 
-        if trace_summary_df is not None:
-            trace_summary_df = attach_allocation_channel(
-                trace_summary_df, students_norm, policy=policy
-            )
-            unallocated_summary_df = build_unallocated_summary(
-                trace_summary_df,
-                policy=policy,
-            )
-            final_status_counts = trace_summary_df["final_status"].value_counts()
-            policy_violations_df = find_allocation_policy_violations(
-                trace_summary_df,
-                pool_with_ids,
-                policy=policy,
-            )
+            if trace_summary_df is not None:
+                trace_summary_df = attach_allocation_channel(
+                    trace_summary_df, students_norm, policy=policy
+                )
+                unallocated_summary_df = build_unallocated_summary(
+                    trace_summary_df,
+                    policy=policy,
+                )
+                final_status_counts = trace_summary_df["final_status"].value_counts()
+                policy_violations_df = find_allocation_policy_violations(
+                    trace_summary_df,
+                    pool_with_ids,
+                    policy=policy,
+                )
 
     # آماده‌سازی خروجی استخر
     pool_output = pool_with_ids.copy()
