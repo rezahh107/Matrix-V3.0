@@ -1810,6 +1810,14 @@ def allocate_student(
     )
 
     detailed_trace: list[TraceStageRecord] | None = None
+    capacity_series: pd.Series | None = None
+    capacity_mask: pd.Series | None = None
+
+    def _capacity_totals() -> tuple[int, int]:
+        if capacity_series is not None and capacity_mask is not None:
+            return int(capacity_series.shape[0]), int(capacity_mask.sum())
+        fallback_count = int(stage_candidate_counts.get("capacity_gate", eligible.shape[0]))
+        return fallback_count, fallback_count
 
     def _ensure_detailed_trace() -> list[TraceStageRecord]:
         nonlocal detailed_trace
@@ -1823,10 +1831,11 @@ def allocate_student(
                 capacity_column=resolved_capacity_column,
                 stage_rules=stage_rules,
             )
+            before_capacity, after_capacity = _capacity_totals()
             _apply_capacity_totals(
                 detailed_trace,
-                before=int(capacity_series.shape[0]),
-                after=int(capacity_mask.sum()),
+                before=before_capacity,
+                after=after_capacity,
             )
         return detailed_trace
 
@@ -1860,6 +1869,10 @@ def allocate_student(
         log.update(payload)
 
         trace_output = _ensure_detailed_trace()
+        derived_code, derived_text, derived_details = _derive_rule_reason(trace_output)
+        log["rule_reason_code"] = derived_code
+        log["rule_reason_text"] = derived_text
+        log["rule_reason_details"] = derived_details
         return AllocationResult(None, trace_output, log)
 
     log["candidate_count"] = int(eligible.shape[0])
@@ -1944,10 +1957,11 @@ def allocate_student(
         stage_rules=stage_rules,
         policy=policy,
     )
+    before_capacity, after_capacity = _capacity_totals()
     _apply_capacity_totals(
         tracker_trace,
-        before=int(capacity_series.shape[0]),
-        after=int(capacity_mask.sum()),
+        before=before_capacity,
+        after=after_capacity,
     )
     log["rule_reason_code"] = rule_reason_code
     log["rule_reason_text"] = rule_reason_text
