@@ -716,7 +716,7 @@ def _validate_allocated_student_ids(
         success_logs = logs_en.loc[status_series.astype("string").str.lower() == "success"]
     success_series = success_logs.get("student_id", pd.Series(dtype="string"))
     success_ids = _normalize_student_id(success_series)
-    success_ids = success_ids[~_student_id_missing_mask(success_series)]
+    success_ids = success_ids[~_student_id_missing_mask(success_ids)]
 
     allocated_set = set(student_ids.tolist())
     success_set = set(success_ids.tolist())
