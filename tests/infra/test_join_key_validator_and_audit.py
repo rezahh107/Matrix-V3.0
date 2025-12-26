@@ -2,7 +2,7 @@ import pandas as pd
 import pytest
 
 from app.core.policy_loader import load_policy
-from app.infra.cli import attach_student_id_column
+from app.infra.cli import attach_student_id_column, normalize_national_id
 from app.infra.cli_legacy import AllocationConsistencyError, _validate_allocated_student_ids
 from app.infra.excel.qa_export import (
     build_join_key_audit_sheet,
@@ -168,12 +168,19 @@ def test_attach_student_id_column_fills_missing_and_nan():
     frame = pd.DataFrame(
         {
             "student_id": [" ", " nan ", pd.NA],
+            "national_id": ["N1", "N2", "N3"],
             "value": [1, 2, 3],
         }
     )
-    ids = pd.Series(["S-1", "S-2", "S-3"])
+    ids = pd.Series(["S-1", "S-2", "S-3"], index=[10, 11, 12])
+    students = pd.DataFrame(
+        {"student_id": ["S-1", "S-2", "S-3"], "national_id": ["N1", "N2", "N3"]},
+        index=[10, 11, 12],
+    )
 
-    result = attach_student_id_column(frame, ids, header_mode="en", ensure_existing=True)
+    result = attach_student_id_column(
+        frame, ids, header_mode="en", ensure_existing=True, students_df=students
+    )
 
     assert result["student_id"].tolist() == ["S-1", "S-2", "S-3"]
     assert "value" in result.columns
@@ -195,12 +202,138 @@ def test_attach_student_id_column_preserves_existing_values():
     assert result["mentor_id"].tolist() == ["M-1", "M-2"]
 
 
+def test_attach_student_id_column_respects_completed_ids():
+    frame = pd.DataFrame(
+        {
+            "student_id": ["S-1", "S-2"],
+            "national_id": ["N-1", "N-2"],
+        }
+    )
+    ids = pd.Series(["S-10", "S-20"])
+
+    result = attach_student_id_column(frame, ids, header_mode="en", ensure_existing=False)
+
+    assert result["student_id"].tolist() == ["S-1", "S-2"]
+
+
+def test_attach_student_id_column_preserves_existing_with_ensure_flag():
+    frame = pd.DataFrame({"student_id": ["S-1", "S-2"], "extra": [1, 2]})
+    ids = pd.Series(["A", "B"], index=[1, 0])
+
+    result = attach_student_id_column(frame, ids, header_mode="en", ensure_existing=True)
+
+    assert result["student_id"].tolist() == ["S-1", "S-2"]
+    assert result["extra"].tolist() == [1, 2]
+
+
+def test_attach_student_id_column_uses_national_id_join():
+    students = pd.DataFrame(
+        {"student_id": ["S-1", "S-2"], "national_id": ["N-1", "N-2"]},
+        index=[2, 1],
+    )
+    frame = pd.DataFrame(
+        {
+            "national_id": ["N-2", "N-1"],
+            "student_id": [pd.NA, ""],
+        },
+        index=[100, 200],
+    )
+    ids = students["student_id"]
+
+    result = attach_student_id_column(
+        frame, ids, header_mode="en", ensure_existing=True, students_df=students
+    )
+
+    assert result["student_id"].tolist() == ["S-2", "S-1"]
+
+
+@pytest.mark.parametrize(
+    "raw, expected",
+    [
+        (" ۱۲۳۴۵۶۷۸۹ ", "0123456789"),
+        ("۱۲۳-۴۵۶-۷۸۹۰", "1234567890"),
+        ("۰۰۱", "0000000001"),
+        ("abc", None),
+        (None, None),
+    ],
+)
+def test_normalize_national_id_variants(raw, expected):
+    assert normalize_national_id(raw) == expected
+
+
+def test_attach_student_id_column_fills_via_national_id_with_normalization():
+    students = pd.DataFrame(
+        {"student_id": ["S-1", "S-2"], "national_id": ["۱۲۳۴۵۶۷۸۹", "0000000002"]}
+    )
+    frame = pd.DataFrame(
+        {"student_id": [pd.NA, ""], "national_id": ["۰۱۲۳۴۵۶۷۸۹", "۲"]}
+    )
+
+    result = attach_student_id_column(
+        frame,
+        students["student_id"],
+        header_mode="en",
+        ensure_existing=True,
+        students_df=students,
+    )
+
+    assert result["student_id"].tolist() == ["S-1", "S-2"]
+
+
+def test_attach_student_id_column_raises_on_duplicate_national_id():
+    students = pd.DataFrame(
+        {
+            "student_id": ["S-1", "S-2"],
+            "national_id": ["123", "123"],
+        }
+    )
+    frame = pd.DataFrame({"national_id": ["123", "123"], "student_id": [pd.NA, pd.NA]})
+
+    with pytest.raises(AllocationConsistencyError):
+        attach_student_id_column(
+            frame,
+            students["student_id"],
+            header_mode="en",
+            ensure_existing=True,
+            students_df=students,
+        )
+
+
+def test_attach_student_id_column_raises_on_missing_national_id_for_needed_rows():
+    students = pd.DataFrame(
+        {"student_id": ["S-1"], "national_id": ["1234567890"]}
+    )
+    frame = pd.DataFrame({"student_id": [pd.NA], "national_id": [" "]})
+
+    with pytest.raises(AllocationConsistencyError):
+        attach_student_id_column(
+            frame,
+            students["student_id"],
+            header_mode="en",
+            ensure_existing=True,
+            students_df=students,
+        )
+
+
 def test_validate_allocated_student_ids_raises_on_mismatch():
     allocations = pd.DataFrame({"student_id": ["S-1"]})
     logs = pd.DataFrame(
         {
             "student_id": ["S-2"],
             "allocation_status": ["success"],
+        }
+    )
+
+    with pytest.raises(AllocationConsistencyError):
+        _validate_allocated_student_ids(allocations_df=allocations, logs_df=logs)
+
+
+def test_validate_allocated_student_ids_filters_success_status():
+    allocations = pd.DataFrame({"student_id": ["S-1", "S-2"]})
+    logs = pd.DataFrame(
+        {
+            "student_id": ["S-1", "S-3"],
+            "allocation_status": ["failed", "success"],
         }
     )
 
