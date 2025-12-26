@@ -144,6 +144,10 @@ def validate_allocation_join_keys(
     student_subset = students.loc[
         :, [col for col in student_columns if col in students.columns]
     ].copy()
+    if "student_id" in student_subset.columns:
+        student_subset["student_id"] = (
+            ensure_series(student_subset["student_id"]).astype("string").str.strip()
+        )
     student_subset, student_duplicates = _prepare_join_keys(
         student_subset, policy.join_keys, policy=policy
     )
@@ -161,6 +165,9 @@ def validate_allocation_join_keys(
         )
 
     base = allocations.copy()
+    # Normalize join identifiers to avoid type-based merge misses (validator-only).
+    if "student_id" in allocations.columns:
+        base["student_id"] = ensure_series(allocations["student_id"]).astype("string").str.strip()
     if alloc_mentor_id_column:
         base["mentor_id"] = (
             ensure_series(allocations[alloc_mentor_id_column]).astype("string").str.strip()
