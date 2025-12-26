@@ -377,10 +377,9 @@ def _normalize_student_id(series: pd.Series) -> pd.Series:
 
 
 def _student_id_missing_mask(series: pd.Series) -> pd.Series:
-    """Identify empty, NA, or 'nan' student_id values in a Series."""
+    """Identify empty, NA, or 'nan' student_id values in a normalized Series."""
 
-    normalized = _normalize_student_id(series)
-    return normalized.eq("") | normalized.str.lower().eq("nan") | normalized.isna()
+    return series.eq("") | series.str.lower().eq("nan") | series.isna()
 
 
 def attach_student_id_column(
