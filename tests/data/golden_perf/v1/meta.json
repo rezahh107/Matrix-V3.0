@@ -1,0 +1,6 @@
+{
+  "dataset": "golden_perf_v1",
+  "students": "students.csv",
+  "mentors": "mentors.csv",
+  "baseline_decisions": "decisions_baseline.csv"
+}
