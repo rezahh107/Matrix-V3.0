@@ -382,12 +382,37 @@ def _student_id_missing_mask(series: pd.Series) -> pd.Series:
     return series.eq("") | series.str.lower().eq("nan") | series.isna()
 
 
+def normalize_national_id(value: Any) -> str | None:
+    """Normalize national_id for stable joins.
+
+    - Coerce to string, strip whitespace.
+    - Convert Persian/Arabic digits to English digits.
+    - Remove non-digit characters.
+    - Zero-pad to length 10 when possible; otherwise return ``None``.
+    """
+
+    if value is None:
+        return None
+
+    digit_map = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
+    normalized = str(value).strip().translate(digit_map)
+    digits_only = "".join(ch for ch in normalized if ch.isdigit())
+    if not digits_only:
+        return None
+    if len(digits_only) < 10:
+        digits_only = digits_only.zfill(10)
+    if len(digits_only) != 10:
+        return None
+    return digits_only
+
+
 def attach_student_id_column(
     frame: pd.DataFrame,
     student_ids: pd.Series,
     *,
     header_mode: HeaderMode,
     ensure_existing: bool = False,
+    students_df: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """الصاق یا تکمیل ستون ``student_id`` با پاک‌سازی مقادیر تهی/"nan".
 
@@ -397,11 +422,13 @@ def attach_student_id_column(
         دیتافریم اولیه (مانند allocations/logs/trace) که ممکن است ستون ``student_id``
         ناقص داشته باشد.
     student_ids:
-        سری شناسنامهٔ دانش‌آموزان (هم‌تراز با ایندکس frame) برای پر کردن مقادیر مفقود.
+        سری شناسنامهٔ دانش‌آموزان (هم‌تراز با students_df) برای پر کردن مقادیر مفقود.
     header_mode:
         حالت هدر مقصد برای بازگرداندن دیتافریم (fa یا en بر اساس Policy).
     ensure_existing:
         اگر True باشد، مقادیر غیرتهی موجود حفظ و فقط تهی/"nan" جایگزین می‌شود.
+    students_df:
+        دیتافریم مرجع دانش‌آموزان برای الصاق پایدار بر اساس national_id یا student_key.
 
     بازگشت
     -------
@@ -416,17 +443,89 @@ def attach_student_id_column(
     ['S1', 'S2']
     """
 
-    en_frame = canonicalize_headers(frame, header_mode="en")
-    aligned = _normalize_student_id(student_ids.reindex(en_frame.index))
+    en_frame = canonicalize_headers(frame, header_mode="en").copy()
 
-    if ensure_existing and "student_id" in en_frame.columns:
-        existing = en_frame["student_id"].astype("string")
-        mask = _student_id_missing_mask(_normalize_student_id(existing))
-        filled = existing.copy()
-        filled.loc[mask] = aligned.reindex(en_frame.index)
-        en_frame["student_id"] = filled
-    else:
-        en_frame["student_id"] = aligned
+    students_en = None
+    student_ids_normalized: pd.Series | None = None
+    if students_df is not None:
+        students_en = canonicalize_headers(students_df, header_mode="en")
+        student_ids_normalized = _normalize_student_id(
+            student_ids.reindex(students_en.index)
+        )
+
+    existing = None
+    if "student_id" in en_frame.columns:
+        existing = _normalize_student_id(en_frame["student_id"])
+        if ensure_existing and not _student_id_missing_mask(existing).any():
+            en_frame["student_id"] = existing
+            return canonicalize_headers(en_frame, header_mode=header_mode)
+
+    filled = (
+        existing.copy()
+        if existing is not None
+        else pd.Series(pd.NA, index=en_frame.index, dtype="string")
+    )
+
+    missing_mask = _student_id_missing_mask(_normalize_student_id(filled))
+
+    def _fill_from_key(key: str) -> None:
+        nonlocal missing_mask
+        if not missing_mask.any() or students_en is None:
+            return
+        if key not in en_frame.columns or key not in students_en.columns:
+            return
+
+        source_keys = students_en[key].astype("string").str.strip()
+        target_keys = en_frame[key].astype("string").str.strip()
+        mapping = pd.Series(student_ids_normalized.values, index=source_keys)
+        mapping = mapping.dropna()
+        mapped = target_keys.map(mapping)
+        fill_mask = missing_mask & mapped.notna()
+        if fill_mask.any():
+            filled.loc[fill_mask] = mapped.loc[fill_mask]
+            missing_mask = _student_id_missing_mask(_normalize_student_id(filled))
+
+    _fill_from_key("student_key")
+
+    if missing_mask.any() and students_en is not None and "national_id" in en_frame.columns:
+        if "national_id" not in students_en.columns:
+            raise AllocationConsistencyError(
+                "students_df is missing national_id column required for fallback student_id fill."
+            )
+
+        frame_nid_norm = en_frame["national_id"].apply(normalize_national_id)
+        if frame_nid_norm.loc[missing_mask].isna().any():
+            missing_rows = frame_nid_norm.loc[missing_mask].index.tolist()
+            raise AllocationConsistencyError(
+                "Cannot fill missing student_id without valid national_id; "
+                f"rows={missing_rows[:5]}"
+            )
+
+        students_nid_norm = students_en["national_id"].apply(normalize_national_id)
+        duplicated = students_nid_norm.dropna().duplicated(keep=False)
+        if duplicated.any():
+            dup_ids = students_nid_norm.loc[duplicated].unique().tolist()
+            raise AllocationConsistencyError(
+                "Duplicate national_id values detected in students_df; "
+                f"sample={dup_ids[:5]}"
+            )
+
+        nid_mapping = pd.Series(student_ids_normalized.values, index=students_nid_norm).dropna()
+        mapped = frame_nid_norm.map(nid_mapping)
+        fill_mask = missing_mask & mapped.notna()
+        if fill_mask.any():
+            filled.loc[fill_mask] = mapped.loc[fill_mask]
+            missing_mask = _student_id_missing_mask(_normalize_student_id(filled))
+
+        if missing_mask.any():
+            failing_indices = en_frame.index[missing_mask].tolist()[:5]
+            failing_ids = frame_nid_norm.loc[missing_mask].tolist()[:5]
+            raise AllocationConsistencyError(
+                "Failed to fill student_id via national_id; missing mappings for rows: "
+                f"{list(zip(failing_indices, failing_ids))}"
+            )
+
+    en_frame["student_id"] = _normalize_student_id(filled)
 
     return canonicalize_headers(en_frame, header_mode=header_mode)
 
@@ -2373,18 +2472,21 @@ def _allocate_and_write(
             student_ids,
             header_mode=header_internal,
             ensure_existing=True,
+            students_df=students_base,
         )
         logs_df = attach_student_id_column(
             logs_df,
             student_ids,
             header_mode=header_internal,
             ensure_existing=True,
+            students_df=students_base,
         )
         trace_df = attach_student_id_column(
             trace_df,
             student_ids,
             header_mode=header_internal,
             ensure_existing=True,
+            students_df=students_base,
         )
 
         _validate_allocated_student_ids(
