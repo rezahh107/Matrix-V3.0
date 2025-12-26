@@ -68,7 +68,14 @@ def test_import_pool_derives_join_keys_from_alias_inputs(tmp_path: Path) -> None
     policy = load_policy()
     db = LocalDatabase(tmp_path / "cache.sqlite")
 
-    schools_df = pd.DataFrame({"کد مدرسه": [3581], "نام مدرسه": ["دبیرستان نمونه"]})
+    schools_df = pd.DataFrame(
+        {
+            "کد مدرسه": [3581],
+            "نام مدرسه": ["دبیرستان نمونه"],
+            "مرکز گلستان صدرا": [0],
+            "جنسیت": [1],
+        }
+    )
     schools_path = tmp_path / "schools.xlsx"
     _write_pool_excel(schools_df, schools_path)
     import_school_report_from_excel(schools_path, db=db)
@@ -115,7 +122,9 @@ def test_import_pool_reports_unmapped_group(tmp_path: Path) -> None:
     policy = load_policy()
     db = LocalDatabase(tmp_path / "cache.sqlite")
 
-    schools_df = pd.DataFrame({"کد مدرسه": [3581], "نام مدرسه": ["نمونه"]})
+    schools_df = pd.DataFrame(
+        {"کد مدرسه": [3581], "نام مدرسه": ["نمونه"], "مرکز گلستان صدرا": [0], "جنسیت": [1]}
+    )
     schools_path = tmp_path / "schools.xlsx"
     _write_pool_excel(schools_df, schools_path)
     import_school_report_from_excel(schools_path, db=db)
@@ -149,7 +158,9 @@ def test_import_pool_reports_unmapped_school(tmp_path: Path) -> None:
     policy = load_policy()
     db = LocalDatabase(tmp_path / "cache.sqlite")
 
-    schools_df = pd.DataFrame({"کد مدرسه": [3581], "نام مدرسه": ["نمونه"]})
+    schools_df = pd.DataFrame(
+        {"کد مدرسه": [3581], "نام مدرسه": ["نمونه"], "مرکز گلستان صدرا": [0], "جنسیت": [1]}
+    )
     schools_path = tmp_path / "schools.xlsx"
     _write_pool_excel(schools_df, schools_path)
     import_school_report_from_excel(schools_path, db=db)
@@ -187,7 +198,9 @@ def test_import_pool_deduplicates_exact_rows(tmp_path: Path) -> None:
     policy = load_policy()
     db = LocalDatabase(tmp_path / "cache.sqlite")
 
-    schools_df = pd.DataFrame({"کد مدرسه": [3581], "نام مدرسه": ["نمونه"]})
+    schools_df = pd.DataFrame(
+        {"کد مدرسه": [3581], "نام مدرسه": ["نمونه"], "مرکز گلستان صدرا": [0], "جنسیت": [1]}
+    )
     schools_path = tmp_path / "schools.xlsx"
     _write_pool_excel(schools_df, schools_path)
     import_school_report_from_excel(schools_path, db=db)
@@ -262,7 +275,9 @@ def test_import_pool_reports_unknown_center_and_finance(tmp_path: Path) -> None:
     policy = load_policy()
     db = LocalDatabase(tmp_path / "cache.sqlite")
 
-    schools_df = pd.DataFrame({"کد مدرسه": [3581], "نام مدرسه": ["نمونه"]})
+    schools_df = pd.DataFrame(
+        {"کد مدرسه": [3581], "نام مدرسه": ["نمونه"], "مرکز گلستان صدرا": [0], "جنسیت": [1]}
+    )
     schools_path = tmp_path / "schools.xlsx"
     _write_pool_excel(schools_df, schools_path)
     import_school_report_from_excel(schools_path, db=db)

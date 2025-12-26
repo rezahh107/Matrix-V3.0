@@ -15,7 +15,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from app.core.common.columns import canonicalize_headers
+from app.core.common.columns import HEADER_ALIASES_V3
+from app.infra.common.header_pipeline_v3 import HeaderPipelineV3
 from app.infra.io_utils import read_excel_first_sheet
 from app.infra.local_database import LocalDatabase
 from app.infra.reference_repository import SQLiteReferenceRepository
@@ -74,11 +75,15 @@ def _normalize_manager_frame(df: pd.DataFrame) -> pd.DataFrame:
       دادهٔ واضح ایجاد می‌شود.
     """
 
-    canonical = canonicalize_headers(df, header_mode="fa")
-    canonical = _drop_pii_columns(canonical, pii_columns=_PII_COLUMNS)
-    missing = [_MANAGER_COLUMN, _CENTER_COLUMN]
-    if not set(missing).issubset(set(canonical.columns)):
-        raise ValueError("ستون‌های موردنیاز ManagerReport یافت نشد: نام مدیر و مرکز گلستان صدرا")
+    pipeline = HeaderPipelineV3(
+        alias_registry=HEADER_ALIASES_V3,
+        required={"manager": [_MANAGER_COLUMN, _CENTER_COLUMN]},
+        critical_required={"manager": {_MANAGER_COLUMN, _CENTER_COLUMN}},
+    )
+    resolution = pipeline.resolve(df, source="manager")
+    canonical = _drop_pii_columns(resolution.resolved_df, pii_columns=_PII_COLUMNS)
+    if not resolution.can_continue:
+        raise ValueError(f"ستون‌های موردنیاز ManagerReport یافت نشد: {', '.join(resolution.missing_required)}")
 
     normalized = canonical[
         [

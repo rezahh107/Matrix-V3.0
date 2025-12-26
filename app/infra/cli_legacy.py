@@ -40,15 +40,8 @@ from app.core.allocate_students import (
 )
 from app.core.allocation.engine import enrich_summary_with_history
 from app.core.allocation.history_metrics import METRIC_COLUMNS, compute_history_metrics
-from app.core.canonical_frames import (
-    canonicalize_allocation_frames,
-    canonicalize_pool_frame,
-    canonicalize_students_frame,
-)
-from app.core.common.join_keys import (
-    JoinKeyCanonicalizationError,
-    validate_and_canonicalize_join_keys,
-)
+from app.core.canonical_frames import canonicalize_allocation_frames, canonicalize_pool_frame
+from app.core.common.join_keys import JoinKeyCanonicalizationError
 from app.core.common.types import JoinKeyValidationIssue, JoinKeyValidationResult
 from app.core.counter import (
     assert_unique_student_ids,
@@ -132,6 +125,7 @@ from app.infra.reference_students_repository import (
     import_student_report_from_excel,
     load_students_from_cache,
 )
+from app.infra.students.pipeline_v3 import StudentPipelineV3
 from app.infra.validators.join_keys import JoinKeyAuditResult, validate_allocation_join_keys
 
 if TYPE_CHECKING:
@@ -758,13 +752,13 @@ def _resolve_students_frame(
             df = import_student_report_from_excel(students_path, db=db, policy=policy)
         else:
             raw_df = read_excel_first_sheet(students_path)
-            raw_df = columns_module.canonicalize_headers(raw_df, header_mode="fa")
-            validation = validate_and_canonicalize_join_keys(
-                raw_df, policy=policy, entity_type="student"
+            pipeline = StudentPipelineV3(
+                policy=policy, header_mode="fa", reference_mode="excel"
             )
-            if validation.issues:
-                raise JoinKeyValidationError(validation)
-            df = canonicalize_students_frame(validation.canonical_df, policy=policy)
+            result = pipeline.run(raw_df)
+            if result.validation.join_keys.issues:
+                raise JoinKeyValidationError(result.validation.join_keys)
+            df = result.canonical_df
         inputs = {"students": str(students_path)}
         inputs_mtime = {"students": students_path.stat().st_mtime}
         return df, inputs, inputs_mtime

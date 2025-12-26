@@ -5,8 +5,9 @@ from pathlib import Path
 
 import pandas as pd
 
-from app.core.common.columns import canonicalize_headers
+from app.core.common.columns import HEADER_ALIASES_V3
 from app.core.common.domain import VALID_GROUP_CODES
+from app.infra.common.header_pipeline_v3 import HeaderPipelineV3
 from app.infra.db.reference_tables import ReferenceTableStatus, status_from_meta
 from app.infra.errors import DatabasePreparationError
 from app.infra.io_utils import read_excel_first_sheet
@@ -26,15 +27,6 @@ class GroupCodeRepository:
         "grade",
         "track",
     )
-
-    _PERSIAN_HEADER_ALIASES: dict[str, str] = {
-        "کد گروه": "group_code",
-        "کدرشته": "group_code",
-        "مقطع تحصیلی": "level",
-        "پایه": "grade",
-        "رشته": "track",
-        "گروه آزمایشی": "experimental_group",
-    }
 
     _ALLOWED_LEVELS: tuple[str, ...] = (
         "دبستان",
@@ -65,6 +57,11 @@ class GroupCodeRepository:
             table_name="groupcodes",
             int_columns=("group_code", "grade"),
             unique_columns=("group_code",),
+        )
+        self._header_pipeline = HeaderPipelineV3(
+            alias_registry=HEADER_ALIASES_V3,
+            required={"groupcode": list(self.REQUIRED_COLUMNS)},
+            critical_required={"groupcode": set(self.REQUIRED_COLUMNS)},
         )
 
     def import_from_excel(
@@ -115,21 +112,14 @@ class GroupCodeRepository:
         return status_from_meta("groupcodes", meta)
 
     def _normalize_import_frame(self, df: pd.DataFrame) -> pd.DataFrame:
-        canonical_fa = canonicalize_headers(df, header_mode="fa")
-        rename_map = {
-            column: target
-            for column in canonical_fa.columns
-            if (target := self._PERSIAN_HEADER_ALIASES.get(column))
-        }
-        normalized = canonical_fa.rename(columns=rename_map)
-        canonical_en = canonicalize_headers(normalized, header_mode="en")
-        missing = [col for col in self.REQUIRED_COLUMNS if col not in canonical_en.columns]
-        if missing:
+        resolution = self._header_pipeline.resolve(df, source="groupcode")
+        if not resolution.can_continue:
             raise DatabasePreparationError(
                 path="groupcodes.xlsx",
                 reason="ستون‌های الزامی group_code موجود نیست.",
-                hint=", ".join(missing),
+                hint=", ".join(resolution.missing_required),
             )
+        canonical_en = resolution.resolved_df
         columns = [
             "group_code",
             "level",

@@ -5,12 +5,12 @@ from pathlib import Path
 
 import pandas as pd
 
-from app.core.common.columns import canonicalize_headers
 from app.infra.db.reference_tables import ReferenceTableStatus, status_from_meta
 from app.infra.errors import DatabasePreparationError
 from app.infra.io_utils import read_excel_first_sheet
 from app.infra.local_database import LocalDatabase
 from app.infra.reference_repository import SQLiteReferenceRepository
+from app.infra.schools.header_resolver import SchoolHeaderResolver
 from app.infra.sqlite_types import coerce_int_columns
 
 __all__ = ["SchoolRepository"]
@@ -34,20 +34,24 @@ class SchoolRepository:
             int_columns=("کد مدرسه", "مرکز گلستان صدرا", "جنسیت"),
             unique_columns=("کد مدرسه",),
         )
+        self._header_resolver = SchoolHeaderResolver(
+            required_fields=list(self.REQUIRED_COLUMNS), header_mode="fa"
+        )
 
     def import_from_excel(
         self, path: Path, *, clear_before: bool = True, version_tag: str | None = None
     ) -> ReferenceTableStatus:
         df = read_excel_first_sheet(path)
-        canonical = canonicalize_headers(df, header_mode="fa")
-        missing = [col for col in self.REQUIRED_COLUMNS if col not in canonical.columns]
-        if missing:
+        resolution = self._header_resolver.resolve(df)
+        if not resolution.can_continue:
             raise DatabasePreparationError(
                 path=str(path),
                 reason="ستون‌های الزامی مدارس در فایل موجود نیست.",
-                hint=", ".join(missing),
+                hint=", ".join(resolution.missing_fields),
             )
-        normalized = coerce_int_columns(canonical, ["کد مدرسه", "مرکز گلستان صدرا", "جنسیت"])
+        normalized = coerce_int_columns(
+            resolution.resolved_df, ["کد مدرسه", "مرکز گلستان صدرا", "جنسیت"]
+        )
         if "فعال" not in normalized.columns:
             normalized = normalized.copy()
             normalized["فعال"] = pd.Series([1] * len(normalized), dtype="Int64")

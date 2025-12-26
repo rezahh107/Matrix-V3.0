@@ -40,7 +40,14 @@ def _create_inspactor_frame() -> pd.DataFrame:
 
 
 def _write_school_report(path: Path) -> None:
-    df = pd.DataFrame({"کد مدرسه": ["5001"], "نام مدرسه 1": ["مدرسه نمونه 1"]})
+    df = pd.DataFrame(
+        {
+            "کد مدرسه": ["5001"],
+            "نام مدرسه": ["مدرسه نمونه 1"],
+            "مرکز گلستان صدرا": [0],
+            "جنسیت": [1],
+        }
+    )
     with pd.ExcelWriter(path, engine="openpyxl") as writer:
         df.to_excel(writer, index=False)
 

@@ -12,6 +12,7 @@ def test_school_import_with_join_key_validation(tmp_path: Path) -> None:
     df = pd.DataFrame(
         [
             {
+                "نام مدرسه": "A",
                 "کدرشته": 1,
                 "جنسیت": 1,
                 "دانش آموز فارغ": 0,
@@ -20,6 +21,7 @@ def test_school_import_with_join_key_validation(tmp_path: Path) -> None:
                 "کد مدرسه": 100,
             },
             {
+                "نام مدرسه": "B",
                 "کدرشته": "bad",
                 "جنسیت": 1,
                 "دانش آموز فارغ": 0,

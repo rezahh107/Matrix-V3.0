@@ -13,7 +13,14 @@ from app.infra.reference_schools_repository import (
 
 
 def _write_school_report(path: Path) -> None:
-    df = pd.DataFrame({"کد مدرسه": ["3001", "3002"], "نام مدرسه": ["الف", "ب"]})
+    df = pd.DataFrame(
+        {
+            "کد مدرسه": ["3001", "3002"],
+            "نام مدرسه": ["الف", "ب"],
+            "مرکز گلستان صدرا": [0, 0],
+            "جنسیت": [1, 1],
+        }
+    )
     with pd.ExcelWriter(path, engine="openpyxl") as writer:
         df.to_excel(writer, index=False)
 
