@@ -421,7 +421,7 @@ def attach_student_id_column(
 
     if ensure_existing and "student_id" in en_frame.columns:
         existing = en_frame["student_id"].astype("string")
-        mask = _student_id_missing_mask(existing)
+        mask = _student_id_missing_mask(_normalize_student_id(existing))
         filled = existing.copy()
         filled.loc[mask] = aligned.reindex(en_frame.index)
         en_frame["student_id"] = filled
