@@ -45,8 +45,19 @@ def _load_ast(path: Path) -> tuple[ast.AST | None, str | None]:
     try:
         return ast.parse(source, filename=str(path)), None
     except (UnicodeDecodeError, SyntaxError) as err:
-        rel = path.relative_to(REPO_ROOT).as_posix()
+        try:
+            rel = path.relative_to(REPO_ROOT).as_posix()
+        except ValueError:
+            rel = str(path)
         return None, f"{rel} (unreadable via {method}: {err.__class__.__name__}: {err})"
+
+
+def _assert_parseable_or_report(path: Path) -> ast.AST:
+    tree, err = _load_ast(path)
+    if err:
+        raise AssertionError(err)
+    assert tree is not None  # for type checkers
+    return tree
 
 
 def _has_forbidden_pandas_read(tree: ast.AST) -> bool:
@@ -128,3 +139,24 @@ def test_no_direct_header_canonicalization_imports_in_infra() -> None:
         "do not import canonicalize_headers/coerce_semantics directly."
         f" Violations: {sorted(violations)}"
     )
+
+
+def test_load_ast_handles_utf8_without_cookie(tmp_path: Path) -> None:
+    target = tmp_path / "tmp_guard_utf8.py"
+    content = '"""Persian docstring حروف فارسی"""\n\n' "def sample():\n    return 1\n"
+    target.write_text(content, encoding="utf-8")
+
+    tree = _assert_parseable_or_report(target)
+
+    assert isinstance(tree, ast.AST)
+
+
+def test_load_ast_reports_unreadable_file(tmp_path: Path) -> None:
+    target = tmp_path / "tmp_guard_bad.py"
+    target.write_bytes(b"\xff\xfe\xfa\xfb")
+
+    tree, err = _load_ast(target)
+
+    assert tree is None
+    assert err is not None
+    assert "unreadable" in err
