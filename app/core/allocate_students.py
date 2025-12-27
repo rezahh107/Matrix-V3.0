@@ -25,9 +25,10 @@ from .common.join_keys import (
     JoinKeyCanonicalizationError,
     canonicalize_join_key_value,
     center_wildcard_value,
-    finance_variants_from_cell,
+    finance_mask_series,
     normalize_join_key_name as _normalize_join_key_name,
     resolve_finance_variants,
+    school_mask_series,
     validate_selected_mentor_join_keys,
 )
 from .common.ranking import (
@@ -677,46 +678,6 @@ def _center_mask_series(
     return mentor_mask.fillna(False)
 
 
-def _school_mask_series(
-    mentor_series: pd.Series,
-    student_school: int,
-    empty_as_zero: bool,
-    constraint_series: pd.Series | None = None,
-) -> pd.Series:
-    """ماسک برداری برای تطبیق مدرسه با رعایت منتورهای global و empty_as_zero مطابق §6.3 Technical SSoT."""
-    series = ensure_series(mentor_series)
-    try:
-        # خالی/NaN به‌عنوان ۰ (global) در نظر گرفته می‌شود اگر empty_as_zero=True باشد،
-        # در غیر این صورت به مقدار نامعتبر -1 نگاشت می‌شود تا match نشود
-        series = series.fillna(0) if empty_as_zero else series.fillna(-1)
-    except Exception:
-        series = mentor_series
-
-    # اگر empty_as_zero و مدرسه‌ی دانش‌آموز ۰ است، یعنی «بدون محدودیت مدرسه‌ای»
-    # در این حالت فقط constraint (has_school_constraint) اعمال می‌شود.
-    if empty_as_zero and student_school == 0:
-        if constraint_series is None:
-            return pd.Series(True, index=series.index)
-        restricted = ensure_series(constraint_series).fillna(False).astype(bool)
-        return ~restricted
-
-    # منتورهای global
-    base_mask = series.eq(0)
-    # اگر دانش‌آموز مدرسهٔ مشخصی دارد، همان مدرسه نیز مجاز است
-    if student_school != 0:
-        school_mask = series.eq(student_school)
-        base_mask = base_mask | school_mask
-
-    # اگر constraint تعریف شده، منتورهای restricted حذف می‌شوند
-    if constraint_series is not None:
-        restricted = ensure_series(constraint_series).fillna(False).astype(bool)
-        restricted_match = restricted & series.eq(student_school)
-        unrestricted_match = (~restricted) & base_mask
-        base_mask = restricted_match | unrestricted_match
-
-    return base_mask
-
-
 def _canonicalize_gender_series(series: pd.Series, policy: PolicyConfig) -> pd.Series:
     """نرمال‌سازی سری جنسیت منتورها به کد عددی Policy با بهبود برای BUG_GND_01."""
 
@@ -866,21 +827,19 @@ def _filter_candidates_by_join_map(
                 if "has_school_constraint" in candidates.columns
                 else None
             )
-            mentor_series = pd.to_numeric(mentor_series_raw, errors="coerce").astype("Int64")
-            col_mask = _school_mask_series(
-                mentor_series,
-                int(student_value),
-                policy.school_code_empty_as_zero,
-                school_constraint,
+            col_mask = school_mask_series(
+                mentor_series_raw,
+                student_school=int(student_value),
+                empty_as_zero=policy.school_code_empty_as_zero,
+                constraint_series=school_constraint,
             )
         elif column == policy.stage_column("finance"):
             # بهبود برای BUG_FNC_01 - استفاده از variants مالی
             allowed_finance = resolve_finance_variants(int(student_value), policy)
-            mentor_variants = mentor_series_raw.map(
-                lambda cell: finance_variants_from_cell(cell, policy)
-            )
-            col_mask = mentor_variants.map(
-                lambda variants: bool(allowed_finance.intersection(variants)) if variants else False
+            col_mask = finance_mask_series(
+                mentor_series_raw,
+                student_variants=allowed_finance,
+                policy=policy,
             )
         else:
             if column == policy.stage_column("gender"):

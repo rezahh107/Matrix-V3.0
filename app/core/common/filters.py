@@ -35,101 +35,22 @@ pandas را اجرا می‌کند. هر تابع یکی از مراحل «Alloc
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
 from typing import Protocol
 
-import numpy as np
 import pandas as pd
 
 from app.core.common.columns import ensure_series
 from app.core.common.join_keys import (
     JoinKeyCanonicalizationError,
+    StudentSchoolCode,
     canonicalize_join_key_value,
-    resolve_finance_variants,
+    finance_mask_series,
+    sanitize_school_series,
+    school_mask_series,
 )
 from app.core.common.join_resolver import JoinKeyResolver
 
 from ..policy_loader import PolicyConfig, load_policy
-from .normalization import to_numlike_str
-
-_SCHOOL_CODE_TRANSLATION = str.maketrans(
-    {
-        "-": " ",
-        "−": " ",  # minus sign
-        "‑": " ",  # non-breaking hyphen
-        "–": " ",  # en dash
-        "—": " ",  # em dash
-        "―": " ",  # horizontal bar
-        "﹘": " ",  # small em dash
-        "﹣": " ",  # small hyphen-minus
-        "／": " ",  # full-width slash
-        "/": " ",
-        "\\": " ",
-        "⁄": " ",
-        "ـ": "",  # kashida
-    }
-)
-
-
-@dataclass(frozen=True)
-class StudentSchoolCode:
-    """نمایش نرمال‌شدهٔ «کد مدرسه» همراه با وضعیت کمبود و wildcard."""
-
-    value: int | None
-    missing: bool
-    wildcard: bool
-
-
-def _coerce_school_candidate(candidate: object) -> tuple[int | None, bool]:
-    """تبدیل مقدار خام کد مدرسه به int یا علامت‌گذاری کمبود.
-
-    این تابع پیش از تفسیر مقدار، همهٔ جداکننده‌های رایج (خط تیره، اسلش، کشیده)
-    را حذف می‌کند تا مقادیر نظیر «۳۵-۸۱» یا «35/81» نیز به‌درستی به 3581 تبدیل شوند.
-    """
-
-    if candidate is None or candidate is pd.NA:
-        return None, True
-    if isinstance(candidate, (int, float, np.integer, np.floating)) and not isinstance(
-        candidate, bool
-    ):
-        if pd.isna(candidate):
-            return None, True
-        return int(float(candidate)), False
-    if isinstance(candidate, (bytes, bytearray)):
-        try:
-            candidate = candidate.decode("utf-8", "ignore")
-        except Exception:
-            return None, True
-    if isinstance(candidate, str):
-        candidate = candidate.translate(_SCHOOL_CODE_TRANSLATION)
-    text = to_numlike_str(candidate).strip()
-    if not text:
-        return None, True
-    try:
-        return int(float(text)), False
-    except ValueError:
-        return None, True
-
-
-def _sanitize_school_series(series: pd.Series) -> pd.Series:
-    """بازگرداندن Series از مقادیر نرمال‌شدهٔ کد مدرسه بدون mutate ورودی.
-
-    مثال کوتاه::
-
-        >>> import pandas as pd
-        >>> _sanitize_school_series(pd.Series(["35-81", "۳۵/۸۱"]))
-        0    3581
-        1    3581
-        dtype: Int64
-    """
-
-    cleaned: list[object] = []
-    for value in series.tolist():
-        coerced, missing = _coerce_school_candidate(value)
-        cleaned.append(pd.NA if missing else coerced)
-    result = pd.Series(cleaned, index=series.index)
-    numeric = pd.to_numeric(result, errors="coerce")
-    return numeric.astype("Int64")
 
 
 def filter_school_by_value(
@@ -141,7 +62,7 @@ def filter_school_by_value(
     if pd.api.types.is_integer_dtype(column_series):
         mask = column_series == target
     else:
-        sanitized = _sanitize_school_series(column_series)
+        sanitized = sanitize_school_series(column_series)
         mask = sanitized == target
     matched = bool(mask.any())
     if not matched:
@@ -154,32 +75,8 @@ def resolve_student_school_code(
     policy: PolicyConfig,
 ) -> StudentSchoolCode:
     """استخراج مقدار استاندارد کد مدرسه با درنظرگرفتن سیاست wildcard."""
-
-    column = policy.stage_column("school")
-    allow_zero = policy.school_code_empty_as_zero and (column == policy.columns.school_code)
-    normalized = column.replace(" ", "_")
-    candidate_keys = (
-        column,
-        normalized,
-        "school_code_norm",
-        "school_code",
-        "school_code_raw",
-    )
-    candidates: list[object] = []
-    for key in candidate_keys:
-        if key in student:
-            candidates.append(student[key])
-
-    for candidate in candidates:
-        value, missing = _coerce_school_candidate(candidate)
-        if not missing:
-            wildcard = bool(allow_zero and value == 0)
-            return StudentSchoolCode(value=value, missing=False, wildcard=wildcard)
-
-    if allow_zero:
-        return StudentSchoolCode(value=0, missing=False, wildcard=True)
-
-    return StudentSchoolCode(value=None, missing=True, wildcard=False)
+    resolver = JoinKeyResolver(policy)
+    return resolver.resolve_school(student)
 
 
 class FilterFunc(Protocol):
@@ -249,15 +146,6 @@ def _filter_by_stage(
         except JoinKeyCanonicalizationError:
             return pool.iloc[0:0]
         return _eq_filter(pool, column, gender_value)
-    if stage == "finance":
-        try:
-            finance_value = canonicalize_join_key_value(column, value, policy=policy)
-        except JoinKeyCanonicalizationError:
-            return pool.iloc[0:0]
-        allowed_variants = resolve_finance_variants(finance_value, policy)
-        series = pd.to_numeric(ensure_series(pool[column]), errors="coerce").astype("Int64")
-        mask = series.isin(allowed_variants).fillna(False)
-        return pool.loc[mask]
     return _eq_filter(pool, column, value)
 
 
@@ -374,13 +262,17 @@ def filter_by_finance(
 
     if policy is None:
         policy = load_policy()
-    return _filter_by_stage(
-        pool,
-        student,
-        policy,
-        "finance",
-        student_join_map=student_join_map,
+    column = policy.stage_column("finance")
+    resolver = JoinKeyResolver(policy)
+    effective = resolver.resolve_finance(student, student_join_map=student_join_map)
+    if effective.finance_code is None:
+        return pool.iloc[0:0]
+    mask = finance_mask_series(
+        ensure_series(pool[column]),
+        student_variants=effective.finance_variants,
+        policy=policy,
     )
+    return pool.loc[mask]
 
 
 def filter_by_school(
@@ -395,10 +287,11 @@ def filter_by_school(
     if policy is None:
         policy = load_policy()
     column = policy.stage_column("school")
-    school_code = resolve_student_school_code(student, policy)
-    if school_code.wildcard or school_code.missing:
-        return pool
+    resolver = JoinKeyResolver(policy)
+    school_code = resolver.resolve_school(student, student_join_map=student_join_map)
     if school_code.value is None:
+        # If school code could not be resolved, no school-specific filtering can be applied.
+        # This occurs when the value is missing and there's no wildcard policy.
         return pool
     target = int(school_code.value)
     constraint_mask: pd.Series | None = None
@@ -411,32 +304,13 @@ def filter_by_school(
         binding_series = pool["mentor_school_binding_mode"].astype("string").fillna("")
         constraint_mask = binding_series.str.strip().eq(restricted_mode)
 
-    if constraint_mask is None:
-        filtered, matched = filter_school_by_value(pool, column, target)
-        if not matched:
-            return pool
-        return filtered
-
-    restricted_mask = constraint_mask.astype(bool)
-    mask_values = restricted_mask.to_numpy(dtype=bool, copy=False)
-    if not bool(mask_values.any()):
-        return pool
-
-    restricted_positions = np.flatnonzero(mask_values)
-    restricted = pool.iloc[mask_values].copy()
-    restricted["__row_pos"] = restricted_positions
-    keep_values = (~mask_values).copy()
-
-    filtered_restricted, matched = filter_school_by_value(restricted, column, target)
-    if not matched:
-        return pool.iloc[keep_values]
-
-    positions = filtered_restricted.get("__row_pos")
-    if positions is not None:
-        keep_values = keep_values.copy()
-        keep_values[positions.to_numpy(dtype=int, copy=False)] = True
-    result = pool.iloc[keep_values]
-    return result
+    mask = school_mask_series(
+        ensure_series(pool[column]),
+        student_school=target,
+        empty_as_zero=policy.school_code_empty_as_zero,
+        constraint_series=constraint_mask,
+    )
+    return pool.loc[mask]
 
 
 def apply_join_filters(
