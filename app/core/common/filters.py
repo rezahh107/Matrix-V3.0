@@ -45,9 +45,9 @@ from app.core.common.columns import ensure_series
 from app.core.common.join_keys import (
     JoinKeyCanonicalizationError,
     canonicalize_join_key_value,
-    center_wildcard_value,
     resolve_finance_variants,
 )
+from app.core.common.join_resolver import JoinKeyResolver
 
 from ..policy_loader import PolicyConfig, load_policy
 from .normalization import to_numlike_str
@@ -222,47 +222,6 @@ def _student_value(student: Mapping[str, object], column: str) -> object:
     raise KeyError(f"Student row missing value for '{column}'")
 
 
-def _coerce_center_candidate(candidate: object) -> int | None:
-    """تبدیل مقدار مرکز به عدد صحیح یا None برای حالت wildcard."""
-
-    if candidate is None or candidate is pd.NA:
-        return None
-    if isinstance(candidate, (int, float, np.integer, np.floating)) and not isinstance(
-        candidate, bool
-    ):
-        if pd.isna(candidate):
-            return None
-        return int(float(candidate))
-    text = to_numlike_str(candidate)
-    if text is None:
-        return None
-    text = text.strip()
-    if not text:
-        return None
-    try:
-        return int(float(text))
-    except ValueError:
-        return None
-
-
-def _student_center_value(student: Mapping[str, object], column: str) -> int | None:
-    """استخراج مقدار مرکز دانش‌آموز با مدیریت ستون‌های معادل."""
-
-    try:
-        raw = _student_value(student, column)
-    except KeyError:
-        return None
-    return _coerce_center_candidate(raw)
-
-
-def _center_wildcard_values(policy: PolicyConfig) -> set[int]:
-    wildcard_values: set[int] = {0}
-    wildcard = center_wildcard_value(policy)
-    if wildcard is not None:
-        wildcard_values.add(int(wildcard))
-    return wildcard_values
-
-
 def _eq_filter(frame: pd.DataFrame, column: str, value: object) -> pd.DataFrame:
     """اعمال فیلتر مساوی روی دیتافریم بدون تغییر ورودی اصلی."""
 
@@ -394,15 +353,13 @@ def filter_by_center(
     if policy is None:
         policy = load_policy()
     column = policy.stage_column("center")
-    center_value = _student_center_value(student, column)
-    if center_value is None:
+    resolver = JoinKeyResolver(policy)
+    effective = resolver.resolve_center(student, student_join_map=student_join_map)
+    if effective.center_code is None:
         return pool
+    center_value = int(effective.center_code)
     series = pd.to_numeric(ensure_series(pool[column]), errors="coerce").astype("Int64")
-    mask = (
-        series.eq(0)
-        if int(center_value) == 0
-        else series.eq(0) | series.eq(int(center_value))
-    )
+    mask = series.eq(0) if center_value == 0 else series.eq(0) | series.eq(center_value)
     return pool.loc[mask.fillna(False)]
 
 
