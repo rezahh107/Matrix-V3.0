@@ -65,6 +65,16 @@
       ]
     },
     {
+      "id": "JOINKEY-SSOT",
+      "severity": "P0",
+      "description": "Effective Join Keys from JoinKeyResolver are the only allowed canonical join inputs; wildcard semantics are mentor-only for center/school; parity guards between allocation and audit/export are mandatory.",
+      "responsible_modules": [
+        "app/infra/mentors/join_key_resolver.py",
+        "app/core/common/join_keys.py",
+        "app/infra/qa/alloc_join_validation.py"
+      ]
+    },
+    {
       "id": "RANK-CORE",
       "severity": "P0",
       "description": "Mentor ranking must be based only on remaining_capacity in descending order plus a deterministic tie-breaker (mentor_id natural sort). occupancy_ratio must not influence ranking.",

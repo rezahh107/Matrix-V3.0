@@ -2770,6 +2770,42 @@ def run_mentor_import_and_join(ctx: RunContext) -> MentorImportRunResult:
 
 ------
 
+## REF-V3-PHASE-00 — Unified JoinKeyResolver rollout (Phase 0–3)
+
+**هدف:** JoinKeyResolver به‌عنوان SSoT یگانه برای canonicalize + infer کلیدهای join و اطمینان از parity بین allocation و audit/export.
+
+**Phase 0 — Contract & Parity Guard تعریف**
+
+- مستندسازی JOINKEY-SSOT-01..04 در LAW/TECH/RepoSpec.
+- تعریف «Effective Join Keys» و الزام مصرف آن در allocation/QA/export.
+- تعریف Parity Guard به‌عنوان گیت اجباری (mismatch ⇒ QA/Blocking).
+
+**Phase 1 — مسیر یگانه برای JoinKeyResolver**
+
+- همهٔ مسیرهای import mentor (و هر مسیر جدید) JoinKeyResolver را به‌عنوان تنها منبع canonicalize/infer فراخوانی می‌کنند.
+- قابلیت فعال‌سازی تدریجی با feature flag و مقایسهٔ خروجی با مسیر legacy.
+- Unit Testهای parity (JoinKeyResolver vs مسیرهای قبلی) اجباری.
+
+**Phase 2 — Parity Integration & Audit Alignment**
+
+- Integration Test برای parity بین allocation و audit/export اضافه می‌شود.
+- QA workbookها باید mismatch را با Rule IDهای مشخص گزارش کنند.
+- Golden regression برای `mentor_id + ۶ join key + capacity` در دادهٔ طلایی فعال است.
+
+**Phase 3 — Enforcement & Legacy Cleanup**
+
+- هرگونه دسترسی مستقیم به join key خام یا derivation پراکنده حذف/مسدود می‌شود.
+- مصرف‌کننده‌ها فقط Effective Join Keys را می‌بینند؛ fallback به legacy ممنوع است.
+- Rollback کنترل‌شده: Kill-Switch و flag همچنان برای بازگشت سریع باقی می‌مانند.
+
+**Risk controls**
+
+- Parity Guard به‌عنوان گیت اجباری پیش از export.
+- fail-fast برای mismatchهای P0 و log/QA برای P0.5/P1.
+- مسیر rollback مستند (Kill-Switch + نسخهٔ legacy).
+
+------
+
 ## REF-V3-PHASE-02 — Mentor import unification (MentorPipelineV3)
 
 - **Before:** چند مسیر مجزا (Inspactor، LocalDatabase، اسکریپت‌های اد-هوک) با هدر/alias متفاوت وجود داشت که باعث drift در استخر پشتیبان می‌شد.

@@ -159,10 +159,13 @@ Where code conflicts with LAW/TECH, **LAW/TECH and this spec are authoritative**
 ### 2.1 Domain Rules (Policy-First Invariants)
 
 **JOIN-CORE / JOIN-01**  
-All joins between students and mentors must use the six canonical integer join keys with consistent semantics across Import / Matrix / Core / QA / Export. (certain) [LAW][TECH][app/core/common/types.py][app/core/common/join_keys.py][app/infra/qa/alloc_join_validation.py]
+All joins between students and mentors must use the six canonical integer join keys with consistent semantics across Import / Matrix / Core / QA / Export. (certain) [LAW][TECH][app/core/common/types.py][app/core/common/join_keys.py][app/infra/qa/alloc_join_validation.py]  
+
+**JOINKEY-SSOT (JOINKEY-SSOT-01..04)**  
+Effective Join Keys are the only canonical join inputs for allocation/QA/export. Wildcard semantics are key-specific (mentor-only for `center_code`/`school_code`, none for other keys). JoinKeyResolver is the only allowed canonicalize+infer source, and parity guards between allocation vs audit/export are mandatory gates. (certain) [LAW][TECH][AGENTS.md]  
 
 **RANK-CORE**  
-Mentor ranking for selection must be based only on descending `remaining_capacity` plus a deterministic tie-breaker (`mentor_id` via `natural_key`). Any use of `occupancy_ratio` in ranking is a P0 violation. (certain) [LAW][TECH][AGENTS.md]
+Mentor ranking for selection must be based only on descending `remaining_capacity` plus a deterministic tie-breaker (`mentor_id` via `natural_key`). Any use of `occupancy_ratio` in ranking is a P0 violation. (certain) [LAW][TECH][AGENTS.md]  
 
 **TRACE-CORE**  
 Each allocation must be explainable via an 8-stage trace in the fixed order `type → group → gender → graduation_status → center → finance → school → capacity_gate`. (certain) [LAW][TECH][app/core/common/trace.py][app/core/allocate_students.py]
@@ -171,7 +174,7 @@ Each allocation must be explainable via an 8-stage trace in the fixed order `typ
 `remaining_capacity` must never be negative; mentors with zero remaining capacity must be filtered out before allocation. (certain) [LAW][TECH][app/core/common/ranking.py][app/core/allocate_students.py]
 
 **SCHOOL-01 / CENTER-01 / WILDCARD-COMBINE-01**  
-School and center joins use wildcard semantics (`0` or policy-defined codes) and treat global mentors/students correctly, with AND-combination of constraints as specified in Policy. (certain) [LAW][TECH][app/core/common/join_keys.py][app/infra/qa/alloc_join_validation.py][app/core/qa/invariants.py]
+School and center joins use wildcard semantics (0 or policy-defined codes) and treat global mentors/students correctly, with AND-combination of constraints as specified in Policy. student_* = 0 is not a wildcard and only matches a mentor's join key of 0; wildcards are mentor-side unless Policy explicitly states otherwise. (certain) [LAW][TECH][app/core/common/join_keys.py][app/infra/qa/alloc_join_validation.py][app/core/qa/invariants.py]  
 
 **MENTOR-TYPE-01 / MENTOR-STATUS-01 / POOL-GOVERNANCE-01**  
 Only mentors with allowed status/type (e.g., ACTIVE) should appear in the effective pool; FROZEN or INACTIVE mentors must be filtered or at least reported via QA. (certain) [LAW][TECH][app/core/allocation/mentor_pool.py][app/core/qa/invariants.py]  

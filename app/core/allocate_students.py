@@ -668,7 +668,9 @@ def _center_mask_series(
     if not pd_types.is_integer_dtype(numeric):
         numeric = pd.to_numeric(numeric, errors="coerce").astype("Int64")
 
-    wildcard_values: set[int] = {int(wildcard_center)} if wildcard_center is not None else {0}
+    wildcard_values: set[int] = {0}
+    if wildcard_center is not None:
+        wildcard_values.add(int(wildcard_center))
 
     wildcard_mask = numeric.isin(wildcard_values)
     mentor_mask = numeric.eq(student_center) | wildcard_mask

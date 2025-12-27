@@ -45,6 +45,7 @@ from app.core.common.columns import ensure_series
 from app.core.common.join_keys import (
     JoinKeyCanonicalizationError,
     canonicalize_join_key_value,
+    center_wildcard_value,
     resolve_finance_variants,
 )
 
@@ -254,24 +255,12 @@ def _student_center_value(student: Mapping[str, object], column: str) -> int | N
     return _coerce_center_candidate(raw)
 
 
-def _center_wildcard(policy: PolicyConfig) -> int | None:
-    """خواندن مقدار wildcard (مانند '*': 0) از policy.center_map."""
-
-    wildcard = policy.center_map.get("*")
-    if wildcard is None:
-        return None
-    return _coerce_center_candidate(wildcard)
-
-
-def _is_center_wildcard(value: int | None, policy: PolicyConfig) -> bool:
-    """بررسی می‌کند که آیا مقدار مرکز باید فیلتر را غیرفعال کند یا خیر."""
-
-    if value is None:
-        return True
-    wildcard = _center_wildcard(policy)
-    if wildcard is None:
-        return False
-    return value == wildcard
+def _center_wildcard_values(policy: PolicyConfig) -> set[int]:
+    wildcard_values: set[int] = {0}
+    wildcard = center_wildcard_value(policy)
+    if wildcard is not None:
+        wildcard_values.add(int(wildcard))
+    return wildcard_values
 
 
 def _eq_filter(frame: pd.DataFrame, column: str, value: object) -> pd.DataFrame:
@@ -406,11 +395,12 @@ def filter_by_center(
         policy = load_policy()
     column = policy.stage_column("center")
     center_value = _student_center_value(student, column)
-    if _is_center_wildcard(center_value, policy):
-        return pool
     if center_value is None:
         return pool
-    return _eq_filter(pool, column, center_value)
+    wildcard_values = _center_wildcard_values(policy)
+    series = pd.to_numeric(ensure_series(pool[column]), errors="coerce").astype("Int64")
+    mask = series.isin(wildcard_values) | series.eq(int(center_value))
+    return pool.loc[mask.fillna(False)]
 
 
 def filter_by_finance(

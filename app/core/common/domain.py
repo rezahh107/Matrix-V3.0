@@ -723,9 +723,16 @@ def center_from_manager(name: Any, *, cfg: BuildConfig) -> int:
         if s in cmap:
             return cmap[s]
 
+        matches: list[tuple[str, int]] = []
         for key, val in cmap.items():
-            if key != "*" and key in s:
-                return val
+            if key == "*" or not key:
+                continue
+            if key in s:
+                matches.append((key, val))
+
+        if matches:
+            matches.sort(key=lambda item: (-len(item[0]), item[0]))
+            return matches[0][1]
 
     if wildcard is not None:
         return wildcard

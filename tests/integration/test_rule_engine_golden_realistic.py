@@ -413,6 +413,20 @@ def test_center_and_school_wildcards_allow_matches() -> None:
                 "allocations_new": 0,
                 "occupancy_ratio": 0.0,
             },
+            {
+                "پشتیبان": "Center-0",
+                "کد کارمندی پشتیبان": "C-0",
+                "کدرشته": 1,
+                "گروه آزمایشی": 1,
+                "جنسیت": 1,
+                "دانش آموز فارغ": 1,
+                "مرکز گلستان صدرا": 0,
+                "مالی حکمت بنیاد": 0,
+                "کد مدرسه": 0,
+                "remaining_capacity": 1,
+                "allocations_new": 0,
+                "occupancy_ratio": 0.0,
+            },
         ]
     )
     students = pd.DataFrame(

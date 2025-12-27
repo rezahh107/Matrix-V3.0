@@ -132,6 +132,31 @@
 - `finance_code` یکی از سه مقدار مجاز {0، 1، 3} است (مالی/حکمت/بنیاد) و جزو ۶ کلید join است.
 - هر مقدار دیگر نامعتبر است و باید با QA/Blocking مواجه شود؛ دامنهٔ کدها تغییری ندارد.
 
+### 2.4. JOINKEY-SSOT — کلیدهای مؤثر، Wildcard و هم‌خوانی خروجی‌ها
+
+**JOINKEY-SSOT-01: Effective Join Keys**
+
+- کلیدهای join مؤثر (Effective Join Keys) تنها نسخهٔ معتبر برای join در allocation/QA/export هستند.
+- «مؤثر» یعنی خروجی **کاننیکال‌سازی + استنتاج + wildcard** که از JoinKeyResolver می‌آید؛
+  دسترسی مستقیم به مقادیر خام یا فیلدهای نیمه‌کاننیکال برای تصمیم‌گیری مجاز نیست.
+
+**JOINKEY-SSOT-02: Wildcard Semantics per Key (side: student/mentor/both/none)**
+
+- `group_code`, `gender_code`, `grad_status_code`, `finance_code`: **none** (wildcard ندارند).
+- `center_code`: **mentor-only** (wildcard فقط در سمت mentor مجاز است).
+- `school_code`: **mentor-only** (wildcard فقط در سمت mentor مجاز است).
+- اگر سمت دانش‌آموز مقدار 0 داشت، به‌معنای wildcard نیست و **فقط** با mentorهای `*_code = 0` match می‌شود.
+
+**JOINKEY-SSOT-03: JoinKeyResolver is the ONLY source for canonicalize+infer**
+
+- هرگونه canonicalize/infer برای join keys باید فقط در JoinKeyResolver انجام شود.
+- هر مسیر تخصیص، QA یا Export که JoinKeyResolver را دور بزند، نقض SSoT محسوب می‌شود.
+
+**JOINKEY-SSOT-04: Parity Guards (allocation vs audit/export)**
+
+- هم‌خوانی join بین allocation و audit/export باید با «Parity Guard» تضمین شود.
+- اگر mismatch در join key مؤثر دیده شود، باید به QA/Blocking ارتقا یابد (طبق Severity جدول LAW).
+
 ---
 
 ## 3. Alias و کد جایگزین (ALIAS-01)
@@ -206,6 +231,16 @@ QA و Rule Engine **موظف‌اند همین semantics را استفاده ک�
   ```
 
 هم Core، هم QA، هم Export باید همین رفتار را پیاده کنند.
+
+**توضیح صریح:**
+
+- `student_center = 0` **فیلتر مرکز را غیرفعال نمی‌کند**؛
+  در این حالت فقط mentorهای با `center = 0` واجدشرط‌اند.
+- wildcard فقط در سمت mentor مجاز است (مگر این‌که Policy به‌صراحت خلاف آن را مشخص کند).
+- اگر `center` از «نام مدیر» استنتاج می‌شود، استنتاج باید **دترمینیستیک** باشد:
+  - تطبیق بر اساس **longest match** انجام شود؛
+  - در تساوی، tie-break پایدار (مثل کد مرکز کوچک‌تر/مرتب‌سازی پایدار) اعمال شود؛
+  - در صورت عدم تطبیق، اگر wildcard `"*"` تعریف شده باشد به آن fallback شود و در QA ثبت گردد.
 
 ---
 
