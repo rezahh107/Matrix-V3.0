@@ -497,3 +497,9 @@ These are primarily suggested inspection points for CodeSurgeon:
 - Core relies on six integer join keys, an 8-stage trace, and non-negative capacity gates as the logical backbone; Infra connects this logic to Excel/SQLite/CLI; UI makes it usable and auditable for end users. (certain) [app/core/*][app/infra/*][app/ui/*]
 - The main known discrepancy is the **Legacy `occupancy_ratio` usage in `common/ranking.py`**, which conflicts with RANK-CORE and is classified as P0. (certain) [LAW][TECH][AGENTS.md][app/core/common/ranking.py]
 - Aside from that and some P1/P2 gaps in observability and documentation (QA mapping, center management mapping, fine-grained logging), the implementation is broadly aligned (≈98%) with LAW/Technical SSoT v3.0, and this document can serve as the **canonical `Repository_Spec_SSoT.md`** for long-term development, audits, and CodeSurgeon-style debugging. (likely) [LAW][TECH][AGENTS.md][code]
+
+## REPO/ARCH-EXPORT-SPINE-01 — Export spine ownership
+- **Spine location:** `students_spine` پس از `_inject_student_ids` ساخته و فریز می‌شود و تنها مرجع `student_id/student_key` برای خروجی‌هاست.
+- **Derived views:** allocations، logs، trace، allocations_sabt و QA workbooks فقط با join روی `student_id` از spine ساخته می‌شوند؛ هیچ الصاق ترتیبی مجاز نیست.
+- **Guards:** نگهبان اجرا در `app/infra/cli_legacy.py::_enforce_allocation_export_invariants` و تست AST در `tests/infra/test_student_id_positional_ast_gate.py` مالک اجرای قانون‌اند.
+- **Fail-fast:** اگر AC-01/AC-02/AC-03 نقض شود، خروجی Excel نوشته نمی‌شود و پیام فارسی قانون LAW/EXPORT-SSOT-ID-01 گزارش می‌شود.

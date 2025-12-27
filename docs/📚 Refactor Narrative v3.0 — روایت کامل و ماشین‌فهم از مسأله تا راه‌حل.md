@@ -3283,3 +3283,10 @@ F.6. نگاشت بین DDD View و پیاده‌سازی v3
 - GOLDEN_DIFF_AUDITOR classification is enforced via `GOLDEN_DIFF_AUDITOR_DECISION` (BUG_FIX/REGRESSION/MIXED/BASELINE_OK) whenever phase02 reports drift; without a decision the workflow stops before any baseline rewrite.
 - Rollback: rerun phase02 with `--mode legacy` (sets `SMART_ALLOC_PIPELINE_MODE=legacy`) to confirm parity with the legacy path before re-enabling v3. No join-key/ranking/capacity/trace semantics change in this phase; toggles only select pipeline routes.
 - History/QA observability: `app.infra.history_store.persist_golden_run` appends a JSONL record under `ci/golden_runs/history.jsonl` so auditors can trace run status, auditor decisions, and timestamps without touching Core logic. The infra-only CLI entrypoint `app.infra.cli.cli_entrypoints_golden.run_phase06_golden` wraps the config-driven scenarios, sets `SMART_ALLOC_PIPELINE_MODE` (default `v3`, rollback `legacy`), and enforces fail-fast behavior when the config is missing or golden files are absent.
+
+## REFACTOR/SSOT-ID-GUARD-01 — پیشگیری از «ID Desynchronization»
+- **Incident class:** زمانی رخ می‌دهد که `student_id` از طریق هم‌ترازی ترتیبی به نماهای خروجی متصل شود و با spine اصلی ناسازگار گردد.
+- **Preventive rule:** همهٔ نماها باید از `students_spine` و join کلیدمحور `student_id` ساخته شوند؛ الصاق/ترمیم ترتیبی ممنوع است (LAW/EXPORT-SSOT-ID-01).
+- **Runtime enforcement:** نگهبان AC-01/AC-02/AC-03 در `app/infra/cli_legacy.py::_enforce_allocation_export_invariants` پیش از نوشتن فایل اجرا و در صورت شکست، خروجی را متوقف می‌کند.
+- **Regression guard:** تست AST `tests/infra/test_student_id_positional_ast_gate.py` هر تلاش برای بازگرداندن الصاق ترتیبی را شکست می‌دهد.
+- **Migration note:** توابع الصاق قبلی به حالت guard-only ارتقا یافتند و باید بدون نوشتن یا جایگزینی `student_id` باقی بمانند؛ مسیرهای قدیمی reset_index + reattach حذف یا غیرفعال می‌شوند.

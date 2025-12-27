@@ -392,6 +392,20 @@ def _get_student_id_set_from_series(series: pd.Series) -> set[str]:
     return set(ids.tolist())
 
 
+def _ensure_student_id_column_for_empty(frame: pd.DataFrame | None) -> pd.DataFrame:
+    """Provide an empty ``student_id`` column when frame is empty or ``None``.
+
+    This helper avoids positional attachment by only materializing a zero-length
+    column for guard checks, keeping LAW/EXPORT-SSOT-ID-01 intact.
+    """
+
+    if frame is None:
+        return pd.DataFrame(columns=["student_id"])
+    if frame.empty and "student_id" not in frame.columns:
+        return pd.DataFrame(columns=["student_id"], index=frame.index)
+    return frame
+
+
 def _build_students_spine(
     students_df: pd.DataFrame, *, header_mode: HeaderMode
 ) -> pd.DataFrame:
@@ -509,134 +523,91 @@ def normalize_national_id(value: Any) -> str | None:
     return digits_only
 
 
+def assert_student_id_integrity(
+    frame: pd.DataFrame,
+    *,
+    header_mode: HeaderMode,
+    expect_unique: bool = True,
+    students_df: pd.DataFrame | None = None,
+    context: str | None = None,
+) -> pd.DataFrame:
+    """Validate that ``student_id`` is already present and canonical.
+
+    This guard is intentionally **non-mutating** to enforce LAW/EXPORT-SSOT-ID-01
+    and prevent any positional or repair-style attachment. It only validates:
+
+    - presence of ``student_id`` (SSoT),
+    - non-null / non-empty values after trimming,
+    - optional uniqueness (default),
+    - consistency with ``students_df`` when provided.
+    """
+
+    en_frame = canonicalize_headers(frame, header_mode="en").copy()
+    rule_hint = "LAW/EXPORT-SSOT-ID-01"
+    location = f" ({context})" if context else ""
+
+    if "student_id" not in en_frame.columns:
+        raise AllocationConsistencyError(
+            f"{rule_hint}: ستون student_id در داده موجود نیست{location}."
+        )
+
+    normalized = _normalize_student_id(en_frame["student_id"])
+    missing_mask = _student_id_missing_mask(normalized)
+    if missing_mask.any():
+        missing_rows = en_frame.index[missing_mask].tolist()[:5]
+        sample_ids = normalized.loc[missing_mask].tolist()[:5]
+        raise AllocationConsistencyError(
+            f"{rule_hint}: student_id تهی/نامعتبر شناسایی شد{location}; "
+            f"نمونه ردیف/مقدار = {list(zip(missing_rows, sample_ids))}."
+        )
+
+    if expect_unique:
+        duplicates = normalized.duplicated(keep=False)
+        if duplicates.any():
+            sample = normalized.loc[duplicates].unique().tolist()[:5]
+            raise AllocationConsistencyError(
+                f"{rule_hint}: student_id باید یکتا باشد{location}; نمونه={sample}."
+            )
+
+    if students_df is not None:
+        students_en = canonicalize_headers(students_df, header_mode="en").copy()
+        if "student_id" not in students_en.columns:
+            raise AllocationConsistencyError(
+                f"{rule_hint}: students_df فاقد student_id است و نمی‌تواند SSoT باشد{location}."
+            )
+        reference = _normalize_student_id(students_en["student_id"])
+        reference_set = _get_student_id_set_from_series(reference)
+        frame_set = _get_student_id_set_from_series(normalized)
+        if frame_set - reference_set:
+            sample = sorted(frame_set - reference_set)[:5]
+            raise AllocationConsistencyError(
+                f"{rule_hint}: student_id خارج از محدودهٔ students_spine یافت شد{location}; نمونه={sample}."
+            )
+
+    return canonicalize_headers(en_frame, header_mode=header_mode)
+
+
 def attach_student_id_column(
     frame: pd.DataFrame,
-    student_ids: pd.Series,
+    student_ids: pd.Series | None = None,
     *,
     header_mode: HeaderMode,
     ensure_existing: bool = False,
     students_df: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
-    """الصاق یا تکمیل ستون ``student_id`` با پاک‌سازی مقادیر تهی/"nan".
+    """Deprecated compatibility wrapper for legacy callers.
 
-    پارامترها
-    ----------
-    frame:
-        دیتافریم اولیه (مانند allocations/logs/trace) که ممکن است ستون ``student_id``
-        ناقص داشته باشد.
-    student_ids:
-        سری شناسنامهٔ دانش‌آموزان (هم‌تراز با students_df) برای پر کردن مقادیر مفقود.
-    header_mode:
-        حالت هدر مقصد برای بازگرداندن دیتافریم (fa یا en بر اساس Policy).
-    ensure_existing:
-        اگر True باشد، مقادیر غیرتهی موجود حفظ و فقط تهی/"nan" جایگزین می‌شود.
-    students_df:
-        دیتافریم مرجع دانش‌آموزان برای الصاق پایدار بر اساس national_id یا student_key.
-
-    بازگشت
-    -------
-    pd.DataFrame
-        دیتافریم با ستون student_id تمیز و کاننیکال.
-
-    مثال
-    ----
-    >>> df = pd.DataFrame({"student_id": [" ", "nan"], "x": [1, 2]})
-    >>> ids = pd.Series(["S1", "S2"])
-    >>> attach_student_id_column(df, ids, header_mode="en", ensure_existing=True)["student_id"].tolist()
-    ['S1', 'S2']
+    The function now delegates to :func:`assert_student_id_integrity` and performs
+    **no mutation**. Parameters are kept for backward compatibility only.
     """
 
-    en_frame = canonicalize_headers(frame, header_mode="en").copy()
-
-    students_en = None
-    student_ids_normalized: pd.Series | None = None
-    if students_df is not None:
-        students_en = canonicalize_headers(students_df, header_mode="en").copy()
-        # Prefer the student_id column in students_df as the single source of truth.
-        # This prevents accidental positional/index-based desync when a caller passes
-        # a misaligned student_ids Series.
-        if "student_id" not in students_en.columns:
-            raise AllocationConsistencyError(
-                "students_df must include student_id for stable attachment."
-            )
-        student_ids_normalized = _normalize_student_id(students_en["student_id"])
-        students_en["student_id"] = student_ids_normalized
-
-    existing = None
-    if "student_id" in en_frame.columns:
-        existing = _normalize_student_id(en_frame["student_id"])
-        if ensure_existing and not _student_id_missing_mask(existing).any():
-            en_frame["student_id"] = existing
-            return canonicalize_headers(en_frame, header_mode=header_mode)
-
-    filled = (
-        existing.copy()
-        if existing is not None
-        else pd.Series(pd.NA, index=en_frame.index, dtype="string")
+    _ = student_ids, ensure_existing  # maintained for signature stability
+    return assert_student_id_integrity(
+        frame,
+        header_mode=header_mode,
+        expect_unique=True,
+        students_df=students_df,
     )
-
-    missing_mask = _student_id_missing_mask(_normalize_student_id(filled))
-
-    def _fill_from_key(key: str) -> None:
-        nonlocal missing_mask
-        if not missing_mask.any() or students_en is None:
-            return
-        if key not in en_frame.columns or key not in students_en.columns:
-            return
-
-        source_keys = students_en[key].astype("string").str.strip()
-        target_keys = en_frame[key].astype("string").str.strip()
-        mapping = pd.Series(student_ids_normalized.values, index=source_keys)
-        mapping = mapping.dropna()
-        mapped = target_keys.map(mapping)
-        fill_mask = missing_mask & mapped.notna()
-        if fill_mask.any():
-            filled.loc[fill_mask] = mapped.loc[fill_mask]
-            missing_mask = _student_id_missing_mask(_normalize_student_id(filled))
-
-    _fill_from_key("student_key")
-
-    if missing_mask.any() and students_en is not None and "national_id" in en_frame.columns:
-        if "national_id" not in students_en.columns:
-            raise AllocationConsistencyError(
-                "students_df is missing national_id column required for fallback student_id fill."
-            )
-
-        frame_nid_norm = en_frame["national_id"].apply(normalize_national_id)
-        if frame_nid_norm.loc[missing_mask].isna().any():
-            missing_rows = frame_nid_norm.loc[missing_mask].index.tolist()
-            raise AllocationConsistencyError(
-                "Cannot fill missing student_id without valid national_id; "
-                f"rows={missing_rows[:5]}"
-            )
-
-        students_nid_norm = students_en["national_id"].apply(normalize_national_id)
-        duplicated = students_nid_norm.dropna().duplicated(keep=False)
-        if duplicated.any():
-            dup_ids = students_nid_norm.loc[duplicated].unique().tolist()
-            raise AllocationConsistencyError(
-                "Duplicate national_id values detected in students_df; "
-                f"sample={dup_ids[:5]}"
-            )
-
-        nid_mapping = pd.Series(student_ids_normalized.values, index=students_nid_norm).dropna()
-        mapped = frame_nid_norm.map(nid_mapping)
-        fill_mask = missing_mask & mapped.notna()
-        if fill_mask.any():
-            filled.loc[fill_mask] = mapped.loc[fill_mask]
-            missing_mask = _student_id_missing_mask(_normalize_student_id(filled))
-
-        if missing_mask.any():
-            failing_indices = en_frame.index[missing_mask].tolist()[:5]
-            failing_ids = frame_nid_norm.loc[missing_mask].tolist()[:5]
-            raise AllocationConsistencyError(
-                "Failed to fill student_id via national_id; missing mappings for rows: "
-                f"{list(zip(failing_indices, failing_ids))}"
-            )
-
-    en_frame["student_id"] = _normalize_student_id(filled)
-
-    return canonicalize_headers(en_frame, header_mode=header_mode)
 
 
 def _default_progress(pct: int, message: str) -> None:
@@ -949,7 +920,7 @@ def _validate_and_write_allocation_workbook(
     unallocated_summary: pd.DataFrame | None,
     sabt_allocations_df: pd.DataFrame | None,
 ) -> None:
-    """Run export invariants and write workbook only after they pass."""
+    """Run export invariants (LAW/EXPORT-SSOT-ID-01) and write only after they pass."""
 
     _enforce_allocation_export_invariants(
         allocations_df=allocations_df,
@@ -989,9 +960,10 @@ def _enforce_allocation_export_invariants(
 ) -> None:
     """Hard guardrails for export integrity (P0, fail-fast).
 
-    Invariants:
-    - INV-EXPORT-01: allocations.student_id == success logs student_id set.
-    - INV-EXPORT-02: allocations and unallocated are disjoint by student_id.
+    LAW/EXPORT-SSOT-ID-01 mandates:
+    - AC-01: set(allocations.student_id) == set(logs.success.student_id)
+    - AC-02: allocations and unallocated are disjoint by student_id.
+    - AC-03: allocations_sabt (when present) matches success set.
     - INV-QA-ALLOC-JOIN-02: join-key audit invalid_count == 0.
     """
 
@@ -1036,9 +1008,10 @@ def _enforce_allocation_export_invariants(
                         parts.append(f"mentor={mode}")
                     sample.append(" | ".join(parts))
         raise AllocationConsistencyError(
-            "INV-QA-ALLOC-JOIN-02 failed: allocation join-key audit has "
-            f"invalid_count={int(join_key_audit.invalid_count)} of total={int(join_key_audit.total)} "
-            f"(sample_student_id={sample})."
+            "LAW/EXPORT-SSOT-ID-01 | INV-QA-ALLOC-JOIN-02: "
+            "خطای ممیزی کلیدهای الحاق؛ خروجی متوقف شد. "
+            f"invalid_count={int(join_key_audit.invalid_count)} total={int(join_key_audit.total)} "
+            f"نمونه={sample or 'N/A'}."
         )
 
     alloc_en = canonicalize_headers(allocations_df, header_mode="en")
@@ -1066,20 +1039,22 @@ def _enforce_allocation_export_invariants(
         if overlap:
             overlap_sample = sorted(overlap)[:5]
             raise AllocationConsistencyError(
-                "INV-EXPORT-02 failed: allocations and unallocated overlap by student_id; "
+                "LAW/EXPORT-SSOT-ID-01 / AC-02: همپوشانی دانش‌آموز بین allocations و unallocated ممنوع است؛ "
                 f"overlap_count={len(overlap)} sample={overlap_sample}."
             )
 
     if sabt_allocations_df is not None:
         sabt_en = canonicalize_headers(sabt_allocations_df, header_mode="en")
         if "student_id" not in sabt_en.columns:
-            raise AllocationConsistencyError("allocations_sabt is missing student_id column.")
+            raise AllocationConsistencyError(
+                "LAW/EXPORT-SSOT-ID-01 / AC-03: allocations_sabt فاقد ستون student_id است."
+            )
         sabt_set = _get_student_id_set_from_series(sabt_en["student_id"])
         if sabt_set != success_set:
             only_in_sabt = sorted(sabt_set - success_set)[:5]
             only_in_success = sorted(success_set - sabt_set)[:5]
             raise AllocationConsistencyError(
-                "allocations_sabt student_id mismatch vs success logs; "
+                "LAW/EXPORT-SSOT-ID-01 / AC-03: عدم انطباق student_id بین allocations_sabt و لاگ موفق؛ "
                 f"sabt_count={len(sabt_set)} success_count={len(success_set)}; "
                 f"only_in_sabt={only_in_sabt} only_in_success={only_in_success}."
             )
@@ -1087,7 +1062,7 @@ def _enforce_allocation_export_invariants(
         if overlap_sabt_unalloc:
             sample = sorted(overlap_sabt_unalloc)[:5]
             raise AllocationConsistencyError(
-                "allocations_sabt overlaps unallocated students; "
+                "LAW/EXPORT-SSOT-ID-01 / AC-03: allocations_sabt نباید با دانش‌آموزان تخصیص‌نیافته همپوشان شود؛ "
                 f"overlap_count={len(overlap_sabt_unalloc)} sample={sample}."
             )
 
@@ -2731,26 +2706,26 @@ def _allocate_and_write(
         header_internal: HeaderMode = _coerce_header_mode(policy.excel.header_mode_internal)
         students_spine = _build_students_spine(students_base, header_mode=header_internal)
 
-        allocations_df = attach_student_id_column(
-            allocations_df,
-            student_ids,
+        allocations_df = assert_student_id_integrity(
+            _ensure_student_id_column_for_empty(allocations_df),
             header_mode=header_internal,
-            ensure_existing=True,
+            expect_unique=True,
             students_df=students_spine,
+            context="allocations",
         )
-        logs_df = attach_student_id_column(
-            logs_df,
-            student_ids,
+        logs_df = assert_student_id_integrity(
+            _ensure_student_id_column_for_empty(logs_df),
             header_mode=header_internal,
-            ensure_existing=True,
+            expect_unique=False,
             students_df=students_spine,
+            context="logs",
         )
-        trace_df = attach_student_id_column(
-            trace_df,
-            student_ids,
+        trace_df = assert_student_id_integrity(
+            _ensure_student_id_column_for_empty(trace_df),
             header_mode=header_internal,
-            ensure_existing=True,
+            expect_unique=False,
             students_df=students_spine,
+            context="trace",
         )
 
         _validate_allocated_student_ids(
@@ -2820,12 +2795,12 @@ def _allocate_and_write(
             policy=policy,
         )
 
-        students_for_audit = attach_student_id_column(
+        students_for_audit = assert_student_id_integrity(
             students_base.copy(),
-            student_ids,
             header_mode=header_internal,
-            ensure_existing=True,
+            expect_unique=True,
             students_df=students_spine,
+            context="students_for_audit",
         )
 
         join_key_audit = validate_allocation_join_keys_with_wildcard(
