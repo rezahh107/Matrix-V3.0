@@ -11,6 +11,7 @@ import pandas as pd
 import pytest
 
 from app.core.allocate_students import (
+    ProgressReporter,
     _normalize_pool,
     _separate_school_students,
     allocate_batch,
@@ -1076,6 +1077,26 @@ def test_allocate_batch_progress_throttles_percent_changes(_base_pool: pd.DataFr
     pd.testing.assert_frame_equal(throttled.allocations_df, baseline.allocations_df)
 
 
+def test_progress_reporter_emits_monotonic_percentages() -> None:
+    progress_calls: list[tuple[int, str]] = []
+
+    def _progress(pct: int, msg: str) -> None:
+        progress_calls.append((pct, msg))
+
+    reporter = ProgressReporter(_progress)
+    total = 7
+    reporter.start("start")
+    for idx in range(1, total + 1):
+        reporter.report(idx, total, f"allocating {idx}/{total}")
+    reporter.done("done")
+
+    percents = [pct for pct, _ in progress_calls]
+    assert percents[0] == 0
+    assert percents[-1] == 100
+    assert percents == sorted(percents)
+    assert len(percents) <= 101
+
+
 def test_allocate_batch_normalizes_state_once(
     monkeypatch: pytest.MonkeyPatch, _base_pool: pd.DataFrame
 ) -> None:
@@ -1126,6 +1147,25 @@ def test_allocate_batch_is_deterministic_for_allocations_and_success_logs(
         second.logs_df.loc[second.logs_df["allocation_status"] == "success", "student_id"]
     )
     assert first_success == second_success
+
+
+def test_allocate_batch_is_deterministic_for_allocations_and_logs(
+    _base_pool: pd.DataFrame,
+) -> None:
+    students = pd.concat(
+        [
+            _single_student(student_id="STD-001"),
+            _single_student(student_id="STD-002"),
+            _single_student(student_id="STD-003"),
+        ],
+        ignore_index=True,
+    )
+
+    first = allocate_batch(students.copy(deep=True), _base_pool.copy(deep=True))
+    second = allocate_batch(students.copy(deep=True), _base_pool.copy(deep=True))
+
+    pd.testing.assert_frame_equal(first.allocations_df, second.allocations_df)
+    pd.testing.assert_frame_equal(first.logs_df, second.logs_df)
 
 
 def test_allocate_student_records_fairness_reason_code(_base_pool: pd.DataFrame) -> None:

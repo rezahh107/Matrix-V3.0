@@ -80,6 +80,33 @@ from .reason.selection_reason import build_selection_reason_rows as _build_selec
 ProgressFn = Callable[[int, str], None]
 
 
+@dataclass
+class ProgressReporter:
+    """گزارش‌گر درصد پیشرفت با throttle قطعی و بدون وابستگی زمانی."""
+
+    progress: ProgressFn
+    last_percent: int | None = None
+
+    def start(self, message: str) -> None:
+        self._emit(0, message, force=True)
+
+    def report(self, processed: int, total: int, message: str) -> None:
+        normalized_total = max(total, 1)
+        percent = int(processed * 100 / normalized_total)
+        percent = min(percent, 99)
+        self._emit(percent, message)
+
+    def done(self, message: str) -> None:
+        self._emit(100, message, force=True)
+
+    def _emit(self, pct: int, message: str, *, force: bool = False) -> None:
+        pct_value = max(0, min(100, int(pct)))
+        if not force and pct_value == self.last_percent:
+            return
+        self.last_percent = pct_value
+        self.progress(pct_value, message)
+
+
 class JoinMismatch(TypedDict):
     column: str
     student_value: object
@@ -89,6 +116,7 @@ class JoinMismatch(TypedDict):
 
 __all__ = [
     "ProgressFn",
+    "ProgressReporter",
     "AllocationResult",
     "AllocationBatchResult",
     "TraceDebugFrames",
@@ -2553,19 +2581,9 @@ def allocate_batch(
     total = max(int(students_norm.shape[0]), 1)
     trace_plan = build_trace_plan(policy, capacity_column=resolved_capacity_column)
 
-    progress(0, "start")
+    reporter = ProgressReporter(progress)
+    reporter.start("start")
     processed = 0
-    last_progress_pct = 0
-
-    def _emit_progress(pct: int, message: str) -> None:
-        nonlocal last_progress_pct
-        pct_int = max(0, min(100, int(pct)))
-        if pct_int >= 100:
-            return
-        if pct_int == last_progress_pct:
-            return
-        last_progress_pct = pct_int
-        progress(pct_int, message)
 
     def _allocate_group(
         group: pd.DataFrame,
@@ -2593,8 +2611,7 @@ def allocate_batch(
             }
             canonical_sid = _canonical_student_id(student_dict.get("student_id"))
             student_dict["student_id"] = canonical_sid
-            percent = int(processed * 100 / total)
-            _emit_progress(percent, f"allocating {processed}/{total}")
+            reporter.report(processed, total, f"allocating {processed}/{total}")
 
             student_center, center_is_valid = _extract_and_validate_center(student_dict, policy)
             invalid_center_payload: dict[str, object] | None = None
@@ -2785,7 +2802,7 @@ def allocate_batch(
         log["alias_autofill"] = alias_autofill
         log["alias_unmatched"] = alias_unmatched
 
-    progress(100, "done")
+    reporter.done("done")
 
     # ساخت خروجی‌های نهایی
     allocations_df = pd.DataFrame(allocations, columns=_ALLOCATION_OUTPUT_COLUMNS)

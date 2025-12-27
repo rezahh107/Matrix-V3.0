@@ -6,6 +6,7 @@ import logging
 import re
 import threading
 from collections.abc import Callable, Iterable, Sequence
+from html import escape, unescape
 from pathlib import Path
 
 import pandas as pd
@@ -25,7 +26,6 @@ from PySide6.QtCore import (
 from PySide6.QtGui import (
     QAction,
     QCloseEvent,
-    QColor,
     QDesktopServices,
     QEnterEvent,
     QGuiApplication,
@@ -48,6 +48,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QMainWindow,
     QMessageBox,
+    QPlainTextEdit,
     QProgressBar,
     QPushButton,
     QScrollArea,
@@ -56,7 +57,6 @@ from PySide6.QtWidgets import (
     QTableWidget,
     QTableWidgetItem,
     QTabWidget,
-    QTextEdit,
     QToolBar,
     QVBoxLayout,
     QWidget,
@@ -115,6 +115,10 @@ from .widgets import DatabaseStatusWidget, FilePicker, ThemedStatusBar
 from .widgets.health_indicator import HealthCallbacks, HealthIndicatorWidget
 
 logger = logging.getLogger(__name__)
+
+_LOG_FLUSH_THRESHOLD = 20
+_LOG_MAX_BLOCKS = 1200
+_LOG_TAG_RE = re.compile(r"<[^>]+>")
 
 _EN_TEXT_DEFAULTS: dict[str, str] = {
     "app.title": "Student-Mentor Allocation",
@@ -326,8 +330,9 @@ class MainWindow(QMainWindow):
         self._center_manager_combos: dict[int, QComboBox] = {}
         self._manager_names_cache: list[str] = []
         self._btn_reset_managers: QPushButton | None = None
-        self._log: QTextEdit | None = None
+        self._log: QPlainTextEdit | None = None
         self._log_buffer: list[str] = []
+        self._log_pending: list[str] = []
         self._log_line = 0
         self._history_metrics_df = pd.DataFrame(columns=METRIC_COLUMNS)
         self._history_metrics_dialog: HistoryMetricsDialog | None = None
@@ -353,6 +358,7 @@ class MainWindow(QMainWindow):
         self._progress_pulse: QPropertyAnimation | None = None
         self._last_run_badge: QLabel | None = None
         self._last_progress_pct: int | None = None
+        self._last_progress_message: str | None = None
         self._current_action: str = self._translator.text("status.ready", "آماده")
         self._status_bar: ThemedStatusBar | None = None
         self._database_status: DatabaseStatusWidget | None = None
@@ -477,6 +483,7 @@ class MainWindow(QMainWindow):
         self._log_panel.connect_clear(self._clear_log)
         self._log_panel.connect_save(self._save_log_to_file)
         self._log = self._log_panel.text_edit
+        self._log.setMaximumBlockCount(_LOG_MAX_BLOCKS)
         if self._log_buffer:
             buffered_messages = self._log_buffer[:]
             self._log_buffer.clear()
@@ -2755,9 +2762,15 @@ class MainWindow(QMainWindow):
             return
         if self._log is None:
             return
+        self._flush_log_pending()
         path = Path(filename)
         suffix = path.suffix.lower()
-        content = self._log.toPlainText() if suffix in {".txt", ".log", ""} else self._log.toHtml()
+        raw_text = self._log.toPlainText()
+        content = (
+            f"<pre>{escape(raw_text)}</pre>"
+            if suffix in {".html", ".htm"}
+            else raw_text
+        )
         try:
             path.write_text(content, encoding="utf-8")
         except OSError as exc:
@@ -2772,6 +2785,8 @@ class MainWindow(QMainWindow):
             return
         self._log.clear()
         self._log_line = 0
+        self._log_pending.clear()
+        self._log_buffer.clear()
         self._sync_log_placeholder()
 
     def _show_async_message(self, icon: QMessageBox.Icon, title: str, text: str) -> None:
@@ -2788,41 +2803,43 @@ class MainWindow(QMainWindow):
         box.setModal(True)
         box.open()
 
+    def _normalize_log_message(self, message: str) -> str:
+        """پاک‌سازی ورودی‌ها از برچسب‌های HTML برای نمایش متن ساده."""
+
+        cleaned = _LOG_TAG_RE.sub("", message)
+        return unescape(cleaned).strip()
+
+    def _should_flush_log(self, message: str) -> bool:
+        stripped = message.lstrip()
+        return stripped.startswith("❌")
+
+    def _flush_log_pending(self) -> None:
+        if self._log is None or not self._log_pending:
+            return
+        lines: list[str] = []
+        for message in self._log_pending:
+            self._log_line += 1
+            timestamp = QDateTime.currentDateTime().toString("HH:mm:ss")
+            prefix = f"[{self._log_line:03d} | {timestamp}]"
+            lines.append(f"{prefix} {message}")
+        self._log_pending.clear()
+        self._log.appendPlainText("\n".join(lines))
+        self._sync_log_placeholder()
+
     def _append_log(self, text: str) -> None:
-        """افزودن پیام به لاگ با برجسته کردن خطاها."""
+        """افزودن پیام به لاگ با بافر محدود و متن ساده."""
 
         if self._log is None or not self._is_widget_valid(self._log) or self._is_closing:
             if not self._is_closing:
                 self._log_buffer.append(text)
             return
-        message = str(text or "")
-        self._log_line += 1
-        timestamp = QDateTime.currentDateTime().toString("HH:mm:ss")
-        prefix = f"[{self._log_line:03d} | {timestamp}]"
-        lowered = message.lower()
-        background: str | None = None
-        if message.strip().startswith("✅"):
-            background = self._theme.success_soft.name(QColor.NameFormat.HexArgb)
-        elif message.strip().startswith("❌"):
-            background = QColor(self._theme.colors.error).lighter(150).name()
-        elif message.strip().startswith("ℹ️") or message.strip().startswith("⚠️"):
-            background = self._theme.accent_soft.name(QColor.NameFormat.HexArgb)
-        elif ("error" in lowered or "خطا" in message) and "<span" not in message:
-            background = QColor(self._theme.colors.error).lighter(150).name()
-        content = message
-        if background:
-            content = (
-                f'<span style="background:{background}; padding:2px 6px; '
-                f"border-radius:{self._theme.radius_sm}px; "
-                f'color:{self._theme.colors.text};">{message}</span>'
-            )
-        html = (
-            "<span style=\"font-family: 'Fira Code', 'Cascadia Code', 'Segoe UI Mono',"
-            " 'Courier New', monospace; color:" + self._theme.colors.text_muted + '">'
-            f"{prefix}</span> {content}"
-        )
-        self._log.append(html)
-        self._sync_log_placeholder()
+        message = self._normalize_log_message(str(text or ""))
+        if not message:
+            return
+        self._log_pending.append(message)
+        should_flush = self._should_flush_log(message) or len(self._log_pending) >= _LOG_FLUSH_THRESHOLD
+        if should_flush:
+            self._flush_log_pending()
 
     def _sync_log_placeholder(self) -> None:
         """به‌روزرسانی وضعیت نمایش placeholder لاگ."""
@@ -2876,18 +2893,23 @@ class MainWindow(QMainWindow):
         """به‌روزرسانی نوار پیشرفت و ثبت لاگ."""
 
         pct_value = max(0, min(100, int(pct)))
-        if self._last_progress_pct is not None and pct_value == self._last_progress_pct:
+        safe_msg = message or "(بدون پیام)"
+        update_progress = self._last_progress_pct is None or pct_value != self._last_progress_pct
+        update_message = self._last_progress_message is None or safe_msg != self._last_progress_message
+        if not update_progress and not update_message:
             return
-        self._last_progress_pct = pct_value
         if self._progress.maximum() == 0:
             self._progress.setRange(0, 100)
             self._progress.setProperty("busy", False)
-        self._progress.setValue(pct_value)
-        self._status.setText(message or "در حال پردازش")
-        safe_msg = message or "(بدون پیام)"
-        self._set_stage(self._current_action, safe_msg)
-        self._update_progress_caption(self._progress.value(), safe_msg)
-        self._append_log(f"{pct_value}% | {safe_msg}")
+        if update_progress:
+            self._last_progress_pct = pct_value
+            self._progress.setValue(pct_value)
+        if update_message:
+            self._last_progress_message = safe_msg
+            self._status.setText(message or "در حال پردازش")
+            self._set_stage(self._current_action, safe_msg)
+        if update_progress or update_message:
+            self._update_progress_caption(self._progress.value(), safe_msg)
         self._update_status_bar_state("running")
 
     @Slot(bool, object)
@@ -2899,6 +2921,7 @@ class MainWindow(QMainWindow):
             self._worker = None
             self._success_hook = None
             return
+        self._flush_log_pending()
         self._disable_controls(False)
         self._set_busy_cursor(False)
         self._progress.setRange(0, 100)
