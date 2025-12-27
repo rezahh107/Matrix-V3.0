@@ -76,7 +76,7 @@ class JoinKeyResolver:
         matches = [
             key
             for key in self._center_map
-            if key not in ("*", "") and normalized_manager and key in normalized_manager
+            if key not in ("*", "") and key in normalized_manager
         ]
         if matches:
             best_key = min(matches, key=lambda key: (-len(key), key))
