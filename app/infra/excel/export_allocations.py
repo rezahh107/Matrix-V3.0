@@ -15,6 +15,7 @@ from app.core.allocation.engine import enrich_summary_with_history
 from app.core.allocation.history_metrics import METRIC_COLUMNS, compute_history_metrics
 from app.core.common.columns import CANON_EN_TO_FA, canonicalize_headers, ensure_series
 from app.core.common.normalization import normalize_fa
+from app.core.common.trace import JOIN_STAGE_SOURCE_KEYS
 from app.core.pipeline import enrich_student_contacts
 from app.core.policy_loader import PolicyConfig
 from app.infra.excel.common import (
@@ -385,6 +386,55 @@ def _build_history_metrics_sheet(
         return _empty_history_metrics_df()
 
 
+_JOIN_KEY_SOURCE_COLUMNS: dict[str, str] = dict(JOIN_STAGE_SOURCE_KEYS)
+
+_DEFAULTED_SOURCES: set[str] = {"missing", "invalid", "defaulted_zero"}
+
+_INFERRED_SOURCES: dict[str, set[str]] = {
+    "center": {"manager_exact", "manager_substring", "manager_wildcard"},
+}
+
+
+def _join_key_stage_label(stage: str, policy: PolicyConfig | None) -> str:
+    if policy is None:
+        return stage
+    if stage == "school":
+        try:
+            return policy.columns.school_code
+        except AttributeError:
+            return stage
+    try:
+        return policy.stage_column(stage)
+    except KeyError:
+        return stage
+
+
+def _build_join_key_provenance_summary(
+    summary_df: pd.DataFrame,
+    *,
+    policy: PolicyConfig | None,
+) -> pd.DataFrame:
+    rows: list[dict[str, object]] = []
+    total_count = int(summary_df.shape[0])
+    for stage, source_column in _JOIN_KEY_SOURCE_COLUMNS.items():
+        inferred = 0
+        defaulted = 0
+        if source_column in summary_df.columns:
+            series = summary_df[source_column].astype("string").fillna("")
+            inferred = int(series.isin(_INFERRED_SOURCES.get(stage, set())).sum())
+            defaulted = int(series.isin(_DEFAULTED_SOURCES).sum())
+        rows.append(
+            {
+                "join_key_stage": stage,
+                "join_key_column": _join_key_stage_label(stage, policy),
+                "inferred_count": inferred,
+                "defaulted_count": defaulted,
+                "total_count": total_count,
+            }
+        )
+    return pd.DataFrame(rows)
+
+
 def collect_trace_debug_sheets(
     trace_df: pd.DataFrame | None,
     *,
@@ -425,6 +475,10 @@ def collect_trace_debug_sheets(
             summary_df,
             students_df=students_df,
             history_info_df=history_info_df,
+            policy=policy,
+        )
+        sheets["JoinKeyProvenance_counts"] = _build_join_key_provenance_summary(
+            summary_df,
             policy=policy,
         )
 

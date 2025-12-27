@@ -38,6 +38,7 @@ from ..policy_loader import PolicyConfig, load_policy
 from .columns import normalize_bool_like, to_int64
 from .eligibility import build_stage_pass_flags
 from .filters import filter_school_by_value, resolve_student_school_code
+from .join_resolver import resolve_join_key_sources
 from .rules import Rule, RuleContext, apply_rule, default_stage_rule_map
 from .types import (
     CANONICAL_TRACE_ORDER,
@@ -50,8 +51,10 @@ from .types import (
 )
 
 __all__ = [
+    "JOIN_STAGE_SOURCE_KEYS",
     "TraceStagePlan",
     "TraceOutcome",
+    "attach_join_source_extras",
     "build_trace_plan",
     "build_stage_rule_map",
     "build_allocation_trace",
@@ -99,6 +102,30 @@ def _align_type_group_student(
     if not has_group and has_type:
         student_copy[group_column] = student[type_column]
     return student_copy
+
+
+JOIN_STAGE_SOURCE_KEYS: Mapping[TraceStageName, str] = {
+    "group": "group_source",
+    "gender": "gender_source",
+    "graduation_status": "graduation_status_source",
+    "center": "center_source",
+    "finance": "finance_source",
+    "school": "school_source",
+}
+
+
+def attach_join_source_extras(
+    extras: dict[str, Any],
+    *,
+    stage: TraceStageName,
+    join_key_sources: Mapping[str, object] | None,
+) -> None:
+    if join_key_sources is None:
+        return
+
+    source_key = JOIN_STAGE_SOURCE_KEYS.get(stage)
+    if source_key and source_key in join_key_sources:
+        extras[source_key] = join_key_sources[source_key]
 
 
 class FinalStatus(str, Enum):
@@ -443,6 +470,7 @@ def build_allocation_trace(
     stage_plan: Sequence[TraceStagePlan] | None = None,
     capacity_column: str = "remaining_capacity",
     stage_rules: Mapping[TraceStageName, Rule] | None = None,
+    join_key_sources: Mapping[str, object] | None = None,
 ) -> list[TraceStageRecord]:
     """ایجاد تریس ۸ مرحله‌ای مطابق Policy."""
 
@@ -467,6 +495,7 @@ def build_allocation_trace(
     _ensure_columns(candidate_pool, columns_needed)
 
     trace: list[TraceStageRecord] = []
+    resolved_sources = dict(join_key_sources) if join_key_sources is not None else None
     current = candidate_pool
     for plan in non_capacity_plan:
         before = int(current.shape[0])
@@ -497,6 +526,12 @@ def build_allocation_trace(
                 stage_extras.update(_mentor_value_extras(mentor_join_value))
         stage_extras["expected_op"] = expected_op
         stage_extras["expected_threshold"] = expected_threshold
+        if resolved_sources is not None:
+            attach_join_source_extras(
+                stage_extras,
+                stage=plan.stage,
+                join_key_sources=resolved_sources,
+            )
         trace.append(
             TraceStageRecord(
                 stage=plan.stage,
@@ -647,6 +682,11 @@ def summarize_trace_outcome(
     metadata["error_type"] = error_code
     metadata["has_candidates"] = candidate_count > 0
     metadata["capacity_candidate_count"] = int(stage_counts.get("capacity_gate", 0))
+    join_key_sources = log.get("join_key_sources")
+    if isinstance(join_key_sources, Mapping):
+        metadata.update({str(key): value for key, value in join_key_sources.items()})
+    elif policy is not None:
+        metadata.update(resolve_join_key_sources(student, policy=policy))
 
     return TraceOutcome(
         student_id=student.get("student_id"),

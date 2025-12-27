@@ -18,6 +18,7 @@ from app.core.common.join_keys import (
     resolve_finance_variants,
 )
 from app.core.common.normalization import normalize_fa
+from app.core.common.types import JoinKeySource, JoinKeySourceMap
 from app.core.policy_loader import PolicyConfig
 
 CenterSource = Literal[
@@ -34,7 +35,6 @@ FinanceSource = Literal[
     "missing",
     "invalid",
 ]
-
 
 @dataclass(frozen=True, slots=True)
 class EffectiveJoinKeys:
@@ -186,6 +186,34 @@ class JoinKeyResolver:
         return None
 
 
+def resolve_join_key_sources(
+    student: Mapping[str, object],
+    *,
+    policy: PolicyConfig,
+    student_join_map: Mapping[str, int] | None = None,
+) -> JoinKeySourceMap:
+    def _resolve_basic(column: str) -> JoinKeySource:
+        return _resolve_basic_source(
+            column,
+            student,
+            policy,
+            student_join_map,
+        )
+
+    resolver = JoinKeyResolver(policy)
+    center = resolver.resolve_center(student, student_join_map=student_join_map)
+    finance = resolver.resolve_finance(student, student_join_map=student_join_map)
+    school_source = _resolve_school_source(student, policy, student_join_map)
+    return {
+        "group_source": _resolve_basic(policy.stage_column("group")),
+        "gender_source": _resolve_basic(policy.stage_column("gender")),
+        "graduation_status_source": _resolve_basic(policy.stage_column("graduation_status")),
+        "center_source": center.center_source,
+        "finance_source": finance.finance_source,
+        "school_source": school_source,
+    }
+
+
 def _center_from_join_map(
     join_map: Mapping[str, int] | None, normalized_column: str
 ) -> int | None:
@@ -195,6 +223,21 @@ def _center_from_join_map(
     if value is None or value < 0:
         return None
     return int(value)
+
+
+def _source_from_join_map(
+    join_map: Mapping[str, int] | None, normalized_column: str
+) -> JoinKeySource | None:
+    if join_map is None:
+        return None
+    value = join_map.get(normalized_column)
+    if value is None:
+        return None
+    if value == -1:
+        return "missing"
+    if value == -2:
+        return "invalid"
+    return "raw"
 
 
 def _value_from_join_map(
@@ -225,6 +268,55 @@ def _student_value_optional(student: Mapping[str, object], column: str) -> objec
         if key in student:
             return student[key]
     return None
+
+
+def _is_missing_value(value: object) -> bool:
+    if value is None:
+        return True
+    try:
+        if pd.isna(value):
+            return True
+    except (TypeError, ValueError):
+        pass
+    if isinstance(value, str):
+        return not value.strip()
+    return False
+
+
+def _resolve_basic_source(
+    column: str,
+    student: Mapping[str, object],
+    policy: PolicyConfig,
+    student_join_map: Mapping[str, int] | None,
+) -> JoinKeySource:
+    normalized = normalize_join_key_name(column)
+    source = _source_from_join_map(student_join_map, normalized)
+    if source in {"missing", "invalid"}:
+        return source
+    value = _student_value_optional(student, column)
+    if _is_missing_value(value):
+        return "missing"
+    try:
+        canonicalize_join_key_value(column, value, policy=policy)
+    except JoinKeyCanonicalizationError:
+        return "invalid"
+    return "raw"
+
+
+def _resolve_school_source(
+    student: Mapping[str, object],
+    policy: PolicyConfig,
+    student_join_map: Mapping[str, int] | None,
+) -> JoinKeySource:
+    column = policy.columns.school_code
+    normalized = normalize_join_key_name(column)
+    source = _source_from_join_map(student_join_map, normalized)
+    if source in {"missing", "invalid"}:
+        return source
+    raw_value = _student_value_optional(student, column)
+    if _is_missing_value(raw_value):
+        return "defaulted_zero" if policy.school_code_empty_as_zero else "missing"
+    return "raw"
 
 
 def _extract_manager_name(student: Mapping[str, object]) -> str:
@@ -263,5 +355,8 @@ __all__ = [
     "EffectiveJoinKeys",
     "FinanceSource",
     "JoinKeyResolver",
+    "JoinKeySource",
+    "JoinKeySourceMap",
     "StudentSchoolCode",
+    "resolve_join_key_sources",
 ]

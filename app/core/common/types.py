@@ -515,6 +515,9 @@ __all__ = [
     "JoinKeys",
     "JoinKeysDF",
     "JoinKeyValueMapping",
+    "JoinKeySource",
+    "JoinKeySourceLiteral",
+    "JoinKeySourceMap",
     "StudentRow",
     "MentorRow",
     "AllocationErrorLiteral",
@@ -591,6 +594,22 @@ AllocationErrorLiteral = Literal[
     "CAPACITY_UNDERFLOW",
 ]
 
+JoinKeySource = Literal[
+    "raw",
+    "missing",
+    "invalid",
+    "defaulted_zero",
+    "manager_exact",
+    "manager_substring",
+    "manager_wildcard",
+    "join_map",
+]
+
+# Backwards-compatible alias for older imports.
+JoinKeySourceLiteral = JoinKeySource
+
+JoinKeySourceMap = Mapping[str, JoinKeySource]
+
 
 class AllocationAlertRecord(TypedDict, total=False):
     """هشدار ساخت‌یافته برای گزارش مرحلهٔ حذف کاندید."""
@@ -611,6 +630,7 @@ class AllocationLogRecord(TypedDict, total=False):
     mentor_id: str | None
     occupancy_ratio: float | None
     join_keys: JoinKeyValues
+    join_key_sources: JoinKeySourceMap
     candidate_count: int
     selection_reason: str | None
     tie_breakers: dict[str, Any]
