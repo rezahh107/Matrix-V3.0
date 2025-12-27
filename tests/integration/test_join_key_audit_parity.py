@@ -59,6 +59,6 @@ def test_allocation_and_audit_join_key_parity() -> None:
     mentor_columns = [f"{key}_mentor" for key in policy.join_keys]
 
     assert audit.invalid_count == 0
-    for column in (*policy.join_keys, *mentor_columns, *match_columns):
-        assert column in audit_frame.columns
+    expected_columns = set(policy.join_keys) | set(mentor_columns) | set(match_columns)
+    assert expected_columns.issubset(audit_frame.columns)
     assert audit_frame[match_columns].all(axis=1).all()
