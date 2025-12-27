@@ -88,7 +88,7 @@ def _infer_center_from_manager(
         if norm_key:
             try:
                 center_map_norm[norm_key] = int(raw_val)
-            except Exception:
+            except (ValueError, TypeError):
                 continue
 
     wildcard = center_map_norm.get("*")
