@@ -299,30 +299,28 @@ def apply_ranking_policy(
             build_mentor_state(state_source, policy=policy),
         )
 
-    def _state_metric(mentor: Hashable, key: str, *, default: int = 0) -> int:
-        entry = state_view.get(mentor)
-        if entry is None:
-            return default
-        raw_value = entry.get(key)
-        if raw_value is None:
-            return default
-        if isinstance(raw_value, (int, float, str, type(None))):
-            try:
-                return _safe_capacity(raw_value)
-            except TypeError:  # pragma: no cover - نگهبان ورودی پیش‌بینی‌نشده
-                return default
-        return default
-
     def _series_as_int(series: pd.Series) -> pd.Series:
         numeric = pd.to_numeric(series, errors="coerce").fillna(0)
         clipped = numeric.clip(lower=0)
         return clipped.astype(int)
 
-    remaining = mentor_ids.map(lambda mentor: _state_metric(mentor, "remaining"))
-    allocations = mentor_ids.map(lambda mentor: _state_metric(mentor, "alloc_new"))
+    state_frame: pd.DataFrame | None = None
 
-    remaining_int = _series_as_int(remaining)
-    allocations_int = _series_as_int(allocations)
+    def _state_series(key: str) -> pd.Series:
+        nonlocal state_frame
+        if not state_view:
+            return pd.Series(0, index=mentor_ids.index)
+        if state_frame is None:
+            state_frame = pd.DataFrame.from_dict(state_view, orient="index")
+        if key not in state_frame.columns:
+            return pd.Series(0, index=mentor_ids.index)
+        values = state_frame[key]
+        reindexed = values.reindex(mentor_ids.tolist())
+        reindexed.index = mentor_ids.index
+        return _series_as_int(reindexed)
+
+    remaining_int = _state_series("remaining")
+    allocations_int = _state_series("alloc_new")
 
     ranked["occupancy_ratio"] = 0.0
     ranked["allocations_new"] = allocations_int

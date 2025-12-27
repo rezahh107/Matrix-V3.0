@@ -633,9 +633,17 @@ def attach_student_id_column(
     )
 
 
+_LAST_PROGRESS_PCT: int | None = None
+
+
 def _default_progress(pct: int, message: str) -> None:
     """چاپ سادهٔ وضعیت پیشرفت در حالت headless."""
-    print(f"{pct:3d}% | {message}")
+    global _LAST_PROGRESS_PCT
+    pct_value = max(0, min(100, int(pct)))
+    if _LAST_PROGRESS_PCT is not None and pct_value == _LAST_PROGRESS_PCT:
+        return
+    _LAST_PROGRESS_PCT = pct_value
+    print(f"{pct_value:3d}% | {message}")
 
 
 def _add_local_db_args(parser: argparse.ArgumentParser) -> None:

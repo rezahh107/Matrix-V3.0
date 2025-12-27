@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import importlib
 import json
+from collections.abc import Mapping
 from dataclasses import replace
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 import pytest
@@ -1050,6 +1052,80 @@ def test_allocate_batch_progress_reports_start_and_end(_base_pool: pd.DataFrame)
     assert progress_calls[0][1] == "start"
     assert any(pct == 100 for pct, _ in progress_calls)
     assert progress_calls[-1][1] == "done"
+
+
+def test_allocate_batch_progress_throttles_percent_changes(_base_pool: pd.DataFrame) -> None:
+    students = pd.concat(
+        [
+            _single_student(student_id=f"STD-{idx:03d}")
+            for idx in range(1, 121)
+        ],
+        ignore_index=True,
+    )
+    progress_calls: list[tuple[int, str]] = []
+
+    def _progress(pct: int, msg: str) -> None:
+        progress_calls.append((pct, msg))
+
+    throttled = allocate_batch(students, _base_pool, progress=_progress)
+    baseline = allocate_batch(students, _base_pool, progress=lambda *_: None)
+
+    assert progress_calls[0] == (0, "start")
+    assert progress_calls[-1] == (100, "done")
+    assert len(progress_calls) <= 101
+    pd.testing.assert_frame_equal(throttled.allocations_df, baseline.allocations_df)
+
+
+def test_allocate_batch_normalizes_state_once(
+    monkeypatch: pytest.MonkeyPatch, _base_pool: pd.DataFrame
+) -> None:
+    students = pd.concat(
+        [
+            _single_student(student_id="STD-001"),
+            _single_student(student_id="STD-002"),
+            _single_student(student_id="STD-003"),
+        ],
+        ignore_index=True,
+    )
+    import app.core.allocate_students as module
+
+    calls: list[int] = []
+    original = module._stringify_mentor_state
+
+    def _wrapped(state: Mapping[Any, Any]) -> dict[str, Any]:
+        calls.append(1)
+        return original(state)
+
+    monkeypatch.setattr(module, "_stringify_mentor_state", _wrapped)
+
+    allocate_batch(students, _base_pool, progress=lambda *_: None)
+
+    assert len(calls) == 1
+
+
+def test_allocate_batch_is_deterministic_for_allocations_and_success_logs(
+    _base_pool: pd.DataFrame,
+) -> None:
+    students = pd.concat(
+        [
+            _single_student(student_id="STD-001"),
+            _single_student(student_id="STD-002"),
+            _single_student(student_id="STD-003"),
+        ],
+        ignore_index=True,
+    )
+
+    first = allocate_batch(students.copy(deep=True), _base_pool.copy(deep=True))
+    second = allocate_batch(students.copy(deep=True), _base_pool.copy(deep=True))
+
+    pd.testing.assert_frame_equal(first.allocations_df, second.allocations_df)
+    first_success = set(
+        first.logs_df.loc[first.logs_df["allocation_status"] == "success", "student_id"]
+    )
+    second_success = set(
+        second.logs_df.loc[second.logs_df["allocation_status"] == "success", "student_id"]
+    )
+    assert first_success == second_success
 
 
 def test_allocate_student_records_fairness_reason_code(_base_pool: pd.DataFrame) -> None:

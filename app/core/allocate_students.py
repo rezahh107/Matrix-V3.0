@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from numbers import Number, Real
 from typing import Any, Literal, SupportsFloat, SupportsInt, TypedDict, TypeVar, cast
 
+import numpy as np
 import pandas as pd
 from pandas.api import types as pd_types
 
@@ -399,10 +400,22 @@ def _resolve_mentor_state_entry(
     return None, None
 
 
+def _is_str_keyed_state(state: Mapping[Hashable, MentorCapacityState]) -> bool:
+    """بررسی سریع اینکه کلیدهای state از جنس str هستند یا خیر."""
+    if not state:
+        return True
+    sample_key = next(iter(state))
+    return isinstance(sample_key, str)
+
+
 def _stringify_mentor_state(
     mentor_state: Mapping[Any, MentorCapacityState],
 ) -> dict[str, MentorCapacityState]:
     """نرمال‌سازی کلیدهای state پشتیبان به رشته پایدار."""
+    if not mentor_state:
+        return {}
+    if _is_str_keyed_state(cast(Mapping[Hashable, MentorCapacityState], mentor_state)):
+        return dict(cast(Mapping[str, MentorCapacityState], mentor_state))
     normalized: dict[str, MentorCapacityState] = {}
     for key, value in mentor_state.items():
         normalized_key = _normalize_mentor_identifier(key)
@@ -463,6 +476,15 @@ def _snapshot_state_entry(
         "occupancy_ratio": _safe_state_float(source.get("occupancy_ratio")),
     }
     return snapshot
+
+
+def _coerce_student_scalar(value: object) -> object:
+    """تبدیل اسکالرهای numpy به معادل Python برای سازگاری خروجی."""
+    if value is pd.NA:
+        return None
+    if isinstance(value, np.generic):
+        return value.item()
+    return value
 
 
 def _build_state_delta(before: MentorStateSnapshot, after: MentorStateSnapshot) -> MentorStateDelta:
@@ -881,10 +903,11 @@ def _is_missing_join_value(value: object) -> bool:
     if value is None:
         return True
     try:
-        if isinstance(value, Number) and pd.isna(value):
-            return True
+        missing = pd.isna(value)
     except TypeError:
-        return False
+        missing = False
+    if isinstance(missing, bool) and missing:
+        return True
     if isinstance(value, str):
         return not normalize_digits(value).strip()
     return False
@@ -2135,13 +2158,15 @@ def allocate_student(
     progress(60, "ranking")
 
     ranking_input = capacity_filtered.copy()
-    active_state = (
-        _stringify_mentor_state(state)
-        if state is not None
-        else _stringify_mentor_state(
+    if state is not None:
+        if _is_str_keyed_state(state):
+            active_state = cast(Mapping[str, MentorCapacityState], state)
+        else:
+            active_state = _stringify_mentor_state(state)
+    else:
+        active_state = _stringify_mentor_state(
             build_mentor_state(state_view_en, capacity_column=capacity_column_name, policy=policy)
         )
-    )
     ranking_state = cast(
         Mapping[Hashable, Mapping[str, int | float | str | None]],
         active_state,
@@ -2530,6 +2555,17 @@ def allocate_batch(
 
     progress(0, "start")
     processed = 0
+    last_progress_pct = 0
+
+    def _emit_progress(pct: int, message: str) -> None:
+        nonlocal last_progress_pct
+        pct_int = max(0, min(100, int(pct)))
+        if pct_int >= 100:
+            return
+        if pct_int == last_progress_pct:
+            return
+        last_progress_pct = pct_int
+        progress(pct_int, message)
 
     def _allocate_group(
         group: pd.DataFrame,
@@ -2548,12 +2584,17 @@ def allocate_batch(
         base_phase_trace = rule_engine.run_stage(phase_stage, stage_students, extras=stage_extras)
         is_school_phase = not enforce_center_manager
 
-        for _, student_row in group.iterrows():
+        group_columns = list(group.columns)
+        for student_row in group.itertuples(index=False, name="StudentRow"):
             processed += 1
-            student_dict = student_row.to_dict()
+            student_dict = {
+                column: _coerce_student_scalar(value)
+                for column, value in zip(group_columns, student_row)
+            }
             canonical_sid = _canonical_student_id(student_dict.get("student_id"))
             student_dict["student_id"] = canonical_sid
-            progress(int(processed * 100 / total), f"allocating {processed}/{total}")
+            percent = int(processed * 100 / total)
+            _emit_progress(percent, f"allocating {processed}/{total}")
 
             student_center, center_is_valid = _extract_and_validate_center(student_dict, policy)
             invalid_center_payload: dict[str, object] | None = None
@@ -2584,7 +2625,7 @@ def allocate_batch(
                 stage_rules=stage_rules,
                 state=cast(Mapping[Hashable, MentorCapacityState], mentor_state),
                 pool_state_view=pool_state_view_local,
-                alert_progress=progress,
+                alert_progress=_noop_progress,
                 perf_tracker=perf_tracker,
                 debug_trace=debug_trace,
                 join_bucket_index=join_bucket_index,
