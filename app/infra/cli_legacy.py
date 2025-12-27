@@ -1008,9 +1008,7 @@ def _enforce_allocation_export_invariants(
     if "student_id" not in success_rows.columns:
         raise AllocationConsistencyError("logs_df must contain student_id for export invariants.")
 
-    success_ids = _normalize_student_id(success_rows["student_id"])
-    success_ids = success_ids[~_student_id_missing_mask(success_ids)]
-    success_set = set(success_ids.tolist())
+    success_set = _get_student_id_set_from_series(success_rows["student_id"])
 
     if join_key_audit is not None and int(join_key_audit.invalid_count) > 0:
         audit = join_key_audit.audit_frame
