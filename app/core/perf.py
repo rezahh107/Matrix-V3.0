@@ -6,6 +6,7 @@ import time
 from collections.abc import Callable
 from contextlib import AbstractContextManager, ContextDecorator, nullcontext
 from types import TracebackType
+from typing import Literal
 
 __all__ = ["PerfTracker", "measure_time"]
 
@@ -32,7 +33,7 @@ class _TimingContext(ContextDecorator):
         exc_type: type[BaseException] | None,
         exc_value: BaseException | None,
         traceback: TracebackType | None,
-    ) -> bool:
+    ) -> Literal[False]:
         if self._start is not None:
             elapsed = self._clock() - self._start
             self._tracker(self._stage, elapsed)

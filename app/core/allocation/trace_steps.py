@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
+from typing import cast
 
 import pandas as pd
 
@@ -39,7 +40,8 @@ def build_trace_frame(
     schema = schema or MatrixSchema()
     records: list[dict[str, object]] = []
     for row in rows:
-        trace = normalize_trace_steps(row.get("trace"), schema=schema)
+        trace_value = cast(Iterable[tuple[str, str]] | None, row.get("trace"))
+        trace = normalize_trace_steps(trace_value, schema=schema)
         record = {
             "student_id": row.get("student_id"),
             "mentor_id": row.get("mentor_id"),

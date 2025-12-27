@@ -53,7 +53,8 @@ def _counter_summary(counter: Counter[Any], *, label: str, limit: int = 5) -> st
 
 def _sample_raw_values(frame: pd.DataFrame, column: str, error_code: str, limit: int = 5) -> list[str]:
     subset = frame[(frame["column"] == column) & (frame["error_code"] == error_code)]
-    samples = subset["raw_value"].dropna().astype("string").unique().tolist()
+    unique_values = subset["raw_value"].dropna().astype("string").unique().tolist()
+    samples = [str(value) for value in unique_values]
     return samples[:limit]
 
 

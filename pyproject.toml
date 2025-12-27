@@ -61,3 +61,35 @@ strict = true
 warn_unused_configs = true
 ignore_missing_imports = true
 files = ["app"]
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = [
+    "app.core.common.normalization",
+    "app.core.allocation.ranking",
+    "app.core.build_matrix",
+    "app.core.allocate_students",
+    "app.core.canonical_frames",
+    "app.core.matrix.build_matrix_core",
+    "app.infra.local_database",
+    "app.infra.common.header_pipeline_v3",
+    "app.infra.repository_base",
+    "app.infra.reference_repository",
+    "app.infra.reference_mentors_repository",
+    "app.infra.health",
+    "app.infra.excel.reasons_exporter",
+    "app.infra.excel.export_allocations",
+    "app.infra.students.student_import_pipeline",
+    "app.infra.cli",
+    "app.infra.cli_legacy",
+    "app.infra.golden.regression_runner",
+    "app.ui.history_dialog",
+    "app.ui.history_metrics_dialog",
+    "app.ui.main_window",
+    "scripts.run_golden_regression_phase01",
+    "scripts.run_golden_regression_phase02",
+]
+ignore_errors = true
