@@ -352,6 +352,7 @@ class MainWindow(QMainWindow):
         self._progress_caption: QLabel | None = None
         self._progress_pulse: QPropertyAnimation | None = None
         self._last_run_badge: QLabel | None = None
+        self._last_progress_pct: int | None = None
         self._current_action: str = self._translator.text("status.ready", "آماده")
         self._status_bar: ThemedStatusBar | None = None
         self._database_status: DatabaseStatusWidget | None = None
@@ -2874,15 +2875,19 @@ class MainWindow(QMainWindow):
     def _on_progress(self, pct: int, message: str) -> None:
         """به‌روزرسانی نوار پیشرفت و ثبت لاگ."""
 
+        pct_value = max(0, min(100, int(pct)))
+        if self._last_progress_pct is not None and pct_value == self._last_progress_pct:
+            return
+        self._last_progress_pct = pct_value
         if self._progress.maximum() == 0:
             self._progress.setRange(0, 100)
             self._progress.setProperty("busy", False)
-        self._progress.setValue(max(0, min(100, int(pct))))
+        self._progress.setValue(pct_value)
         self._status.setText(message or "در حال پردازش")
         safe_msg = message or "(بدون پیام)"
         self._set_stage(self._current_action, safe_msg)
         self._update_progress_caption(self._progress.value(), safe_msg)
-        self._append_log(f"{pct}% | {safe_msg}")
+        self._append_log(f"{pct_value}% | {safe_msg}")
         self._update_status_bar_state("running")
 
     @Slot(bool, object)
