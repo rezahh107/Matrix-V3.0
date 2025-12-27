@@ -34,7 +34,7 @@ The sort uses `kind="mergesort"` (stable). Any policy change to these three rule
 
 * Capacity/allocation inputs are coerced via `_safe_capacity` and `_series_as_int`:
   * `None`, `NaN`, empty string → `0`.
-  * Numeric strings are parsed to integers via `int(float(text))`; non-numeric strings raise `TypeError` before clipping to `0` in `_series_as_int`.
+  * Numeric strings are parsed to integers via int(float(text)) in _safe_capacity, which raises TypeError on non-numeric strings; _series_as_int instead coerces non-numeric strings to 0 without error.
   * Negative numeric values are clipped to `0` before sorting.
 * Resulting fields `remaining_capacity` and `allocations_new` are integer-typed series (`int64` after coercion). Mentors missing in state default to `0` for both.
 
