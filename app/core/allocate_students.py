@@ -991,10 +991,7 @@ def _should_use_join_bucket(
         constraint = ensure_series(candidate_pool["has_school_constraint"]).fillna(False).astype(bool)
         if (~constraint).any():
             return False
-    if "mentor_school_binding_mode" in candidate_pool.columns:
-        return False
-
-    return True
+    return "mentor_school_binding_mode" not in candidate_pool.columns
 
 
 def _join_bucket_key_variants(

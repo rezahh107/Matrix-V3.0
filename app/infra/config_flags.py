@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Mapping
 
 _TRUE_VALUES: set[str] = {"1", "true", "yes", "on", "y", "t"}
 _FALSE_VALUES: set[str] = {"0", "false", "no", "off", "n", "f"}

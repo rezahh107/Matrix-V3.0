@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import pandas as pd
 
-from app.core.allocate_students import allocate_batch, allocate_student, _build_join_bucket_index
+from app.core.allocate_students import (
+    _build_join_bucket_index,
+    allocate_batch,
+    allocate_student,
+)
 from app.core.policy_loader import load_policy
 
 
