@@ -89,7 +89,11 @@ def _infer_center_from_manager(
                 continue
 
     wildcard = center_map_norm.get("*")
-    candidates = [(k, v) for k, v in center_map_norm.items() if k != "*"]
+    candidates = sorted(
+        [(k, v) for k, v in center_map_norm.items() if k != "*"],
+        key=lambda item: len(item[0]),
+        reverse=True,
+    )
 
     manager_series = (
         ensure_series(students[_MANAGER_COLUMN_FA]).astype("string").fillna("")
