@@ -128,6 +128,87 @@ def _infer_center_from_manager(
     return students
 
 
+_MANAGER_COLUMN_FA = "مدیر"
+
+
+def _infer_center_from_manager(
+    students: pd.DataFrame, *, policy: PolicyConfig, center_column: str
+) -> pd.DataFrame:
+    """Fill student center codes when the input center is 0 but a manager mapping exists.
+
+    The allocation core historically inferred center codes from the manager name when
+    the student center join-key was 0. Export/QA layers audit join keys directly
+    from the canonical student frame, so we materialize the same effective center
+    values here to keep join-key auditing deterministic and aligned.
+
+    Best-effort: if no mapping is configured or inference cannot be made, the
+    original center value is kept.
+    """
+
+    if not policy.center_map:
+        return students
+
+    if center_column not in students.columns or _MANAGER_COLUMN_FA not in students.columns:
+        return students
+
+    center_series = ensure_series(students[center_column]).astype("Int64")
+    mask = center_series.fillna(-1).eq(0)
+    if not bool(mask.any()):
+        return students
+
+    # Normalize mapping keys once (wildcard '*' is preserved).
+    center_map_norm: dict[str, int] = {}
+    for raw_key, raw_val in (policy.center_map or {}).items():
+        key = str(raw_key).strip()
+        norm_key = "*" if key == "*" else normalize_fa(key)
+        if norm_key:
+            try:
+                center_map_norm[norm_key] = int(raw_val)
+            except (ValueError, TypeError):
+                continue
+
+    wildcard = center_map_norm.get("*")
+    manager_series = (
+        ensure_series(students[_MANAGER_COLUMN_FA]).astype("string").fillna("")
+    )
+
+    cache: dict[str, int] = {}
+
+    def _infer_one(name: str) -> int:
+        norm = normalize_fa(name)
+        if norm in cache:
+            return cache[norm]
+        if norm and norm in center_map_norm and norm != "*":
+            cache[norm] = center_map_norm[norm]
+            return cache[norm]
+        matches = [
+            key
+            for key in center_map_norm
+            if key != "*" and key and norm and key in norm
+        ]
+        if matches:
+            best_key = min(matches, key=lambda key: (-len(key), key))
+            cache[norm] = center_map_norm[best_key]
+            return cache[norm]
+        if wildcard is not None:
+            cache[norm] = wildcard
+            return wildcard
+        cache[norm] = 0
+        return 0
+
+    inferred_vals: list[int | None] = []
+    inferred_index = manager_series.index[mask]
+    for raw in manager_series.loc[mask].tolist():
+        inferred_vals.append(_infer_one(str(raw)))
+
+    inferred = pd.Series(inferred_vals, index=inferred_index, dtype="Int64")
+    update_mask = inferred.notna()
+    if bool(update_mask.any()):
+        students.loc[inferred_index[update_mask], center_column] = inferred.loc[update_mask]
+
+    return students
+
+
 @dataclass(slots=True)
 class PoolCanonicalizationStats:
     """شمارندهٔ اصلاحات استخر منتور برای گزارش QA.

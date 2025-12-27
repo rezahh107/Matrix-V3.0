@@ -2288,6 +2288,17 @@ def allocate_student(
         error_type: AllocationErrorLiteral = (
             "ELIGIBILITY_NO_MATCH" if filtered_pool.empty else "INTERNAL_ERROR"
         )
+        error_type: AllocationErrorLiteral = "INTERNAL_ERROR"
+        try:
+            strict_eligible, _ = _filter_candidates_by_join_map(
+                eligible,
+                join_map=join_map,
+                policy=policy,
+            )
+        except (ValueError, KeyError):
+            strict_eligible = eligible
+        if strict_eligible.empty:
+            error_type = "ELIGIBILITY_NO_MATCH"
         corruption_updates: dict[str, object] = {
             "join_key_mismatches": list(join_mismatches),
             "validation_stage": "pre_consume",
