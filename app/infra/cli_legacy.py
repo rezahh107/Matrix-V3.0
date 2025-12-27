@@ -499,7 +499,7 @@ def _build_allocations_view(
         )
     alloc_en["student_id"] = _normalize_student_id(alloc_en["student_id"])
     missing_mask = _student_id_missing_mask(alloc_en["student_id"])
-    if bool(missing_mask.any()):
+    if missing_mask.any():
         sample_rows = alloc_en.index[missing_mask].tolist()[:5]
         raise AllocationConsistencyError(
             "LAW/EXPORT-SSOT-ID-01: allocations_df شامل student_id خالی/نامعتبر است؛ "
