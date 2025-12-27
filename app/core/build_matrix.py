@@ -52,6 +52,7 @@ from app.core.common.column_normalizer import (
     normalize_input_columns,
 )
 from app.core.common.columns import (
+    COL_SCHOOL_CODE_EN,
     Source as ColumnSource,
     coerce_semantics,
     ensure_required_columns,
@@ -2787,16 +2788,15 @@ def validate_with_students(
         group_stats.get("unresolved_group_code", 0),
     )
 
-    school_code_key = "school_code"
     mat = matrix_df.copy()
     mat["alias_norm"] = ensure_series(mat["جایگزین"]).apply(to_numlike_str)
-    mat[school_code_key] = ensure_series(mat[school_code_col]).astype(str).str.strip()
+    mat[COL_SCHOOL_CODE_EN] = ensure_series(mat[school_code_col]).astype(str).str.strip()
 
     status_column = cfg.policy.stage_column("graduation_status")
     school_column = cfg.policy.columns.school_code
     stud["student_binding"] = stud.apply(
         lambda row: classify_student_binding(
-            {status_column: row["status_code"], school_column: row[school_code_key]},
+            {status_column: row["status_code"], school_column: row[COL_SCHOOL_CODE_EN]},
             cfg=cfg,
         ),
         axis=1,
@@ -2808,17 +2808,20 @@ def validate_with_students(
             sub = mat[(mat["عادی مدرسه"] == "عادی") & (mat["alias_norm"] == row["alias_norm"])]
             if not sub.empty:
                 return (sub, None)
-            if row[school_code_key]:
+            if row[COL_SCHOOL_CODE_EN]:
                 school_sub = mat[(mat["عادی مدرسه"] == "مدرسه‌ای")]
                 school_sub = school_sub[
-                    school_sub[school_code_key].astype(str) == str(row[school_code_key])
+                    school_sub[COL_SCHOOL_CODE_EN].astype(str)
+                    == str(row[COL_SCHOOL_CODE_EN])
                 ]
                 return (school_sub, None if not school_sub.empty else "no school-code match")
             return (sub, "no normal alias match")
         if binding is StudentBindingKind.SCHOOL:
             sub = mat[(mat["عادی مدرسه"] == "مدرسه‌ای")]
-            if row[school_code_key]:
-                sub = sub[sub[school_code_key].astype(str) == str(row[school_code_key])]
+            if row[COL_SCHOOL_CODE_EN]:
+                sub = sub[
+                    sub[COL_SCHOOL_CODE_EN].astype(str) == str(row[COL_SCHOOL_CODE_EN])
+                ]
             return (sub, None if not sub.empty else "no school-code match")
         return (mat.iloc[0:0], "legacy binding kind")
 

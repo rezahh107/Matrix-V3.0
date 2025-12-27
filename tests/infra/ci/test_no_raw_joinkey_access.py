@@ -14,23 +14,17 @@ ALLOWLIST = {
     (CORE_ROOT / "common" / "join_keys.py").resolve(),
 }
 
+_EN_JOIN_KEYS = (
+    "group_code",
+    "gender",
+    "graduation_status",
+    "center",
+    "finance",
+    "school_code",
+)
+JOIN_KEY_EN_LITERALS = set(_EN_JOIN_KEYS)
 JOIN_KEY_LITERALS = set(CANONICAL_JOIN_KEYS)
-JOIN_KEY_EN_LITERALS = {
-    "group_code",
-    "gender",
-    "graduation_status",
-    "center",
-    "finance",
-    "school_code",
-}
-for key in (
-    "group_code",
-    "gender",
-    "graduation_status",
-    "center",
-    "finance",
-    "school_code",
-):
+for key in _EN_JOIN_KEYS:
     fa_value = CANON_EN_TO_FA.get(key)
     if fa_value is None:
         continue
@@ -78,22 +72,15 @@ def _extract_literal(value: ast.AST) -> str | None:
 
 def _iter_slice_literals(node: ast.AST) -> list[str]:
     if isinstance(node, ast.Tuple):
-        literals: list[str] = []
-        for element in node.elts:
-            literals.extend(_iter_slice_literals(element))
-        return literals
+        return [literal for element in node.elts for literal in _iter_slice_literals(element)]
     if hasattr(ast, "Index") and isinstance(node, ast.Index):
         return _iter_slice_literals(node.value)
     literal = _extract_literal(node)
     if literal is not None:
         return [literal]
     if isinstance(node, ast.Slice):
-        literals: list[str] = []
-        for part in (node.lower, node.upper, node.step):
-            if part is None:
-                continue
-            literals.extend(_iter_slice_literals(part))
-        return literals
+        parts = [part for part in (node.lower, node.upper, node.step) if part is not None]
+        return [literal for part in parts for literal in _iter_slice_literals(part)]
     if isinstance(node, ast.Call):
         literals: list[str] = []
         for arg in node.args:
