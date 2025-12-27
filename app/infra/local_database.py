@@ -790,18 +790,23 @@ class LocalDatabase:
 
         if not run_ids:
             return {}
-        placeholders = ", ".join("?" for _ in run_ids)
-        query = (
+        normalized_ids = list(dict.fromkeys(int(run_id) for run_id in run_ids))
+        metrics: dict[int, list[sqlite3.Row]] = {run_id: [] for run_id in normalized_ids}
+        chunk_size = 900
+        query_template = (
             "SELECT * FROM run_metrics "
-            f"WHERE run_id IN ({placeholders}) "
+            "WHERE run_id IN ({placeholders}) "
             "ORDER BY run_id ASC, id ASC"
         )
         with self._open_connection() as conn:
-            cursor = conn.execute(query, tuple(run_ids))
-            rows = cursor.fetchall()
-        metrics: dict[int, list[sqlite3.Row]] = {int(run_id): [] for run_id in run_ids}
-        for row in rows:
-            metrics[int(row["run_id"])].append(row)
+            for start in range(0, len(normalized_ids), chunk_size):
+                chunk = normalized_ids[start : start + chunk_size]
+                placeholders = ", ".join("?" for _ in chunk)
+                query = query_template.format(placeholders=placeholders)
+                cursor = conn.execute(query, tuple(chunk))
+                rows = cursor.fetchall()
+                for row in rows:
+                    metrics[int(row["run_id"])].append(row)
         return metrics
 
     def fetch_qa_summary(self, run_id: int) -> list[sqlite3.Row]:
