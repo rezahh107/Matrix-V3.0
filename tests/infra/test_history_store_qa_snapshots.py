@@ -165,7 +165,9 @@ def test_allocate_cli_passes_history_info_into_qa(
         students_df: pd.DataFrame, args: argparse.Namespace, policy: object
     ) -> tuple[pd.Series, dict[str, int], pd.DataFrame]:
         ids = pd.Series(["s-1"] * len(students_df))
-        return ids, {}, students_df
+        students_with_ids = students_df.copy()
+        students_with_ids["student_id"] = ids
+        return ids, {}, students_with_ids
 
     def fake_allocate_batch(*_: object, **__: object) -> AllocationBatchResult:
         allocations = pd.DataFrame({"student_id": ["s-1"], "mentor_id": ["m-1"]})
@@ -187,7 +189,7 @@ def test_allocate_cli_passes_history_info_into_qa(
         )
 
     def fake_selection_reasons(*_: object, **__: object) -> pd.DataFrame:
-        return pd.DataFrame()
+        return pd.DataFrame({"dummy": [1]})
 
     def fake_selection_sheet(
         df: pd.DataFrame, writer: object | None = None, policy: object | None = None

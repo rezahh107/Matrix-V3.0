@@ -277,7 +277,7 @@ def _sync_counter_summary_with_allocations(
     if "student_id" in alloc_en.columns and "student_id" in students_en.columns:
         student_gender = students_en.loc[:, ["student_id"]].copy()
         if gender_col in students_en.columns:
-            student_gender[gender_col] = students_en[gender_col]
+            student_gender[gender_col] = columns_module.ensure_series(students_en[gender_col])
         merged = alloc_en.merge(student_gender, on="student_id", how="left")
 
     male_value = int(policy.gender_codes.male.value)
@@ -390,6 +390,101 @@ def _get_student_id_set_from_series(series: pd.Series) -> set[str]:
     ids = _normalize_student_id(series)
     ids = ids[~_student_id_missing_mask(ids)]
     return set(ids.tolist())
+
+
+def _build_students_spine(
+    students_df: pd.DataFrame, *, header_mode: HeaderMode
+) -> pd.DataFrame:
+    """Create a canonical, validated student spine with stable ``student_id`` values."""
+
+    students_en = canonicalize_headers(students_df, header_mode="en").copy()
+    if "student_id" not in students_en.columns:
+        raise AllocationConsistencyError(
+            "ستون student_id در داده‌های دانش‌آموز یافت نشد؛ پیش از خروجی‌گیری باید شناسه تزریق شود."
+        )
+
+    students_en["student_id"] = _normalize_student_id(students_en["student_id"])
+    missing_mask = _student_id_missing_mask(students_en["student_id"])
+    if missing_mask.any():
+        missing_rows = students_en.index[missing_mask].tolist()[:5]
+        raise AllocationConsistencyError(
+            "شناسهٔ دانش‌آموز (student_id) نباید خالی باشد؛ نمونه ردیف‌های ناقص: "
+            f"{missing_rows}."
+        )
+
+    duplicates = students_en["student_id"].duplicated(keep=False)
+    if duplicates.any():
+        sample = students_en.loc[duplicates, "student_id"].unique().tolist()[:5]
+        raise AllocationConsistencyError(
+            "student_id باید یکتا باشد؛ نمونهٔ تکراری: " f"{sample}."
+        )
+
+    return canonicalize_headers(students_en, header_mode=header_mode)
+
+
+def _build_success_spine(
+    logs_df: pd.DataFrame, *, students_spine: pd.DataFrame, header_mode: HeaderMode
+) -> pd.DataFrame:
+    """Filter ``students_spine`` down to successful students and validate size integrity."""
+
+    logs_en = canonicalize_headers(logs_df, header_mode="en")
+    status_series = logs_en.get("allocation_status")
+    if status_series is None:
+        success_rows = logs_en
+    else:
+        success_rows = logs_en.loc[status_series.astype("string").str.lower() == "success"]
+
+    if "student_id" not in success_rows.columns:
+        raise AllocationConsistencyError("logs_df must include student_id for success spine.")
+
+    success_ids = _normalize_student_id(success_rows["student_id"])
+    success_ids = success_ids[~_student_id_missing_mask(success_ids)]
+    success_set = set(success_ids.tolist())
+
+    students_en = canonicalize_headers(students_spine, header_mode="en").copy()
+    students_en["student_id"] = _normalize_student_id(students_en["student_id"])
+    success_spine = students_en.loc[students_en["student_id"].isin(success_set)].copy()
+
+    if len(success_spine) != len(success_set):
+        missing = sorted(success_set - set(success_spine["student_id"].tolist()))[:5]
+        raise AllocationConsistencyError(
+            "ناسازگاری بین لاگ موفق و دادهٔ دانش‌آموز: student_idهایی در لاگ یافت شد که در دادهٔ اصلی نیستند; "
+            f"نمونه={missing}."
+        )
+
+    sort_candidates = ["کد ثبت نام0", "student_id"]
+    sort_column = next((col for col in sort_candidates if col in success_spine.columns), None)
+    if sort_column is not None:
+        success_spine = success_spine.sort_values(sort_column, kind="mergesort")
+
+    return canonicalize_headers(success_spine, header_mode=header_mode)
+
+
+def _build_allocations_view(
+    allocations_df: pd.DataFrame,
+    *,
+    success_spine: pd.DataFrame,
+    header_mode: HeaderMode,
+) -> pd.DataFrame:
+    """Align allocations to the success spine using key-based joins (student_id-only)."""
+
+    alloc_en = canonicalize_headers(allocations_df, header_mode="en").copy()
+    alloc_en["student_id"] = _normalize_student_id(alloc_en.get("student_id", pd.Series(dtype="string")))
+
+    spine_en = canonicalize_headers(success_spine, header_mode="en").copy()
+    spine_en["student_id"] = _normalize_student_id(spine_en["student_id"])
+
+    merged = spine_en[["student_id"]].merge(
+        alloc_en,
+        on="student_id",
+        how="left",
+        validate="one_to_one",
+    )
+
+    if merged["student_id"].isna().any():
+        raise AllocationConsistencyError("allocations_df missing student_id values after alignment.")
+
+    return canonicalize_headers(merged, header_mode=header_mode)
 
 
 def normalize_national_id(value: Any) -> str | None:
@@ -848,6 +943,7 @@ def _enforce_allocation_export_invariants(
     logs_df: pd.DataFrame,
     join_key_audit: JoinKeyAuditResult | None,
     unallocated_summary: pd.DataFrame | None,
+    sabt_allocations_df: pd.DataFrame | None = None,
 ) -> None:
     """Hard guardrails for export integrity (P0, fail-fast).
 
@@ -859,6 +955,20 @@ def _enforce_allocation_export_invariants(
 
     # Re-check right before writing any output files.
     _validate_allocated_student_ids(allocations_df=allocations_df, logs_df=logs_df)
+
+    logs_en = canonicalize_headers(logs_df, header_mode="en")
+    status_series = logs_en.get("allocation_status")
+    if status_series is None:
+        success_rows = logs_en
+    else:
+        success_rows = logs_en.loc[status_series.astype("string").str.lower() == "success"]
+
+    if "student_id" not in success_rows.columns:
+        raise AllocationConsistencyError("logs_df must contain student_id for export invariants.")
+
+    success_ids = _normalize_student_id(success_rows["student_id"])
+    success_ids = success_ids[~_student_id_missing_mask(success_ids)]
+    success_set = set(success_ids.tolist())
 
     if join_key_audit is not None and int(join_key_audit.invalid_count) > 0:
         audit = join_key_audit.audit_frame
@@ -918,6 +1028,27 @@ def _enforce_allocation_export_invariants(
             raise AllocationConsistencyError(
                 "INV-EXPORT-02 failed: allocations and unallocated overlap by student_id; "
                 f"overlap_count={len(overlap)} sample={overlap_sample}."
+            )
+
+    if sabt_allocations_df is not None:
+        sabt_en = canonicalize_headers(sabt_allocations_df, header_mode="en")
+        if "student_id" not in sabt_en.columns:
+            raise AllocationConsistencyError("allocations_sabt is missing student_id column.")
+        sabt_set = _get_student_id_set_from_series(sabt_en["student_id"])
+        if sabt_set != success_set:
+            only_in_sabt = sorted(sabt_set - success_set)[:5]
+            only_in_success = sorted(success_set - sabt_set)[:5]
+            raise AllocationConsistencyError(
+                "allocations_sabt student_id mismatch vs success logs; "
+                f"sabt_count={len(sabt_set)} success_count={len(success_set)}; "
+                f"only_in_sabt={only_in_sabt} only_in_success={only_in_success}."
+            )
+        overlap_sabt_unalloc = sabt_set.intersection(unallocated_set)
+        if overlap_sabt_unalloc:
+            sample = sorted(overlap_sabt_unalloc)[:5]
+            raise AllocationConsistencyError(
+                "allocations_sabt overlaps unallocated students; "
+                f"overlap_count={len(overlap_sabt_unalloc)} sample={sample}."
             )
 
 
@@ -2558,27 +2689,28 @@ def _allocate_and_write(
         trace_extras = batch_result.trace_extras
 
         header_internal: HeaderMode = _coerce_header_mode(policy.excel.header_mode_internal)
+        students_spine = _build_students_spine(students_base, header_mode=header_internal)
 
         allocations_df = attach_student_id_column(
             allocations_df,
             student_ids,
             header_mode=header_internal,
             ensure_existing=True,
-            students_df=students_base,
+            students_df=students_spine,
         )
         logs_df = attach_student_id_column(
             logs_df,
             student_ids,
             header_mode=header_internal,
             ensure_existing=True,
-            students_df=students_base,
+            students_df=students_spine,
         )
         trace_df = attach_student_id_column(
             trace_df,
             student_ids,
             header_mode=header_internal,
             ensure_existing=True,
-            students_df=students_base,
+            students_df=students_spine,
         )
 
         _validate_allocated_student_ids(
@@ -2586,19 +2718,22 @@ def _allocate_and_write(
             logs_df=logs_df,
         )
 
+        success_spine = _build_success_spine(
+            logs_df,
+            students_spine=students_spine,
+            header_mode=header_internal,
+        )
+        allocations_df = _build_allocations_view(
+            allocations_df,
+            success_spine=success_spine,
+            header_mode=header_internal,
+        )
+
         export_profile_choice = _resolve_optional_override(args, "export_profile", "sabt") or "sabt"
         export_profile_path = _resolve_optional_override(
             args, "export_profile_path", str(_DEFAULT_ALLOC_PROFILE_PATH)
         ) or str(_DEFAULT_ALLOC_PROFILE_PATH)
-        students_for_export = canonicalize_headers(students_base, header_mode=header_internal)
-        if "student_id" in students_for_export.columns:
-            students_for_export["student_id"] = _normalize_student_id(
-                students_for_export["student_id"]
-            )
-        else:
-            students_for_export["student_id"] = _normalize_student_id(
-                student_ids.reindex(students_for_export.index)
-            )
+        students_for_export = students_spine.copy()
         if export_profile_choice == "sabt":
             sabt_profile = load_sabt_export_profile(Path(export_profile_path))
             sabt_allocations_df = build_sabt_export_frame(
@@ -2725,6 +2860,7 @@ def _allocate_and_write(
             logs_df=logs_df,
             join_key_audit=join_key_audit,
             unallocated_summary=trace_extras.unallocated_summary if trace_extras else None,
+            sabt_allocations_df=sabt_allocations_df,
         )
 
         # تبدیل نهایی به فرمت‌های قابل نوشتن در Excel

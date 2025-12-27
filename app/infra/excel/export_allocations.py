@@ -339,7 +339,12 @@ def build_sabt_export_frame(
             series = pd.Series([literal] * len(alloc_en), index=alloc_en.index)
         export_data[column.header] = series
 
+    student_id_series = ensure_series(student_ids).astype("string").reset_index(drop=True)
     export_df = pd.DataFrame(export_data)
+    if "student_id" in export_df.columns:
+        export_df["student_id"] = student_id_series
+    else:
+        export_df.insert(0, "student_id", student_id_series)
     code_headers = identify_code_headers(profile)
     export_df = enforce_text_columns(export_df, headers=code_headers)
     export_df.attrs["missing_student_columns"] = sorted(missing_columns)
