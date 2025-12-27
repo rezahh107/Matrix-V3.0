@@ -9,7 +9,7 @@ import ast
 from collections.abc import Iterable
 from pathlib import Path
 
-FORBIDDEN_ATTRS = {"reindex", "iloc", "iat", "values", "to_numpy"}
+FORBIDDEN_ATTRS = {"reindex", "iloc", "iat", "values", "to_numpy", "reset_index"}
 TARGET_DIRS = [Path("app/infra"), Path("app/ui")]
 
 
