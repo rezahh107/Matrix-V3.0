@@ -30,7 +30,7 @@ def _rhs_has_forbidden(node: ast.AST) -> bool:
             return True
         if isinstance(child, ast.Call):
             func = child.func
-            if isinstance(func, ast.Attribute) and func.attr == "reindex":
+            if isinstance(func, ast.Attribute) and func.attr in {"reindex", "reset_index"}:
                 return True
         if isinstance(child, ast.Subscript) and isinstance(child.value, ast.Attribute) and (
             child.value.attr in {"iloc", "iat"}
