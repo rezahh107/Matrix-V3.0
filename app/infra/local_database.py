@@ -46,7 +46,7 @@ from app.infra.sqlite_types import (
     coerce_int_like as _sqlite_coerce_int_like,
 )
 
-_SCHEMA_VERSION = 12
+_SCHEMA_VERSION = 13
 _POLICY_VERSION = "1.0.3"
 _SSOT_VERSION = "1.0.2"
 _ISO_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
@@ -785,6 +785,30 @@ class LocalDatabase:
             )
             return cursor.fetchall()
 
+    def fetch_metrics_for_runs(self, run_ids: Sequence[int]) -> dict[int, list[sqlite3.Row]]:
+        """بازیابی KPI تاریخچه برای چندین اجرا در یک پرس‌وجو."""
+
+        if not run_ids:
+            return {}
+        normalized_ids = list(dict.fromkeys(int(run_id) for run_id in run_ids))
+        metrics: dict[int, list[sqlite3.Row]] = {run_id: [] for run_id in normalized_ids}
+        chunk_size = 900
+        query_template = (
+            "SELECT * FROM run_metrics "
+            "WHERE run_id IN ({placeholders}) "
+            "ORDER BY run_id ASC, id ASC"
+        )
+        with self._open_connection() as conn:
+            for start in range(0, len(normalized_ids), chunk_size):
+                chunk = normalized_ids[start : start + chunk_size]
+                placeholders = ", ".join("?" for _ in chunk)
+                query = query_template.format(placeholders=placeholders)
+                cursor = conn.execute(query, tuple(chunk))
+                rows = cursor.fetchall()
+                for row in rows:
+                    metrics[int(row["run_id"])].append(row)
+        return metrics
+
     def fetch_qa_summary(self, run_id: int) -> list[sqlite3.Row]:
         """بازیابی خلاصهٔ QA برای یک اجرا."""
 
@@ -1302,6 +1326,12 @@ class LocalDatabase:
 
             CREATE INDEX IF NOT EXISTS idx_mentor_pool_cache_join_keys
             ON mentor_pool_cache("کدرشته", "جنسیت", "دانش آموز فارغ", "مرکز گلستان صدرا", "مالی حکمت بنیاد", "کد مدرسه");
+
+            CREATE INDEX IF NOT EXISTS idx_run_metrics_run_id
+            ON run_metrics(run_id);
+
+            CREATE INDEX IF NOT EXISTS idx_qa_summary_run_id
+            ON qa_summary(run_id);
             """
         )
         conn.execute(
@@ -1508,6 +1538,10 @@ class LocalDatabase:
             if version == 11:
                 self._migrate_v11_to_v12(conn)
                 version = 12
+                continue
+            if version == 12:
+                self._migrate_v12_to_v13(conn)
+                version = 13
                 continue
             raise SchemaVersionMismatchError(
                 expected_version=_SCHEMA_VERSION,
@@ -1723,6 +1757,15 @@ class LocalDatabase:
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_groupcodes_code ON groupcodes(group_code)"
         )
         conn.execute("UPDATE schema_meta SET schema_version = ? WHERE id = 1", (12,))
+
+    def _migrate_v12_to_v13(self, conn: sqlite3.Connection) -> None:
+        """افزودن ایندکس‌های run_id برای جداول run_metrics و qa_summary."""
+
+        if _table_exists(conn, "run_metrics"):
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_run_metrics_run_id ON run_metrics(run_id)")
+        if _table_exists(conn, "qa_summary"):
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_qa_summary_run_id ON qa_summary(run_id)")
+        conn.execute("UPDATE schema_meta SET schema_version = ? WHERE id = 1", (13,))
 
     @staticmethod
     def _ensure_year_tables(conn: sqlite3.Connection) -> None:
