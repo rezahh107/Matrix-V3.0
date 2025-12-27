@@ -171,6 +171,7 @@ _STAGE_LABEL_FA: dict[str, str] = {
 
 T = TypeVar("T")
 HeaderMode = Literal["fa", "en", "fa_en"]
+JoinBucketIndex = Mapping[tuple[int, ...], pd.Index]
 
 
 def safe_int(value: Any) -> int | None:
@@ -927,6 +928,138 @@ def _is_missing_join_value(value: object) -> bool:
     return False
 
 
+def _normalize_join_key_value_for_bucket(
+    column: str, value: object, policy: PolicyConfig
+) -> int:
+    try:
+        return canonicalize_join_key_value(column, value, policy=policy)
+    except JoinKeyCanonicalizationError:
+        if _is_missing_join_value(value):
+            return -1
+        return -2
+
+
+def _normalize_join_keys_for_bucketing(
+    pool: pd.DataFrame, policy: PolicyConfig
+) -> pd.DataFrame:
+    normalized: dict[str, pd.Series] = {}
+    for column in policy.join_keys:
+        if column not in pool.columns:
+            raise KeyError(f"Join key '{column}' missing from candidate pool")
+        series = ensure_series(pool[column])
+        normalized[column] = series.map(
+            lambda cell: _normalize_join_key_value_for_bucket(column, cell, policy)
+        ).astype("int64")
+    return pd.DataFrame(normalized, index=pool.index)
+
+
+def _build_join_bucket_index(pool: pd.DataFrame, policy: PolicyConfig) -> JoinBucketIndex:
+    normalized = _normalize_join_keys_for_bucketing(pool, policy)
+    grouped = normalized.groupby(list(policy.join_keys), sort=False).indices
+    buckets: dict[tuple[int, ...], pd.Index] = {}
+    index = pool.index
+    for key, positions in grouped.items():
+        key_tuple = key if isinstance(key, tuple) else (key,)
+        buckets[tuple(int(value) for value in key_tuple)] = index.take(positions)
+    return buckets
+
+
+def _should_use_join_bucket(
+    student: Mapping[str, object],
+    join_map: Mapping[str, int],
+    candidate_pool: pd.DataFrame,
+    policy: PolicyConfig,
+) -> bool:
+    for column in policy.join_keys:
+        normalized = _normalize_join_key_name(column)
+        value = join_map.get(normalized)
+        if value is None or int(value) < 0:
+            return False
+
+    school_code = resolve_student_school_code(student, policy)
+    if school_code.wildcard or school_code.missing or school_code.value is None:
+        return False
+
+    center_info = _resolve_student_center_info(student, policy)
+    if center_info.normalized_value is None:
+        return False
+    wildcard_center = center_wildcard_value(policy)
+    if wildcard_center is not None and center_info.normalized_value == wildcard_center:
+        return False
+
+    if "has_school_constraint" in candidate_pool.columns:
+        constraint = ensure_series(candidate_pool["has_school_constraint"]).fillna(False).astype(bool)
+        if (~constraint).any():
+            return False
+    if "mentor_school_binding_mode" in candidate_pool.columns:
+        return False
+
+    return True
+
+
+def _join_bucket_key_variants(
+    join_map: Mapping[str, int],
+    policy: PolicyConfig,
+) -> list[tuple[int, ...]]:
+    normalized_keys = [_normalize_join_key_name(column) for column in policy.join_keys]
+    values: list[int] = []
+    for normalized in normalized_keys:
+        value = join_map.get(normalized)
+        if value is None:
+            return []
+        values.append(int(value))
+
+    finance_normalized = _normalize_join_key_name(policy.stage_column("finance"))
+    if finance_normalized not in normalized_keys:
+        return [tuple(values)]
+
+    finance_index = normalized_keys.index(finance_normalized)
+    finance_value = values[finance_index]
+    variants = resolve_finance_variants(finance_value, policy)
+    if not variants:
+        return [tuple(values)]
+
+    keys: list[tuple[int, ...]] = []
+    for variant in sorted(variants):
+        updated = list(values)
+        updated[finance_index] = int(variant)
+        keys.append(tuple(updated))
+    return keys
+
+
+def _bucket_candidate_pool(
+    candidate_pool: pd.DataFrame,
+    join_bucket_index: JoinBucketIndex | None,
+    join_map: Mapping[str, int],
+    student: Mapping[str, object],
+    policy: PolicyConfig,
+) -> pd.DataFrame:
+    if join_bucket_index is None:
+        return candidate_pool
+    if not _should_use_join_bucket(student, join_map, candidate_pool, policy):
+        return candidate_pool
+
+    key_variants = _join_bucket_key_variants(join_map, policy)
+    if not key_variants:
+        return candidate_pool
+
+    combined_values: list[Hashable] = []
+    for key in key_variants:
+        bucket = join_bucket_index.get(key)
+        if bucket is None or bucket.empty:
+            continue
+        combined_values.extend(bucket.to_list())
+
+    if not combined_values:
+        return candidate_pool
+
+    combined_index = pd.Index(pd.unique(pd.Index(combined_values)))
+    selected_index = candidate_pool.index.intersection(combined_index, sort=False)
+    if selected_index.empty:
+        return candidate_pool
+    return candidate_pool.loc[selected_index]
+
+
 def _ensure_type_group_alignment_frame(frame: pd.DataFrame, policy: PolicyConfig) -> pd.DataFrame:
     """افزودن ستون type یا group در صورت نبودن یکی از آن‌ها."""
 
@@ -1644,6 +1777,7 @@ def allocate_student(
     alert_progress: ProgressFn | None = None,
     perf_tracker: PerfTracker | None = None,
     debug_trace: bool = False,
+    join_bucket_index: JoinBucketIndex | None = None,
 ) -> AllocationResult:
     """تخصیص تک‌دانش‌آموز با حفظ Trace و لاگ کامل مطابق §5 Technical SSoT."""
     if policy is None:
@@ -1713,9 +1847,16 @@ def allocate_student(
         stage_candidate_counts[stage_name] = int(count)
 
     # اعمال فیلترهای join
+    candidate_pool_for_join = _bucket_candidate_pool(
+        candidate_pool,
+        join_bucket_index=join_bucket_index,
+        join_map=join_map,
+        student=student,
+        policy=policy,
+    )
     with measure_time("join_filters", perf_tracker):
         eligible = apply_join_filters(
-            candidate_pool,
+            candidate_pool_for_join,
             student,
             policy=policy,
             student_join_map=join_map,
@@ -2255,6 +2396,7 @@ def allocate_batch(
     strict_center_validation: bool = False,
     perf_tracker: PerfTracker | None = None,
     debug_trace: bool = False,
+    use_join_buckets: bool = False,
 ) -> AllocationBatchResult:
     """تخصیص دسته‌ای دانش‌آموزان و بازگشت خروجی‌های چهارتایی + تریس مطابق §3 Technical SSoT."""
     if policy is None:
@@ -2307,6 +2449,7 @@ def allocate_batch(
     extra_columns = [column for column in pool_norm.columns if column not in candidate_pool.columns]
 
     pool_with_ids = inject_mentor_id(pool_norm, build_mentor_id_map(pool_norm))
+    join_bucket_index = _build_join_bucket_index(pool_with_ids, policy) if use_join_buckets else None
 
     # تضمین ستون‌های مورد نیاز
     if "mentor_sort_key" not in pool_with_ids.columns:
@@ -2423,6 +2566,7 @@ def allocate_batch(
                 alert_progress=progress,
                 perf_tracker=perf_tracker,
                 debug_trace=debug_trace,
+                join_bucket_index=join_bucket_index,
             )
 
             if invalid_center_payload is not None:
