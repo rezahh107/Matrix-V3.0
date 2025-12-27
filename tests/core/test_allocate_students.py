@@ -323,7 +323,7 @@ def test_filter_candidates_respects_policy_wildcard_value_for_mentor_centers() -
 
     filtered, _ = _filter_candidates_by_join_map(pool, join_map=join_map, policy=policy)
 
-    assert filtered["mentor_id"].tolist() == ["wildcard", "exact"]
+    assert filtered["mentor_id"].tolist() == ["wildcard", "exact", "global"]
 
 
 def test_filter_candidates_accepts_student_center_wildcard_value() -> None:

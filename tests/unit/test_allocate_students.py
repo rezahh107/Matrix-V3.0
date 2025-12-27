@@ -804,14 +804,17 @@ def test_allocate_student_with_string_join_values_matches(_base_pool: pd.DataFra
     student_row["کد_مدرسه"] = "3581"
 
 
-def test_allocate_student_center_zero_skips_filter(_base_pool: pd.DataFrame) -> None:
+def test_allocate_student_center_zero_matches_global_only(_base_pool: pd.DataFrame) -> None:
+    pool = _base_pool.copy()
+    pool.loc[0, "مرکز گلستان صدرا"] = 0
+    pool.loc[0, "مرکز گلستان صدرا | center"] = 0
     student_row = _single_student(مرکز_گلستان_صدرا=0).iloc[0].to_dict()
 
-    result = allocate_student(student_row, _base_pool)
+    result = allocate_student(student_row, pool)
 
     assert result.log["allocation_status"] == "success"
     assert result.log["error_type"] is None
-    assert result.log["candidate_count"] == 2
+    assert result.log["candidate_count"] == 1
     assert result.log["rule_reason_code"] == "OK"
 
 
