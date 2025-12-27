@@ -2816,10 +2816,10 @@ class MainWindow(QMainWindow):
     def _flush_log_pending(self) -> None:
         if self._log is None or not self._log_pending:
             return
+        timestamp = QDateTime.currentDateTime().toString("HH:mm:ss")
         lines: list[str] = []
         for message in self._log_pending:
             self._log_line += 1
-            timestamp = QDateTime.currentDateTime().toString("HH:mm:ss")
             prefix = f"[{self._log_line:03d} | {timestamp}]"
             lines.append(f"{prefix} {message}")
         self._log_pending.clear()
