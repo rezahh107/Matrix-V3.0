@@ -492,7 +492,19 @@ def _build_allocations_view(
     """Align allocations to the success spine using key-based joins (student_id-only)."""
 
     alloc_en = canonicalize_headers(allocations_df, header_mode="en").copy()
-    alloc_en["student_id"] = _normalize_student_id(alloc_en.get("student_id", pd.Series(dtype="string")))
+    if "student_id" not in alloc_en.columns:
+        raise AllocationConsistencyError(
+            "LAW/EXPORT-SSOT-ID-01: allocations_df فاقد ستون student_id است و "
+            "امکان هم‌ترازسازی وجود ندارد."
+        )
+    alloc_en["student_id"] = _normalize_student_id(alloc_en["student_id"])
+    missing_mask = _student_id_missing_mask(alloc_en["student_id"])
+    if missing_mask.any():
+        sample_rows = alloc_en.index[missing_mask].tolist()[:5]
+        raise AllocationConsistencyError(
+            "LAW/EXPORT-SSOT-ID-01: allocations_df شامل student_id خالی/نامعتبر است؛ "
+            f"نمونه ردیف‌ها={sample_rows}."
+        )
 
     spine_en = canonicalize_headers(success_spine, header_mode="en").copy()
     spine_en["student_id"] = _normalize_student_id(spine_en["student_id"])

@@ -309,6 +309,12 @@ def build_sabt_export_frame(
     students_en["student_id"] = ensure_series(students_en["student_id"]).copy()
     students_unique = students_en.drop_duplicates("student_id", keep="first")
     students_indexed = students_unique.set_index("student_id", drop=False)
+    student_details = alloc_en[["student_id"]].merge(
+        students_unique,
+        on="student_id",
+        how="left",
+        validate="many_to_one",
+    )
     lookup = _build_students_lookup(students_indexed)
 
     export_data: dict[str, pd.Series] = {}
@@ -331,8 +337,7 @@ def build_sabt_export_frame(
                 missing_columns.add(column.source_field or column.header)
                 series = pd.Series(pd.NA, index=alloc_en.index, dtype="object")
             else:
-                aligned = students_indexed.reindex(student_ids.tolist())
-                series = ensure_series(aligned[resolved]).copy()
+                series = ensure_series(student_details[resolved]).copy()
                 series.index = alloc_en.index
         else:
             literal = column.literal_value

@@ -269,8 +269,12 @@ def prepare_allocation_export_frame(
     mentor_source = _describe_frame_source(mentors_df, default_label="mentors_df")
 
     if student_ids is not None:
-        aligned_ids = student_ids.reindex(students.index)
-        students.loc[:, "student_id"] = aligned_ids.astype("string")
+        if not student_ids.index.equals(students.index):
+            raise ImportToSabtExportError(
+                "LAW/EXPORT-SSOT-ID-01: شاخص student_ids با students_df هم‌تراز نیست؛ "
+                "اتصال ترتیبی مجاز نیست. ابتدا student_id را در دادهٔ دانش‌آموز تزریق کنید."
+            )
+        students.loc[:, "student_id"] = student_ids.astype("string")
 
     validate_export_identifiers(
         students,
