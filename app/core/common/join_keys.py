@@ -4,14 +4,16 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable, Hashable, Iterable, Mapping, Sequence
+from dataclasses import dataclass
 from numbers import Number
 from typing import Literal, TypedDict, cast
 
+import numpy as np
 import pandas as pd
 
-from app.core.common.columns import _GENDER_TOKEN_MAP, CANON_EN_TO_FA
+from app.core.common.columns import _GENDER_TOKEN_MAP, CANON_EN_TO_FA, ensure_series
 from app.core.common.domain import VALID_GROUP_CODES
-from app.core.common.normalization import normalize_fa
+from app.core.common.normalization import normalize_fa, to_numlike_str
 from app.core.common.types import (
     CANONICAL_JOIN_KEYS,
     JOIN_KEY_GENDER,
@@ -26,7 +28,10 @@ from app.core.policy_loader import PolicyConfig
 __all__ = [
     "JoinKeyCanonicalizationError",
     "JoinKeyMismatchDetail",
+    "StudentSchoolCode",
     "center_wildcard_value",
+    "coerce_school_candidate",
+    "finance_mask_series",
     "coerce_join_int",
     "canonicalize_join_key_value",
     "matches_center_with_wildcard",
@@ -35,6 +40,8 @@ __all__ = [
     "parse_group_codes",
     "finance_variants_from_cell",
     "resolve_finance_variants",
+    "sanitize_school_series",
+    "school_mask_series",
     "validate_policy_join_keys",
     "validate_selected_mentor_join_keys",
     "validate_and_canonicalize_join_keys",
@@ -60,6 +67,34 @@ class JoinKeyCanonicalizationError(ValueError):
         self.column = column
         self.value = value
         self.index = index
+
+
+_SCHOOL_CODE_TRANSLATION = str.maketrans(
+    {
+        "-": " ",
+        "−": " ",  # minus sign
+        "‑": " ",  # non-breaking hyphen
+        "–": " ",  # en dash
+        "—": " ",  # em dash
+        "―": " ",  # horizontal bar
+        "﹘": " ",  # small em dash
+        "﹣": " ",  # small hyphen-minus
+        "／": " ",  # full-width slash
+        "/": " ",
+        "\\": " ",
+        "⁄": " ",
+        "ـ": "",  # kashida
+    }
+)
+
+
+@dataclass(frozen=True)
+class StudentSchoolCode:
+    """نمایش نرمال‌شدهٔ «کد مدرسه» همراه با وضعیت کمبود و wildcard."""
+
+    value: int | None
+    missing: bool
+    wildcard: bool
 
 
 def coerce_join_int(value: object) -> int:
@@ -170,6 +205,101 @@ def _canonicalize_numeric_value(value: object, *, allow_zero_from_empty: bool) -
     if allow_zero_from_empty:
         return 0
     raise ValueError("DATA_MISSING")
+
+
+def coerce_school_candidate(candidate: object) -> tuple[int | None, bool]:
+    """تبدیل مقدار خام کد مدرسه به int یا علامت‌گذاری کمبود."""
+
+    if candidate is None or candidate is pd.NA:
+        return None, True
+    if isinstance(candidate, (int, float, np.integer, np.floating)) and not isinstance(
+        candidate, bool
+    ):
+        if pd.isna(candidate):
+            return None, True
+        return int(float(candidate)), False
+    if isinstance(candidate, (bytes, bytearray)):
+        try:
+            candidate = candidate.decode("utf-8", "ignore")
+        except Exception:
+            return None, True
+    if isinstance(candidate, str):
+        candidate = candidate.translate(_SCHOOL_CODE_TRANSLATION)
+    text = to_numlike_str(candidate).strip()
+    if not text:
+        return None, True
+    try:
+        return int(float(text)), False
+    except ValueError:
+        return None, True
+
+
+def sanitize_school_series(series: pd.Series) -> pd.Series:
+    """بازگرداندن Series از مقادیر نرمال‌شدهٔ کد مدرسه بدون mutate ورودی."""
+
+    cleaned: list[object] = []
+    for value in series.tolist():
+        coerced, missing = coerce_school_candidate(value)
+        cleaned.append(pd.NA if missing else coerced)
+    result = pd.Series(cleaned, index=series.index)
+    numeric = pd.to_numeric(result, errors="coerce")
+    return numeric.astype("Int64")
+
+
+def school_mask_series(
+    mentor_series: pd.Series,
+    *,
+    student_school: int,
+    empty_as_zero: bool,
+    constraint_series: pd.Series | None = None,
+) -> pd.Series:
+    """ماسک برداری برای تطبیق مدرسه با رعایت منتورهای global و empty_as_zero."""
+
+    series = ensure_series(mentor_series)
+    if pd.api.types.is_integer_dtype(series):
+        numeric = pd.to_numeric(series, errors="coerce").astype("Int64")
+    else:
+        numeric = sanitize_school_series(series)
+
+    numeric = numeric.fillna(0 if empty_as_zero else -1)
+
+    if empty_as_zero and student_school == 0:
+        if constraint_series is None:
+            return pd.Series(True, index=numeric.index)
+        restricted = ensure_series(constraint_series).fillna(False).astype(bool)
+        return ~restricted
+
+    base_mask = numeric.eq(0)
+    if student_school != 0:
+        base_mask = base_mask | numeric.eq(student_school)
+
+    if constraint_series is not None:
+        restricted = ensure_series(constraint_series).fillna(False).astype(bool)
+        restricted_match = restricted & numeric.eq(student_school)
+        unrestricted_match = (~restricted) & base_mask
+        base_mask = restricted_match | unrestricted_match
+
+    return base_mask.fillna(False)
+
+
+def finance_mask_series(
+    mentor_series: pd.Series,
+    *,
+    student_variants: frozenset[int],
+    policy: PolicyConfig,
+) -> pd.Series:
+    """ماسک برداری برای تطبیق مالی با پشتیبانی از variantها."""
+
+    if not student_variants:
+        return pd.Series(False, index=mentor_series.index)
+    series = ensure_series(mentor_series)
+    if pd.api.types.is_integer_dtype(series):
+        numeric = pd.to_numeric(series, errors="coerce").astype("Int64")
+        return numeric.isin(student_variants).fillna(False)
+    mentor_variants = series.map(lambda cell: finance_variants_from_cell(cell, policy))
+    return mentor_variants.map(
+        lambda variants: bool(variants and student_variants.intersection(variants))
+    )
 
 
 def canonicalize_join_key_value(column: str, value: object, *, policy: PolicyConfig) -> int:

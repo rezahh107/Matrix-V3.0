@@ -64,3 +64,29 @@ def test_join_key_resolver_center_ambiguous_longest_match_deterministic() -> Non
 
     assert effective.center_code == 10
     assert effective.center_source == "manager_substring"
+
+
+def test_join_key_resolver_finance_variants_from_join_map() -> None:
+    policy = replace(load_policy(), finance_variants=(1, 2))
+    resolver = JoinKeyResolver(policy)
+    column = policy.stage_column("finance")
+    join_map = {column.replace(" ", "_"): 1}
+
+    effective = resolver.resolve_finance({}, student_join_map=join_map)
+
+    assert effective.finance_code == 1
+    assert effective.finance_variants == frozenset({1, 2})
+    assert effective.finance_source == "join_map"
+
+
+def test_join_key_resolver_school_normalizes_candidate() -> None:
+    policy = replace(load_policy(), school_code_empty_as_zero=True)
+    resolver = JoinKeyResolver(policy)
+    column = policy.stage_column("school")
+    student = {column: "35-81"}
+
+    effective = resolver.resolve_school(student)
+
+    assert effective.value == 3581
+    assert effective.missing is False
+    assert effective.wildcard is False

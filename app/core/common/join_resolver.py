@@ -11,8 +11,11 @@ import pandas as pd
 from app.core.common.columns import CANON_EN_TO_FA
 from app.core.common.join_keys import (
     JoinKeyCanonicalizationError,
+    StudentSchoolCode,
     canonicalize_join_key_value,
+    coerce_school_candidate,
     normalize_join_key_name,
+    resolve_finance_variants,
 )
 from app.core.common.normalization import normalize_fa
 from app.core.policy_loader import PolicyConfig
@@ -25,11 +28,25 @@ CenterSource = Literal[
     "missing",
 ]
 
+FinanceSource = Literal[
+    "raw",
+    "join_map",
+    "missing",
+    "invalid",
+]
+
 
 @dataclass(frozen=True, slots=True)
 class EffectiveJoinKeys:
     center_code: int | None
     center_source: CenterSource
+
+
+@dataclass(frozen=True, slots=True)
+class EffectiveFinanceKeys:
+    finance_code: int | None
+    finance_variants: frozenset[int]
+    finance_source: FinanceSource
 
 
 class JoinKeyResolver:
@@ -58,6 +75,82 @@ class JoinKeyResolver:
         if inferred is not None:
             return inferred
         return EffectiveJoinKeys(center_code=center_value, center_source="raw")
+
+    def resolve_finance(
+        self,
+        student: Mapping[str, object],
+        *,
+        student_join_map: Mapping[str, int] | None = None,
+    ) -> EffectiveFinanceKeys:
+        column = self._policy.stage_column("finance")
+        normalized = normalize_join_key_name(column)
+        join_value = _value_from_join_map(student_join_map, normalized)
+        if join_value is not None:
+            variants = resolve_finance_variants(join_value, self._policy)
+            return EffectiveFinanceKeys(
+                finance_code=join_value,
+                finance_variants=variants,
+                finance_source="join_map",
+            )
+        raw = _student_value_optional(student, column)
+        if raw is None:
+            return EffectiveFinanceKeys(
+                finance_code=None,
+                finance_variants=frozenset(),
+                finance_source="missing",
+            )
+        try:
+            finance_value = canonicalize_join_key_value(column, raw, policy=self._policy)
+        except JoinKeyCanonicalizationError:
+            return EffectiveFinanceKeys(
+                finance_code=None,
+                finance_variants=frozenset(),
+                finance_source="invalid",
+            )
+        return EffectiveFinanceKeys(
+            finance_code=finance_value,
+            finance_variants=resolve_finance_variants(finance_value, self._policy),
+            finance_source="raw",
+        )
+
+    def resolve_school(
+        self,
+        student: Mapping[str, object],
+        *,
+        student_join_map: Mapping[str, int] | None = None,
+    ) -> StudentSchoolCode:
+        column = self._policy.stage_column("school")
+        normalized = normalize_join_key_name(column)
+        allow_zero = (
+            self._policy.school_code_empty_as_zero and column == self._policy.columns.school_code
+        )
+        join_value = _value_from_join_map(student_join_map, normalized)
+        if join_value is not None:
+            wildcard = bool(allow_zero and join_value == 0)
+            return StudentSchoolCode(value=join_value, missing=False, wildcard=wildcard)
+
+        normalized_column = column.replace(" ", "_")
+        candidate_keys = (
+            column,
+            normalized_column,
+            "school_code_norm",
+            "school_code",
+            "school_code_raw",
+        )
+        candidates: list[object] = []
+        for key in candidate_keys:
+            if key in student:
+                candidates.append(student[key])
+
+        for candidate in candidates:
+            value, missing = coerce_school_candidate(candidate)
+            if not missing:
+                wildcard = bool(allow_zero and value == 0)
+                return StudentSchoolCode(value=value, missing=False, wildcard=wildcard)
+
+        if allow_zero:
+            return StudentSchoolCode(value=0, missing=False, wildcard=True)
+        return StudentSchoolCode(value=None, missing=True, wildcard=False)
 
     def _infer_center_from_manager(
         self, student: Mapping[str, object]
@@ -94,6 +187,17 @@ class JoinKeyResolver:
 
 
 def _center_from_join_map(
+    join_map: Mapping[str, int] | None, normalized_column: str
+) -> int | None:
+    if join_map is None:
+        return None
+    value = join_map.get(normalized_column)
+    if value is None or value < 0:
+        return None
+    return int(value)
+
+
+def _value_from_join_map(
     join_map: Mapping[str, int] | None, normalized_column: str
 ) -> int | None:
     if join_map is None:
@@ -153,4 +257,11 @@ def _normalize_center_map(center_map: Mapping[str, int]) -> dict[str, int]:
     return normalized
 
 
-__all__ = ["CenterSource", "EffectiveJoinKeys", "JoinKeyResolver"]
+__all__ = [
+    "CenterSource",
+    "EffectiveFinanceKeys",
+    "EffectiveJoinKeys",
+    "FinanceSource",
+    "JoinKeyResolver",
+    "StudentSchoolCode",
+]
