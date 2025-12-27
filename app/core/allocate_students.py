@@ -2255,6 +2255,17 @@ def allocate_student(
         policy=policy,
     )
     if not join_valid:
+        error_type: AllocationErrorLiteral = "INTERNAL_ERROR"
+        try:
+            strict_eligible, _ = _filter_candidates_by_join_map(
+                eligible,
+                join_map=join_map,
+                policy=policy,
+            )
+        except (ValueError, KeyError):
+            strict_eligible = eligible
+        if strict_eligible.empty:
+            error_type = "ELIGIBILITY_NO_MATCH"
         corruption_updates: dict[str, object] = {
             "join_key_mismatches": list(join_mismatches),
             "validation_stage": "pre_consume",
@@ -2268,7 +2279,7 @@ def allocate_student(
             corruption_updates["mentor_alias"] = mentor_alias_value
         return _fail_allocation(
             "Selected mentor violates join-key constraints (pool conflict)",
-            error_type="INTERNAL_ERROR",
+            error_type=error_type,
             suggested_actions=[
                 "بازسازی استخر پشتیبان",
                 "بررسی تعارض join keys برای mentor_id",

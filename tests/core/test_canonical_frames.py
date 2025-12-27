@@ -32,6 +32,126 @@ def test_canonicalize_students_frame_normalizes_localized_join_keys() -> None:
     assert canonical[policy.stage_column("finance")].iloc[0] == 3
 
 
+
+def test_canonicalize_students_frame_infers_center_from_manager_when_zero() -> None:
+    policy = replace(load_policy(), center_map={"مدیر الف": 5, "*": 0})
+    students = pd.DataFrame(
+        {
+            "student_id": ["s1"],
+            "مدیر": ["مدیر الف"],
+            policy.stage_column("group"): [21],
+            policy.stage_column("gender"): ["پسر"],
+            policy.stage_column("graduation_status"): [0],
+            policy.stage_column("center"): [0],
+            policy.stage_column("finance"): [0],
+            policy.columns.school_code: [0],
+        }
+    )
+
+    canonical = canonicalize_students_frame(students, policy=policy)
+
+    assert canonical[policy.stage_column("center")].iloc[0] == 5
+
+
+def test_canonicalize_students_frame_infers_center_from_manager_substring() -> None:
+    policy = replace(load_policy(), center_map={"مدیر": 4})
+    students = pd.DataFrame(
+        {
+            "student_id": ["s1"],
+            "مدیر": ["مدیر ارشد"],
+            policy.stage_column("group"): [21],
+            policy.stage_column("gender"): ["پسر"],
+            policy.stage_column("graduation_status"): [0],
+            policy.stage_column("center"): [0],
+            policy.stage_column("finance"): [0],
+            policy.columns.school_code: [0],
+        }
+    )
+
+    canonical = canonicalize_students_frame(students, policy=policy)
+
+    assert canonical[policy.stage_column("center")].iloc[0] == 4
+
+
+def test_canonicalize_students_frame_infers_center_from_wildcard() -> None:
+    policy = replace(load_policy(), center_map={"*": 9})
+    students = pd.DataFrame(
+        {
+            "student_id": ["s1"],
+            "مدیر": ["نامشخص"],
+            policy.stage_column("group"): [21],
+            policy.stage_column("gender"): ["پسر"],
+            policy.stage_column("graduation_status"): [0],
+            policy.stage_column("center"): [0],
+            policy.stage_column("finance"): [0],
+            policy.columns.school_code: [0],
+        }
+    )
+
+    canonical = canonicalize_students_frame(students, policy=policy)
+
+    assert canonical[policy.stage_column("center")].iloc[0] == 9
+
+
+def test_canonicalize_students_frame_no_center_match_keeps_zero() -> None:
+    policy = replace(load_policy(), center_map={"مدیر الف": 3})
+    students = pd.DataFrame(
+        {
+            "student_id": ["s1"],
+            "مدیر": ["نامشخص"],
+            policy.stage_column("group"): [21],
+            policy.stage_column("gender"): ["پسر"],
+            policy.stage_column("graduation_status"): [0],
+            policy.stage_column("center"): [0],
+            policy.stage_column("finance"): [0],
+            policy.columns.school_code: [0],
+        }
+    )
+
+    canonical = canonicalize_students_frame(students, policy=policy)
+
+    assert canonical[policy.stage_column("center")].iloc[0] == 0
+
+
+def test_canonicalize_students_frame_prefers_longest_substring_match() -> None:
+    policy = replace(load_policy(), center_map={"مدیر": 2, "مدیر ارشد": 6})
+    students = pd.DataFrame(
+        {
+            "student_id": ["s1"],
+            "مدیر": ["مدیر ارشد اول"],
+            policy.stage_column("group"): [21],
+            policy.stage_column("gender"): ["پسر"],
+            policy.stage_column("graduation_status"): [0],
+            policy.stage_column("center"): [0],
+            policy.stage_column("finance"): [0],
+            policy.columns.school_code: [0],
+        }
+    )
+
+    canonical = canonicalize_students_frame(students, policy=policy)
+
+    assert canonical[policy.stage_column("center")].iloc[0] == 6
+
+
+def test_canonicalize_students_frame_breaks_ties_lexicographically() -> None:
+    policy = replace(load_policy(), center_map={"الف": 7, "بتا": 8})
+    students = pd.DataFrame(
+        {
+            "student_id": ["s1"],
+            "مدیر": ["مدیر الف بتا"],
+            policy.stage_column("group"): [21],
+            policy.stage_column("gender"): ["پسر"],
+            policy.stage_column("graduation_status"): [0],
+            policy.stage_column("center"): [0],
+            policy.stage_column("finance"): [0],
+            policy.columns.school_code: [0],
+        }
+    )
+
+    canonical = canonicalize_students_frame(students, policy=policy)
+
+    assert canonical[policy.stage_column("center")].iloc[0] == 7
+
 def test_canonicalize_pool_frame_rejects_invalid_school_code() -> None:
     policy = replace(load_policy(), school_code_empty_as_zero=False)
     pool = pd.DataFrame(
