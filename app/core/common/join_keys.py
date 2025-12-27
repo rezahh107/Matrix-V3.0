@@ -613,6 +613,8 @@ def validate_policy_join_keys(
             )
             continue
         if column == policy.stage_column("center"):
+            if wildcard_center is not None and student_int == int(wildcard_center):
+                continue
             if matches_center_with_wildcard(student_int, mentor_value, wildcard_center):
                 continue
             mismatches.append(

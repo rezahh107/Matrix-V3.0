@@ -431,17 +431,7 @@ def test_center_and_school_wildcards_allow_matches() -> None:
 
     allocations, _, logs, _ = allocate_batch(students, pool, policy=policy)
 
-    assert allocations.shape[0] == 0
-    join_mismatches = logs.loc[0, "join_key_mismatches"]
-    assert {
-        "column": "مرکز گلستان صدرا",
-        "reason": "mentor_value_mismatch",
-        "student_value": 0,
-        "mentor_values": [1, 2],
-    } in join_mismatches
-    assert {
-        "column": "کد مدرسه",
-        "reason": "mentor_value_mismatch",
-        "student_value": 501,
-        "mentor_values": [700],
-    } in join_mismatches
+    assert allocations.shape[0] == 1
+    assert logs.loc[0, "allocation_status"] == "success"
+    assert logs.loc[0, "error_type"] in (None, "", pd.NA)
+    assert "join_key_mismatches" not in logs.columns
