@@ -422,10 +422,10 @@ def _build_students_spine(
     return canonicalize_headers(students_en, header_mode=header_mode)
 
 
-def _build_success_spine(
-    logs_df: pd.DataFrame, *, students_spine: pd.DataFrame, header_mode: HeaderMode
+def _get_success_log_rows(
+    logs_df: pd.DataFrame, *, header_mode: HeaderMode = "en"
 ) -> pd.DataFrame:
-    """Filter ``students_spine`` down to successful students and validate size integrity."""
+    """Return successful log rows; if allocation_status is missing, return all rows."""
 
     logs_en = canonicalize_headers(logs_df, header_mode="en")
     status_series = logs_en.get("allocation_status")
@@ -433,6 +433,17 @@ def _build_success_spine(
         success_rows = logs_en
     else:
         success_rows = logs_en.loc[status_series.astype("string").str.lower() == "success"]
+    if header_mode == "en":
+        return success_rows
+    return canonicalize_headers(success_rows, header_mode=header_mode)
+
+
+def _build_success_spine(
+    logs_df: pd.DataFrame, *, students_spine: pd.DataFrame, header_mode: HeaderMode
+) -> pd.DataFrame:
+    """Filter ``students_spine`` down to successful students and validate size integrity."""
+
+    success_rows = _get_success_log_rows(logs_df)
 
     if "student_id" not in success_rows.columns:
         raise AllocationConsistencyError("logs_df must include student_id for success spine.")
@@ -896,7 +907,7 @@ def _validate_allocated_student_ids(
     """Ensure allocation and logs student_ids stay consistent before export."""
 
     alloc_en = canonicalize_headers(allocations_df, header_mode="en")
-    logs_en = canonicalize_headers(logs_df, header_mode="en")
+    success_logs = _get_success_log_rows(logs_df)
 
     if "student_id" not in alloc_en.columns:
         raise AllocationConsistencyError("allocations_df is missing student_id column.")
@@ -917,11 +928,6 @@ def _validate_allocated_student_ids(
             f"sample={duplicates[:5]}."
         )
 
-    status_series = logs_en.get("allocation_status")
-    if status_series is None:
-        success_logs = logs_en
-    else:
-        success_logs = logs_en.loc[status_series.astype("string").str.lower() == "success"]
     success_series = success_logs.get("student_id", pd.Series(dtype="string"))
     allocated_set = _get_student_id_set_from_series(student_ids)
     success_set = _get_student_id_set_from_series(success_series)
@@ -998,12 +1004,7 @@ def _enforce_allocation_export_invariants(
     # Re-check right before writing any output files.
     _validate_allocated_student_ids(allocations_df=allocations_df, logs_df=logs_df)
 
-    logs_en = canonicalize_headers(logs_df, header_mode="en")
-    status_series = logs_en.get("allocation_status")
-    if status_series is None:
-        success_rows = logs_en
-    else:
-        success_rows = logs_en.loc[status_series.astype("string").str.lower() == "success"]
+    success_rows = _get_success_log_rows(logs_df)
 
     if "student_id" not in success_rows.columns:
         raise AllocationConsistencyError("logs_df must contain student_id for export invariants.")
