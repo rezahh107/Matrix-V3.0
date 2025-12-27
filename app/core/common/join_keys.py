@@ -221,7 +221,7 @@ def coerce_school_candidate(candidate: object) -> tuple[int | None, bool]:
     if isinstance(candidate, (bytes, bytearray)):
         try:
             candidate = candidate.decode("utf-8", "ignore")
-        except Exception:
+        except UnicodeDecodeError:
             return None, True
     if isinstance(candidate, str):
         candidate = candidate.translate(_SCHOOL_CODE_TRANSLATION)
