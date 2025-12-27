@@ -110,20 +110,23 @@ class HeapRankingManager:
         bucket_key: tuple[int, ...] | tuple[str, ...],
         candidate_set: set[Hashable],
     ) -> list[Hashable]:
-        ordered: list[Hashable] = []
         heap = self._buckets[bucket_key]
-        temp: list[tuple[tuple[object, ...], int, Hashable]] = []
-        target = len(candidate_set)
-        while heap and len(ordered) < target:
-            priority, version, idx = heapq.heappop(heap)
-            if version != self._versions.get(idx):
-                continue
-            temp.append((priority, version, idx))
-            if idx not in candidate_set:
-                continue
-            ordered.append(idx)
-        for entry in temp:
-            heapq.heappush(heap, entry)
+
+        # Drain the heap while collecting valid items. These will be sorted by priority.
+        valid_items: list[tuple[tuple[object, ...], int, Hashable]] = []
+        while heap:
+            item = heapq.heappop(heap)
+            # Keep only items with the latest version
+            if self._versions.get(item[2]) == item[1]:
+                valid_items.append(item)
+
+        # Rebuild the heap with valid items, which is more efficient than pushing one by one.
+        # This also purges stale entries from the heap.
+        heap.extend(valid_items)
+        heapq.heapify(heap)
+
+        # Extract ordered candidates from the sorted list of valid items.
+        ordered = [idx for _, _, idx in valid_items if idx in candidate_set]
         return ordered
 
     def order_indices(self, ranked: pd.DataFrame) -> list[Hashable]:
