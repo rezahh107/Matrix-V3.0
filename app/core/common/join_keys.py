@@ -237,12 +237,13 @@ def coerce_school_candidate(candidate: object) -> tuple[int | None, bool]:
 def sanitize_school_series(series: pd.Series) -> pd.Series:
     """بازگرداندن Series از مقادیر نرمال‌شدهٔ کد مدرسه بدون mutate ورودی."""
 
-    cleaned: list[object] = []
-    for value in series.tolist():
+    def _clean(value: object) -> int | None:
         coerced, missing = coerce_school_candidate(value)
-        cleaned.append(pd.NA if missing else coerced)
-    result = pd.Series(cleaned, index=series.index)
-    numeric = pd.to_numeric(result, errors="coerce")
+        return None if missing else coerced
+
+    # Using .map is more idiomatic and can be more performant than iterating.
+    cleaned_series = series.map(_clean)
+    numeric = pd.to_numeric(cleaned_series, errors="coerce")
     return numeric.astype("Int64")
 
 
