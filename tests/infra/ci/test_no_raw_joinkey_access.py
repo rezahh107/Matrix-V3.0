@@ -11,15 +11,21 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 CORE_ROOT = REPO_ROOT / "app" / "core"
 
 ALLOWLIST = {
-    (CORE_ROOT / "common" / "join_keys.py").resolve(),
+    # JoinKeyResolver is the only Core surface permitted to inspect raw join-key columns
+    # before they are resolved into effective join keys (INVARIANT-JOIN-03).
+    (CORE_ROOT / "common" / "join_resolver.py").resolve(),
 }
 
 _EN_JOIN_KEYS = (
     "group_code",
+    "group",
     "gender",
     "graduation_status",
+    "grad_status",
+    "grad_status_code",
     "center",
     "finance",
+    "school",
     "school_code",
 )
 JOIN_KEY_EN_LITERALS = set(_EN_JOIN_KEYS)
