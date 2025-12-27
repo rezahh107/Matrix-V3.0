@@ -178,7 +178,8 @@ def test_build_sabt_export_frame_sources_allocation_and_student_correctly() -> N
         ),
     ]
     export_df = build_sabt_export_frame(allocations_df, students_df, profile)
-    assert list(export_df.columns) == ["پشتیبان", "کد ثبت نام", "کدملی", "نام", "معدل"]
+    assert list(export_df.columns) == ["student_id", "پشتیبان", "کد ثبت نام", "کدملی", "نام", "معدل"]
+    assert export_df.iloc[0]["student_id"] == "1"
     assert export_df.iloc[0]["کد ثبت نام"] == "1"
     assert export_df.iloc[1]["کدملی"] == "002"
     assert pd_types.is_string_dtype(export_df["کد ثبت نام"])
@@ -329,6 +330,7 @@ def test_export_sabt_excel_headers_and_types(tmp_path: Path) -> None:
     )
     exported = pd.read_excel(output_path, sheet_name="Sabt")
     assert list(exported.columns) == [
+        "student_id",
         "پیدا کردن ردیف پشتیبان از فیلد 141",
         "کد ثبت نام0",
         "نام",
@@ -338,9 +340,9 @@ def test_export_sabt_excel_headers_and_types(tmp_path: Path) -> None:
     workbook = load_workbook(output_path)
     sheet = workbook["Sabt"]
     assert sheet["A2"].data_type == "s"
-    assert sheet["A2"].value == "111"
+    assert sheet["A2"].value == "10"
     assert sheet["B2"].data_type == "s"
-    assert sheet["B2"].value == "10"
+    assert sheet["B2"].value == "111"
 
 
 def test_sabt_export_golden_snapshot(
@@ -350,8 +352,10 @@ def test_sabt_export_golden_snapshot(
 ) -> None:
     export_df = build_sabt_export_frame(sample_allocations_df, sample_students_df, sabt_profile)
     expected = _load_snapshot_dataframe(sabt_profile)
+    expected_with_id = expected.copy()
+    expected_with_id.insert(0, "student_id", export_df["student_id"].reset_index(drop=True))
     pd_testing.assert_frame_equal(
         export_df.reset_index(drop=True),
-        expected,
+        expected_with_id,
         check_dtype=False,
     )
