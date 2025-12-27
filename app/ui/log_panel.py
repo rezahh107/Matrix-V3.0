@@ -10,9 +10,9 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QPlainTextEdit,
     QPushButton,
     QStackedLayout,
-    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -54,7 +54,7 @@ class LogPanel(QFrame):
         self._placeholder.setWordWrap(True)
         self._placeholder.setFont(get_app_font())
 
-        self._text = QTextEdit(self)
+        self._text = QPlainTextEdit(self)
         self._text.setReadOnly(True)
         self._text.setObjectName("textLog")
         self._text.setFont(get_app_font())
@@ -84,8 +84,8 @@ class LogPanel(QFrame):
 
     # ------------------------------------------------------------------ رابط دسترسی
     @property
-    def text_edit(self) -> QTextEdit:
-        """دسترسی مستقیم به QTextEdit داخلی."""
+    def text_edit(self) -> QPlainTextEdit:
+        """دسترسی مستقیم به QPlainTextEdit داخلی."""
 
         return self._text
 
@@ -129,7 +129,7 @@ class LogPanel(QFrame):
             f"#logPanel{{background:{theme.colors.log_background};"
             f"border:1px solid {theme.colors.log_border};border-radius:{theme.radius_md}px;}}"
             f"#logPlaceholder{{color:{theme.colors.text_muted};}}"
-            f"QTextEdit#textLog{{border:none;background:transparent;"
+            f"QPlainTextEdit#textLog{{border:none;background:transparent;"
             f"color:{theme.colors.log_foreground};line-height:1.35; padding:{theme.spacing_sm}px;}}"
             f"QPushButton#btnClearLog, QPushButton#btnSaveLog{{"
             f"background:{theme.colors.card};border:1px solid {theme.colors.border};"

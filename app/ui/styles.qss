@@ -96,14 +96,14 @@ QComboBox QAbstractItemView {
     selection-color: {text};
 }
 
-QLineEdit, QTextEdit {
+QLineEdit, QTextEdit, QPlainTextEdit {
     border: 1px solid {border};
     border-radius: {radius_sm}px;
     padding: {spacing_xs}px {spacing_md}px;
     background: {card};
 }
 
-QLineEdit:focus, QTextEdit:focus {
+QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus {
     border: 2px solid {primary};
     background: {surface_alt};
 }
@@ -166,7 +166,7 @@ QFrame#logPanel {
     border-radius: {radius_md}px;
 }
 
-QTextEdit#textLog {
+QPlainTextEdit#textLog {
     background: transparent;
     border: none;
     color: {log_foreground};
