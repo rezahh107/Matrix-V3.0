@@ -31,6 +31,7 @@ from .common.join_keys import (
     school_mask_series,
     validate_selected_mentor_join_keys,
 )
+from .common.join_resolver import resolve_join_key_sources
 from .common.ranking import (
     HeapRankingManager,
     MentorCapacityState,
@@ -51,6 +52,7 @@ from .common.trace import (
     TraceStagePlan,
     _apply_stage_rule,
     _coerce_optional_int,
+    attach_join_source_extras,
     build_allocation_trace,
     build_trace_plan,
     build_unallocated_summary,
@@ -524,6 +526,8 @@ def _student_value_for_trace(student: Mapping[str, object], column: str) -> obje
     return None
 
 
+
+
 def _build_tracker_trace(
     student: Mapping[str, object],
     stage_plan: Sequence[TraceStagePlan],
@@ -532,6 +536,7 @@ def _build_tracker_trace(
     initial_candidates: int,
     stage_rules: Mapping[TraceStageName, Rule],
     policy: PolicyConfig,
+    join_key_sources: Mapping[str, object] | None = None,
 ) -> list[TraceStageRecord]:
     """ساخت Trace بر پایه شمارندهٔ tracker بدون اجرای مجدد فیلترها."""
 
@@ -579,6 +584,11 @@ def _build_tracker_trace(
                 extras["school_code_norm"] = school_code.value
             extras["expected_op"] = expected_op
             extras["expected_threshold"] = expected_threshold
+            attach_join_source_extras(
+                extras,
+                stage=stage,
+                join_key_sources=join_key_sources,
+            )
 
         record = TraceStageRecord(
             stage=stage,
@@ -605,6 +615,7 @@ def _build_tracker_trace_with_reasons(
     initial_candidates: int,
     stage_rules: Mapping[TraceStageName, Rule],
     policy: PolicyConfig,
+    join_key_sources: Mapping[str, object] | None = None,
 ) -> tuple[list[TraceStageRecord], str | None, str | None, list[dict[str, object]]]:
     tracker_trace = _build_tracker_trace(
         student,
@@ -613,6 +624,7 @@ def _build_tracker_trace_with_reasons(
         initial_candidates=initial_candidates,
         stage_rules=stage_rules,
         policy=policy,
+        join_key_sources=join_key_sources,
     )
     rule_reason_code, rule_reason_text, rule_details = _derive_rule_reason(tracker_trace)
     return tracker_trace, rule_reason_code, rule_reason_text, rule_details
@@ -1219,8 +1231,16 @@ def _canonical_student_id(value: object) -> str:
 def _build_log_from_join_map(
     student: Mapping[str, object],
     join_map: Mapping[str, int],
+    policy: PolicyConfig,
+    *,
+    join_key_sources: Mapping[str, object] | None = None,
 ) -> AllocationLogRecord:
     """ساخت لاگ پایه از روی نگاشت join keys."""
+    resolved_sources = (
+        dict(join_key_sources)
+        if join_key_sources is not None
+        else resolve_join_key_sources(student, policy=policy, student_join_map=join_map)
+    )
     log: AllocationLogRecord = {
         "row_index": -1,
         "student_id": _canonical_student_id(student.get("student_id")),
@@ -1229,6 +1249,7 @@ def _build_log_from_join_map(
         "mentor_id": None,
         "occupancy_ratio": None,
         "join_keys": JoinKeyValues(join_map, expected_keys=join_map.keys()),
+        "join_key_sources": resolved_sources,
         "candidate_count": 0,
         "selection_reason": None,
         "tie_breakers": {},
@@ -1657,13 +1678,19 @@ def _build_log_base(
     *,
     join_map: Mapping[str, int] | None = None,
     missing: Sequence[str] | None = None,
+    join_key_sources: Mapping[str, object] | None = None,
 ) -> AllocationLogRecord:
     """ساخت لاگ پایه با استفاده از نگاشت ازپیش‌محاسبه‌شدهٔ کلیدهای join."""
     if join_map is None or missing is None:
         join_map, missing = _collect_join_key_map(student, policy)
     if missing:
         raise JoinKeyDataMissingError(missing, join_map)
-    return _build_log_from_join_map(student, join_map)
+    return _build_log_from_join_map(
+        student,
+        join_map,
+        policy,
+        join_key_sources=join_key_sources,
+    )
 
 
 def _normalize_students(df: pd.DataFrame, policy: PolicyConfig) -> pd.DataFrame:
@@ -1801,7 +1828,11 @@ def allocate_student(
         join_map, missing_columns = _collect_join_key_map(student, policy)
     except JoinKeyDataInvalidError as exc:
         trace: list[TraceStageRecord] = []
-        log = _build_log_from_join_map(student, exc.join_map)
+        log = _build_log_from_join_map(
+            student,
+            exc.join_map,
+            policy,
+        )
         log.update(
             {
                 "error_type": "DATA_MISSING",
@@ -1816,6 +1847,11 @@ def allocate_student(
         )
         log["initial_candidate_count"] = initial_candidates
         return AllocationResult(None, trace, log)
+    join_sources = resolve_join_key_sources(
+        student,
+        policy=policy,
+        student_join_map=join_map,
+    )
 
     if pool_state_view is not None:
         pool_state_view = pool_state_view.reindex(candidate_pool.index)
@@ -1889,6 +1925,7 @@ def allocate_student(
             policy,
             join_map=join_map,
             missing=missing_columns,
+            join_key_sources=join_sources,
         )
     except JoinKeyDataMissingError as exc:
         stage_candidate_counts = _canonical_stage_counts(stage_candidate_counts)
@@ -1904,8 +1941,13 @@ def allocate_student(
             initial_candidates=initial_candidates,
             stage_rules=stage_rules,
             policy=policy,
+            join_key_sources=join_sources,
         )
-        log = _build_log_from_join_map(student, exc.join_map)
+        log = _build_log_from_join_map(
+            student,
+            exc.join_map,
+            policy,
+        )
         log.update(
             {
                 "rule_reason_code": rule_reason_code,
@@ -1951,6 +1993,7 @@ def allocate_student(
         initial_candidates=initial_candidates,
         stage_rules=stage_rules,
         policy=policy,
+        join_key_sources=join_sources,
     )
 
     detailed_trace: list[TraceStageRecord] | None = None
@@ -1974,6 +2017,7 @@ def allocate_student(
                 stage_plan=trace_plan,
                 capacity_column=resolved_capacity_column,
                 stage_rules=stage_rules,
+                join_key_sources=join_sources,
             )
             before_capacity, after_capacity = _capacity_totals()
             _apply_capacity_totals(
@@ -2098,6 +2142,7 @@ def allocate_student(
         initial_candidates=initial_candidates,
         stage_rules=stage_rules,
         policy=policy,
+        join_key_sources=join_sources,
     )
     before_capacity, after_capacity = _capacity_totals()
     _apply_capacity_totals(
@@ -2651,6 +2696,7 @@ def allocate_batch(
             if not debug_trace and is_success:
                 summary_trace = result.trace
             else:
+                join_sources = result.log.get("join_key_sources")
                 summary_trace, _, _, _ = _build_tracker_trace_with_reasons(
                     student_dict,
                     trace_plan,
@@ -2658,6 +2704,7 @@ def allocate_batch(
                     initial_candidates=initial_count,
                     stage_rules=stage_rules,
                     policy=policy,
+                    join_key_sources=join_sources if isinstance(join_sources, Mapping) else None,
                 )
 
             trace_for_storage = result.trace if debug_trace or not is_success else summary_trace
