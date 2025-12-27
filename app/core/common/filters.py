@@ -289,9 +289,9 @@ def filter_by_school(
     column = policy.stage_column("school")
     resolver = JoinKeyResolver(policy)
     school_code = resolver.resolve_school(student, student_join_map=student_join_map)
-    if school_code.value is None and school_code.missing:
-        return pool
     if school_code.value is None:
+        # If school code could not be resolved, no school-specific filtering can be applied.
+        # This occurs when the value is missing and there's no wildcard policy.
         return pool
     target = int(school_code.value)
     constraint_mask: pd.Series | None = None
