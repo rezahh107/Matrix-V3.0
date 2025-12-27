@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
+from typing import cast
 
 import pandas as pd
 
@@ -12,7 +13,8 @@ __all__ = ["build_matrix_core"]
 
 
 def _ensure_iterable_records(frame: pd.DataFrame) -> Iterable[Mapping[str, object]]:
-    return frame.to_dict(orient="records")
+    records = cast(list[Mapping[str, object]], frame.to_dict(orient="records"))
+    return records
 
 
 def _trace_with_capacity(
@@ -67,9 +69,10 @@ def build_matrix_core(
     records: list[dict[str, object]] = []
     mentor_records = list(_ensure_iterable_records(mentors))
     student_records = list(_ensure_iterable_records(students))
-    capacity_by_mentor: dict[int, tuple[CapacityOutcome, dict[str, object]]] = {
-        mentor["mentor_id"]: _capacity_values(mentor) for mentor in mentor_records
-    }
+    capacity_by_mentor: dict[int, tuple[CapacityOutcome, dict[str, object]]] = {}
+    for mentor in mentor_records:
+        mentor_id = cast(int, mentor.get("mentor_id", 0))
+        capacity_by_mentor[mentor_id] = _capacity_values(mentor)
 
     for mentor in mentor_records:
         capacity_outcome, capacity_fields = capacity_by_mentor[mentor["mentor_id"]]

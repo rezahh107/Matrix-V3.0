@@ -72,3 +72,17 @@ def test_empty_workbook_reports_clear_error() -> None:
         detect_pool_sheet(Path("/tmp/empty.xlsx"), pool_type="inspactor")
 
     assert "no sheets" in str(excinfo.value)
+
+
+def test_tie_break_prefers_known_higher_row_count(tmp_path: Path) -> None:
+    path = tmp_path / "pool.xlsx"
+    with pd.ExcelWriter(path) as writer:
+        pd.DataFrame({"a": [1]}).to_excel(writer, sheet_name="alpha", index=False)
+        pd.DataFrame({"a": [1, 2, 3]}).to_excel(writer, sheet_name="beta", index=False)
+
+    result = detect_pool_sheet(path, pool_type="matrix")
+
+    assert result.selected_sheet == "beta"
+    sheets = {info["sheet"]: info for info in result.evidence["sheets"]}
+    assert sheets["beta"]["row_count"] == 3
+    assert sheets["alpha"]["row_count"] == 1

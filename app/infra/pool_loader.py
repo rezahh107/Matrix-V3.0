@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path
-from typing import Literal, TypedDict, cast
+from typing import Literal, TypedDict
 
 import pandas as pd
 
@@ -49,6 +49,18 @@ def detect_pool_sheet(
 ) -> PoolDetectionResult:
     path = Path(path)
     excel = pd.ExcelFile(path)
+    workbook = None
+    workbook_opened = False
+    if path.exists():
+        try:
+            from openpyxl import load_workbook
+
+            workbook = load_workbook(path, read_only=True, data_only=True)
+            workbook_opened = True
+        except ImportError:
+            workbook = getattr(excel, "book", None)
+    else:
+        workbook = getattr(excel, "book", None)
     sheet_names = list(excel.sheet_names)
 
     if not sheet_names:
@@ -69,17 +81,15 @@ def detect_pool_sheet(
         missing_columns_lite = missing_columns[:5]
         missing_count = len(missing_columns)
         is_reserved_matrix = pool_type == "inspactor" and sheet == "matrix"
-        exclusion_reason = (
-            "not_explicit_sheet" if explicit_sheet is not None and sheet != explicit_sheet else None
-        )
-        exclusion_reason = (
-            "reserved_sheet_matrix"
-            if exclusion_reason is None and is_reserved_matrix and explicit_sheet != "matrix"
-            else exclusion_reason
-        )
+        if explicit_sheet is not None and sheet != explicit_sheet:
+            exclusion_reason = "not_explicit_sheet"
+        elif is_reserved_matrix and explicit_sheet != "matrix":
+            exclusion_reason = "reserved_sheet_matrix"
+        else:
+            exclusion_reason = None
         row_count: int | None = None
-        if hasattr(excel, "book") and sheet in getattr(excel.book, "sheetnames", []):
-            max_row = getattr(excel.book[sheet], "max_row", None)
+        if workbook is not None and sheet in getattr(workbook, "sheetnames", []):
+            max_row = getattr(workbook[sheet], "max_row", None)
             row_count = max(max_row - 1, 0) if max_row is not None else None
 
         evidence.append(
@@ -92,6 +102,8 @@ def detect_pool_sheet(
                 "exclusion_reason": exclusion_reason,
             }
         )
+
+    selection_reason: dict[str, object] | None = None
 
     if explicit_sheet is not None:
         selected_sheet = explicit_sheet
@@ -109,17 +121,29 @@ def detect_pool_sheet(
         best_candidates = [
             info for info in candidates if info["missing_count"] == best_missing_count
         ]
-        all_have_row_counts = all(info["row_count"] is not None for info in best_candidates)
-        if all_have_row_counts:
-            best_candidates.sort(
-                key=lambda info: (-cast(int, info["row_count"]), info["sheet"])
+        best_candidates.sort(
+            key=lambda info: (
+                info["missing_count"],
+                info["row_count"] is None,
+                -info["row_count"] if info["row_count"] is not None else 0,
+                info["sheet"],
             )
-        else:
-            best_candidates.sort(key=lambda info: info["sheet"])
+        )
 
         selected_sheet = best_candidates[0]["sheet"]
         detection_method = "best_header_match"
         confidence = 1.0 if best_missing_count == 0 else 0.8
+        selection_reason = {
+            "missing_required_count": best_missing_count,
+            "sort_key": (
+                best_missing_count,
+                best_candidates[0]["row_count"] is None,
+                -best_candidates[0]["row_count"]
+                if best_candidates[0]["row_count"] is not None
+                else 0,
+                best_candidates[0]["sheet"],
+            ),
+        }
 
     return PoolDetectionResult(
         pool_type=pool_type,
@@ -128,9 +152,10 @@ def detect_pool_sheet(
         confidence=confidence,
         evidence={
             "path": str(path),
-            "pool_type": pool_type,
-            "explicit_sheet": explicit_sheet,
             "sheets": evidence,
-            "selection": {"method": detection_method, "selected": selected_sheet},
+            **({"selection_reason": selection_reason} if selection_reason else {}),
         },
     )
+
+    if workbook_opened and hasattr(workbook, "close"):
+        workbook.close()
