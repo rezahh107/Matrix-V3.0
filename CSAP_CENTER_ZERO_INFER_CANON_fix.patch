@@ -1,0 +1,125 @@
+--- /mnt/data/orig_sel/Matrix2-main/app/core/canonical_frames.py	2025-12-27 08:54:54.000000000 +0000
++++ /mnt/data/Matrix2-main_3/Matrix2-main/app/core/canonical_frames.py	2025-12-27 09:40:47.697526468 +0000
+@@ -52,6 +52,81 @@
+ )
+ 
+ 
++_MANAGER_COLUMN_FA = "مدیر"
++
++
++def _infer_center_from_manager(
++    students: pd.DataFrame, *, policy: PolicyConfig, center_column: str
++) -> pd.DataFrame:
++    """Fill student center codes when the input center is 0 but a manager mapping exists.
++
++    The allocation core historically inferred center codes from the manager name when
++    the student center join-key was 0. Export/QA layers audit join keys directly
++    from the canonical student frame, so we materialize the same effective center
++    values here to keep join-key auditing deterministic and aligned.
++
++    Best-effort: if no mapping is configured or inference cannot be made, the
++    original center value is kept.
++    """
++
++    if not policy.center_map:
++        return students
++
++    if center_column not in students.columns or _MANAGER_COLUMN_FA not in students.columns:
++        return students
++
++    center_series = ensure_series(students[center_column]).astype("Int64")
++    mask = center_series.fillna(-1).eq(0)
++    if not bool(mask.any()):
++        return students
++
++    # Normalize mapping keys once (wildcard '*' is preserved).
++    center_map_norm: dict[str, int] = {}
++    for raw_key, raw_val in (policy.center_map or {}).items():
++        key = str(raw_key).strip()
++        norm_key = "*" if key == "*" else normalize_fa(key)
++        if norm_key:
++            try:
++                center_map_norm[norm_key] = int(raw_val)
++            except Exception:
++                continue
++
++    wildcard = center_map_norm.get("*")
++    candidates = [(k, v) for k, v in center_map_norm.items() if k != "*"]
++
++    manager_series = (
++        ensure_series(students[_MANAGER_COLUMN_FA]).astype("string").fillna("")
++    )
++
++    cache: dict[str, int | None] = {}
++
++    def _infer_one(name: str) -> int | None:
++        norm = normalize_fa(name)
++        if norm in cache:
++            return cache[norm]
++        if norm and norm in center_map_norm and norm != "*":
++            cache[norm] = center_map_norm[norm]
++            return cache[norm]
++        for key, val in candidates:
++            if key and norm and key in norm:
++                cache[norm] = val
++                return val
++        cache[norm] = wildcard
++        return wildcard
++
++    inferred_vals: list[int | None] = []
++    inferred_index = manager_series.index[mask]
++    for raw in manager_series.loc[mask].tolist():
++        inferred_vals.append(_infer_one(str(raw)))
++
++    inferred = pd.Series(inferred_vals, index=inferred_index, dtype="Int64")
++    update_mask = inferred.notna()
++    if bool(update_mask.any()):
++        students.loc[inferred_index[update_mask], center_column] = inferred.loc[update_mask]
++
++    return students
++
++
+ @dataclass(slots=True)
+ class PoolCanonicalizationStats:
+     """شمارندهٔ اصلاحات استخر منتور برای گزارش QA.
+@@ -744,6 +819,11 @@
+         strict_columns={group_column},
+         allow_missing_when_strict=True,
+     )
++    students = _infer_center_from_manager(
++        students,
++        policy=policy,
++        center_column=policy.stage_column("center"),
++    )
+     for column in policy.join_keys:
+         if column in students.columns and not ensure_series(students[column]).isna().any():
+             students[column] = ensure_series(students[column]).astype("int64")
+--- /mnt/data/orig_sel/Matrix2-main/tests/core/test_canonical_frames.py	2025-12-27 08:54:54.000000000 +0000
++++ /mnt/data/Matrix2-main_3/Matrix2-main/tests/core/test_canonical_frames.py	2025-12-27 09:41:41.549773823 +0000
+@@ -32,6 +32,26 @@
+     assert canonical[policy.stage_column("finance")].iloc[0] == 3
+ 
+ 
++
++def test_canonicalize_students_frame_infers_center_from_manager_when_zero() -> None:
++    policy = replace(load_policy(), center_map={"مدیر الف": 5, "*": 0})
++    students = pd.DataFrame(
++        {
++            "student_id": ["s1"],
++            "مدیر": ["مدیر الف"],
++            policy.stage_column("group"): [21],
++            policy.stage_column("gender"): ["پسر"],
++            policy.stage_column("graduation_status"): [0],
++            policy.stage_column("center"): [0],
++            policy.stage_column("finance"): [0],
++            policy.columns.school_code: [0],
++        }
++    )
++
++    canonical = canonicalize_students_frame(students, policy=policy)
++
++    assert canonical[policy.stage_column("center")].iloc[0] == 5
++
+ def test_canonicalize_pool_frame_rejects_invalid_school_code() -> None:
+     policy = replace(load_policy(), school_code_empty_as_zero=False)
+     pool = pd.DataFrame(
