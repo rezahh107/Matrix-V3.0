@@ -397,9 +397,12 @@ def filter_by_center(
     center_value = _student_center_value(student, column)
     if center_value is None:
         return pool
-    wildcard_values = _center_wildcard_values(policy)
     series = pd.to_numeric(ensure_series(pool[column]), errors="coerce").astype("Int64")
-    mask = series.isin(wildcard_values) | series.eq(int(center_value))
+    mask = (
+        series.eq(0)
+        if int(center_value) == 0
+        else series.eq(0) | series.eq(int(center_value))
+    )
     return pool.loc[mask.fillna(False)]
 
 
