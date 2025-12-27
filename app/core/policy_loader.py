@@ -434,6 +434,7 @@ class PolicyConfig:
     mentor_school_binding: MentorSchoolBindingPolicy = field(
         default_factory=MentorSchoolBindingPolicy
     )
+    ranking_mode: str = "legacy_sort"
     mentor_pool_governance: MentorPoolGovernanceConfig = field(
         default_factory=lambda: MentorPoolGovernanceConfig(
             default_status=MentorStatus.ACTIVE,
@@ -585,6 +586,7 @@ def _normalize_policy_payload(data: RawPolicy) -> Mapping[str, object]:
     fairness_strategy = _normalize_fairness_strategy(
         data.get("fairness_strategy") or data.get("fairness")
     )
+    ranking_mode = _normalize_ranking_mode(data.get("ranking_mode"))
     matrix_section = data.get("matrix")
     if matrix_section is None:
         coverage_source: Mapping[str, object] = {}
@@ -637,6 +639,7 @@ def _normalize_policy_payload(data: RawPolicy) -> Mapping[str, object]:
         "virtual_name_patterns": virtual_name_patterns,
         "emission": data.get("emission", {}),
         "fairness_strategy": fairness_strategy,
+        "ranking_mode": ranking_mode,
         "coverage_options": coverage_options,
         "mentor_pool_governance": mentor_pool_governance,
         "allocation_channels": allocation_channels,
@@ -1129,6 +1132,14 @@ def _normalize_meta(raw: object) -> Mapping[str, str]:
     return {"law_version": law_version, "tech_ssot_version": tech_ssot_version}
 
 
+def _normalize_ranking_mode(raw: object) -> str:
+    value = "legacy_sort" if raw is None else str(raw).strip() or "legacy_sort"
+    allowed = {"legacy_sort", "heap_queue"}
+    if value not in allowed:
+        raise ValueError("ranking_mode must be one of legacy_sort, heap_queue")
+    return value
+
+
 def _normalize_ranking_rules(raw: Sequence[RankingRuleRaw]) -> list[Mapping[str, object]]:
     if isinstance(raw, (str, bytes)):
         raise TypeError("ranking must be a sequence of rules")
@@ -1412,6 +1423,7 @@ def _to_config(data: RawPolicy) -> PolicyConfig:
         virtual_name_patterns=tuple(str(item) for item in virtual_name_patterns_raw),
         emission=_to_emission_options(emission_raw),
         fairness_strategy=str(data.get("fairness_strategy", "none")),
+        ranking_mode=str(data.get("ranking_mode", "legacy_sort")),
         center_management=_to_center_management_config(center_management_raw),
         coverage_options=MatrixCoverageOptions(
             denominator_mode=str(coverage_options_raw["denominator_mode"]),
@@ -1595,6 +1607,7 @@ def _apply_schema_defaults(data: dict[str, object]) -> dict[str, object]:
 
     data.setdefault("virtual_alias_ranges", list(_DEFAULT_VIRTUAL_ALIAS_RANGES))
     data.setdefault("virtual_name_patterns", list(_DEFAULT_VIRTUAL_NAME_PATTERNS))
+    data.setdefault("ranking_mode", "legacy_sort")
 
     meta_raw = data.get("meta")
     if not isinstance(meta_raw, Mapping):

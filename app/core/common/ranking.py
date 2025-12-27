@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import heapq
 import re
+from collections import defaultdict
 from collections.abc import Hashable, Mapping, Sequence
 from hashlib import blake2b
 from numbers import Number
@@ -24,6 +26,7 @@ __all__ = [
     "compute_remaining_capacity",
     "apply_ranking_policy",
     "consume_capacity",
+    "HeapRankingManager",
     "ensure_ranking_columns",
 ]
 
@@ -56,6 +59,93 @@ class MentorCapacityState(TypedDict):
     total_capacity: int
     current_allocations: int
     remaining_capacity: int
+
+
+class HeapRankingManager:
+    """Deterministic per-bucket priority queues for mentor ranking."""
+
+    def __init__(
+        self,
+        *,
+        index: pd.Index,
+        join_bucket_index: Mapping[tuple[int, ...], pd.Index] | None = None,
+    ) -> None:
+        self._default_bucket: tuple[str, ...] = ("__all__",)
+        self._index_to_bucket: dict[Hashable, tuple[int, ...] | tuple[str, ...]] = {}
+        if join_bucket_index:
+            for bucket_key, bucket_index in join_bucket_index.items():
+                normalized_key = tuple(int(value) for value in bucket_key)
+                for idx in bucket_index:
+                    self._index_to_bucket[idx] = normalized_key
+        else:
+            for idx in index:
+                self._index_to_bucket[idx] = self._default_bucket
+
+        self._buckets: dict[
+            tuple[int, ...] | tuple[str, ...],
+            list[tuple[tuple[object, ...], int, Hashable]],
+        ] = defaultdict(list)
+        self._versions: dict[Hashable, int] = {}
+
+    def _priority_from_row(self, row: pd.Series) -> tuple[object, ...]:
+        remaining = _coerce_capacity_value(row.get("remaining_capacity", 0))
+        allocations_new = _coerce_capacity_value(row.get("allocations_new", 0))
+        mentor_token = row.get("mentor_sort_key")
+        if mentor_token is None:
+            mentor_token = natural_key(row.get("mentor_id_en", row.get("mentor_id")))
+        return (-remaining, allocations_new, mentor_token)
+
+    def refresh_candidates(self, ranked: pd.DataFrame) -> None:
+        """Insert or update heap entries for the provided ranked frame."""
+
+        for idx, row in ranked.iterrows():
+            bucket_key = self._index_to_bucket.get(idx, self._default_bucket)
+            version = self._versions.get(idx, 0) + 1
+            self._versions[idx] = version
+            priority = self._priority_from_row(row)
+            heapq.heappush(self._buckets[bucket_key], (priority, version, idx))
+
+    def _pop_bucket_order(
+        self,
+        bucket_key: tuple[int, ...] | tuple[str, ...],
+        candidate_set: set[Hashable],
+    ) -> list[Hashable]:
+        ordered: list[Hashable] = []
+        heap = self._buckets[bucket_key]
+        temp: list[tuple[tuple[object, ...], int, Hashable]] = []
+        target = len(candidate_set)
+        while heap and len(ordered) < target:
+            priority, version, idx = heapq.heappop(heap)
+            if version != self._versions.get(idx):
+                continue
+            temp.append((priority, version, idx))
+            if idx not in candidate_set:
+                continue
+            ordered.append(idx)
+        for entry in temp:
+            heapq.heappush(heap, entry)
+        return ordered
+
+    def order_indices(self, ranked: pd.DataFrame) -> list[Hashable]:
+        """Return deterministic ordering for the provided ranked frame."""
+
+        if ranked.empty:
+            return []
+
+        self.refresh_candidates(ranked)
+        candidate_set = set(ranked.index)
+        bucket_keys = {
+            self._index_to_bucket.get(idx, self._default_bucket) for idx in candidate_set
+        }
+        ordered: list[Hashable] = []
+        for bucket_key in sorted(bucket_keys):
+            ordered.extend(self._pop_bucket_order(bucket_key, candidate_set))
+
+        if len(ordered) < len(candidate_set):
+            missing = [idx for idx in ranked.index if idx not in ordered]
+            ordered.extend(missing)
+
+        return ordered
 
 
 CapacityScalar = int | float | str | None
@@ -174,6 +264,7 @@ def apply_ranking_policy(
     state: Mapping[Hashable, Mapping[str, CapacityScalar]] | None = None,
     policy: PolicyConfig | None = None,
     policy_path: str | Path = _DEFAULT_POLICY_PATH,
+    heap_manager: HeapRankingManager | None = None,
 ) -> pd.DataFrame:
     """مرتب‌سازی استخر کاندید طبق RANK-CORE (ظرفیت‌محور)."""
 
@@ -244,11 +335,16 @@ def apply_ranking_policy(
     if any("ratio" in column or "occupancy" in column for column in sort_columns):
         raise ValueError("Ranking columns must not include ratio-based metrics")
 
-    ranked = ranked.sort_values(
-        by=sort_columns,
-        ascending=ascending_flags,
-        kind="mergesort",
-    )
+    ranking_mode = getattr(policy, "ranking_mode", "legacy_sort")
+    if ranking_mode == "heap_queue" and heap_manager is not None:
+        order = heap_manager.order_indices(ranked)
+        ranked = ranked.loc[order]
+    else:
+        ranked = ranked.sort_values(
+            by=sort_columns,
+            ascending=ascending_flags,
+            kind="mergesort",
+        )
 
     strategy = getattr(policy, "fairness_strategy", "none")
     fairness_reason_obj: object | None = None

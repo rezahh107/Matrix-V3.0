@@ -31,6 +31,7 @@ from .common.join_keys import (
     validate_selected_mentor_join_keys,
 )
 from .common.ranking import (
+    HeapRankingManager,
     MentorCapacityState,
     apply_ranking_policy,
     build_mentor_state,
@@ -1775,6 +1776,7 @@ def allocate_student(
     perf_tracker: PerfTracker | None = None,
     debug_trace: bool = False,
     join_bucket_index: JoinBucketIndex | None = None,
+    heap_manager: HeapRankingManager | None = None,
 ) -> AllocationResult:
     """تخصیص تک‌دانش‌آموز با حفظ Trace و لاگ کامل مطابق §5 Technical SSoT."""
     if policy is None:
@@ -2161,7 +2163,12 @@ def allocate_student(
 
     # ابتدا سیاست رتبه‌بندی رسمی اجرا می‌شود
     with measure_time("ranking", perf_tracker):
-        ranked = apply_ranking_policy(ranking_input, state=ranking_state, policy=policy)
+        ranked = apply_ranking_policy(
+            ranking_input,
+            state=ranking_state,
+            policy=policy,
+            heap_manager=heap_manager,
+        )
 
     fairness_reason = ranked.attrs.get("fairness_reason")
     if fairness_reason is not None:
@@ -2446,7 +2453,9 @@ def allocate_batch(
     extra_columns = [column for column in pool_norm.columns if column not in candidate_pool.columns]
 
     pool_with_ids = inject_mentor_id(pool_norm, build_mentor_id_map(pool_norm))
-    join_bucket_index = _build_join_bucket_index(pool_with_ids, policy) if use_join_buckets else None
+    join_bucket_index = (
+        _build_join_bucket_index(pool_with_ids, policy) if use_join_buckets else None
+    )
 
     # تضمین ستون‌های مورد نیاز
     if "mentor_sort_key" not in pool_with_ids.columns:
@@ -2480,6 +2489,14 @@ def allocate_batch(
         pool_internal["occupancy_ratio"] = 0.0
     if "mentor_id" not in pool_internal.columns:
         raise KeyError("Pool must contain 'mentor_id' column after canonicalization")
+
+    ranking_mode = getattr(policy, "ranking_mode", "legacy_sort")
+    heap_manager: HeapRankingManager | None = None
+    if ranking_mode == "heap_queue":
+        heap_manager = HeapRankingManager(
+            index=pool_internal.index,
+            join_bucket_index=join_bucket_index,
+        )
 
     # ساخت state اولیه
     mentor_state = _stringify_mentor_state(
@@ -2564,6 +2581,7 @@ def allocate_batch(
                 perf_tracker=perf_tracker,
                 debug_trace=debug_trace,
                 join_bucket_index=join_bucket_index,
+                heap_manager=heap_manager,
             )
 
             if invalid_center_payload is not None:

@@ -1,6 +1,6 @@
 # RFC-2025-12-01 — Freeze ranking semantics for mentor selection (INVARIANT-RANK-CORE)
 
-**Status:** Draft
+**Status:** Draft (with optional heap-based implementation flag)
 
 **Owner:** Allocation Core Team
 
@@ -10,11 +10,12 @@
 
 ## 1. Motivation
 
-Mentor selection currently relies on an implicit ordering derived from `config/policy.json` and helper functions. To avoid drift during the refactor phases, we freeze the ranking semantics, null/NaN handling, type coercion, and tie-break rules. This RFC establishes determinism guarantees for mentor ordering and documents what can change only with a follow-up RFC.
+Mentor selection currently relies on an implicit ordering derived from `config/policy.json` and helper functions. To avoid drift during the refactor phases, we freeze the ranking semantics, null/NaN handling, type coercion, and tie-break rules. This RFC establishes determinism guarantees for mentor ordering and documents what can change only with a follow-up RFC. It now also records an optional, correctness-preserving implementation toggle (`ranking_mode = legacy_sort | heap_queue`) that must default to `legacy_sort` and produce identical outputs when `heap_queue` is enabled.
 
 ## 2. Background and current implementation
 
 * `app/core/common/ranking.py::apply_ranking_policy` constructs `remaining_capacity`, `allocations_new`, `mentor_sort_key`, and sorts by policy-defined rules using `sort_values(..., kind="mergesort")`. The default policy is `remaining_capacity` (DESC), `allocations_new` (ASC), `mentor_sort_key` (ASC), sourced from `config/policy.json`.
+* A feature-flagged alternate path (`ranking_mode = "heap_queue"`) may replace the sort with a per-join-bucket priority queue keyed by `(-remaining_capacity, allocations_new, mentor_id)` with deterministic tie-breaking identical to the legacy sort. The flag is **OFF by default** and must not alter observable ordering or trace outputs when enabled.
 * `app/core/common/ranking.py::_safe_capacity` and `_series_as_int` coerce capacity and allocation fields to non-negative integers. `None`/NaN/empty strings become `0`; negatives are clipped to `0`; non-numeric strings raise `TypeError` before clipping.
 * `app/core/common/ranking.py::build_mentor_state` initializes per-mentor capacity by canonicalizing headers, resolving a capacity column (preferring `remaining_capacity`), and defaulting to `0` if missing. `mentor_sort_key` falls back to the natural-key transform of `mentor_id` when absent.
 * `app/core/common/ranking.py::consume_capacity` decrements `remaining`, `remaining_capacity`, and increments `alloc_new`/`current_allocations` per assignment. Allocation loops in `app/core/allocate_students.py` call `consume_capacity` after selecting the top-ranked mentor, so subsequent ranking passes see reduced capacity and higher `allocations_new`.
@@ -63,12 +64,14 @@ The following require a new RFC:
 * Altering `_safe_capacity` or `_series_as_int` coercion rules (including negative handling or NaN semantics).
 * Changing the deterministic merge-sort/stable ordering or adding randomness.
 * Modifying how `consume_capacity` updates state or how `build_mentor_state` selects capacity columns.
+* Enabling the heap/queue implementation by default without a dedicated rollout plan and parity checks.
 
 The following are allowed without a new RFC, provided they do **not** affect observable ordering:
 
 * Documentation or comment clarifications.
 * Adding optional diagnostics/QA fields that do not feed into ranking keys.
 * Policy file relocation without semantic edits (e.g., path moves) so long as rule definitions stay identical.
+* Introducing a feature-flagged alternative implementation (e.g., heap/queue) that preserves the frozen ranking semantics exactly and remains OFF by default.
 
 ## 4. Examples (deterministic scenarios)
 
