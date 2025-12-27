@@ -174,7 +174,7 @@ Each allocation must be explainable via an 8-stage trace in the fixed order `typ
 `remaining_capacity` must never be negative; mentors with zero remaining capacity must be filtered out before allocation. (certain) [LAW][TECH][app/core/common/ranking.py][app/core/allocate_students.py]
 
 **SCHOOL-01 / CENTER-01 / WILDCARD-COMBINE-01**  
-School and center joins use wildcard semantics (`0` or policy-defined codes) and treat global mentors/students correctly, with AND-combination of constraints as specified in Policy. `student_* = 0` does not disable filtering; wildcard is mentor-side unless Policy explicitly states otherwise. (certain) [LAW][TECH][app/core/common/join_keys.py][app/infra/qa/alloc_join_validation.py][app/core/qa/invariants.py]  
+School and center joins use wildcard semantics (0 or policy-defined codes) and treat global mentors/students correctly, with AND-combination of constraints as specified in Policy. student_* = 0 is not a wildcard and only matches a mentor's join key of 0; wildcards are mentor-side unless Policy explicitly states otherwise. (certain) [LAW][TECH][app/core/common/join_keys.py][app/infra/qa/alloc_join_validation.py][app/core/qa/invariants.py]  
 
 **MENTOR-TYPE-01 / MENTOR-STATUS-01 / POOL-GOVERNANCE-01**  
 Only mentors with allowed status/type (e.g., ACTIVE) should appear in the effective pool; FROZEN or INACTIVE mentors must be filtered or at least reported via QA. (certain) [LAW][TECH][app/core/allocation/mentor_pool.py][app/core/qa/invariants.py]  
