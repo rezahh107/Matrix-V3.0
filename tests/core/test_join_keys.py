@@ -166,6 +166,7 @@ def test_matches_center_with_wildcard_keeps_zero_wildcard_when_policy_set() -> N
 
     assert wildcard == 99
     assert matches_center_with_wildcard(5, 0, wildcard)
+    assert not matches_center_with_wildcard(5, 99, wildcard)
 
 
 def test_validate_policy_join_keys_flags_missing_center() -> None:
@@ -202,12 +203,13 @@ def test_resolve_finance_variants_expands_policy_values() -> None:
 
 
 def test_matches_center_with_wildcard_rejects_student_side_global_with_policy_wildcard() -> None:
-    policy = load_policy()
+    policy = replace(load_policy(), center_map={"*": 99})
     wildcard = policy.center_map.get("*")
 
     assert wildcard is not None
     assert matches_center_with_wildcard(5, 0, wildcard)
     assert not matches_center_with_wildcard(0, 5, wildcard)
+    assert not matches_center_with_wildcard(0, int(wildcard), wildcard)
 
 
 def test_resolve_finance_variants_unknown_falls_back() -> None:
