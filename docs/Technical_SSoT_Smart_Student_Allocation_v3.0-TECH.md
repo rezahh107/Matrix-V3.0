@@ -424,6 +424,33 @@ Core باید:
 
 ---
 
+### 6.1.1. JOINKEY-SSOT — Effective Join Keys و Parity Guards
+
+**JOINKEY-SSOT-01: Effective Join Keys**
+
+- تنها منبع معتبر برای join در تمام لایه‌ها، **Effective Join Keys** است.
+- Effective Join Keys خروجی **JoinKeyResolver** بعد از canonicalize + infer + wildcard است؛
+  استفاده از دادهٔ خام یا کانال‌های نصفه‌کاننیکال برای join ممنوع است.
+
+**JOINKEY-SSOT-02: Wildcard Semantics per Key (side: student/mentor/both/none)**
+
+- `group_code`, `gender_code`, `grad_status_code`, `finance_code`: **none**
+- `center_code`: **mentor-only**
+- `school_code`: **mentor-only**
+- `student_* = 0` wildcard نیست و فقط mentorهای `*_code = 0` را match می‌کند.
+
+**JOINKEY-SSOT-03: JoinKeyResolver is the ONLY source for canonicalize+infer**
+
+- هرگونه canonicalize/infer برای join keys باید فقط در JoinKeyResolver انجام شود؛
+  هیچ مسیر دیگری (Core/QA/Export) نباید این منطق را دوباره پیاده کند.
+
+**JOINKEY-SSOT-04: Parity Guards (allocation vs audit/export)**
+
+- Parity Guard بین allocation و audit/export اجباری است.
+- عدم برابری join keys مؤثر باید به QA/Blocking ارتقا یابد (طبق LAW/TECH Severity).
+
+---
+
 ### 6.2. CAPACITY-01 — ظرفیت و state
 
 - تعریف `capacity_limit`, `assigned_baseline`, `allocations_new`, `remaining_capacity` در Core و QA باید یکسان باشد.
@@ -450,6 +477,20 @@ def is_eligible_at_school_center(student, mentor) -> bool:
 ```
 
 QA و Export باید دقیقا همین semantics را replicate کنند؛ نه چیزی کمتر، نه چیزی بیشتر.
+
+**Clarifications (CENTER-01):**
+
+- `student.center == 0` wildcard نیست و فیلتر مرکز را غیرفعال نمی‌کند؛
+  در این حالت فقط mentorهای `center == 0` واجدشرط‌اند.
+- wildcard فقط در سمت mentor مجاز است مگر Policy خلاف آن را صریحاً تعریف کند.
+
+**Deterministic center inference from manager name:**
+
+- اگر `center` از `manager_name` استنتاج می‌شود، باید دترمینیستیک باشد:
+  1. همهٔ candidateها با matching نرمال‌شده بررسی شوند.
+  2. **طولانی‌ترین match** انتخاب شود.
+  3. در تساوی، tie-break پایدار (مثلاً `center_code` کوچک‌تر یا ترتیب ثابت map) اعمال شود.
+  4. اگر هیچ match نبود و wildcard `"*"` تعریف شده باشد، به آن fallback شود و QA ثبت شود.
 
 ---
 

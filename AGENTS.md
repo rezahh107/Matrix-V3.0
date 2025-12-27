@@ -1,4 +1,4 @@
-# AGENTS — Smart Student Allocation Engine (v3.1)
+# AGENTS — Smart Student Allocation Engine (v3.2)
 
 **Scope:** Coding / refactor agents working on the student→mentor allocation system  
 **Audience:** LLM-based coding agents (Codex, etc.) + human reviewers  
@@ -119,6 +119,13 @@ Any change that:
 * redefines equality/hash for `JoinKeyProfile`
 
 MUST be treated as a **policy-level change** → use **RISK_REFUSAL**.
+
+**[INVARIANT-JOIN-03] Effective Join Keys / No Raw JoinKey Access**
+
+* Allocation, QA, and export MUST consume **Effective Join Keys** only.
+* Effective Join Keys come exclusively from `JoinKeyResolver` (canonicalize + infer + wildcard).
+* Any direct use of raw join-key columns outside JoinKeyResolver is forbidden.
+* Any change to join-key list or wildcard semantics requires **policy-level review** → use **RISK_REFUSAL**.
 
 ### 3.2. Mentor pipeline invariants
 
@@ -344,6 +351,11 @@ Tests MUST:
 * include regression tests for each bug fix,
 * especially cover join, capacity, trace, and QA behaviors.
 
+When changing join-key logic or QA joins, **required tests**:
+
+* Parity unit tests (JoinKeyResolver vs legacy paths).
+* Parity integration tests (allocation vs audit/export).
+
 ---
 
 ## 6. Observability & QA
@@ -457,6 +469,11 @@ For any PR touching mentors or mentor import:
   - Health check جدید فقط با خواندن سیگنال‌های QA/History موجود یا قوانین مستند LAW/Technical SSoT مجاز است؛ business rule تازه در Health ممنوع است.
 
 ## 12. Changelog
+
+**v3.2**
+
+* Added Effective Join Keys / No Raw JoinKey Access constraint.
+* Added mandatory parity unit + integration tests for join-key changes.
 
 **v3.1**
 
