@@ -1,0 +1,88 @@
+--- /mnt/data/orig_allocate_students.py	2025-12-27 09:15:37.742929539 +0000
++++ /mnt/data/Matrix2_repo/Matrix2-main/app/core/allocate_students.py	2025-12-27 09:14:12.884032192 +0000
+@@ -1229,6 +1229,31 @@
+     return join_map, tuple(missing_columns)
+ 
+ 
++def _canonical_student_id(value: object) -> str:
++    """Return a stable, comparable student_id string.
++
++    - None / NA -> ""
++    - strip whitespace
++    - treat textual 'nan' / '<na>' / 'none' as empty
++    """
++
++    if value is None:
++        return ""
++    try:
++        if pd.isna(value):  # type: ignore[arg-type]
++            return ""
++    except Exception:
++        pass
++
++    text = str(value).strip()
++    if not text:
++        return ""
++    lowered = text.lower()
++    if lowered in {"nan", "<na>", "none"}:
++        return ""
++    return text
++
++
+ def _build_log_from_join_map(
+     student: Mapping[str, object],
+     join_map: Mapping[str, int],
+@@ -1236,7 +1261,7 @@
+     """ساخت لاگ پایه از روی نگاشت join keys."""
+     log: AllocationLogRecord = {
+         "row_index": -1,
+-        "student_id": str(student.get("student_id", "")),
++        "student_id": _canonical_student_id(student.get("student_id")),
+         "allocation_status": "failed",
+         "mentor_selected": None,
+         "mentor_id": None,
+@@ -2687,7 +2712,9 @@
+ 
+                 allocations.append(
+                     {
+-                        "student_id": student_dict.get("student_id", ""),
++                        "student_id": _canonical_student_id(
++                            result.log.get("student_id") or student_dict.get("student_id")
++                        ),
+                         "student_national_code": student_national_code,
+                         "mentor": result.mentor_row.get("پشتیبان", ""),
+                         "mentor_id": "" if mentor_id_display is None else str(mentor_id_display),
+@@ -2720,6 +2747,33 @@
+     # ساخت خروجی‌های نهایی
+     allocations_df = pd.DataFrame(allocations, columns=_ALLOCATION_OUTPUT_COLUMNS)
+     logs_df = pd.DataFrame(logs)
++
++    # Hard guard: allocations must match successful logs by student_id (SSoT-ID invariant).
++    if not allocations_df.empty or not logs_df.empty:
++        alloc_ids = {
++            _canonical_student_id(v)
++            for v in allocations_df.get("student_id", pd.Series(dtype="object")).tolist()
++            if _canonical_student_id(v)
++        }
++        if "allocation_status" in logs_df.columns:
++            status = logs_df["allocation_status"].astype("string").str.lower()
++            success_logs = logs_df.loc[status == "success"]
++        else:
++            success_logs = logs_df
++        success_ids = {
++            _canonical_student_id(v)
++            for v in success_logs.get("student_id", pd.Series(dtype="object")).tolist()
++            if _canonical_student_id(v)
++        }
++        if alloc_ids != success_ids:
++            only_in_alloc = sorted(alloc_ids - success_ids)[:5]
++            only_in_logs = sorted(success_ids - alloc_ids)[:5]
++            raise RuntimeError(
++                "INTERNAL_ERROR: STUDENT_ID_DESYNC: allocations vs success logs mismatch; "
++                f"allocations={len(alloc_ids)} success_logs={len(success_ids)}; "
++                f"only_in_allocations={only_in_alloc} only_in_success_logs={only_in_logs}"
++            )
++
+     if run_warnings:
+         logs_df.attrs["warnings"] = tuple(run_warnings)
+     with measure_time("trace_detail", perf_tracker):
