@@ -91,6 +91,7 @@ class HistoryDialog(QDialog):
         super().__init__(parent)
         self._db = db
         self._runs: Sequence[Row] = []
+        self._metrics_by_run: dict[int, Sequence[Row]] = {}
         self.setWindowTitle("History Snapshots")
 
         self._run_list = QListWidget(self)
@@ -173,6 +174,8 @@ class HistoryDialog(QDialog):
 
     def _load_runs(self) -> None:
         self._runs = cast(Sequence[Row], self._db.fetch_runs())
+        run_ids = [int(row["id"]) for row in self._runs]
+        self._metrics_by_run = self._db.fetch_metrics_for_runs(run_ids)
         self._run_list.clear()
         for row in self._runs:
             started = row["started_at"]
@@ -198,9 +201,8 @@ class HistoryDialog(QDialog):
             return
         run_row = self._runs[row]
         run_id = int(run_row["id"])
-        metrics_df = self._rows_to_dataframe(
-            cast(Sequence[Row], self._db.fetch_metrics_for_run(run_id))
-        )
+        metrics_rows = self._metrics_by_run.get(run_id, [])
+        metrics_df = self._rows_to_dataframe(cast(Sequence[Row], metrics_rows))
         trace_df, qa_summary_df, qa_details_df, qa_extras = self._load_snapshots(run_id)
         self._metrics_model.update(metrics_df)
         self._trace_model.update(trace_df)

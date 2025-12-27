@@ -46,6 +46,7 @@ class HistoryMetricsDialog(QDialog):
         super().__init__(parent)
         self._db = db
         self._runs: Sequence[RowMapping] = []
+        self._metrics_by_run: dict[int, Sequence[RowMapping]] = {}
         self.setWindowTitle("Stored History Metrics")
 
         self._run_list = QListWidget(self)
@@ -61,6 +62,8 @@ class HistoryMetricsDialog(QDialog):
 
     def _load_runs(self) -> None:
         self._runs = cast(Sequence[RowMapping], self._db.fetch_runs())
+        run_ids = [int(row["id"]) for row in self._runs]
+        self._metrics_by_run = self._db.fetch_metrics_for_runs(run_ids)
         self._run_list.clear()
         for row in self._runs:
             self._run_list.addItem(f"#{row['id']} | {row['run_uuid']}")
@@ -75,7 +78,7 @@ class HistoryMetricsDialog(QDialog):
             return
         run_row = self._runs[row]
         run_id = int(run_row["id"])
-        metric_rows = cast(Sequence[RowMapping], self._db.fetch_metrics_for_run(run_id))
+        metric_rows = cast(Sequence[RowMapping], self._metrics_by_run.get(run_id, []))
         metrics_df = _metrics_rows_to_frame(metric_rows)
         self._panel.set_metrics(metrics_df)
 
