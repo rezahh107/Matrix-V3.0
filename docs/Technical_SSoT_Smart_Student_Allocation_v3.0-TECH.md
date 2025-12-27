@@ -751,3 +751,10 @@ Technical SSoT باید تضمین کند:
 `docs/Technical_SSoT_Smart_Student_Allocation_v3.0-TECH.md`
 
 در ریپو commit شود و در کنار LAW v3.0، تنها مرجع فنی/اجرایی برای تمام تغییرات آینده باشد.
+
+## TECH/IDENTITY-SSOT-01 — student_id/student_key as single identity channel
+- **Spine-first:** یک «students_spine» پس از تزریق و کاننیکال‌سازی `student_id` تشکیل می‌شود و تمام نماهای خروجی از همین spine و از طریق merge بر پایهٔ `student_id` ساخته می‌شوند (ترتیب پایدار، kind="mergesort").
+- **Ban positional attachment:** استفاده از `reindex(...index)`, `.values`, `to_numpy`, `iloc`/`iat` یا فهرست‌های هم‌طول برای مقداردهی `student_id` ممنوع است؛ تنها join کلیدمحور مجاز است.
+- **Guards:** قبل از نوشتن Excel، AC-01/AC-02/AC-03 روی مجموعهٔ student_id اجرا می‌شوند و در صورت شکست با پیام فارسی متوقف می‌شوند؛ تست AST در `tests/infra/test_student_id_positional_ast_gate.py` هر بازگشت به الصاق ترتیبی را مسدود می‌کند.
+- **Migration:** توابع الصاق قدیمی باید فقط صحت `student_id` را بررسی کنند و هیچ مقداردهی یا جایگزینی انجام ندهند؛ هر مسیر با reset_index + الحاق ترتیبی باید حذف شود.
+- **Rationale:** هم‌ترازی ترتیبی می‌تواند به فساد بی‌صدا بین allocations، logs و workbookها منجر شود و باید با spine مبتنی بر کلید جایگزین شود.

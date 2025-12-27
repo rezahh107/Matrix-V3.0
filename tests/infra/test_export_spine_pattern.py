@@ -77,7 +77,7 @@ def test_export_guard_blocks_on_overlap() -> None:
 
     unallocated_summary = pd.DataFrame({"student_id": ["S-1"], "reason": ["NO_CAPACITY"]})
 
-    with pytest.raises(AllocationConsistencyError, match="INV-EXPORT-02"):
+    with pytest.raises(AllocationConsistencyError, match="AC-02"):
         _enforce_allocation_export_invariants(
             allocations_df=allocations_df,
             logs_df=logs_df,

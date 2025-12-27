@@ -9,11 +9,12 @@ from __future__ import annotations
 
 import app.infra.cli_legacy as cli_legacy
 from app.infra.cli_legacy import *  # noqa: F401,F403 - re-export legacy CLI surface
-from app.infra.cli_legacy import attach_student_id_column
+from app.infra.cli_legacy import assert_student_id_integrity, attach_student_id_column
 
 from . import cli_entrypoints_golden
 
 __all__ = getattr(cli_legacy, "__all__", []) + [
+    "assert_student_id_integrity",
     "attach_student_id_column",
     "cli_entrypoints_golden",
 ]
