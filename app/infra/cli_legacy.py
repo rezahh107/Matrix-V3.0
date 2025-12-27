@@ -437,9 +437,7 @@ def _build_success_spine(
     if "student_id" not in success_rows.columns:
         raise AllocationConsistencyError("logs_df must include student_id for success spine.")
 
-    success_ids = _normalize_student_id(success_rows["student_id"])
-    success_ids = success_ids[~_student_id_missing_mask(success_ids)]
-    success_set = set(success_ids.tolist())
+    success_set = _get_student_id_set_from_series(success_rows["student_id"])
 
     students_en = canonicalize_headers(students_spine, header_mode="en").copy()
     students_en["student_id"] = _normalize_student_id(students_en["student_id"])
