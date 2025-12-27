@@ -52,6 +52,7 @@ from app.core.common.column_normalizer import (
     normalize_input_columns,
 )
 from app.core.common.columns import (
+    COL_SCHOOL_CODE_EN,
     Source as ColumnSource,
     coerce_semantics,
     ensure_required_columns,
@@ -59,6 +60,11 @@ from app.core.common.columns import (
     resolve_aliases,
 )
 from app.core.common.domain import (
+    COL_CENTER as JOIN_COL_CENTER,
+    COL_FINANCE as JOIN_COL_FINANCE,
+    COL_GENDER as JOIN_COL_GENDER,
+    COL_GROUP as JOIN_COL_GROUP,
+    COL_SCHOOL as JOIN_COL_SCHOOL,
     COL_SCHOOL_CODE_1,
     COL_SCHOOL_CODE_2,
     COL_SCHOOL_CODE_3,
@@ -67,6 +73,7 @@ from app.core.common.domain import (
     COL_SCHOOL_NAME_2,
     COL_SCHOOL_NAME_3,
     COL_SCHOOL_NAME_4,
+    COL_STATUS as JOIN_COL_STATUS,
     DUAL_STATUS_GROUPS,  # noqa: F401 - re-export for compatibility
     BuildConfig,
     MentorType,
@@ -1776,10 +1783,10 @@ def _explode_rows(
     blank_school_mask = df["school_list"].map(
         lambda v: pd.isna(v) or (isinstance(v, str) and not v.strip())
     )
-    df["کد مدرسه"] = _build_school_code_series(df["school_list"], df.index)
-    df.loc[blank_school_mask.fillna(True), "کد مدرسه"] = 0
-    df["کد مدرسه"] = df["کد مدرسه"].astype("Int64")
-    df["نام مدرسه"] = df["کد مدرسه"].astype(str).map(code_to_name_school).fillna("")
+    df[JOIN_COL_SCHOOL] = _build_school_code_series(df["school_list"], df.index)
+    df.loc[blank_school_mask.fillna(True), JOIN_COL_SCHOOL] = 0
+    df[JOIN_COL_SCHOOL] = df[JOIN_COL_SCHOOL].astype("Int64")
+    df["نام مدرسه"] = df[JOIN_COL_SCHOOL].astype(str).map(code_to_name_school).fillna("")
     if school_code_col != "کد مدرسه":
         df = df.rename(columns={"کد مدرسه": school_code_col})
         school_code_display = school_code_col
@@ -1809,13 +1816,15 @@ def _explode_rows(
     df[cap_special_col] = safe_int_column(df, "capacity_special")
     df[remaining_col] = safe_int_column(df, "capacity_remaining")
 
-    df["مالی حکمت بنیاد"] = safe_int_column(df, "مالی حکمت بنیاد")
-    df["جنسیت"] = df["gender_code"].astype("Int64")
-    df["دانش آموز فارغ"] = df["status_code"].astype("Int64")
-    df["مرکز گلستان صدرا"] = safe_int_column(df, "مرکز گلستان صدرا", default=0)
-    df["کدرشته"] = safe_int_column(df, "کدرشته", default=0)
-    df["جنسیت2"] = df["جنسیت"].map(lambda v: gender_text(v) if pd.notna(v) else "")
-    df["دانش آموز فارغ2"] = df["دانش آموز فارغ"].map(
+    df[JOIN_COL_FINANCE] = safe_int_column(df, JOIN_COL_FINANCE)
+    df[JOIN_COL_GENDER] = df["gender_code"].astype("Int64")
+    df[JOIN_COL_STATUS] = df["status_code"].astype("Int64")
+    df[JOIN_COL_CENTER] = safe_int_column(df, JOIN_COL_CENTER, default=0)
+    df[JOIN_COL_GROUP] = safe_int_column(df, JOIN_COL_GROUP, default=0)
+    df["جنسیت2"] = df[JOIN_COL_GENDER].map(
+        lambda v: gender_text(v) if pd.notna(v) else ""
+    )
+    df["دانش آموز فارغ2"] = df[JOIN_COL_STATUS].map(
         lambda v: status_text(v) if pd.notna(v) else ""
     )
     df["مرکز گلستان صدرا3"] = df["center_text"]
@@ -2391,8 +2400,8 @@ def build_matrix(
             matrix[finance_col] = ensure_series(matrix[finance_col]).astype("Int64")
         if center_col in matrix.columns:
             matrix[center_col] = ensure_series(matrix[center_col]).astype("int64")
-        matrix["جنسیت"] = ensure_series(matrix["جنسیت"]).astype("Int64")
-        matrix["دانش آموز فارغ"] = ensure_series(matrix["دانش آموز فارغ"]).astype("Int64")
+        matrix[JOIN_COL_GENDER] = ensure_series(matrix[JOIN_COL_GENDER]).astype("Int64")
+        matrix[JOIN_COL_STATUS] = ensure_series(matrix[JOIN_COL_STATUS]).astype("Int64")
 
         rows_before_dedupe = len(matrix)
         dedupe_cols = [col for col in DEDUP_KEY_ORDER if col in matrix.columns]
@@ -2686,8 +2695,8 @@ def resolve_students_gender_series(
     hint = infer_students_gender_from_hint(source_hint)
     if hint is not None:
         return pd.Series([hint] * n, index=stud_df.index)
-    if "جنسیت" in stud_df.columns:
-        return stud_df["جنسیت"].apply(norm_gender).fillna(Gender.MALE)
+    if JOIN_COL_GENDER in stud_df.columns:
+        return stud_df[JOIN_COL_GENDER].apply(norm_gender).fillna(Gender.MALE)
     return pd.Series([Gender.MALE] * n, index=stud_df.index)
 
 
@@ -2781,13 +2790,14 @@ def validate_with_students(
 
     mat = matrix_df.copy()
     mat["alias_norm"] = ensure_series(mat["جایگزین"]).apply(to_numlike_str)
-    mat["school_code"] = ensure_series(mat[school_code_col]).astype(str).str.strip()
+    mat[COL_SCHOOL_CODE_EN] = ensure_series(mat[school_code_col]).astype(str).str.strip()
 
     status_column = cfg.policy.stage_column("graduation_status")
     school_column = cfg.policy.columns.school_code
     stud["student_binding"] = stud.apply(
         lambda row: classify_student_binding(
-            {status_column: row["status_code"], school_column: row["school_code"]}, cfg=cfg
+            {status_column: row["status_code"], school_column: row[COL_SCHOOL_CODE_EN]},
+            cfg=cfg,
         ),
         axis=1,
     )
@@ -2798,26 +2808,29 @@ def validate_with_students(
             sub = mat[(mat["عادی مدرسه"] == "عادی") & (mat["alias_norm"] == row["alias_norm"])]
             if not sub.empty:
                 return (sub, None)
-            if row["school_code"]:
+            if row[COL_SCHOOL_CODE_EN]:
                 school_sub = mat[(mat["عادی مدرسه"] == "مدرسه‌ای")]
                 school_sub = school_sub[
-                    school_sub["school_code"].astype(str) == str(row["school_code"])
+                    school_sub[COL_SCHOOL_CODE_EN].astype(str)
+                    == str(row[COL_SCHOOL_CODE_EN])
                 ]
                 return (school_sub, None if not school_sub.empty else "no school-code match")
             return (sub, "no normal alias match")
         if binding is StudentBindingKind.SCHOOL:
             sub = mat[(mat["عادی مدرسه"] == "مدرسه‌ای")]
-            if row["school_code"]:
-                sub = sub[sub["school_code"].astype(str) == str(row["school_code"])]
+            if row[COL_SCHOOL_CODE_EN]:
+                sub = sub[
+                    sub[COL_SCHOOL_CODE_EN].astype(str) == str(row[COL_SCHOOL_CODE_EN])
+                ]
             return (sub, None if not sub.empty else "no school-code match")
         return (mat.iloc[0:0], "legacy binding kind")
 
     def _check_gender(row: pd.Series, sub: pd.DataFrame) -> tuple[pd.DataFrame, str | None]:
-        sub2 = sub[sub["جنسیت"] == row["gender_code"]]
+        sub2 = sub[sub[JOIN_COL_GENDER] == row["gender_code"]]
         return (sub2, None if not sub2.empty else "gender mismatch")
 
     def _check_status(row: pd.Series, sub: pd.DataFrame) -> tuple[pd.DataFrame, str | None]:
-        sub2 = sub[sub["دانش آموز فارغ"] == row["status_code"]]
+        sub2 = sub[sub[JOIN_COL_STATUS] == row["status_code"]]
         return (sub2, None if not sub2.empty else "status mismatch")
 
     def _check_center(row: pd.Series, sub: pd.DataFrame) -> tuple[pd.DataFrame, str | None]:

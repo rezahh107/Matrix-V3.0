@@ -356,6 +356,12 @@ When changing join-key logic or QA joins, **required tests**:
 * Parity unit tests (JoinKeyResolver vs legacy paths).
 * Parity integration tests (allocation vs audit/export).
 
+### 5.3. Mandatory pre-merge guards
+
+The pre-merge guard suite (see `tools/ci/pre_merge_guards.py` and CI job
+`pre-merge-guards`) is a required merge gate. Do NOT bypass or dilute these
+guards by changing workflows or expanding allowlists without review.
+
 ---
 
 ## 6. Observability & QA

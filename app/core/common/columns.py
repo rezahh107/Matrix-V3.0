@@ -24,6 +24,7 @@ __all__ = [
     "CANON_EN_TO_FA",
     "CANON_FA_TO_EN",
     "CANON",
+    "COL_SCHOOL_CODE_EN",
     "HeaderMode",
     "parse_header_mode",
     "dedupe_columns",
@@ -154,6 +155,8 @@ CANON = CANON_EN_TO_FA
 CANON_FA_TO_EN: Mapping[str, str] = {
     normalize_fa(value): key for key, value in CANON_EN_TO_FA.items()
 }
+
+COL_SCHOOL_CODE_EN = "school_code"
 
 
 # ---------------------------------------------------------------------------
