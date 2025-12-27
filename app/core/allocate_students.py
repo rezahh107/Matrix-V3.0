@@ -2781,18 +2781,18 @@ def allocate_batch(
     # Hard guard: allocations must match successful logs by student_id (SSoT-ID invariant).
     if not allocations_df.empty or not logs_df.empty:
         alloc_values = allocations_df.get("student_id", pd.Series(dtype="object")).tolist()
-        alloc_ids = {_canonical_student_id(v) for v in alloc_values if _canonical_student_id(v)}
-        alloc_empty = sum(1 for v in alloc_values if not _canonical_student_id(v))
+        alloc_sids_canonical = [_canonical_student_id(v) for v in alloc_values]
+        alloc_ids = {sid for sid in alloc_sids_canonical if sid}
+        alloc_empty = alloc_sids_canonical.count("")
         if "allocation_status" in logs_df.columns:
             status = logs_df["allocation_status"].astype("string").str.lower()
             success_logs = logs_df.loc[status == "success"]
         else:
             success_logs = logs_df
         success_values = success_logs.get("student_id", pd.Series(dtype="object")).tolist()
-        success_ids = {
-            _canonical_student_id(v) for v in success_values if _canonical_student_id(v)
-        }
-        success_empty = sum(1 for v in success_values if not _canonical_student_id(v))
+        success_sids_canonical = [_canonical_student_id(v) for v in success_values]
+        success_ids = {sid for sid in success_sids_canonical if sid}
+        success_empty = success_sids_canonical.count("")
         if alloc_ids != success_ids:
             only_in_alloc = sorted(alloc_ids - success_ids)[:5]
             only_in_logs = sorted(success_ids - alloc_ids)[:5]
