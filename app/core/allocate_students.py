@@ -1721,23 +1721,29 @@ def allocate_student(
             student_join_map=join_map,
             tracker=_record_stage,
         )
+    stage_candidate_counts = _canonical_stage_counts(stage_candidate_counts)
 
-    # بهبود برای OBS_JOIN_01 - همیشه جمع‌آوری mismatches
-    with measure_time("mismatch_detail", perf_tracker):
-        eligible, join_mismatch_details = _filter_candidates_by_join_map(
-            eligible,
-            join_map=join_map,
-            policy=policy,
-        )
-        _, prefilter_mismatches = _filter_candidates_by_join_map(
-            candidate_pool,
-            join_map=join_map,
-            policy=policy,
-        )
-        join_mismatch_details = _merge_join_mismatches(
-            join_mismatch_details, prefilter_mismatches
-        )
-        stage_candidate_counts = _canonical_stage_counts(stage_candidate_counts)
+    join_mismatch_details: list[JoinMismatch] | None = None
+
+    def _compute_join_mismatch_details() -> list[JoinMismatch]:
+        nonlocal join_mismatch_details
+
+        if join_mismatch_details is None:
+            with measure_time("mismatch_detail", perf_tracker):
+                _, join_mismatches = _filter_candidates_by_join_map(
+                    eligible,
+                    join_map=join_map,
+                    policy=policy,
+                )
+                _, prefilter_mismatches = _filter_candidates_by_join_map(
+                    candidate_pool,
+                    join_map=join_map,
+                    policy=policy,
+                )
+                join_mismatch_details = _merge_join_mismatches(
+                    join_mismatches, prefilter_mismatches
+                )
+        return join_mismatch_details
 
     try:
         log = _build_log_base(
@@ -1886,17 +1892,14 @@ def allocate_student(
         center_alert_payload["student_id"] = log.get("student_id")
     _append_invalid_center_alert(log, center_alert_payload, center_fallback)
 
-    # بهبود برای OBS_JOIN_01 - همیشه ثبت mismatches
-    if join_mismatch_details:
-        log["join_key_mismatches"] = list(join_mismatch_details)
+    if debug_trace:
+        join_mismatch_details = _compute_join_mismatch_details()
+        if join_mismatch_details:
+            log["join_key_mismatches"] = list(join_mismatch_details)
 
     if eligible.empty:
-        if not join_mismatch_details:
-            _, join_mismatch_details = _filter_candidates_by_join_map(
-                candidate_pool,
-                join_map=join_map,
-                policy=policy,
-            )
+        if join_mismatch_details is None:
+            join_mismatch_details = _compute_join_mismatch_details()
         extra_updates = (
             {"join_key_mismatches": join_mismatch_details} if join_mismatch_details else None
         )

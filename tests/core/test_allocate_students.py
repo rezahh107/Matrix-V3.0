@@ -442,7 +442,7 @@ def test_join_key_mismatches_preserved_on_success_allocation() -> None:
         }
     )
 
-    result = allocate_student(student, pool, policy=policy)
+    result = allocate_student(student, pool, policy=policy, debug_trace=True)
 
     assert result.log.get("allocation_status") == "success"
     assert result.log.get("mentor_id") == "m_match"
@@ -564,7 +564,7 @@ def test_join_key_mismatches_merge_combines_prefilter_and_eligibility_details() 
         }
     )
 
-    result = allocate_student(student, candidate_pool, policy=policy)
+    result = allocate_student(student, candidate_pool, policy=policy, debug_trace=True)
 
     assert result.log.get("allocation_status") == "success"
     assert result.log.get("mentor_id") == "m_match"
