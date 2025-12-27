@@ -3287,6 +3287,7 @@ F.6. نگاشت بین DDD View و پیاده‌سازی v3
 ## REFACTOR/SSOT-ID-GUARD-01 — پیشگیری از «ID Desynchronization»
 - **Incident class:** زمانی رخ می‌دهد که `student_id` از طریق هم‌ترازی ترتیبی به نماهای خروجی متصل شود و با spine اصلی ناسازگار گردد.
 - **Preventive rule:** همهٔ نماها باید از `students_spine` و join کلیدمحور `student_id` ساخته شوند؛ الصاق/ترمیم ترتیبی ممنوع است (LAW/EXPORT-SSOT-ID-01).
+- **Immutable allocations:** `allocations_df.student_id` پس از Core تغییرناپذیر است؛ هر تلاش برای اتصال/بازنویسی آن در Infra/Export ممنوع و باید با خطای فارسی متوقف شود.
 - **Runtime enforcement:** نگهبان AC-01/AC-02/AC-03 در `app/infra/cli_legacy.py::_enforce_allocation_export_invariants` پیش از نوشتن فایل اجرا و در صورت شکست، خروجی را متوقف می‌کند.
 - **Regression guard:** تست AST `tests/infra/test_student_id_positional_ast_gate.py` هر تلاش برای بازگرداندن الصاق ترتیبی را شکست می‌دهد.
 - **Migration note:** توابع الصاق قبلی به حالت guard-only ارتقا یافتند و باید بدون نوشتن یا جایگزینی `student_id` باقی بمانند؛ مسیرهای قدیمی reset_index + reattach حذف یا غیرفعال می‌شوند.

@@ -86,3 +86,34 @@ def test_export_guard_blocks_on_overlap() -> None:
             sabt_allocations_df=sabt_df,
         )
 
+
+def test_allocations_view_preserves_success_ids_with_large_spine() -> None:
+    total = 189
+    success_count = 73
+    student_ids = [f"S-{idx:03d}" for idx in range(1, total + 1)]
+    success_ids = student_ids[:success_count]
+    failed_ids = student_ids[success_count:]
+
+    students = pd.DataFrame({"student_id": student_ids})
+    logs = pd.DataFrame(
+        {
+            "student_id": student_ids,
+            "allocation_status": ["success"] * success_count + ["failed"] * (total - success_count),
+        }
+    )
+    allocations = pd.DataFrame(
+        {
+            "student_id": success_ids,
+            "mentor_id": list(range(1000, 1000 + success_count)),
+        }
+    )
+
+    students_spine = _build_students_spine(students, header_mode="en")
+    success_spine = _build_success_spine(logs, students_spine=students_spine, header_mode="en")
+    allocations_view = _build_allocations_view(
+        allocations, success_spine=success_spine, header_mode="en"
+    )
+
+    allocation_set = set(allocations_view["student_id"].tolist())
+    assert allocation_set == set(success_ids)
+    assert allocation_set.isdisjoint(set(failed_ids))

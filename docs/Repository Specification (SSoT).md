@@ -501,5 +501,6 @@ These are primarily suggested inspection points for CodeSurgeon:
 ## REPO/ARCH-EXPORT-SPINE-01 — Export spine ownership
 - **Spine location:** `students_spine` پس از `_inject_student_ids` ساخته و فریز می‌شود و تنها مرجع `student_id/student_key` برای خروجی‌هاست.
 - **Derived views:** allocations، logs، trace، allocations_sabt و QA workbooks فقط با join روی `student_id` از spine ساخته می‌شوند؛ هیچ الصاق ترتیبی مجاز نیست.
+- **Immutable allocations:** ستون `allocations_df.student_id` از Core می‌آید و در لایهٔ Export تغییر نمی‌کند؛ فقدان/تهی بودن آن باید fail-fast شود (LAW/EXPORT-SSOT-ID-01).
 - **Guards:** نگهبان اجرا در `app/infra/cli_legacy.py::_enforce_allocation_export_invariants` و تست AST در `tests/infra/test_student_id_positional_ast_gate.py` مالک اجرای قانون‌اند.
 - **Fail-fast:** اگر AC-01/AC-02/AC-03 نقض شود، خروجی Excel نوشته نمی‌شود و پیام فارسی قانون LAW/EXPORT-SSOT-ID-01 گزارش می‌شود.
