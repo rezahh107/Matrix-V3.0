@@ -557,11 +557,12 @@ def attach_student_id_column(
         # Prefer the student_id column in students_df as the single source of truth.
         # This prevents accidental positional/index-based desync when a caller passes
         # a misaligned student_ids Series.
-        if "student_id" in students_en.columns:
-            student_ids_normalized = _normalize_student_id(students_en["student_id"])
-            students_en["student_id"] = student_ids_normalized
-        else:
-            student_ids_normalized = _normalize_student_id(student_ids.reindex(students_en.index))
+        if "student_id" not in students_en.columns:
+            raise AllocationConsistencyError(
+                "students_df must include student_id for stable attachment."
+            )
+        student_ids_normalized = _normalize_student_id(students_en["student_id"])
+        students_en["student_id"] = student_ids_normalized
 
     existing = None
     if "student_id" in en_frame.columns:
@@ -935,6 +936,49 @@ def _validate_allocated_student_ids(
             f"allocations={len(allocated_set)} success_logs={len(success_set)}; "
             f"only_in_allocations={only_in_alloc} only_in_success_logs={only_in_logs}."
         )
+
+
+def _validate_and_write_allocation_workbook(
+    *,
+    sheets: dict[str, pd.DataFrame],
+    header_overrides: dict[str, HeaderMode | None],
+    prepare_overrides: dict[str, Literal["default", "raw"]],
+    output: Path,
+    policy: PolicyConfig,
+    allocations_df: pd.DataFrame,
+    logs_df: pd.DataFrame,
+    join_key_audit: JoinKeyAuditResult | None,
+    unallocated_summary: pd.DataFrame | None,
+    sabt_allocations_df: pd.DataFrame | None,
+) -> None:
+    """Run export invariants and write workbook only after they pass."""
+
+    _enforce_allocation_export_invariants(
+        allocations_df=allocations_df,
+        logs_df=logs_df,
+        join_key_audit=join_key_audit,
+        unallocated_summary=unallocated_summary,
+        sabt_allocations_df=sabt_allocations_df,
+    )
+
+    header_internal = _coerce_header_mode(policy.excel.header_mode_internal)
+    prepared_sheets: dict[str, pd.DataFrame] = {}
+    for name, df in sheets.items():
+        if header_overrides.get(name) is None:
+            prepared_sheets[name] = df
+        else:
+            prepared_sheets[name] = canonicalize_headers(df, header_mode=header_internal)
+
+    write_xlsx_atomic(
+        prepared_sheets,
+        output,
+        rtl=policy.excel.rtl,
+        font_name=policy.excel.font_name,
+        font_size=policy.excel.font_size,
+        header_mode=_coerce_header_mode(policy.excel.header_mode_write),
+        sheet_header_modes=header_overrides,
+        sheet_prepare_modes=prepare_overrides,
+    )
 
 
 def _enforce_allocation_export_invariants(
@@ -2780,9 +2824,13 @@ def _allocate_and_write(
             policy=policy,
         )
 
-        students_for_audit = students_base.copy()
-        if "student_id" not in students_for_audit.columns:
-            students_for_audit["student_id"] = student_ids.reindex(students_for_audit.index)
+        students_for_audit = attach_student_id_column(
+            students_base.copy(),
+            student_ids,
+            header_mode=header_internal,
+            ensure_existing=True,
+            students_df=students_spine,
+        )
 
         join_key_audit = validate_allocation_join_keys_with_wildcard(
             allocations_df,
@@ -2792,17 +2840,6 @@ def _allocate_and_write(
         )
         join_key_audit_sheet = build_join_key_audit_sheet(join_key_audit.audit_frame, policy=policy)
         join_key_summary_sheet = build_join_key_summary_sheet(join_key_audit.audit_frame)
-
-        _maybe_export_import_to_sabt(
-            args=args,
-            allocations_df=allocations_df,
-            students_df=students_base,
-            mentors_df=pool_base,
-            logs_df=logs_df,
-            student_ids=student_ids,
-            db=db,
-            run_uuid=run_uuid,
-        )
 
         if sabt_allocations_df is not None:
             sabt_allocations_df = _ensure_valid_dataframe(sabt_allocations_df, "allocations_sabt")
@@ -2855,40 +2892,6 @@ def _allocate_and_write(
         if not qa_report.passed:
             _raise_qa_invariant_failure(qa_report, output=output)
 
-        _enforce_allocation_export_invariants(
-            allocations_df=allocations_df,
-            logs_df=logs_df,
-            join_key_audit=join_key_audit,
-            unallocated_summary=trace_extras.unallocated_summary if trace_extras else None,
-            sabt_allocations_df=sabt_allocations_df,
-        )
-
-        # تبدیل نهایی به فرمت‌های قابل نوشتن در Excel
-        allocations_df = _make_excel_safe(allocations_df)
-        updated_pool_df = _make_excel_safe(updated_pool_df)
-        logs_df = _make_excel_safe(logs_df)
-        trace_df = _make_excel_safe(trace_df)
-        selection_reasons_df = _make_excel_safe(selection_reasons_df)
-        # sabt_allocations_df با هدر اصلی حفظ می‌شود اما از مسیر آماده‌سازی پیش‌فرض
-        # عبور می‌کند تا ستون‌های موبایل/رهگیری به‌صورت متن و با صفر پیشتاز ذخیره شوند.
-        # --- پایان پاک‌سازی ---
-
-        progress(90, "writing outputs")
-        sheets: dict[str, pd.DataFrame] = {}
-        header_overrides: dict[str, HeaderMode | None] = {}
-        prepare_overrides: dict[str, Literal["default", "raw"]] = {}
-        if sabt_allocations_df is not None:
-            sheets["allocations"] = allocations_df
-            sheets["allocations_sabt"] = sabt_allocations_df
-            header_overrides["allocations_sabt"] = None
-        else:
-            sheets["allocations"] = allocations_df
-        sheets["updated_pool"] = updated_pool_df
-        sheets["logs"] = logs_df
-        sheets["trace"] = trace_df
-        sheets[sheet_name] = selection_reasons_df
-        sheets["allocation_vs_pool_audit"] = join_key_audit_sheet
-
         summary_df_attr = trace_extras.summary_df if trace_extras else None
         ui_overrides = getattr(args, "_ui_overrides", {}) or {}
         history_metrics_df = _empty_history_metrics_df()
@@ -2923,6 +2926,10 @@ def _allocate_and_write(
             except Exception:  # pragma: no cover - UI callback safety
                 logger.exception("Failed to deliver history metrics to UI")
 
+        sheets: dict[str, pd.DataFrame] = {}
+        header_overrides: dict[str, HeaderMode | None] = {}
+        prepare_overrides: dict[str, Literal["default", "raw"]] = {}
+
         debug_sheets = collect_trace_debug_sheets(
             trace_df,
             students_df=students_base,
@@ -2937,22 +2944,60 @@ def _allocate_and_write(
             sheets[name] = _make_excel_safe(df)
             header_overrides[name] = None
 
-        header_internal = _coerce_header_mode(policy.excel.header_mode_internal)
-        prepared_sheets: dict[str, pd.DataFrame] = {}
-        for name, df in sheets.items():
-            if header_overrides.get(name) is None:
-                prepared_sheets[name] = df
-            else:
-                prepared_sheets[name] = canonicalize_headers(df, header_mode=header_internal)
-        write_xlsx_atomic(
-            prepared_sheets,
-            output,
-            rtl=policy.excel.rtl,
-            font_name=policy.excel.font_name,
-            font_size=policy.excel.font_size,
-            header_mode=_coerce_header_mode(policy.excel.header_mode_write),
-            sheet_header_modes=header_overrides,
-            sheet_prepare_modes=prepare_overrides,
+        _enforce_allocation_export_invariants(
+            allocations_df=allocations_df,
+            logs_df=logs_df,
+            join_key_audit=join_key_audit,
+            unallocated_summary=trace_extras.unallocated_summary if trace_extras else None,
+            sabt_allocations_df=sabt_allocations_df,
+        )
+
+        if _resolve_optional_override(args, "sabt_output"):
+            _maybe_export_import_to_sabt(
+                args=args,
+                allocations_df=allocations_df,
+                students_df=students_base,
+                mentors_df=pool_base,
+                logs_df=logs_df,
+                student_ids=student_ids,
+                db=db,
+                run_uuid=run_uuid,
+            )
+
+        # تبدیل نهایی به فرمت‌های قابل نوشتن در Excel
+        allocations_df = _make_excel_safe(allocations_df)
+        updated_pool_df = _make_excel_safe(updated_pool_df)
+        logs_df = _make_excel_safe(logs_df)
+        trace_df = _make_excel_safe(trace_df)
+        selection_reasons_df = _make_excel_safe(selection_reasons_df)
+        # sabt_allocations_df با هدر اصلی حفظ می‌شود اما از مسیر آماده‌سازی پیش‌فرض
+        # عبور می‌کند تا ستون‌های موبایل/رهگیری به‌صورت متن و با صفر پیشتاز ذخیره شوند.
+        # --- پایان پاک‌سازی ---
+
+        progress(90, "writing outputs")
+        if sabt_allocations_df is not None:
+            sheets["allocations"] = allocations_df
+            sheets["allocations_sabt"] = sabt_allocations_df
+            header_overrides["allocations_sabt"] = None
+        else:
+            sheets["allocations"] = allocations_df
+        sheets["updated_pool"] = updated_pool_df
+        sheets["logs"] = logs_df
+        sheets["trace"] = trace_df
+        sheets[sheet_name] = selection_reasons_df
+        sheets["allocation_vs_pool_audit"] = join_key_audit_sheet
+
+        _validate_and_write_allocation_workbook(
+            sheets=sheets,
+            header_overrides=header_overrides,
+            prepare_overrides=prepare_overrides,
+            output=output,
+            policy=policy,
+            allocations_df=allocations_df,
+            logs_df=logs_df,
+            join_key_audit=join_key_audit,
+            unallocated_summary=trace_extras.unallocated_summary if trace_extras else None,
+            sabt_allocations_df=sabt_allocations_df,
         )
 
         if getattr(args, "determinism_check", False):
