@@ -118,12 +118,13 @@ def attach_join_source_extras(
     extras: dict[str, Any],
     *,
     stage: TraceStageName,
-    join_key_sources: Mapping[str, object],
+    join_key_sources: Mapping[str, object] | None,
 ) -> None:
-    source_key = JOIN_STAGE_SOURCE_KEYS.get(stage)
-    if not source_key:
+    if join_key_sources is None:
         return
-    if source_key in join_key_sources:
+
+    source_key = JOIN_STAGE_SOURCE_KEYS.get(stage)
+    if source_key and source_key in join_key_sources:
         extras[source_key] = join_key_sources[source_key]
 
 
