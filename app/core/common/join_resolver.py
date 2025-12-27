@@ -68,7 +68,7 @@ class JoinKeyResolver:
         normalized_manager = normalize_fa(manager_name)
         if not normalized_manager:
             return None
-        if normalized_manager and normalized_manager in self._center_map and normalized_manager != "*":
+        if normalized_manager in self._center_map and normalized_manager != "*":
             return EffectiveJoinKeys(
                 center_code=self._center_map[normalized_manager],
                 center_source="manager_exact",
