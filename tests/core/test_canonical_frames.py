@@ -32,6 +32,26 @@ def test_canonicalize_students_frame_normalizes_localized_join_keys() -> None:
     assert canonical[policy.stage_column("finance")].iloc[0] == 3
 
 
+def test_canonicalize_students_frame_infers_center_from_manager_when_zero() -> None:
+    policy = replace(load_policy(), center_map={"مدیر الف": 5, "*": 0})
+    students = pd.DataFrame(
+        {
+            "student_id": ["s1"],
+            "مدیر": ["مدیر الف"],
+            policy.stage_column("group"): [21],
+            policy.stage_column("gender"): ["پسر"],
+            policy.stage_column("graduation_status"): [0],
+            policy.stage_column("center"): [0],
+            policy.stage_column("finance"): [0],
+            policy.columns.school_code: [0],
+        }
+    )
+
+    canonical = canonicalize_students_frame(students, policy=policy)
+
+    assert canonical[policy.stage_column("center")].iloc[0] == 5
+
+
 def test_canonicalize_pool_frame_rejects_invalid_school_code() -> None:
     policy = replace(load_policy(), school_code_empty_as_zero=False)
     pool = pd.DataFrame(

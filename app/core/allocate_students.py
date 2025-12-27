@@ -1230,6 +1230,31 @@ def _collect_join_key_map(
     return join_map, tuple(missing_columns)
 
 
+def _canonical_student_id(value: object) -> str:
+    """Return a stable, comparable student_id string.
+
+    - None / NA -> ""
+    - strip whitespace
+    - treat textual 'nan' / '<na>' / 'none' as empty
+    """
+
+    if value is None:
+        return ""
+    try:
+        if pd.isna(value):  # type: ignore[arg-type]
+            return ""
+    except Exception:
+        pass
+
+    text = str(value).strip()
+    if not text:
+        return ""
+    lowered = text.lower()
+    if lowered in {"nan", "<na>", "none"}:
+        return ""
+    return text
+
+
 def _build_log_from_join_map(
     student: Mapping[str, object],
     join_map: Mapping[str, int],
@@ -1237,7 +1262,7 @@ def _build_log_from_join_map(
     """ساخت لاگ پایه از روی نگاشت join keys."""
     log: AllocationLogRecord = {
         "row_index": -1,
-        "student_id": str(student.get("student_id", "")),
+        "student_id": _canonical_student_id(student.get("student_id")),
         "allocation_status": "failed",
         "mentor_selected": None,
         "mentor_id": None,
@@ -2255,6 +2280,14 @@ def allocate_student(
         policy=policy,
     )
     if not join_valid:
+        filtered_pool, _ = _filter_candidates_by_join_map(
+            eligible,
+            join_map=join_map,
+            policy=policy,
+        )
+        error_type: AllocationErrorLiteral = (
+            "ELIGIBILITY_NO_MATCH" if filtered_pool.empty else "INTERNAL_ERROR"
+        )
         corruption_updates: dict[str, object] = {
             "join_key_mismatches": list(join_mismatches),
             "validation_stage": "pre_consume",
@@ -2268,7 +2301,7 @@ def allocate_student(
             corruption_updates["mentor_alias"] = mentor_alias_value
         return _fail_allocation(
             "Selected mentor violates join-key constraints (pool conflict)",
-            error_type="INTERNAL_ERROR",
+            error_type=error_type,
             suggested_actions=[
                 "بازسازی استخر پشتیبان",
                 "بررسی تعارض join keys برای mentor_id",
@@ -2546,6 +2579,8 @@ def allocate_batch(
         for _, student_row in group.iterrows():
             processed += 1
             student_dict = student_row.to_dict()
+            canonical_sid = _canonical_student_id(student_dict.get("student_id"))
+            student_dict["student_id"] = canonical_sid
             progress(int(processed * 100 / total), f"allocating {processed}/{total}")
 
             student_center, center_is_valid = _extract_and_validate_center(student_dict, policy)
@@ -2636,6 +2671,10 @@ def allocate_batch(
             )
             allocation_status = result.log.get("allocation_status")
             is_success = allocation_status == "success"
+            if is_success and not canonical_sid:
+                raise RuntimeError(
+                    "DATA_CONTRACT_BREACH: allocation success requires non-empty student_id"
+                )
 
             if not debug_trace and is_success:
                 summary_trace = result.trace
@@ -2705,7 +2744,7 @@ def allocate_batch(
 
                 allocations.append(
                     {
-                        "student_id": student_dict.get("student_id", ""),
+                        "student_id": canonical_sid,
                         "student_national_code": student_national_code,
                         "mentor": result.mentor_row.get("پشتیبان", ""),
                         "mentor_id": "" if mentor_id_display is None else str(mentor_id_display),
@@ -2738,6 +2777,32 @@ def allocate_batch(
     # ساخت خروجی‌های نهایی
     allocations_df = pd.DataFrame(allocations, columns=_ALLOCATION_OUTPUT_COLUMNS)
     logs_df = pd.DataFrame(logs)
+
+    # Hard guard: allocations must match successful logs by student_id (SSoT-ID invariant).
+    if not allocations_df.empty or not logs_df.empty:
+        alloc_values = allocations_df.get("student_id", pd.Series(dtype="object")).tolist()
+        alloc_ids = {_canonical_student_id(v) for v in alloc_values if _canonical_student_id(v)}
+        alloc_empty = sum(1 for v in alloc_values if not _canonical_student_id(v))
+        if "allocation_status" in logs_df.columns:
+            status = logs_df["allocation_status"].astype("string").str.lower()
+            success_logs = logs_df.loc[status == "success"]
+        else:
+            success_logs = logs_df
+        success_values = success_logs.get("student_id", pd.Series(dtype="object")).tolist()
+        success_ids = {
+            _canonical_student_id(v) for v in success_values if _canonical_student_id(v)
+        }
+        success_empty = sum(1 for v in success_values if not _canonical_student_id(v))
+        if alloc_ids != success_ids:
+            only_in_alloc = sorted(alloc_ids - success_ids)[:5]
+            only_in_logs = sorted(success_ids - alloc_ids)[:5]
+            raise RuntimeError(
+                "INTERNAL_ERROR: STUDENT_ID_DESYNC: allocations vs success logs mismatch; "
+                f"allocations={len(alloc_ids)} success_logs={len(success_ids)}; "
+                f"empty_allocations={alloc_empty} empty_success_logs={success_empty}; "
+                f"only_in_allocations={only_in_alloc} only_in_success_logs={only_in_logs}"
+            )
+
     if run_warnings:
         logs_df.attrs["warnings"] = tuple(run_warnings)
     with measure_time("trace_detail", perf_tracker):
@@ -2765,7 +2830,10 @@ def allocate_batch(
             if "student_id" in trace_summary_df.columns:
                 trace_summary_df = trace_summary_df.drop_duplicates(subset=["student_id"], keep="last")
                 if "student_id" in students.columns:
-                    ordered_ids = students["student_id"].tolist()
+                    ordered_ids = [
+                        _canonical_student_id(value)
+                        for value in students["student_id"].tolist()
+                    ]
                     trace_summary_df = (
                         trace_summary_df.set_index("student_id").reindex(ordered_ids).reset_index()
                     )
@@ -2774,7 +2842,12 @@ def allocate_batch(
                 and "student_id" in trace_summary_df.columns
                 and "student_id" in students.columns
             ):
-                student_indexed = students.set_index("student_id", drop=False)
+                students_for_summary = students.copy()
+                students_for_summary["student_id"] = [
+                    _canonical_student_id(value)
+                    for value in students_for_summary["student_id"].tolist()
+                ]
+                student_indexed = students_for_summary.set_index("student_id", drop=False)
                 for column in (
                     "student_national_code",
                     "student_registration_status",

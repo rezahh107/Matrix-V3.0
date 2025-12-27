@@ -305,8 +305,9 @@ def build_sabt_export_frame(
         alloc_en = alloc_en.sort_values(sort_columns, kind="mergesort")
     alloc_en = alloc_en.reset_index(drop=True)
 
+    alloc_en["student_id"] = ensure_series(alloc_en["student_id"]).astype("string")
+    students_en["student_id"] = ensure_series(students_en["student_id"]).astype("string")
     student_ids = ensure_series(alloc_en["student_id"]).copy()
-    students_en["student_id"] = ensure_series(students_en["student_id"]).copy()
     students_unique = students_en.drop_duplicates("student_id", keep="first")
     students_indexed = students_unique.set_index("student_id", drop=False)
     student_details = alloc_en[["student_id"]].merge(
