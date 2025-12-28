@@ -58,7 +58,7 @@ from app.core.inspactor_schema_helper import (
 )
 from app.core.policy_loader import MentorStatus, PolicyConfig, load_policy
 from app.core.qa.invariants import QaReport, run_all_invariants
-from app.infra import history_store
+from app.infra import history_store, pool_loader
 from app.infra.audit_allocations import audit_allocations, summarize_report
 from app.infra.console import safe_print
 from app.infra.errors import (
@@ -103,7 +103,6 @@ from app.infra.groupcode.groupcode_repository import GroupCodeRepository
 from app.infra.io_utils import (
     ALT_CODE_COLUMN,
     read_excel_first_sheet,
-    read_inspactor_workbook,
     write_xlsx_atomic,
 )
 from app.infra.local_database import LocalDatabase
@@ -1197,15 +1196,24 @@ def _resolve_mentor_pool_frame(
 ) -> tuple[pd.DataFrame, dict[str, str], dict[str, float]]:
     """بارگذاری استخر منتورها از مسیر فایل یا کش SQLite."""
 
+    pool_type = getattr(args, "pool_type", pool_source)
+    pool_sheet = getattr(args, "pool_sheet", None)
     path_text = getattr(args, pool_arg, None)
     if path_text:
         pool_path = Path(path_text)
         if db:
             df = import_mentor_pool_from_excel(
-                pool_path, db=db, policy=policy, pool_source=pool_source
+                pool_path,
+                db=db,
+                policy=policy,
+                pool_source=pool_source,
+                pool_type=pool_type,
+                pool_sheet=pool_sheet,
             )
         else:
-            raw_df = read_inspactor_workbook(pool_path)
+            raw_df = pool_loader.load_pool(
+                pool_path, pool_type=pool_type, pool_sheet=pool_sheet
+            )
             try:
                 df = canonicalize_pool_frame(
                     raw_df,
@@ -2349,8 +2357,9 @@ def _run_build_matrix(args: argparse.Namespace, policy: PolicyConfig, progress: 
             ref_inputs,
             ref_inputs_mtime,
         ) = _resolve_reference_frames(args=args, db=db)
+    pool_source = getattr(args, "pool_type", "inspactor")
     insp_df, pool_inputs, pool_inputs_mtime = _resolve_mentor_pool_frame(
-        args, policy, db=db, pool_arg="inspactor", pool_source="inspactor"
+        args, policy, db=db, pool_arg="inspactor", pool_source=pool_source
     )
 
     governance_cfg: MentorPoolGovernanceConfig = getattr(
@@ -3111,8 +3120,9 @@ def _run_allocate(args: argparse.Namespace, policy: PolicyConfig, progress: Prog
 
     progress(0, "loading inputs")
     students_df, student_inputs, _ = _resolve_students_frame(args, policy, db=db)
+    pool_source = getattr(args, "pool_type", "inspactor")
     pool_df, pool_inputs, _ = _resolve_mentor_pool_frame(
-        args, policy, db=db, pool_arg="pool", pool_source="inspactor"
+        args, policy, db=db, pool_arg="pool", pool_source=pool_source
     )
 
     students_base, pool_base = _prepare_allocation_frames(
@@ -3120,7 +3130,7 @@ def _run_allocate(args: argparse.Namespace, policy: PolicyConfig, progress: Prog
         pool_df,
         policy=policy,
         sanitize_pool=True,
-        pool_source="inspactor",
+        pool_source=pool_source,
     )
 
     pool_base = _apply_mentor_pool_overrides(pool_base, policy, args)
@@ -3288,6 +3298,17 @@ def _build_parser() -> argparse.ArgumentParser:
         "--inspactor", required=False, help="(اختیاری) مسیر فایل inspactor برای بروزرسانی کش"
     )
     build_cmd.add_argument(
+        "--pool-type",
+        choices=("inspactor", "matrix"),
+        default="inspactor",
+        help="نوع استخر منتورها برای انتخاب شیت ورودی",
+    )
+    build_cmd.add_argument(
+        "--pool-sheet",
+        required=False,
+        help="نام شیت ورودی استخر (اختیاری؛ پیش‌فرض بر اساس شناسایی خودکار)",
+    )
+    build_cmd.add_argument(
         "--schools",
         required=False,
         help="(اختیاری) مسیر SchoolReport برای بروزرسانی مرجع مدارس در SQLite",
@@ -3359,6 +3380,17 @@ def _build_parser() -> argparse.ArgumentParser:
         help="ورود Inspactor/MentorPool و ذخیرهٔ کش منتورها در SQLite",
     )
     import_mentors_cmd.add_argument("--inspactor", required=True, help="مسیر فایل Inspactor")
+    import_mentors_cmd.add_argument(
+        "--pool-type",
+        choices=("inspactor", "matrix"),
+        default="inspactor",
+        help="نوع استخر منتورها برای انتخاب شیت ورودی",
+    )
+    import_mentors_cmd.add_argument(
+        "--pool-sheet",
+        required=False,
+        help="نام شیت ورودی استخر (اختیاری؛ پیش‌فرض بر اساس شناسایی خودکار)",
+    )
     _add_local_db_args(import_mentors_cmd)
 
     import_managers_cmd = sub.add_parser(
@@ -3404,6 +3436,17 @@ def _build_parser() -> argparse.ArgumentParser:
         "--pool",
         required=False,
         help="مسیر استخر منتورها؛ در صورت عدم ارائه از کش SQLite خوانده می‌شود",
+    )
+    alloc_cmd.add_argument(
+        "--pool-type",
+        choices=("inspactor", "matrix"),
+        default="inspactor",
+        help="نوع استخر منتورها برای انتخاب شیت ورودی",
+    )
+    alloc_cmd.add_argument(
+        "--pool-sheet",
+        required=False,
+        help="نام شیت ورودی استخر (اختیاری؛ پیش‌فرض بر اساس شناسایی خودکار)",
     )
     alloc_cmd.add_argument("--output", required=True, help="مسیر Excel خروجی تخصیص")
     alloc_cmd.add_argument(
@@ -3684,7 +3727,12 @@ def main(
             if db is None:
                 raise ValueError("برای import-mentors باید --local-db مشخص شود.")
             import_mentor_pool_from_excel(
-                Path(args.inspactor), db=db, policy=policy, pool_source="inspactor"
+                Path(args.inspactor),
+                db=db,
+                policy=policy,
+                pool_source=(pool_type_val := getattr(args, "pool_type", "inspactor")),
+                pool_type=pool_type_val,
+                pool_sheet=getattr(args, "pool_sheet", None),
             )
             print("mentor pool cache imported")
             return 0

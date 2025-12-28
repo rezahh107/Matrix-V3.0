@@ -7,6 +7,9 @@ from typing import Literal, TypedDict
 
 import pandas as pd
 
+from app.core.canonical_frames import canonicalize_headers
+from app.infra.io_utils import ALT_CODE_COLUMN
+
 PoolType = Literal["inspactor", "matrix"]
 
 
@@ -159,3 +162,22 @@ def detect_pool_sheet(
 
     if workbook_opened and hasattr(workbook, "close"):
         workbook.close()
+
+
+def load_pool(
+    path: Path | str | PathLike[str],
+    *,
+    pool_type: PoolType = "inspactor",
+    pool_sheet: str | None = None,
+) -> pd.DataFrame:
+    """Load mentor pool workbook using shared sheet selection logic."""
+
+    detection = detect_pool_sheet(path, pool_type=pool_type, explicit_sheet=pool_sheet)
+    with pd.ExcelFile(path) as workbook:
+        df = workbook.parse(detection.selected_sheet)
+    canonical = canonicalize_headers(df, header_mode="fa")
+    if ALT_CODE_COLUMN in canonical.columns:
+        canonical = canonical.copy()
+        canonical[ALT_CODE_COLUMN] = canonical[ALT_CODE_COLUMN].astype(str)
+    canonical.attrs["pool_detection"] = detection
+    return canonical

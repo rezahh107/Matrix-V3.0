@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from argparse import Namespace
 from pathlib import Path
 
@@ -6,7 +8,14 @@ import pandas as pd
 from app.core.policy_loader import load_policy
 from app.infra import cli
 from app.infra.local_database import LocalDatabase
-from app.infra.reference_mentors_repository import import_mentor_pool_from_excel
+from app.infra.reference_mentors_repository import (
+    import_mentor_pool_from_excel,
+    load_mentor_pool_from_cache,
+)
+from app.infra.reference_schools_repository import (
+    import_school_crosswalk_from_excel,
+    import_school_report_from_excel,
+)
 from app.infra.reference_students_repository import import_student_report_from_excel
 
 
@@ -130,3 +139,68 @@ def test_build_matrix_errors_when_cache_missing(tmp_path: Path) -> None:
         assert "import-mentors" in str(exc)
     else:  # pragma: no cover
         assert False, "expected failure due to missing cache"
+
+
+def _write_pool_workbook(path: Path, primary: pd.DataFrame, alternate: pd.DataFrame) -> None:
+    with pd.ExcelWriter(path, engine="openpyxl") as writer:
+        primary.to_excel(writer, sheet_name="primary", index=False)
+        alternate.to_excel(writer, sheet_name="alt", index=False)
+
+
+def test_pool_sheet_selection_matches_cli_and_cache(tmp_path: Path) -> None:
+    policy = load_policy()
+    db = LocalDatabase(tmp_path / "cache.sqlite")
+
+    schools_df = pd.DataFrame(
+        {"کد مدرسه": [3581], "نام مدرسه": ["نمونه"], "مرکز گلستان صدرا": [1], "جنسیت": [1]}
+    )
+    schools_path = tmp_path / "schools.xlsx"
+    _write_excel(schools_df, schools_path)
+    import_school_report_from_excel(schools_path, db=db)
+
+    crosswalk_path = tmp_path / "crosswalk.xlsx"
+    with pd.ExcelWriter(crosswalk_path, engine="openpyxl") as writer:
+        pd.DataFrame(
+            {"گروه آزمایشی": ["27"], "کد گروه": [27], "مقطع تحصیلی": ["دوازدهم"]}
+        ).to_excel(writer, sheet_name="پایه تحصیلی (گروه آزمایشی)", index=False)
+    import_school_crosswalk_from_excel(crosswalk_path, db=db)
+
+    primary_pool = pd.DataFrame(
+        {
+            "نام پشتیبان": ["پشتیبان A"],
+            "نام مدیر": ["مرکز"],
+            "کد کارمندی پشتیبان": ["M-1"],
+            "گروه آزمایشی": ["27"],
+            "شامل گروه های آزمایشی": ["27"],
+            "جنسیت": [1],
+            "دانش آموز فارغ": [0],
+            "مرکز گلستان صدرا": [1],
+            "مالی حکمت بنیاد": [0],
+            "کد مدرسه": [3581],
+            "کدرشته": [27],
+            "remaining_capacity": [1],
+        }
+    )
+    alternate_pool = primary_pool.copy()
+    alternate_pool["remaining_capacity"] = [9]
+    pool_path = tmp_path / "pool.xlsx"
+    _write_pool_workbook(pool_path, primary_pool, alternate_pool)
+
+    args = Namespace(pool=str(pool_path), pool_type="inspactor", pool_sheet="alt")
+
+    pool_df, _, _ = cli._resolve_mentor_pool_frame(
+        args, policy, db=None, pool_arg="pool", pool_source="inspactor"
+    )
+    assert int(pool_df["remaining_capacity"].iloc[0]) == 9
+
+    import_mentor_pool_from_excel(
+        pool_path,
+        db=db,
+        policy=policy,
+        pool_source="inspactor",
+        pool_type="inspactor",
+        pool_sheet="alt",
+    )
+    cached_pool = load_mentor_pool_from_cache(db=db, policy=policy)
+
+    assert int(cached_pool["remaining_capacity"].iloc[0]) == 9

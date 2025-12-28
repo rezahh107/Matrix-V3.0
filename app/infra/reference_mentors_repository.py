@@ -44,8 +44,8 @@ from app.core.common.normalization import normalize_fa
 from app.core.common.payloads import build_frame_payload
 from app.core.common.types import JoinKeyValidationIssue, JoinKeyValidationResult
 from app.core.policy_loader import PolicyConfig
+from app.infra import pool_loader
 from app.infra.errors import JoinKeyValidationError
-from app.infra.io_utils import read_inspactor_workbook
 from app.infra.local_database import LocalDatabase, _coerce_int_columns
 from app.infra.references.schools import get_school_reference_frames
 
@@ -59,10 +59,12 @@ def import_mentor_pool_from_excel(
     db: LocalDatabase,
     policy: PolicyConfig,
     pool_source: str = "inspactor",
+    pool_type: pool_loader.PoolType = "inspactor",
+    pool_sheet: str | None = None,
 ) -> pd.DataFrame:
     """وارد کردن استخر منتورها از Inspactor و ذخیره در کش."""
 
-    raw_df = read_inspactor_workbook(path)
+    raw_df = pool_loader.load_pool(path, pool_type=pool_type, pool_sheet=pool_sheet)
     return import_mentor_pool_from_dataframe(raw_df, db=db, policy=policy, pool_source=pool_source)
 
 
