@@ -284,7 +284,12 @@ def _sync_counter_summary_with_allocations(
         student_gender = students_en.loc[:, ["student_id"]].copy()
         if gender_col in students_en.columns:
             student_gender[gender_col] = columns_module.ensure_series(students_en[gender_col])
-        merged = alloc_en.merge(student_gender, on="student_id", how="left")
+        merged = alloc_en.merge(
+            student_gender,
+            on="student_id",
+            how="left",
+            validate="many_to_one",
+        )
 
     male_value = int(policy.gender_codes.male.value)
     female_value = int(policy.gender_codes.female.value)

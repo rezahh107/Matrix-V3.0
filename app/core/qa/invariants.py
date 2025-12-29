@@ -321,7 +321,12 @@ def check_STU_02(  # noqa: N802
         .rename(columns={"size": "assigned"})
     )
 
-    merged = expected_counts.merge(alloc_counts, on="mentor_id", how="left").fillna({"assigned": 0})
+    merged = expected_counts.merge(
+        alloc_counts,
+        on="mentor_id",
+        how="left",
+        validate="one_to_one",
+    ).fillna({"assigned": 0})
     mismatches = merged[merged["expected"] != merged["assigned"]]
 
     violations: list[QaViolation] = []

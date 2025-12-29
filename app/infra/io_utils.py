@@ -166,7 +166,8 @@ def _coalesce_duplicate_columns(df: pd.DataFrame) -> pd.DataFrame:
         if isinstance(subset, pd.Series):
             result[label] = subset
         else:
-            filled = subset.bfill(axis=1)
+            with pd.option_context("future.no_silent_downcasting", True):
+                filled = subset.bfill(axis=1)
             filled = filled.infer_objects(copy=False)
             result[label] = filled.iloc[:, 0]
     return result

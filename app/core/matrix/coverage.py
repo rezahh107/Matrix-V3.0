@@ -179,6 +179,7 @@ def compute_group_coverage_debug(
         how="outer",
         sort=True,
         suffixes=("_candidate", "_matrix"),
+        validate="one_to_one",
     )
     for column in (
         "candidate_row_count",
@@ -304,6 +305,7 @@ def _denominator_mask(
             on=merge_keys,
             how="left",
             sort=False,
+            validate="one_to_one",
         )["_student_present"]
         student_flags = pd.Series(
             student_flags_raw.to_numpy(dtype=bool, na_value=False),
@@ -333,7 +335,13 @@ def _include_student_only_groups(
         if not coverage_df.empty
         else pd.DataFrame(columns=list(join_keys))
     )
-    merged = student_groups.merge(existing_keys, on=list(join_keys), how="left", indicator=True)
+    merged = student_groups.merge(
+        existing_keys,
+        on=list(join_keys),
+        how="left",
+        indicator=True,
+        validate="one_to_one",
+    )
     missing_students = merged["_merge"] == "left_only"
     if not bool(missing_students.any()):
         return coverage_df

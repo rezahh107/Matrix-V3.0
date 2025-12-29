@@ -12,6 +12,7 @@ import pandas as pd
 from app.core.build_matrix import prepare_crosswalk_mappings
 from app.core.canonical_frames import canonicalize_students_frame
 from app.core.common.columns import canonicalize_headers
+from app.core.common.index_contract import assert_index_preserved, assert_no_new_labels
 from app.core.common.normalization import normalize_fa
 from app.core.policy_loader import (
     MentorPoolGovernanceConfig,
@@ -90,7 +91,15 @@ def canonicalize_mentor_pool_frame(
     canonical = canonicalize_headers(mentors_df.copy(), header_mode="en")
     allowed_statuses = set(governance.allowed_statuses)
     if "mentor_status" in canonical.columns:
+        input_index = canonical.index
         normalized_status = pd.Series(index=canonical.index, dtype=object)
+        assert_index_preserved(
+            input_index,
+            normalized_status.index,
+            require_unique=True,
+            require_same_order=True,
+            context="canonicalize_mentor_pool_frame",
+        )
         for idx, value in canonical["mentor_status"].items():
             try:
                 status = MentorStatus.from_value(value)
@@ -102,6 +111,9 @@ def canonicalize_mentor_pool_frame(
                 raise ValueError(
                     "mentor_status value is not allowed by governance.allowed_statuses"
                 )
-            normalized_status.loc[idx] = status.value
+            normalized_status.at[idx] = status.value
+        assert_no_new_labels(
+            input_index, normalized_status.index, context="canonicalize_mentor_pool_frame"
+        )
         canonical["mentor_status"] = normalized_status
     return canonical

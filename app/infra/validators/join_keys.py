@@ -183,6 +183,7 @@ def validate_allocation_join_keys(
         how="left",
         suffixes=("", "_student"),
         indicator="merge_student",
+        validate="many_to_one",
     )
     merged["__audit_row_id"] = range(len(merged))
 
@@ -195,6 +196,7 @@ def validate_allocation_join_keys(
             how="left",
             suffixes=("", "_mentor"),
             indicator="merge_mentor_id",
+            validate="many_to_one",
         )
 
         if (
@@ -216,6 +218,7 @@ def validate_allocation_join_keys(
                     how="left",
                     suffixes=("", "_mentor_fill"),
                     indicator="merge_mentor_alias",
+                    validate="many_to_one",
                 )
                 rename_map = {
                     col: f"{col}_mentor_fill" for col in mentor_keys if col in alias_lookup.columns
@@ -225,7 +228,12 @@ def validate_allocation_join_keys(
                 keep_cols = ["__audit_row_id", "merge_mentor_alias", *rename_map.values()]
                 alias_lookup = alias_lookup[[col for col in keep_cols if col in alias_lookup.columns]].copy()
 
-                merged = merged.merge(alias_lookup, on="__audit_row_id", how="left")
+                merged = merged.merge(
+                    alias_lookup,
+                    on="__audit_row_id",
+                    how="left",
+                    validate="one_to_one",
+                )
                 for col in mentor_keys:
                     primary_col = f"{col}_mentor"
                     fill_col = f"{col}_mentor_fill"
@@ -256,6 +264,7 @@ def validate_allocation_join_keys(
             how="left",
             suffixes=("", "_mentor"),
             indicator="merge_mentor_alias",
+            validate="many_to_one",
         )
         merged["mentor_lookup_mode"] = merged["merge_mentor_alias"].map(
             {"both": "mentor_alias", "left_only": "missing"}
