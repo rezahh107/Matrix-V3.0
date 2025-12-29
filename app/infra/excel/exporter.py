@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 import pandas as pd
 
+from app.core.common.contracts import validate_export_frame_contract
 from app.core.common.logging_ext import log_step
 
 from .styles import build_font_config, ensure_openpyxl_named_style, ensure_xlsxwriter_format
@@ -297,6 +298,7 @@ def write_selection_reasons_sheet(
     columns = options.columns
     with log_step(_LOGGER, "selection_reason_export"):
         sanitized = _sanitize_selection_reasons_frame(df_reasons, columns)
+        validate_export_frame_contract(sanitized, context="excel.selection_reasons")
         sanitized.attrs["schema_hash"] = options.schema_hash
 
         if writer is not None:

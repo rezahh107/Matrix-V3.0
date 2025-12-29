@@ -18,6 +18,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from app.core.common.contracts import validate_export_frame_contract, validate_trace_contract
+from app.core.common.errors import ContractViolationError
 from app.core.common.national_id import canonical_national_code
 from app.core.qa.invariants import QaReport
 from app.infra.local_database import LocalDatabase, QaSummaryRow, RunMetricRow, RunRecord
@@ -227,6 +229,11 @@ def log_allocation_run(
         history_info_df = trace_snapshot.attrs.get("history_info_df")
         if isinstance(history_info_df, pd.DataFrame):
             trace_snapshot.attrs["history_info_df"] = _normalize_history_info(history_info_df)
+        try:
+            validate_trace_contract(trace_snapshot, context="history.trace_snapshot")
+        except ContractViolationError:
+            logger.exception("Trace snapshot contract violation; skipping snapshot")
+            trace_snapshot = None
 
     try:
         db.initialize()
@@ -279,6 +286,8 @@ def _maybe_store_snapshots(
             summary_df=trace_summary_df,
             history_info_df=normalized_history,
         )
+    if trace_summary_df is not None:
+        validate_export_frame_contract(trace_summary_df, context="history.trace_summary")
     if qa_report is not None or qa_extras:
         qa_summary_df, qa_details_df, qa_extra_frames = _extract_qa_frames(qa_report)
         if qa_extras:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -53,6 +54,25 @@ class PolicyVersionMismatchError(BaseDomainError):
     """در صورت ناهماهنگی نسخهٔ policy بارگذاری‌شده."""
 
 
+@dataclass(frozen=True, slots=True)
+class ContractIssue:
+    """جزئیات نقض قراردادهای خروجی/مرزی برای گزارش‌گیری."""
+
+    code: str
+    message: str
+    context: str | None = None
+
+
+class ContractViolationError(DomainError):
+    """خطای سطح بالا برای نقض قراردادهای خروجی."""
+
+    issues: Sequence[ContractIssue]
+
+    def __init__(self, issues: Iterable[ContractIssue]) -> None:
+        self.issues = list(issues)
+        super().__init__("\n".join(issue.message for issue in self.issues))
+
+
 __all__ = [
     "DomainError",
     "BaseDomainError",
@@ -60,4 +80,6 @@ __all__ = [
     "InvalidCenterMappingError",
     "DataMissingError",
     "PolicyVersionMismatchError",
+    "ContractIssue",
+    "ContractViolationError",
 ]
