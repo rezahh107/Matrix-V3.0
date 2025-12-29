@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 from pandas.api import types as pd_types
 
+from .allocate import enforce_allocation_output_contracts
 from .allocation.trace import attach_allocation_channel, build_stage_summary
 from .canonical_frames import canonicalize_pool_frame, canonicalize_students_frame
 from .center_manager import resolve_center_manager_config, validate_center_config
@@ -2923,12 +2924,18 @@ def allocate_batch(
         final_status_counts=final_status_counts,
     )
 
-    return AllocationBatchResult(
+    result = AllocationBatchResult(
         allocations_df=allocations_df,
         pool_output=pool_output,
         logs_df=logs_df,
         trace_df=trace_df,
         trace_extras=trace_extras,
+    )
+    return enforce_allocation_output_contracts(
+        result,
+        pool_internal=pool_internal,
+        pool_with_ids=pool_with_ids,
+        policy=policy,
     )
 
 
