@@ -366,6 +366,46 @@ def test_allocate_batch_filters_by_center_manager() -> None:
     assert logs.loc[0, "mentor_selected"].strip() == "هدف"
 
 
+def test_center_manager_does_not_drop_center_wildcard_candidates() -> None:
+    policy = load_policy()
+    students = _single_student(student_id="S-1")
+    pool = pd.DataFrame(
+        {
+            "پشتیبان": ["مدیر", "سراسری", "نامرتبط"],
+            "کد کارمندی پشتیبان": ["EMP-10", "EMP-20", "EMP-30"],
+            "کدرشته": [27, 27, 27],
+            "کدرشته | group_code": [27, 27, 27],
+            "گروه آزمایشی": [27, 27, 27],
+            "گروه آزمایشی | exam_group": [27, 27, 27],
+            "جنسیت": [1, 1, 1],
+            "جنسیت | gender": [1, 1, 1],
+            "دانش آموز فارغ": [0, 0, 0],
+            "دانش آموز فارغ | graduation_status": [0, 0, 0],
+            "مرکز گلستان صدرا": [1, 0, 2],
+            "مرکز گلستان صدرا | center": [1, 0, 2],
+            "مالی حکمت بنیاد": [0, 0, 0],
+            "مالی حکمت بنیاد | finance": [0, 0, 0],
+            "کد مدرسه": [3581, 3581, 3581],
+            "کد مدرسه | school_code": [3581, 3581, 3581],
+            "remaining_capacity": [1, 1, 1],
+            "occupancy_ratio": [0.9, 0.1, 0.2],
+            "allocations_new": [5, 0, 0],
+            "مدیر": ["شهدخت کشاورز", "مدیر دیگر", "نامرتبط"],
+        }
+    )
+
+    _, _, logs, _ = allocate_batch(
+        students,
+        pool,
+        policy=policy,
+        center_manager_map={1: ("شهدخت کشاورز",)},
+    )
+
+    eligibility_trace = logs.loc[0, "eligibility_trace"]
+    assert eligibility_trace["initial"]["rows"] == 3
+    assert eligibility_trace["eligible"]["rows"] == 2
+
+
 def test_school_students_processed_first() -> None:
     policy = load_policy()
     school_student = _single_student(student_id="S-school")

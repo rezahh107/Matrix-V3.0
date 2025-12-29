@@ -16,9 +16,14 @@ from .allocation.trace import attach_allocation_channel, build_stage_summary
 from .canonical_frames import canonicalize_pool_frame, canonicalize_students_frame
 from .center_manager import resolve_center_manager_config, validate_center_config
 from .common.columns import CANON_EN_TO_FA, canonicalize_headers, dedupe_columns, ensure_series
+from .common.eligibility_channel import (
+    JoinBucketIndex,
+    apply_eligibility,
+    build_join_bucket_index as _build_join_bucket_index,
+)
 from .common.filters import (
     StudentSchoolCode,
-    apply_join_filters,
+    apply_join_filters as _apply_join_filters,
     resolve_student_school_code,
 )
 from .common.ids import build_mentor_id_map, inject_mentor_id, natural_key
@@ -32,7 +37,7 @@ from .common.join_keys import (
     school_mask_series,
     validate_selected_mentor_join_keys,
 )
-from .common.join_resolver import resolve_join_key_sources
+from .common.join_resolver import JoinKeyResolver, resolve_join_key_sources
 from .common.ranking import (
     HeapRankingManager,
     MentorCapacityState,
@@ -80,6 +85,8 @@ from .policy_loader import PolicyConfig, load_policy
 from .reason.selection_reason import build_selection_reason_rows as _build_selection_reason_rows
 
 ProgressFn = Callable[[int, str], None]
+
+apply_join_filters = _apply_join_filters
 
 
 @dataclass
@@ -204,7 +211,6 @@ _STAGE_LABEL_FA: dict[str, str] = {
 
 T = TypeVar("T")
 HeaderMode = Literal["fa", "en", "fa_en"]
-JoinBucketIndex = Mapping[tuple[int, ...], pd.Index]
 
 
 def safe_int(value: Any) -> int | None:
@@ -951,135 +957,6 @@ def _is_missing_join_value(value: object) -> bool:
     if isinstance(value, str):
         return not normalize_digits(value).strip()
     return False
-
-
-def _normalize_join_key_value_for_bucket(
-    column: str, value: object, policy: PolicyConfig
-) -> int:
-    try:
-        return canonicalize_join_key_value(column, value, policy=policy)
-    except JoinKeyCanonicalizationError:
-        if _is_missing_join_value(value):
-            return -1
-        return -2
-
-
-def _normalize_join_keys_for_bucketing(
-    pool: pd.DataFrame, policy: PolicyConfig
-) -> pd.DataFrame:
-    normalized: dict[str, pd.Series] = {}
-    for column in policy.join_keys:
-        if column not in pool.columns:
-            raise KeyError(f"Join key '{column}' missing from candidate pool")
-        series = ensure_series(pool[column])
-        normalized[column] = series.map(
-            lambda cell: _normalize_join_key_value_for_bucket(column, cell, policy)
-        ).astype("int64")
-    return pd.DataFrame(normalized, index=pool.index)
-
-
-def _build_join_bucket_index(pool: pd.DataFrame, policy: PolicyConfig) -> JoinBucketIndex:
-    normalized = _normalize_join_keys_for_bucketing(pool, policy)
-    grouped = normalized.groupby(list(policy.join_keys), sort=False).indices
-    buckets: dict[tuple[int, ...], pd.Index] = {}
-    index = pool.index
-    for key, positions in grouped.items():
-        key_tuple = key if isinstance(key, tuple) else (key,)
-        buckets[tuple(int(value) for value in key_tuple)] = index.take(positions)
-    return buckets
-
-
-def _should_use_join_bucket(
-    student: Mapping[str, object],
-    join_map: Mapping[str, int],
-    candidate_pool: pd.DataFrame,
-    policy: PolicyConfig,
-) -> bool:
-    for column in policy.join_keys:
-        normalized = _normalize_join_key_name(column)
-        value = join_map.get(normalized)
-        if value is None or int(value) < 0:
-            return False
-
-    school_code = resolve_student_school_code(student, policy)
-    if school_code.wildcard or school_code.missing or school_code.value is None:
-        return False
-
-    center_info = _resolve_student_center_info(student, policy)
-    if center_info.normalized_value is None:
-        return False
-    wildcard_center = center_wildcard_value(policy)
-    if wildcard_center is not None and center_info.normalized_value == wildcard_center:
-        return False
-
-    if "has_school_constraint" in candidate_pool.columns:
-        constraint = ensure_series(candidate_pool["has_school_constraint"]).fillna(False).astype(bool)
-        if (~constraint).any():
-            return False
-    return "mentor_school_binding_mode" not in candidate_pool.columns
-
-
-def _join_bucket_key_variants(
-    join_map: Mapping[str, int],
-    policy: PolicyConfig,
-) -> list[tuple[int, ...]]:
-    normalized_keys = [_normalize_join_key_name(column) for column in policy.join_keys]
-    values: list[int] = []
-    for normalized in normalized_keys:
-        value = join_map.get(normalized)
-        if value is None:
-            return []
-        values.append(int(value))
-
-    finance_normalized = _normalize_join_key_name(policy.stage_column("finance"))
-    if finance_normalized not in normalized_keys:
-        return [tuple(values)]
-
-    finance_index = normalized_keys.index(finance_normalized)
-    finance_value = values[finance_index]
-    variants = resolve_finance_variants(finance_value, policy)
-    if not variants:
-        return [tuple(values)]
-
-    keys: list[tuple[int, ...]] = []
-    for variant in sorted(variants):
-        updated = list(values)
-        updated[finance_index] = int(variant)
-        keys.append(tuple(updated))
-    return keys
-
-
-def _bucket_candidate_pool(
-    candidate_pool: pd.DataFrame,
-    join_bucket_index: JoinBucketIndex | None,
-    join_map: Mapping[str, int],
-    student: Mapping[str, object],
-    policy: PolicyConfig,
-) -> pd.DataFrame:
-    if join_bucket_index is None:
-        return candidate_pool
-    if not _should_use_join_bucket(student, join_map, candidate_pool, policy):
-        return candidate_pool
-
-    key_variants = _join_bucket_key_variants(join_map, policy)
-    if not key_variants:
-        return candidate_pool
-
-    combined_values: list[Hashable] = []
-    for key in key_variants:
-        bucket = join_bucket_index.get(key)
-        if bucket is None or bucket.empty:
-            continue
-        combined_values.extend(bucket.to_list())
-
-    if not combined_values:
-        return candidate_pool
-
-    combined_index = pd.Index(pd.unique(pd.Index(combined_values)))
-    selected_index = candidate_pool.index.intersection(combined_index, sort=False)
-    if selected_index.empty:
-        return candidate_pool
-    return candidate_pool.loc[selected_index]
 
 
 def _ensure_type_group_alignment_frame(frame: pd.DataFrame, policy: PolicyConfig) -> pd.DataFrame:
@@ -1840,6 +1717,8 @@ def allocate_student(
     perf_tracker: PerfTracker | None = None,
     debug_trace: bool = False,
     join_bucket_index: JoinBucketIndex | None = None,
+    manager_preference_index: pd.Index | None = None,
+    manager_priority_enabled: bool = False,
     heap_manager: HeapRankingManager | None = None,
 ) -> AllocationResult:
     """تخصیص تک‌دانش‌آموز با حفظ Trace و لاگ کامل مطابق §5 Technical SSoT."""
@@ -1909,32 +1788,30 @@ def allocate_student(
 
     progress(5, "prefilter")
 
-    stage_candidate_counts: dict[TraceStageName, int] = {
-        stage: 0 for stage in CANONICAL_TRACE_ORDER
-    }
-
-    def _record_stage(stage: str, count: int) -> None:
-        """ثبت شمارنده مراحل برای Trace."""
-        stage_name = ensure_trace_stage_name(stage)
-        stage_candidate_counts[stage_name] = int(count)
-
-    # اعمال فیلترهای join
-    candidate_pool_for_join = _bucket_candidate_pool(
-        candidate_pool,
+    resolver = JoinKeyResolver(policy)
+    eligibility_spec = resolver.resolve_candidate_scope(
+        student,
+        student_join_map=join_map,
         join_bucket_index=join_bucket_index,
-        join_map=join_map,
-        student=student,
-        policy=policy,
+        manager_preference_index=manager_preference_index,
+        manager_priority_enabled=manager_priority_enabled,
+        phase="allocation",
     )
     with measure_time("join_filters", perf_tracker):
-        eligible = apply_join_filters(
-            candidate_pool_for_join,
-            student,
-            policy=policy,
-            student_join_map=join_map,
-            tracker=_record_stage,
+        eligible, eligibility_priority, eligibility_trace = apply_eligibility(
+            candidate_pool,
+            eligibility_spec,
         )
-    stage_candidate_counts = _canonical_stage_counts(stage_candidate_counts)
+
+    stage_counts_raw = cast(Mapping[str, int], eligibility_trace.get("stage_counts", {}))
+    stage_candidate_counts = _canonical_stage_counts(
+        {stage: int(stage_counts_raw.get(stage, 0)) for stage in CANONICAL_TRACE_ORDER}
+    )
+
+    eligible_full = eligible
+    if not eligible_full.index.equals(eligibility_priority.index):
+        raise AssertionError("Eligibility priority index must align with eligible candidates")
+    preferred_index = eligibility_priority[eligibility_priority > 0].index
 
     join_mismatch_details: list[JoinMismatch] | None = None
     mismatch_detail_recorded = False
@@ -1946,7 +1823,7 @@ def allocate_student(
         if join_mismatch_details is None:
             with measure_time("mismatch_detail", perf_tracker):
                 _, join_mismatches = _filter_candidates_by_join_map(
-                    eligible,
+                    eligible_full,
                     join_map=join_map,
                     policy=policy,
                 )
@@ -2006,7 +1883,7 @@ def allocate_student(
                 "rule_reason_details": rule_details,
             }
         )
-        log["candidate_count"] = int(eligible.shape[0])
+        log["candidate_count"] = int(eligible_full.shape[0])
         log["stage_candidate_counts"] = stage_candidate_counts
         log["initial_candidate_count"] = initial_candidates
         missing_text = ", ".join(exc.missing_columns)
@@ -2025,8 +1902,11 @@ def allocate_student(
         _append_invalid_center_alert(log, center_alert_payload, center_fallback)
         return AllocationResult(None, tracker_trace, log)
 
+    log["eligibility_trace"] = eligibility_trace
+    log["eligible_priority_count"] = int(eligibility_priority.sum())
+
     pool_mismatch_detected = _detect_pool_mismatch(
-        candidate_pool=eligible,
+        candidate_pool=eligible_full,
         pool_view=candidate_pool,
         pool_state_view=pool_state_view,
     )
@@ -2054,7 +1934,9 @@ def allocate_student(
     def _capacity_totals() -> tuple[int, int]:
         if capacity_series is not None and capacity_mask is not None:
             return int(capacity_series.shape[0]), int(capacity_mask.sum())
-        fallback_count = int(stage_candidate_counts.get("capacity_gate", eligible.shape[0]))
+        fallback_count = int(
+            stage_candidate_counts.get("capacity_gate", eligible_full.shape[0])
+        )
         return fallback_count, fallback_count
 
     def _ensure_detailed_trace() -> list[TraceStageRecord]:
@@ -2115,7 +1997,7 @@ def allocate_student(
         _record_mismatch_detail_noop()
         return AllocationResult(None, trace_output, log)
 
-    log["candidate_count"] = int(eligible.shape[0])
+    log["candidate_count"] = int(eligible_full.shape[0])
     log["stage_candidate_counts"] = stage_candidate_counts
     log["initial_candidate_count"] = initial_candidates
     log["rule_reason_code"] = rule_reason_code
@@ -2131,7 +2013,7 @@ def allocate_student(
         if join_mismatch_details:
             log["join_key_mismatches"] = list(join_mismatch_details)
 
-    if eligible.empty:
+    if eligible_full.empty:
         if join_mismatch_details is None:
             join_mismatch_details = _compute_join_mismatch_details()
         extra_updates = (
@@ -2146,40 +2028,64 @@ def allocate_student(
 
     progress(30, "capacity")
 
+    eligible_for_capacity = eligible_full
+    manager_pass = "full"
+    if manager_priority_enabled and not preferred_index.empty:
+        eligible_for_capacity = eligible_full.loc[preferred_index]
+        manager_pass = "preferred"
+
     state_frame = pool_state_view if pool_state_view is not None else candidate_pool
     state_view_en = dedupe_columns(
         canonicalize_headers(state_frame, header_mode="en"), copy=False
     )
 
-    with measure_time("capacity_gate", perf_tracker):
-        capacity_candidates: list[str] = []
-        if "remaining_capacity" in state_view_en.columns:
-            capacity_candidates.append("remaining_capacity")
-        capacity_candidates.append(resolved_capacity_column)
-        derived_name = canonicalize_headers(
-            pd.DataFrame(columns=[resolved_capacity_column]),
-            header_mode="en",
-        ).columns[0]
-        if derived_name not in capacity_candidates:
-            capacity_candidates.append(derived_name)
+    capacity_candidates: list[str] = []
+    if "remaining_capacity" in state_view_en.columns:
+        capacity_candidates.append("remaining_capacity")
+    capacity_candidates.append(resolved_capacity_column)
+    derived_name = canonicalize_headers(
+        pd.DataFrame(columns=[resolved_capacity_column]),
+        header_mode="en",
+    ).columns[0]
+    if derived_name not in capacity_candidates:
+        capacity_candidates.append(derived_name)
 
-        capacity_column_name: str | None = None
-        for candidate in capacity_candidates:
-            if candidate in state_view_en.columns:
-                capacity_column_name = candidate
-                break
-        if capacity_column_name is None:
-            raise KeyError(
-                f"Capacity column '{resolved_capacity_column}' not found after canonicalization"
+    capacity_column_name: str | None = None
+    for candidate in capacity_candidates:
+        if candidate in state_view_en.columns:
+            capacity_column_name = candidate
+            break
+    if capacity_column_name is None:
+        raise KeyError(
+            f"Capacity column '{resolved_capacity_column}' not found after canonicalization"
+        )
+
+    def _apply_capacity_gate(candidates: pd.DataFrame) -> pd.DataFrame:
+        nonlocal capacity_series
+        nonlocal capacity_mask
+        with measure_time("capacity_gate", perf_tracker):
+            capacity_series = ensure_series(
+                state_view_en.loc[candidates.index, capacity_column_name]
             )
+            capacity_numeric = (
+                pd.to_numeric(capacity_series, errors="coerce").fillna(0).astype(int)
+            )
+            capacity_mask = capacity_numeric > 0
+            filtered = candidates.loc[capacity_mask.values]
+            stage_candidate_counts["capacity_gate"] = int(capacity_mask.sum())
+            return filtered
 
-        capacity_series = ensure_series(state_view_en.loc[eligible.index, capacity_column_name])
-        capacity_numeric = pd.to_numeric(capacity_series, errors="coerce").fillna(0).astype(int)
-        capacity_mask = capacity_numeric > 0
-        capacity_filtered = eligible.loc[capacity_mask.values]
-        stage_candidate_counts["capacity_gate"] = int(capacity_mask.sum())
-        stage_candidate_counts = _canonical_stage_counts(stage_candidate_counts)
-        log["stage_candidate_counts"] = stage_candidate_counts
+    capacity_filtered = _apply_capacity_gate(eligible_for_capacity)
+    if capacity_filtered.empty and manager_pass == "preferred":
+        eligible_for_capacity = eligible_full
+        manager_pass = "fallback"
+        capacity_filtered = _apply_capacity_gate(eligible_for_capacity)
+
+    stage_candidate_counts = _canonical_stage_counts(stage_candidate_counts)
+    log["stage_candidate_counts"] = stage_candidate_counts
+    if manager_priority_enabled:
+        log["center_manager_pass"] = manager_pass
+        log["center_manager_preferred_count"] = int(preferred_index.shape[0])
 
     (
         tracker_trace,
@@ -2340,7 +2246,7 @@ def allocate_student(
     )
     if not join_valid:
         filtered_pool, _ = _filter_candidates_by_join_map(
-            eligible,
+            eligible_full,
             join_map=join_map,
             policy=policy,
         )
@@ -2350,12 +2256,12 @@ def allocate_student(
         error_type: AllocationErrorLiteral = "INTERNAL_ERROR"
         try:
             strict_eligible, _ = _filter_candidates_by_join_map(
-                eligible,
+                eligible_full,
                 join_map=join_map,
                 policy=policy,
             )
         except (ValueError, KeyError):
-            strict_eligible = eligible
+            strict_eligible = eligible_full
         if strict_eligible.empty:
             error_type = "ELIGIBILITY_NO_MATCH"
         corruption_updates: dict[str, object] = {
@@ -2667,15 +2573,15 @@ def allocate_batch(
                     "center_column": center_column_name,
                 }
 
-            # بهبود برای BUG_CAP_01 - هماهنگی pool_view و pool_state_view
             pool_view = pool_with_ids
             pool_state_view_local = pool_internal
-            if enforce_center_manager and student_center is not None:
+            manager_preference_index: pd.Index | None = None
+            manager_preference_enabled = bool(
+                enforce_center_manager and policy.center_management.enabled
+            )
+            if manager_preference_enabled and student_center is not None:
                 center_key = int(student_center)
-                manager_index = center_manager_index.get(center_key)
-                if manager_index is not None and len(manager_index) > 0:
-                    pool_view = pool_with_ids.loc[manager_index]
-                    pool_state_view_local = pool_internal.loc[manager_index]
+                manager_preference_index = center_manager_index.get(center_key)
 
             result = allocate_student(
                 student_dict,
@@ -2691,6 +2597,8 @@ def allocate_batch(
                 perf_tracker=perf_tracker,
                 debug_trace=debug_trace,
                 join_bucket_index=join_bucket_index,
+                manager_preference_index=manager_preference_index,
+                manager_priority_enabled=manager_preference_enabled,
                 heap_manager=heap_manager,
             )
 

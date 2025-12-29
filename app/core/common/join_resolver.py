@@ -9,6 +9,7 @@ from typing import Literal
 import pandas as pd
 
 from app.core.common.columns import CANON_EN_TO_FA
+from app.core.common.eligibility_channel import EligibilitySpec, JoinBucketIndex
 from app.core.common.join_keys import (
     JoinKeyCanonicalizationError,
     StudentSchoolCode,
@@ -151,6 +152,38 @@ class JoinKeyResolver:
         if allow_zero:
             return StudentSchoolCode(value=0, missing=False, wildcard=True)
         return StudentSchoolCode(value=None, missing=True, wildcard=False)
+
+    def resolve_candidate_scope(
+        self,
+        student: Mapping[str, object],
+        *,
+        student_join_map: Mapping[str, int] | None = None,
+        join_bucket_index: JoinBucketIndex | None = None,
+        manager_preference_index: pd.Index | None = None,
+        manager_priority_enabled: bool = False,
+        phase: str | None = None,
+    ) -> EligibilitySpec:
+        _ = phase
+        return EligibilitySpec(
+            effective_join_keys=self.resolve_center(
+                student,
+                student_join_map=student_join_map,
+            ),
+            finance_keys=self.resolve_finance(
+                student,
+                student_join_map=student_join_map,
+            ),
+            school_code=self.resolve_school(
+                student,
+                student_join_map=student_join_map,
+            ),
+            student=student,
+            policy=self._policy,
+            student_join_map=student_join_map,
+            join_bucket_index=join_bucket_index,
+            manager_preference_index=manager_preference_index,
+            manager_priority_enabled=manager_priority_enabled,
+        )
 
     def _infer_center_from_manager(
         self, student: Mapping[str, object]
