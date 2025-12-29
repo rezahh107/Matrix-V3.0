@@ -8,9 +8,9 @@ import pandas as pd
 
 from app.core.common.types import HeaderMode
 from app.core.policy_loader import PolicyConfig
+from app.infra import pool_loader
 from app.infra.errors import DatabasePreparationError
 from app.infra.groupcode.groupcode_repository import GroupCodeRepository
-from app.infra.io_utils import read_inspactor_workbook
 from app.infra.local_database import LocalDatabase, _coerce_int_columns
 from app.infra.reference_mentors_repository import _POOL_JOIN_KEY_QA_ATTR, _derive_pool_join_keys
 from app.infra.schools.school_repository import SchoolRepository
@@ -65,8 +65,16 @@ class MentorPipelineV3:
         self._groupcode_repo = groupcode_repo
         self._db = db or (school_repo.database if school_repo is not None else None)
 
-    def run_from_excel(self, path: Path) -> MentorPipelineResult:
-        raw_df = read_inspactor_workbook(path)
+    def run_from_excel(
+        self,
+        path: Path,
+        *,
+        pool_type: pool_loader.PoolType = "inspactor",
+        pool_sheet: str | None = None,
+    ) -> MentorPipelineResult:
+        raw_df, _ = pool_loader.load_pool_with_detection(
+            path, pool_type=pool_type, pool_sheet=pool_sheet
+        )
         return self.run(raw_df)
 
     def run(self, df: pd.DataFrame) -> MentorPipelineResult:

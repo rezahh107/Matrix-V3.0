@@ -4,6 +4,7 @@ import pandas as pd
 import pytest
 from pandas.testing import assert_frame_equal
 
+from app.core.build_matrix import REQUIRED_INSPACTOR_COLUMNS
 from app.core.canonical_frames import (
     POOL_JOIN_KEY_DUPLICATES_ATTR,
     canonicalize_pool_frame,
@@ -23,6 +24,9 @@ from app.infra.references.schools import (
 
 
 def _write_pool_excel(df: pd.DataFrame, path: Path) -> None:
+    for column in REQUIRED_INSPACTOR_COLUMNS:
+        if column not in df.columns:
+            df[column] = 1
     with pd.ExcelWriter(path, engine="openpyxl") as writer:
         df.to_excel(writer, index=False)
 
@@ -116,6 +120,66 @@ def test_import_pool_derives_join_keys_from_alias_inputs(tmp_path: Path) -> None
     assert int(normalized["کد مدرسه"].iloc[0]) == 3581
     for helper_col in {"school_name_1", "school_name_2", "school_name_3", "school_name_4"}:
         assert helper_col not in normalized.columns
+
+
+def test_import_pool_prefers_non_matrix_sheet(tmp_path: Path) -> None:
+    policy = load_policy()
+    db = LocalDatabase(tmp_path / "cache.sqlite")
+
+    pool_real = pd.DataFrame(
+        {
+            "پشتیبان": ["الف", "ب"],
+            "کد کارمندی پشتیبان": ["P-1", "P-2"],
+            "کدرشته": [27, 27],
+            "گروه آزمایشی": ["27", "27"],
+            "شامل گروه های آزمایشی": ["27", "27"],
+            "جنسیت": [1, 0],
+            "دانش آموز فارغ": [0, 0],
+            "مرکز گلستان صدرا": [1, 1],
+            "مالی حکمت بنیاد": [0, 0],
+            "کد مدرسه": [3581, 3581],
+            "remaining_capacity": [2, 3],
+            "نام پشتیبان": ["الف", "ب"],
+            "نام مدیر": ["مدیر", "مدیر"],
+            "تعداد داوطلبان تحت پوشش": [1, 1],
+            "تعداد مدارس تحت پوشش": [1, 1],
+            "کدپستی": ["1", "1"],
+            "تعداد تحت پوشش خاص": [0, 0],
+        }
+    )
+    matrix_like = pd.DataFrame(
+        {
+            "پشتیبان": ["ماتریس"],
+            "کد کارمندی پشتیبان": ["MX"],
+            "کدرشته": [27],
+            "شامل گروه های آزمایشی": ["27"],
+            "گروه آزمایشی": ["27"],
+            "جنسیت": [1],
+            "دانش آموز فارغ": [0],
+            "مرکز گلستان صدرا": [1],
+            "مالی حکمت بنیاد": [0],
+            "کد مدرسه": [3581],
+            "remaining_capacity": [1],
+            "نام پشتیبان": ["ماتریس"],
+            "نام مدیر": ["مدیر"],
+            "تعداد داوطلبان تحت پوشش": [1],
+            "تعداد مدارس تحت پوشش": [1],
+            "کدپستی": ["1"],
+            "تعداد تحت پوشش خاص": [0],
+        }
+    )
+
+    pool_path = tmp_path / "pool.xlsx"
+    with pd.ExcelWriter(pool_path, engine="openpyxl") as writer:
+        matrix_like.to_excel(writer, sheet_name="matrix", index=False)
+        pool_real.to_excel(writer, sheet_name="POOL_REAL", index=False)
+
+    normalized = import_mentor_pool_from_excel(pool_path, db=db, policy=policy)
+
+    detection = normalized.attrs.get("pool_detection")
+    assert detection is not None
+    assert detection.selected_sheet == "POOL_REAL"
+    assert normalized.shape[0] == pool_real.shape[0]
 
 
 def test_import_pool_reports_unmapped_group(tmp_path: Path) -> None:

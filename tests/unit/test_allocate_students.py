@@ -1691,6 +1691,12 @@ def test_cli_capacity_column_default_from_policy(tmp_path: Path) -> None:
                 "ظرفیت": 1,
                 "occupancy_ratio": 0.2,
                 "allocations_new": 0,
+                "نام پشتیبان": "زهرا",
+                "نام مدیر": "مدیر",
+                "تعداد داوطلبان تحت پوشش": 1,
+                "تعداد مدارس تحت پوشش": 1,
+                "کدپستی": "1",
+                "تعداد تحت پوشش خاص": 0,
             }
         ]
     ).to_excel(pool_path, index=False)

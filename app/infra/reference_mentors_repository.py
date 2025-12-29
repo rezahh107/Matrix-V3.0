@@ -64,8 +64,15 @@ def import_mentor_pool_from_excel(
 ) -> pd.DataFrame:
     """وارد کردن استخر منتورها از Inspactor و ذخیره در کش."""
 
-    raw_df = pool_loader.load_pool(path, pool_type=pool_type, pool_sheet=pool_sheet)
-    return import_mentor_pool_from_dataframe(raw_df, db=db, policy=policy, pool_source=pool_source)
+    raw_df, detection = pool_loader.load_pool_with_detection(
+        path, pool_type=pool_type, pool_sheet=pool_sheet
+    )
+    normalized = import_mentor_pool_from_dataframe(
+        raw_df, db=db, policy=policy, pool_source=pool_source
+    )
+    if detection is not None:
+        normalized.attrs["pool_detection"] = detection
+    return normalized
 
 
 def import_mentor_pool_from_dataframe(
@@ -77,6 +84,7 @@ def import_mentor_pool_from_dataframe(
 ) -> pd.DataFrame:
     """Normalize mentor pool payloads via MentorPipelineV3 as the single SSoT."""
 
+    detection = df.attrs.get("pool_detection")
     mentor_id_present = _has_non_empty_mentor_id(df)
     working_df = df.drop_duplicates(keep="first") if not mentor_id_present else df.copy()
     raw_employee = _extract_raw_employee_id(working_df)
@@ -115,6 +123,8 @@ def import_mentor_pool_from_dataframe(
         cache_payload.attrs.update(normalized.attrs)
     if db is not None:
         db.upsert_mentor_pool_cache(cache_payload, join_keys=policy.join_keys)
+    if detection is not None:
+        cache_payload.attrs["pool_detection"] = detection
     return cache_payload
 
 

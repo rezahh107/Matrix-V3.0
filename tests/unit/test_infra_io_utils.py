@@ -262,6 +262,20 @@ def test_read_inspactor_workbook_handles_missing_alt_code_column(tmp_path: Path)
 
 
 @pytest.mark.skipif(not _HAS_OPENPYXL, reason="openpyxl لازم است برای خواندن .xlsx")
+def test_read_inspactor_workbook_rejects_only_matrix_sheet(tmp_path: Path) -> None:
+    sample = tmp_path / "inspactor_only_matrix.xlsx"
+    with pd.ExcelWriter(sample) as writer:
+        pd.DataFrame({COL_MENTOR_ID: ["1"]}).to_excel(
+            writer, sheet_name="matrix", index=False
+        )
+
+    with pytest.raises(ValueError) as excinfo:
+        io_utils.read_inspactor_workbook(sample)
+
+    assert "matrix" in str(excinfo.value)
+
+
+@pytest.mark.skipif(not _HAS_OPENPYXL, reason="openpyxl لازم است برای خواندن .xlsx")
 def test_read_crosswalk_workbook_coerces_alt_code_in_all_sheets(tmp_path: Path) -> None:
     groups = pd.DataFrame({ALT_CODE_COLUMN: [111222], "گروه": ["الف"]})
     synonyms = pd.DataFrame({ALT_CODE_COLUMN: [333444], "کد اصلی": ["ب"]})

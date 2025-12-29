@@ -435,28 +435,69 @@ def read_inspactor_workbook(path: Path | str | PathLike[str]) -> pd.DataFrame:
             if not workbook.sheet_names:
                 raise ValueError(f"هیچ شیتی در فایل {source} یافت نشد.")
 
-            best_frame: pd.DataFrame | None = None
+            best_sheet: str | None = None
             best_missing: list[str] | None = None
+            row_counts: dict[str, int | None] = {}
 
             for sheet_name in workbook.sheet_names:
-                candidate = workbook.parse(sheet_name)
-                canonical = canonicalize_headers(candidate, header_mode="fa")
-                if ALT_CODE_COLUMN in canonical.columns:
-                    canonical = canonical.copy()
-                    canonical[ALT_CODE_COLUMN] = canonical[ALT_CODE_COLUMN].astype(str)
+                if sheet_name == "matrix":
+                    continue
+                header_frame = workbook.parse(sheet_name, nrows=0)
+                canonical_headers = canonicalize_headers(header_frame, header_mode="fa")
+                missing = missing_inspactor_columns(
+                    canonical_headers, REQUIRED_INSPACTOR_COLUMNS
+                )
+                row_count: int | None
+                try:
+                    worksheet = workbook.book[sheet_name]
+                    row_count = (
+                        worksheet.max_row - 1
+                        if worksheet.max_row is not None and worksheet.max_row > 0
+                        else 0
+                    )
+                except Exception:  # pragma: no cover - defensive
+                    row_count = None
 
-                missing = missing_inspactor_columns(canonical, REQUIRED_INSPACTOR_COLUMNS)
-
-                if best_missing is None or len(missing) < len(best_missing):
-                    best_frame = canonical
+                if best_missing is None:
+                    best_sheet = sheet_name
                     best_missing = list(missing)
+                else:
+                    if len(missing) < len(best_missing):
+                        best_sheet = sheet_name
+                        best_missing = list(missing)
+                    elif len(missing) == len(best_missing):
+                        prev_row = row_counts.get(best_sheet or "", None)
+                        prev_priority = -prev_row if prev_row is not None else float("inf")
+                        curr_priority = -row_count if row_count is not None else float("inf")
+                        if curr_priority < prev_priority or (
+                            curr_priority == prev_priority and sheet_name < (best_sheet or "")
+                        ):
+                            best_sheet = sheet_name
+                            best_missing = list(missing)
+                row_counts[sheet_name] = row_count
 
-                if not missing:
-                    return canonical
+                if not missing and row_count not in {None, 0}:
+                    best_sheet = sheet_name
+                    break
 
-            if best_frame is None:
-                raise ValueError(f"خطا در خواندن فایل {source}: تمامی شیت‌ها خالی هستند")
-            return best_frame
+            if best_sheet is None:
+                raise ValueError(
+                    "هیچ شیت معتبری برای Inspactor یافت نشد؛ شیت 'matrix' کنار گذاشته شد."
+                    " برای استفاده از خروجی rule-engine از --pool-type matrix یا --pool-sheet استفاده کنید."
+                )
+
+            if best_sheet == "matrix":
+                raise ValueError(
+                    "شیت 'matrix' برای Inspactor مجاز نیست؛ از --pool-type matrix یا --pool-sheet استفاده کنید."
+                )
+
+            canonical = canonicalize_headers(
+                workbook.parse(best_sheet), header_mode="fa"
+            )
+            if ALT_CODE_COLUMN in canonical.columns:
+                canonical = canonical.copy()
+                canonical[ALT_CODE_COLUMN] = canonical[ALT_CODE_COLUMN].astype(str)
+            return canonical
     except FileNotFoundError as exc:
         raise FileNotFoundError(f"فایل یافت نشد: {source}") from exc
     except Exception as exc:  # pragma: no cover - سناریوهای پیش‌بینی‌نشده
