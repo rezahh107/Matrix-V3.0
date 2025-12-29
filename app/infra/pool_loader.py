@@ -7,7 +7,7 @@ from typing import Literal, TypedDict
 
 import pandas as pd
 
-from app.core.canonical_frames import canonicalize_headers
+from app.core.common.columns import canonicalize_headers
 from app.infra.io_utils import ALT_CODE_COLUMN
 
 PoolType = Literal["inspactor", "matrix"]
@@ -18,6 +18,7 @@ class SheetEvidence(TypedDict):
     missing_columns: list[str]
     missing_count: int
     row_count: int | None
+    has_mentor_id: bool
     excluded: bool
     exclusion_reason: str | None
 
@@ -83,6 +84,7 @@ def detect_pool_sheet(
         missing_columns = sorted(col for col in expected if col not in columns)
         missing_columns_lite = missing_columns[:5]
         missing_count = len(missing_columns)
+        has_mentor_id = "mentor_id" in columns or "کد معلم" in columns
         is_reserved_matrix = pool_type == "inspactor" and sheet == "matrix"
         if explicit_sheet is not None and sheet != explicit_sheet:
             exclusion_reason = "not_explicit_sheet"
@@ -101,6 +103,7 @@ def detect_pool_sheet(
                 "missing_columns": missing_columns_lite,
                 "missing_count": missing_count,
                 "row_count": row_count,
+                "has_mentor_id": has_mentor_id,
                 "excluded": exclusion_reason is not None,
                 "exclusion_reason": exclusion_reason,
             }
@@ -147,6 +150,28 @@ def detect_pool_sheet(
                 best_candidates[0]["sheet"],
             ),
         }
+
+    if (
+        pool_type == "inspactor"
+        and explicit_sheet is None
+        and selected_sheet != "matrix"
+        and any(info["sheet"] == "matrix" for info in evidence)
+    ):
+        matrix_info = next(info for info in evidence if info["sheet"] == "matrix")
+        selected_info = next(info for info in evidence if info["sheet"] == selected_sheet)
+        matrix_rows = matrix_info.get("row_count")
+        selected_rows = selected_info.get("row_count")
+        if matrix_info["has_mentor_id"] and matrix_rows is not None and (
+            selected_rows is None or matrix_rows > selected_rows
+        ):
+            selected_sheet = "matrix"
+            detection_method = "fallback_matrix_preferred"
+            confidence = 0.9
+            selection_reason = {
+                "fallback": "matrix_has_more_rows_and_mentor_id",
+                "matrix_rows": matrix_rows,
+                "selected_rows": selected_rows,
+            }
 
     return PoolDetectionResult(
         pool_type=pool_type,

@@ -1209,17 +1209,28 @@ def _resolve_mentor_pool_frame(
 ) -> tuple[pd.DataFrame, dict[str, str], dict[str, float]]:
     """بارگذاری استخر منتورها از مسیر فایل یا کش SQLite."""
 
-    pool_type = getattr(args, "pool_type", pool_source)
+    pool_type_arg = getattr(args, "pool_type", pool_source)
     pool_sheet = getattr(args, "pool_sheet", None)
     path_text = getattr(args, pool_arg, None)
+
+    def _resolve_pool_type(pool_path: Path) -> str:
+        if pool_type_arg != "auto":
+            return pool_type_arg
+        if pool_sheet:
+            return "matrix" if pool_sheet == "matrix" else "inspactor"
+        with pd.ExcelFile(pool_path) as excel:
+            return "matrix" if "matrix" in excel.sheet_names else "inspactor"
+
     if path_text:
         pool_path = Path(path_text)
+        pool_type = _resolve_pool_type(pool_path)
+        pool_source_value = pool_source if pool_source != "auto" else pool_type
         if db:
             df = import_mentor_pool_from_excel(
                 pool_path,
                 db=db,
                 policy=policy,
-                pool_source=pool_source,
+                pool_source=pool_source_value,
                 pool_type=pool_type,
                 pool_sheet=pool_sheet,
             )
@@ -1232,7 +1243,7 @@ def _resolve_mentor_pool_frame(
                     raw_df,
                     policy=policy,
                     sanitize_pool=False,
-                    pool_source=pool_source,
+                    pool_source=pool_source_value,
                 )
             except JoinKeyCanonicalizationError as exc:
                 issue = JoinKeyValidationIssue(
@@ -1245,6 +1256,7 @@ def _resolve_mentor_pool_frame(
                 raise JoinKeyValidationError(
                     JoinKeyValidationResult(canonical_df=pd.DataFrame(), issues=[issue])
                 ) from exc
+        df.attrs["pool_source"] = pool_source_value
         inputs = {pool_arg: str(pool_path)}
         inputs_mtime = {pool_arg: pool_path.stat().st_mtime}
         return df, inputs, inputs_mtime
@@ -2370,9 +2382,9 @@ def _run_build_matrix(args: argparse.Namespace, policy: PolicyConfig, progress: 
             ref_inputs,
             ref_inputs_mtime,
         ) = _resolve_reference_frames(args=args, db=db)
-    pool_source = getattr(args, "pool_type", "inspactor")
+    pool_source_arg = getattr(args, "pool_type", "inspactor")
     insp_df, pool_inputs, pool_inputs_mtime = _resolve_mentor_pool_frame(
-        args, policy, db=db, pool_arg="inspactor", pool_source=pool_source
+        args, policy, db=db, pool_arg="inspactor", pool_source=pool_source_arg
     )
 
     governance_cfg: MentorPoolGovernanceConfig = getattr(
@@ -3146,9 +3158,13 @@ def _run_allocate(args: argparse.Namespace, policy: PolicyConfig, progress: Prog
 
     progress(0, "loading inputs")
     students_df, student_inputs, _ = _resolve_students_frame(args, policy, db=db)
-    pool_source = getattr(args, "pool_type", "inspactor")
+    pool_source_arg = getattr(args, "pool_type", "inspactor")
     pool_df, pool_inputs, _ = _resolve_mentor_pool_frame(
-        args, policy, db=db, pool_arg="pool", pool_source=pool_source
+        args, policy, db=db, pool_arg="pool", pool_source=pool_source_arg
+    )
+    detection = pool_df.attrs.get("pool_detection")
+    pool_source = getattr(detection, "pool_type", None) or pool_df.attrs.get(
+        "pool_source", pool_source_arg
     )
 
     students_base, pool_base = _prepare_allocation_frames(
@@ -3411,7 +3427,7 @@ def _build_parser() -> argparse.ArgumentParser:
     import_mentors_cmd.add_argument("--inspactor", required=True, help="مسیر فایل Inspactor")
     import_mentors_cmd.add_argument(
         "--pool-type",
-        choices=("inspactor", "matrix"),
+        choices=("auto", "inspactor", "matrix"),
         default="inspactor",
         help="نوع استخر منتورها برای انتخاب شیت ورودی",
     )
@@ -3468,8 +3484,8 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     alloc_cmd.add_argument(
         "--pool-type",
-        choices=("inspactor", "matrix"),
-        default="inspactor",
+        choices=("auto", "inspactor", "matrix"),
+        default="auto",
         help="نوع استخر منتورها برای انتخاب شیت ورودی",
     )
     alloc_cmd.add_argument(
@@ -3756,13 +3772,29 @@ def main(
             db = _resolve_local_db(args)
             if db is None:
                 raise ValueError("برای import-mentors باید --local-db مشخص شود.")
+            pool_type_val = getattr(args, "pool_type", "inspactor")
+            pool_sheet = getattr(args, "pool_sheet", None)
+            pool_path = Path(args.inspactor)
+            if pool_type_val == "auto":
+                if pool_sheet:
+                    resolved_pool_type = "matrix" if pool_sheet == "matrix" else "inspactor"
+                else:
+                    with pd.ExcelFile(pool_path) as excel:
+                        resolved_pool_type = (
+                            "matrix" if "matrix" in excel.sheet_names else "inspactor"
+                        )
+            else:
+                resolved_pool_type = pool_type_val
+            resolved_pool_source = (
+                pool_type_val if pool_type_val != "auto" else resolved_pool_type
+            )
             import_mentor_pool_from_excel(
-                Path(args.inspactor),
+                pool_path,
                 db=db,
                 policy=policy,
-                pool_source=(pool_type_val := getattr(args, "pool_type", "inspactor")),
-                pool_type=pool_type_val,
-                pool_sheet=getattr(args, "pool_sheet", None),
+                pool_source=resolved_pool_source,
+                pool_type=resolved_pool_type,
+                pool_sheet=pool_sheet,
             )
             print("mentor pool cache imported")
             return 0
