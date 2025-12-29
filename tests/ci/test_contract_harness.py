@@ -118,3 +118,31 @@ def test_trace_contract_rejects_out_of_order_stages() -> None:
 
     with pytest.raises(ContractViolationError, match="trace stages out of order"):
         validate_trace_contract(trace_df, context="unit-test")
+
+
+def test_trace_contract_allows_repeated_blocks() -> None:
+    trace_df = pd.DataFrame(
+        [
+            {"student_id": "S-1", "stage": "type", "total_before": 1, "total_after": 1},
+            {"student_id": "S-1", "stage": "group", "total_before": 1, "total_after": 1},
+            {"student_id": "S-1", "stage": "capacity_gate", "total_before": 1, "total_after": 1},
+            {"student_id": "S-1", "stage": "type", "total_before": 1, "total_after": 1},
+            {"student_id": "S-1", "stage": "group", "total_before": 1, "total_after": 1},
+            {"student_id": "S-1", "stage": "capacity_gate", "total_before": 1, "total_after": 1},
+        ]
+    )
+
+    validate_trace_contract(trace_df, context="unit-test")
+
+
+def test_trace_contract_rejects_continuation_after_last_stage() -> None:
+    trace_df = pd.DataFrame(
+        [
+            {"student_id": "S-1", "stage": "type", "total_before": 1, "total_after": 1},
+            {"student_id": "S-1", "stage": "capacity_gate", "total_before": 1, "total_after": 1},
+            {"student_id": "S-1", "stage": "school", "total_before": 1, "total_after": 1},
+        ]
+    )
+
+    with pytest.raises(ContractViolationError, match="trace stages out of order"):
+        validate_trace_contract(trace_df, context="unit-test")

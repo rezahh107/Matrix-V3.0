@@ -218,17 +218,21 @@ def validate_trace_contract(
             )
         stage_index = stage_series.map(_TRACE_STAGE_ORDER)
         if "student_id" in trace_df.columns and stage_index.notna().all():
+            first_stage = CANONICAL_TRACE_ORDER[0]
+            last_stage = CANONICAL_TRACE_ORDER[-1]
             for student_id, group in trace_df.groupby("student_id", sort=False):
                 stages = stage_series.loc[group.index].tolist()
                 indices = stage_index.loc[group.index].tolist()
-                prev_index: int | None = None
+                in_block = False
+                prev_index_in_block: int | None = None
                 prev_stage: str | None = None
                 for stage_name, index_value in zip(stages, indices):
-                    if (
-                        prev_index is not None
-                        and index_value < prev_index
-                        and prev_stage != "capacity_gate"
-                    ):
+                    if stage_name == first_stage:
+                        in_block = True
+                        prev_index_in_block = index_value
+                        prev_stage = stage_name
+                        continue
+                    if not in_block:
                         issues.append(
                             _issue(
                                 "TRACE_STAGE_ORDER",
@@ -237,7 +241,25 @@ def validate_trace_contract(
                             )
                         )
                         break
-                    prev_index = index_value
+                    if prev_stage == last_stage and stage_name != first_stage:
+                        issues.append(
+                            _issue(
+                                "TRACE_STAGE_ORDER",
+                                f"{context}: trace stages out of order for student_id={student_id!r}.",
+                                context=context,
+                            )
+                        )
+                        break
+                    if prev_index_in_block is not None and index_value < prev_index_in_block:
+                        issues.append(
+                            _issue(
+                                "TRACE_STAGE_ORDER",
+                                f"{context}: trace stages out of order for student_id={student_id!r}.",
+                                context=context,
+                            )
+                        )
+                        break
+                    prev_index_in_block = index_value
                     prev_stage = stage_name
                 if issues:
                     break
