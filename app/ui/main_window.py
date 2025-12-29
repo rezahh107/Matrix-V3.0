@@ -1780,16 +1780,13 @@ class MainWindow(QMainWindow):
 
     def _refresh_settings_indicators(self) -> None:
         status = self._user_settings
-        indicator_values = {
-            "enable_history_metrics": status.enable_history_metrics,
-            "enable_trace_debug_sheets": status.enable_trace_debug_sheets,
-            "enable_trace_export": status.enable_trace_export,
-        }
-        for key, enabled in indicator_values.items():
+        label_map = self._settings_label_map()
+        indicator_values = status.to_dict()
+        for key, label in label_map.items():
             indicator = self._settings_indicators.get(key)
             if indicator is None:
                 continue
-            label = self._settings_label_map().get(key, key)
+            enabled = indicator_values.get(key, False)
             indicator.setText(self._indicator_markup(enabled, label))
 
     def _show_history_metrics(self) -> None:
