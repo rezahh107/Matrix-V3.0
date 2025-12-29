@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 import pandas as pd
 
 from app.core.common.columns import ensure_series
+from app.core.common.filters import apply_join_filters
 from app.core.common.join_keys import (
     JoinKeyCanonicalizationError,
     StudentSchoolCode,
@@ -122,8 +123,6 @@ def _apply_join_filters(
     tracker: Any,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     candidate_pool = _bucket_candidate_pool(pool_df, spec)
-    from app.core.common.filters import apply_join_filters
-
     eligible = apply_join_filters(
         candidate_pool,
         spec.student,
@@ -144,7 +143,7 @@ def _bucket_candidate_pool(
     join_map = spec.student_join_map
     if join_map is None:
         return candidate_pool
-    if not _should_use_join_bucket(spec.student, join_map, candidate_pool, spec.policy):
+    if not _should_use_join_bucket(spec, candidate_pool):
         return candidate_pool
 
     key_variants = _join_bucket_key_variants(join_map, spec.policy)
@@ -169,28 +168,24 @@ def _bucket_candidate_pool(
 
 
 def _should_use_join_bucket(
-    student: Mapping[str, object],
-    join_map: Mapping[str, int],
+    spec: EligibilitySpec,
     candidate_pool: pd.DataFrame,
-    policy: PolicyConfig,
 ) -> bool:
-    for column in policy.join_keys:
+    join_map = spec.student_join_map
+    if join_map is None:
+        return False
+    for column in spec.policy.join_keys:
         normalized = normalize_join_key_name(column)
         value = join_map.get(normalized)
         if value is None or int(value) < 0:
             return False
-
-    from app.core.common.join_resolver import JoinKeyResolver
-
-    resolver = JoinKeyResolver(policy)
-    school_code = resolver.resolve_school(student, student_join_map=join_map)
+    school_code = spec.school_code
     if school_code.wildcard or school_code.missing or school_code.value is None:
         return False
-
-    center_info = resolver.resolve_center(student, student_join_map=join_map)
+    center_info = spec.effective_join_keys
     if center_info.center_code is None:
         return False
-    wildcard_center = center_wildcard_value(policy)
+    wildcard_center = center_wildcard_value(spec.policy)
     if wildcard_center is not None and int(center_info.center_code) == wildcard_center:
         return False
 
