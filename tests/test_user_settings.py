@@ -32,6 +32,22 @@ def test_save_and_load_user_settings_roundtrip(tmp_path: Path) -> None:
     assert loaded == settings
 
 
+def test_user_settings_to_dict_is_limited_to_indicators() -> None:
+    settings = UserSettings(
+        enable_history_metrics=True,
+        enable_trace_debug_sheets=True,
+        enable_trace_export=False,
+    )
+
+    settings_dict = settings.to_dict()
+
+    assert settings_dict == {
+        "enable_history_metrics": True,
+        "enable_trace_debug_sheets": True,
+        "enable_trace_export": False,
+    }
+
+
 def test_collect_trace_debug_sheets_respects_history_toggle() -> None:
     summary_payload: dict[str, list[object]] = {
         "student_id": [1],
