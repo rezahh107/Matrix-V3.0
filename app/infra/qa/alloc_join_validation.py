@@ -61,7 +61,12 @@ def validate_allocation_join_keys_with_wildcard(
             if col in audit.columns and col in constraint_lookup.columns
         ]
         if merge_keys:
-            audit = audit.merge(constraint_lookup, on=merge_keys, how="left")
+            audit = audit.merge(
+                constraint_lookup,
+                on=merge_keys,
+                how="left",
+                validate="many_to_one",
+            )
 
     def _fix_match_column(
         column: str,

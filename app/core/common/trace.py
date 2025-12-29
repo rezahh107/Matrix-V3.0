@@ -734,6 +734,7 @@ def find_allocation_policy_violations(
         how="left",
         on=policy.join_keys,
         suffixes=("_student", "_pool"),
+        validate="many_to_one",
     )
     capacity_numeric = pd.to_numeric(merged[capacity_col], errors="coerce").fillna(0)
     mask_positive_capacity = capacity_numeric > 0

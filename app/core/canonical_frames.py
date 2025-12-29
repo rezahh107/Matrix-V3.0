@@ -22,6 +22,7 @@ from .common.columns import (
     resolve_aliases,
 )
 from .common.ids import build_mentor_alias_map, extract_alias_code_series
+from .common.index_contract import enforce_rangeindex_with_lineage
 from .common.join_keys import (
     JoinKeyCanonicalizationError,
     _is_missing_value,
@@ -498,7 +499,11 @@ def _build_join_key_duplicate_report(
         report.duplicated(subset=subset_columns, keep=False).groupby(report.index).transform("sum")
     )
     if include_pool_columns:
-        pool_row_index = pd.Series(frame.index[mask_duplicates], index=report.index)
+        if "__source_index__" in frame.columns:
+            source_index = ensure_series(frame["__source_index__"])
+        else:
+            source_index = pd.Series(frame.index, index=frame.index)
+        pool_row_index = pd.Series(source_index[mask_duplicates], index=report.index)
         pool_row_numeric = pd.to_numeric(pool_row_index, errors="coerce")
         if pool_row_numeric.notna().any():
             report["pool_row_index"] = pool_row_numeric.astype("Int64")
@@ -669,6 +674,11 @@ def sanitize_pool_for_allocation(
 
     header_mode = output_header_mode or parse_header_mode(policy.excel.header_mode_internal)
     result = canonicalize_headers(sanitized, header_mode=header_mode)
+    result = enforce_rangeindex_with_lineage(
+        result,
+        lineage_cols=["__source_index__"],
+        context="sanitize_pool_for_allocation",
+    )
     return _attach_pool_stats(result, stats)
 
 
@@ -909,7 +919,11 @@ def canonicalize_students_frame(
     for column in policy.join_keys:
         if column in students.columns and not ensure_series(students[column]).isna().any():
             students[column] = ensure_series(students[column]).astype("int64")
-    return students
+    return enforce_rangeindex_with_lineage(
+        students,
+        lineage_cols=["__source_index__"],
+        context="canonicalize_students_frame",
+    )
 
 
 def canonicalize_pool_frame(
@@ -1072,6 +1086,11 @@ def canonicalize_pool_frame(
         for column, original in preserved.items():
             if column not in pool.columns:
                 pool[column] = original.reindex(pool.index)
+    pool = enforce_rangeindex_with_lineage(
+        pool,
+        lineage_cols=["__source_index__"],
+        context="canonicalize_pool_frame",
+    )
     return _attach_pool_stats(pool, stats)
 
 

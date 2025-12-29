@@ -521,6 +521,7 @@ def _safe_merge(
     right: pd.DataFrame,
     *,
     context: str,
+    validate: str,
     left_label: str | None = None,
     right_label: str | None = None,
     sample_limit: int = _MERGE_DUPLICATE_SAMPLE_LIMIT,
@@ -540,7 +541,7 @@ def _safe_merge(
     right_name = right_label or _describe_frame_source(right, default_label="right dataframe")
 
     try:
-        return left.merge(right, **kwargs)
+        return left.merge(right, validate=validate, **kwargs)
     except ValueError as exc:  # pragma: no cover - مسیر خطا تست دارد
         duplicate_hint = _format_merge_duplicate_hint(
             str(exc),
