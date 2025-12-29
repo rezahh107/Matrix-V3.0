@@ -36,8 +36,10 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
+    QCheckBox,
     QComboBox,
     QDialog,
+    QDialogButtonBox,
     QFileDialog,
     QFormLayout,
     QFrame,
@@ -69,6 +71,7 @@ from app.core.common.columns import canonicalize_headers
 from app.core.counter import find_max_sequence_by_prefix, year_to_yy
 from app.core.policy_loader import get_policy
 from app.infra import cli
+from app.infra.config_flags import UserSettings, load_user_settings, save_user_settings
 from app.infra.db import compute_reference_readiness
 from app.infra.errors import JoinKeyValidationError
 from app.infra.groupcode.groupcode_repository import GroupCodeRepository
@@ -283,12 +286,48 @@ class AccentSplitter(QSplitter):
                 handle.set_theme(theme)
 
 
+class SettingsDialog(QDialog):
+    """Dialog for toggling optional diagnostics exports."""
+
+    def __init__(self, settings: UserSettings, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Settings")
+        self._history_checkbox = QCheckBox("History Metrics", self)
+        self._history_checkbox.setChecked(settings.enable_history_metrics)
+
+        self._debug_checkbox = QCheckBox("Trace Debug Sheets", self)
+        self._debug_checkbox.setChecked(settings.enable_trace_debug_sheets)
+
+        self._trace_checkbox = QCheckBox("Trace Sheet Export", self)
+        self._trace_checkbox.setChecked(settings.enable_trace_export)
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(QLabel("Toggle optional diagnostics and exports", self))
+        layout.addWidget(self._history_checkbox)
+        layout.addWidget(self._debug_checkbox)
+        layout.addWidget(self._trace_checkbox)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    @property
+    def result_settings(self) -> UserSettings:
+        return UserSettings(
+            enable_history_metrics=self._history_checkbox.isChecked(),
+            enable_trace_debug_sheets=self._debug_checkbox.isChecked(),
+            enable_trace_export=self._trace_checkbox.isChecked(),
+        )
+
+
 class MainWindow(QMainWindow):
     """پنجرهٔ اصلی PySide6 برای اجرای سناریوهای Build و Allocate."""
 
     def __init__(self) -> None:
         super().__init__()
         self._prefs = AppPreferences()
+        self._user_settings = load_user_settings()
         stored_language = self._prefs.language
         if self._prefs.has_language_setting():
             self._language = stored_language
@@ -336,6 +375,7 @@ class MainWindow(QMainWindow):
         self._log_line = 0
         self._history_metrics_df = pd.DataFrame(columns=METRIC_COLUMNS)
         self._history_metrics_dialog: HistoryMetricsDialog | None = None
+        self._settings_indicators: dict[str, QLabel] = {}
         self._mentor_pool_entries: list[MentorPoolEntry] = []
         self._mentor_pool_overrides: dict[str, bool] = {}
         self._mentor_pool_source: str = ""
@@ -495,6 +535,12 @@ class MainWindow(QMainWindow):
         controls_layout.setContentsMargins(0, 0, 0, 0)
         controls_layout.setSpacing(12)
         controls_layout.addStretch(1)
+        self._btn_settings = QPushButton("Settings", self)
+        self._btn_settings.setObjectName("btnSettings")
+        self._btn_settings.clicked.connect(self._open_settings_dialog)
+        controls_layout.addWidget(self._btn_settings)
+        settings_strip = self._build_settings_indicator_strip()
+        controls_layout.addLayout(settings_strip)
         self._btn_history_metrics = QPushButton("History Metrics", self)
         self._btn_history_metrics.setObjectName("btnHistoryMetrics")
         self._btn_history_metrics.clicked.connect(self._show_history_metrics)
@@ -538,6 +584,7 @@ class MainWindow(QMainWindow):
         self._is_busy_cursor = False
         self._register_interactive_controls()
         self._update_output_folder_button_state()
+        self._refresh_settings_indicators()
         self._apply_theme()
         self._refresh_last_run_badge()
         self._animate_tab_change(self._tabs.currentIndex())
@@ -1697,12 +1744,53 @@ class MainWindow(QMainWindow):
     def _capture_history_metrics(self, metrics_df: pd.DataFrame | None) -> None:
         """ذخیرهٔ KPI تاریخچه محاسبه‌شده در نخ Worker."""
 
+        if not self._user_settings.enable_history_metrics:
+            self._reset_history_metrics()
+            return
         if isinstance(metrics_df, pd.DataFrame):
             self._history_metrics_df = metrics_df.copy()
         else:
             self._reset_history_metrics()
         if self._history_metrics_dialog is not None:
             self._history_metrics_dialog.update_metrics(self._history_metrics_df)
+
+    @staticmethod
+    def _indicator_markup(enabled: bool, label: str) -> str:
+        color = "#2ecc71" if enabled else "#e74c3c"
+        dot = "●"
+        return f"<span style='color:{color}'>{dot}</span> {escape(label)}"
+
+    def _settings_label_map(self) -> dict[str, str]:
+        return {
+            "enable_history_metrics": "History",
+            "enable_trace_debug_sheets": "Debug Sheets",
+            "enable_trace_export": "Trace",
+        }
+
+    def _build_settings_indicator_strip(self) -> QHBoxLayout:
+        layout = QHBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
+        for key, label in self._settings_label_map().items():
+            indicator = QLabel(self)
+            indicator.setObjectName(f"settingsIndicator_{key}")
+            self._settings_indicators[key] = indicator
+            layout.addWidget(indicator)
+        return layout
+
+    def _refresh_settings_indicators(self) -> None:
+        status = self._user_settings
+        indicator_values = {
+            "enable_history_metrics": status.enable_history_metrics,
+            "enable_trace_debug_sheets": status.enable_trace_debug_sheets,
+            "enable_trace_export": status.enable_trace_export,
+        }
+        for key, enabled in indicator_values.items():
+            indicator = self._settings_indicators.get(key)
+            if indicator is None:
+                continue
+            label = self._settings_label_map().get(key, key)
+            indicator.setText(self._indicator_markup(enabled, label))
 
     def _show_history_metrics(self) -> None:
         """نمایش دیالوگ History Metrics با داده‌های آخرین اجرا."""
@@ -1713,6 +1801,15 @@ class MainWindow(QMainWindow):
             self._history_metrics_dialog.update_metrics(self._history_metrics_df)
         self._history_metrics_dialog.show()
         self._history_metrics_dialog.raise_()
+
+    def _open_settings_dialog(self) -> None:
+        dialog = SettingsDialog(self._user_settings, self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self._user_settings = dialog.result_settings
+            save_user_settings(self._user_settings)
+            self._refresh_settings_indicators()
+            if not self._user_settings.enable_history_metrics:
+                self._reset_history_metrics()
 
     def _start_allocate(self) -> None:
         """اجرای سناریوی تخصیص با فراخوانی CLI."""
@@ -1958,6 +2055,8 @@ class MainWindow(QMainWindow):
         if self._mentor_pool_overrides:
             overrides["mentor_pool_overrides"] = dict(self._mentor_pool_overrides)
 
+        overrides["user_settings"] = self._user_settings.to_dict()
+
         return overrides
 
     def _build_rule_engine_overrides(self) -> dict[str, object]:
@@ -1987,6 +2086,8 @@ class MainWindow(QMainWindow):
         sabt_template = self._picker_sabt_template_rule.text().strip()
         if sabt_template:
             overrides["sabt_template"] = sabt_template
+
+        overrides["user_settings"] = self._user_settings.to_dict()
 
         return overrides
 
