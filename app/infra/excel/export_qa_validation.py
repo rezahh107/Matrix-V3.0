@@ -38,6 +38,7 @@ class QaValidationContext:
     alloc_join_audit: pd.DataFrame | None = None
     alloc_join_summary: pd.DataFrame | None = None
     pool_join_conflicts: pd.DataFrame | None = None
+    pool_alignment_preflight: pd.DataFrame | None = None
 
 
 def _summary_sheet(report: QaReport) -> pd.DataFrame:
@@ -223,6 +224,38 @@ def _meta_sheet(context: QaValidationContext, report: QaReport) -> pd.DataFrame:
     return pd.json_normalize([meta])
 
 
+def _pool_detection_sheet(context: QaValidationContext) -> pd.DataFrame:
+    detection: object | None = None
+    if context.meta:
+        detection = context.meta.get("pool_detection")
+    if not detection or not isinstance(detection, Mapping):
+        return pd.DataFrame(
+            columns=[
+                "sheet",
+                "missing_required_count",
+                "missing_required_list",
+                "row_count",
+                "col_count",
+                "excluded_reason",
+                "has_mentor_id",
+                "selected_sheet",
+                "pool_type",
+                "detection_method",
+                "confidence",
+            ]
+        )
+    sheets = detection.get("sheets") if isinstance(detection, Mapping) else None
+    if not isinstance(sheets, list):
+        sheets = []
+    detection_map = detection
+    frame = pd.DataFrame(sheets)
+    frame["selected_sheet"] = detection_map.get("selected_sheet")
+    frame["pool_type"] = detection_map.get("pool_type")
+    frame["detection_method"] = detection_map.get("detection_method")
+    frame["confidence"] = detection_map.get("confidence")
+    return frame
+
+
 def export_qa_validation(
     report: QaReport,
     *,
@@ -242,6 +275,7 @@ def export_qa_validation(
         "meta": _meta_sheet(ctx, report),
         "pool_join_key_duplicates": _join_key_duplicates_sheet(ctx),
         "pool_join_conflicts": _pool_join_conflicts_sheet(ctx, report),
+        "pool_detection": _pool_detection_sheet(ctx),
     }
     if ctx.alloc_join_summary is not None:
         sheets["alloc_join_summary"] = ctx.alloc_join_summary
@@ -250,5 +284,7 @@ def export_qa_validation(
         if "any_mismatch" in audit.columns:
             audit = audit.loc[audit["any_mismatch"].fillna(False)].copy()
         sheets["alloc_join_mismatches"] = audit
+    if ctx.pool_alignment_preflight is not None:
+        sheets["pool_alignment_preflight"] = ctx.pool_alignment_preflight
     sheet_modes = {name: None for name in sheets}
     write_xlsx_atomic(sheets, output, header_mode=None, sheet_header_modes=sheet_modes)

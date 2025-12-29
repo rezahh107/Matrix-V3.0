@@ -52,6 +52,7 @@ from app.core.counter import (
     pick_counter_sheet_name,
     year_to_yy,
 )
+from app.core.debug_pool_alignment import analyze_pool_alignment_batch
 from app.core.inspactor_schema_helper import (
     InspactorDefaultConfig,
     with_default_inspactor_columns,
@@ -118,6 +119,7 @@ from app.infra.mentors.value_canonicalizer import ValueCanonicalizer
 from app.infra.qa.alloc_join_validation import validate_allocation_join_keys_with_wildcard
 from app.infra.reference_managers_repository import import_managers_from_excel
 from app.infra.reference_mentors_repository import (
+    import_mentor_pool_from_dataframe,
     import_mentor_pool_from_excel,
     load_mentor_pool_from_cache,
 )
@@ -317,6 +319,7 @@ def _build_qa_meta(
     trace_df: pd.DataFrame | None,
     trace_summary_df: pd.DataFrame | None,
     history_info_df: pd.DataFrame | None,
+    pool_detection: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
     """Summarize QA and trace observability for logging and exports."""
 
@@ -333,6 +336,8 @@ def _build_qa_meta(
         meta["input_students"] = str(input_students_path)
     if input_pool_path:
         meta["input_pool"] = str(input_pool_path)
+    if pool_detection:
+        meta["pool_detection"] = pool_detection
 
     meta["started_at"] = started_at.isoformat().replace("+00:00", "Z")
     if completed_at is not None:
@@ -1213,31 +1218,37 @@ def _resolve_mentor_pool_frame(
     pool_sheet = getattr(args, "pool_sheet", None)
     path_text = getattr(args, pool_arg, None)
 
-    def _resolve_pool_type(pool_path: Path) -> str:
-        if pool_type_arg != "auto":
-            return pool_type_arg
-        if pool_sheet:
-            return "matrix" if pool_sheet == "matrix" else "inspactor"
-        with pd.ExcelFile(pool_path) as excel:
-            return "matrix" if "matrix" in excel.sheet_names else "inspactor"
-
     if path_text:
         pool_path = Path(path_text)
-        pool_type = _resolve_pool_type(pool_path)
+        pool_type: str
+        detection: pool_loader.PoolDetectionResult | None = None
+
+        def _load_raw(resolved_type: str) -> pd.DataFrame:
+            nonlocal detection
+            raw_df, detection = pool_loader.load_pool_with_detection(
+                pool_path, pool_type=resolved_type, pool_sheet=pool_sheet
+            )
+            return raw_df
+
+        if pool_type_arg == "auto" and pool_sheet:
+            pool_type = "matrix" if pool_sheet == "matrix" else "inspactor"
+            raw_df = _load_raw(pool_type)
+        elif pool_type_arg == "auto":
+            pool_type = "inspactor"
+            raw_df = _load_raw(pool_type)
+        else:
+            if pool_type_arg not in {"inspactor", "matrix"}:
+                raise ValueError("pool-type باید inspactor یا matrix باشد.")
+            pool_type = pool_type_arg
+            raw_df = _load_raw(pool_type)
+
         pool_source_value = pool_source if pool_source != "auto" else pool_type
         if db:
-            df = import_mentor_pool_from_excel(
-                pool_path,
-                db=db,
-                policy=policy,
-                pool_source=pool_source_value,
-                pool_type=pool_type,
-                pool_sheet=pool_sheet,
+            df = import_mentor_pool_from_dataframe(
+                raw_df, db=db, policy=policy, pool_source=pool_source_value
             )
+            detection = detection or df.attrs.get("pool_detection")
         else:
-            raw_df = pool_loader.load_pool(
-                pool_path, pool_type=pool_type, pool_sheet=pool_sheet
-            )
             try:
                 df = canonicalize_pool_frame(
                     raw_df,
@@ -1256,6 +1267,14 @@ def _resolve_mentor_pool_frame(
                 raise JoinKeyValidationError(
                     JoinKeyValidationResult(canonical_df=pd.DataFrame(), issues=[issue])
                 ) from exc
+        detection = detection or df.attrs.get("pool_detection")
+        pool_source_value = (
+            pool_source
+            if pool_source != "auto"
+            else getattr(detection, "pool_type", pool_type)
+        )
+        if detection is not None:
+            df.attrs["pool_detection"] = detection
         df.attrs["pool_source"] = pool_source_value
         inputs = {pool_arg: str(pool_path)}
         inputs_mtime = {pool_arg: pool_path.stat().st_mtime}
@@ -2652,7 +2671,52 @@ def _prepare_allocation_frames(
     return students_clean, pool_clean
 
 
-def _sanitize_pool_for_allocation(pool_df: pd.DataFrame, *, policy: PolicyConfig) -> pd.DataFrame:
+def _run_pool_alignment_preflight(
+    students_df: pd.DataFrame, pool_df: pd.DataFrame, *, policy: PolicyConfig
+) -> pd.DataFrame:
+    sample_limit = None if len(students_df) <= 500 else 100
+    reports = analyze_pool_alignment_batch(
+        students_df, pool_df, policy=policy, limit=sample_limit
+    )
+    preflight_df = pd.DataFrame(reports)
+    if preflight_df.empty:
+        return preflight_df
+
+    def _stage_type_zero(counts: object) -> bool:
+        if not isinstance(counts, dict):
+            return False
+        value = counts.get("type")
+        try:
+            return int(value) == 0
+        except (TypeError, ValueError):
+            return False
+
+    zero_mask = preflight_df["candidate_count_final"].fillna(0) == 0
+    zero_rate = float(zero_mask.mean()) if len(preflight_df) else 0.0
+    stage_type_zero_rate = 0.0
+    if bool(zero_mask.any()):
+        stage_type_zero_rate = float(
+            preflight_df.loc[zero_mask, "stage_counts"].apply(_stage_type_zero).mean()
+        )
+
+    log_fn = logger.warning if zero_rate >= 0.2 else logger.info
+    log_fn(
+        "Pool alignment preflight: zero_candidates=%.3f stage0=%.3f sample=%d",
+        zero_rate,
+        stage_type_zero_rate,
+        len(preflight_df),
+    )
+    if zero_rate >= 0.7 and stage_type_zero_rate >= 0.7:
+        raise ValueError(
+            "پیش‌وارسی استخر منتورها نشان می‌دهد بیش از ۷۰٪ نمونه هیچ کاندیدایی ندارند (مرحله type=0). "
+            "احتمالاً شیت اشتباه انتخاب شده است؛ گزینه‌های --pool-sheet و --pool-type را بررسی کنید."
+        )
+    return preflight_df
+
+
+def _sanitize_pool_for_allocation(
+    pool_df: pd.DataFrame, *, policy: PolicyConfig, pool_source: str = "inspactor"
+) -> pd.DataFrame:
     """پاک‌سازی استخر منتورها برای تخصیص بر اساس Policy.
 
     این تابع لایهٔ Infra تنها وظیفهٔ فوروارد کردن استخر خام به منطق خالص
@@ -2686,7 +2750,7 @@ def _sanitize_pool_for_allocation(pool_df: pd.DataFrame, *, policy: PolicyConfig
         pool_df,
         policy=policy,
         sanitize_pool=True,
-        pool_source="inspactor",
+        pool_source=pool_source,
         require_join_keys=True,
     )
 
@@ -2712,6 +2776,8 @@ def _allocate_and_write(
     input_pool_path: Path | None,
     policy_path: Path,
     user_settings: UserSettings | None = None,
+    pool_alignment_preflight: pd.DataFrame | None = None,
+    pool_detection: Mapping[str, object] | None = None,
 ) -> int:
     """اجرای تخصیص، الصاق شناسه‌ها و نوشتن خروجی‌های Excel."""
     run_uuid = uuid4().hex
@@ -2895,8 +2961,14 @@ def _allocate_and_write(
             trace_df=trace_df,
             trace_summary_df=trace_extras.summary_df if trace_extras else None,
             history_info_df=history_info_df,
+            pool_detection=pool_detection,
         )
         merged_extras = dict(qa_report.extras or {})
+        preflight_sheet = (
+            _make_excel_safe(pool_alignment_preflight)
+            if isinstance(pool_alignment_preflight, pd.DataFrame)
+            else None
+        )
         qa_context = QaValidationContext(
             allocation=allocations_df,
             allocation_summary=updated_pool_df,
@@ -2904,6 +2976,7 @@ def _allocate_and_write(
             alloc_join_audit=join_key_audit_sheet,
             alloc_join_summary=join_key_summary_sheet,
             pool_join_conflicts=merged_extras.get("pool_join_conflicts"),
+            pool_alignment_preflight=preflight_sheet,
         )
         merged_extras["pool_join_conflicts"] = qa_context.pool_join_conflicts
         qa_report.extras = merged_extras
@@ -3102,6 +3175,7 @@ def _allocate_and_write(
                 trace_df=trace_df,
                 trace_summary_df=trace_extras.summary_df if trace_extras else None,
                 history_info_df=history_info_df,
+                pool_detection=pool_detection,
             )
         final_meta = dict(qa_meta or {})
         final_meta.setdefault("completed_at", completed_at.isoformat().replace("+00:00", "Z"))
@@ -3163,6 +3237,7 @@ def _run_allocate(args: argparse.Namespace, policy: PolicyConfig, progress: Prog
         args, policy, db=db, pool_arg="pool", pool_source=pool_source_arg
     )
     detection = pool_df.attrs.get("pool_detection")
+    detection_payload = asdict(detection) if detection is not None else None
     pool_source = getattr(detection, "pool_type", None) or pool_df.attrs.get(
         "pool_source", pool_source_arg
     )
@@ -3176,6 +3251,10 @@ def _run_allocate(args: argparse.Namespace, policy: PolicyConfig, progress: Prog
     )
 
     pool_base = _apply_mentor_pool_overrides(pool_base, policy, args)
+
+    preflight_df = _run_pool_alignment_preflight(
+        students_base, pool_base, policy=policy
+    )
 
     return _allocate_and_write(
         students_base,
@@ -3195,6 +3274,8 @@ def _run_allocate(args: argparse.Namespace, policy: PolicyConfig, progress: Prog
         ),
         policy_path=policy_path,
         user_settings=user_settings,
+        pool_alignment_preflight=preflight_df,
+        pool_detection=detection_payload,
     )
 
 
@@ -3212,6 +3293,8 @@ def _run_rule_engine(args: argparse.Namespace, policy: PolicyConfig, progress: P
     progress(0, "loading inputs")
     students_df = reader_students(students_path)
     pool_df = _load_matrix_candidate_pool(matrix_path, policy)
+    detection = pool_df.attrs.get("pool_detection")
+    detection_payload = asdict(detection) if detection is not None else None
 
     students_base, pool_base = _prepare_allocation_frames(
         students_df,
@@ -3239,6 +3322,8 @@ def _run_rule_engine(args: argparse.Namespace, policy: PolicyConfig, progress: P
         input_pool_path=matrix_path,
         policy_path=policy_path,
         user_settings=user_settings,
+        pool_alignment_preflight=None,
+        pool_detection=detection_payload,
     )
 
 
@@ -3346,7 +3431,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--pool-type",
         choices=("inspactor", "matrix"),
         default="inspactor",
-        help="نوع استخر منتورها برای انتخاب شیت ورودی",
+        help="نوع استخر منتورها برای انتخاب شیت ورودی (شیت 'matrix' خروجی rule-engine است)",
     )
     build_cmd.add_argument(
         "--pool-sheet",
@@ -3427,9 +3512,9 @@ def _build_parser() -> argparse.ArgumentParser:
     import_mentors_cmd.add_argument("--inspactor", required=True, help="مسیر فایل Inspactor")
     import_mentors_cmd.add_argument(
         "--pool-type",
-        choices=("auto", "inspactor", "matrix"),
+        choices=("inspactor", "matrix"),
         default="inspactor",
-        help="نوع استخر منتورها برای انتخاب شیت ورودی",
+        help="نوع استخر منتورها برای انتخاب شیت ورودی (شیت 'matrix' تنها با این گزینه انتخاب می‌شود)",
     )
     import_mentors_cmd.add_argument(
         "--pool-sheet",
@@ -3484,9 +3569,9 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     alloc_cmd.add_argument(
         "--pool-type",
-        choices=("auto", "inspactor", "matrix"),
-        default="auto",
-        help="نوع استخر منتورها برای انتخاب شیت ورودی",
+        choices=("inspactor", "matrix"),
+        default="inspactor",
+        help="نوع استخر منتورها برای انتخاب شیت ورودی (شیت خروجی rule-engine با گزینه matrix)",
     )
     alloc_cmd.add_argument(
         "--pool-sheet",
@@ -3775,19 +3860,10 @@ def main(
             pool_type_val = getattr(args, "pool_type", "inspactor")
             pool_sheet = getattr(args, "pool_sheet", None)
             pool_path = Path(args.inspactor)
-            if pool_type_val == "auto":
-                if pool_sheet:
-                    resolved_pool_type = "matrix" if pool_sheet == "matrix" else "inspactor"
-                else:
-                    with pd.ExcelFile(pool_path) as excel:
-                        resolved_pool_type = (
-                            "matrix" if "matrix" in excel.sheet_names else "inspactor"
-                        )
-            else:
-                resolved_pool_type = pool_type_val
-            resolved_pool_source = (
-                pool_type_val if pool_type_val != "auto" else resolved_pool_type
-            )
+            if pool_type_val not in {"inspactor", "matrix"}:
+                raise ValueError("pool-type باید inspactor یا matrix باشد.")
+            resolved_pool_type = "matrix" if pool_sheet == "matrix" else pool_type_val
+            resolved_pool_source = resolved_pool_type
             import_mentor_pool_from_excel(
                 pool_path,
                 db=db,

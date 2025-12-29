@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from app.core.build_matrix import REQUIRED_INSPACTOR_COLUMNS
 from app.core.common.columns import canonicalize_headers
 from app.infra import cli
 
@@ -79,6 +80,9 @@ def test_cli_allocate_accepts_counter_args(tmp_path: Path) -> None:
             },
         ]
     )
+    for column in REQUIRED_INSPACTOR_COLUMNS:
+        if column not in pool.columns:
+            pool[column] = ["v1", "v2"]
     pool_path = tmp_path / "pool.xlsx"
     _write_excel(pool, pool_path, sheet_name="Pool")
 

@@ -5,6 +5,8 @@ from collections.abc import Sequence
 import pandas as pd
 import pytest
 
+from app.core.build_matrix import REQUIRED_INSPACTOR_COLUMNS
+
 JOIN_KEYS_6: list[str] = [
     "کدرشته",
     "جنسیت",
@@ -29,6 +31,8 @@ def make_empty_pool_with_join_keys(join_keys: Sequence[str] = JOIN_KEYS_6) -> pd
 
     payload = {key: pd.Series([], dtype="Int64") for key in join_keys}
     payload["کد کارمندی پشتیبان"] = pd.Series([], dtype="string")
+    for column in REQUIRED_INSPACTOR_COLUMNS:
+        payload.setdefault(column, pd.Series([], dtype="object"))
     return pd.DataFrame(payload)
 
 
@@ -56,4 +60,6 @@ def mentor_pool_with_duplicates() -> pd.DataFrame:
 
     data = {key: pd.Series([1, 1, 1], dtype="Int64") for key in JOIN_KEYS_6}
     data["کد کارمندی پشتیبان"] = pd.Series(["E1", "E1", "E2"], dtype="string")
+    for column in REQUIRED_INSPACTOR_COLUMNS:
+        data.setdefault(column, pd.Series([1, 1, 1], dtype="Int64"))
     return pd.DataFrame(data)
