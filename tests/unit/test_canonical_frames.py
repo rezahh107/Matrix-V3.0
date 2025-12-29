@@ -28,17 +28,19 @@ def test_canonicalize_mentor_pool_frame_handles_non_range_index() -> None:
     assert canonical.loc[20, "mentor_status"] == "active"
 
 
-def test_canonicalize_mentor_pool_frame_rejects_unknown_status() -> None:
+@pytest.mark.parametrize(
+    ("status", "error_match"),
+    [
+        ("unknown", "Unknown mentor_status value"),
+        ("inactive", "mentor_status value is not allowed"),
+    ],
+)
+def test_canonicalize_mentor_pool_frame_rejects_invalid_status(
+    status: str, error_match: str
+) -> None:
+    """Verify that invalid mentor statuses are rejected with the correct error."""
     governance = _governance_config(allowed=(MentorStatus.ACTIVE,))
-    mentors_df = pd.DataFrame({"mentor_status": ["unknown"]})
+    mentors_df = pd.DataFrame({"mentor_status": [status]})
 
-    with pytest.raises(ValueError, match="Unknown mentor_status value"):
-        canonicalize_mentor_pool_frame(mentors_df, governance=governance)
-
-
-def test_canonicalize_mentor_pool_frame_rejects_disallowed_status() -> None:
-    governance = _governance_config(allowed=(MentorStatus.ACTIVE,))
-    mentors_df = pd.DataFrame({"mentor_status": ["inactive"]})
-
-    with pytest.raises(ValueError, match="mentor_status value is not allowed"):
+    with pytest.raises(ValueError, match=error_match):
         canonicalize_mentor_pool_frame(mentors_df, governance=governance)
