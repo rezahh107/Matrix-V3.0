@@ -1,17 +1,23 @@
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pandas as pd
 import pytest
 
+from app.core.policy_loader import load_policy
+from app.infra.cli_legacy import _resolve_mentor_pool_frame
 from app.infra.pool_loader import detect_pool_sheet
+from app.infra.reference_mentors_repository import import_mentor_pool_from_dataframe
 
 
-def _make_workbook(path: Path, include_inspactor: bool = True) -> Path:
+def _make_workbook(path: Path, include_inspactor: bool = True, matrix_rows: int = 2) -> Path:
     with pd.ExcelWriter(path) as writer:
-        pd.DataFrame({"mentor_id": [1, 2]}).to_excel(writer, sheet_name="matrix", index=False)
+        pd.DataFrame({"mentor_id": list(range(1, matrix_rows + 1))}).to_excel(
+            writer, sheet_name="matrix", index=False
+        )
         if include_inspactor:
             pd.DataFrame({"mentor_id": [3]}).to_excel(
                 writer, sheet_name="inspactor_valid", index=False
@@ -20,7 +26,7 @@ def _make_workbook(path: Path, include_inspactor: bool = True) -> Path:
 
 
 def test_inspactor_pool_excludes_matrix_by_default(tmp_path: Path) -> None:
-    path = _make_workbook(tmp_path / "pool.xlsx")
+    path = _make_workbook(tmp_path / "pool.xlsx", matrix_rows=0)
 
     result = detect_pool_sheet(path, pool_type="inspactor")
 
@@ -86,3 +92,65 @@ def test_tie_break_prefers_known_higher_row_count(tmp_path: Path) -> None:
     sheets = {info["sheet"]: info for info in result.evidence["sheets"]}
     assert sheets["beta"]["row_count"] == 3
     assert sheets["alpha"]["row_count"] == 1
+
+
+def test_inspactor_pool_fallback_prefers_matrix_with_ids(tmp_path: Path) -> None:
+    path = tmp_path / "pool.xlsx"
+    with pd.ExcelWriter(path) as writer:
+        pd.DataFrame(
+            {
+                "mentor_id": ["m1", "m2"],
+                "کدرشته": [1, 2],
+                "جنسیت": [1, 2],
+                "دانش آموز فارغ": [0, 0],
+                "مرکز گلستان صدرا": [1, 1],
+                "مالی حکمت بنیاد": [1, 1],
+                "کد مدرسه": [10, 20],
+            }
+        ).to_excel(writer, sheet_name="matrix", index=False)
+        pd.DataFrame({"یادداشت": ["aux"]}).to_excel(
+            writer, sheet_name="validation", index=False
+        )
+
+    result = detect_pool_sheet(path, pool_type="inspactor")
+
+    assert result.selected_sheet == "matrix"
+    assert result.detection_method == "fallback_matrix_preferred"
+
+
+def test_auto_pool_type_loads_matrix_and_validates_join_keys(tmp_path: Path) -> None:
+    path = tmp_path / "pool.xlsx"
+    with pd.ExcelWriter(path) as writer:
+        pd.DataFrame(
+            {
+                "mentor_id": ["m1"],
+                "کدرشته": [1],
+                "جنسیت": [1],
+                "دانش آموز فارغ": [0],
+                "مرکز گلستان صدرا": [1],
+                "مالی حکمت بنیاد": [1],
+                "کد مدرسه": [10],
+            }
+        ).to_excel(writer, sheet_name="matrix", index=False)
+        pd.DataFrame({"یادداشت": ["aux"]}).to_excel(
+            writer, sheet_name="validation", index=False
+        )
+
+    policy = load_policy(Path("config/policy.json"))
+    args = argparse.Namespace(pool=str(path), pool_type="auto", pool_sheet=None)
+
+    df, _, _ = _resolve_mentor_pool_frame(
+        args, policy, db=None, pool_arg="pool", pool_source="auto"
+    )
+
+    detection = df.attrs.get("pool_detection")
+    assert detection is not None
+    assert detection.selected_sheet == "matrix"
+    assert detection.pool_type == "matrix"
+
+    normalized = import_mentor_pool_from_dataframe(
+        df, db=None, policy=policy, pool_source="matrix"
+    )
+
+    assert set(policy.join_keys).issubset(normalized.columns)
+    assert normalized[policy.join_keys].notna().all().all()

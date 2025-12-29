@@ -1901,6 +1901,8 @@ class MainWindow(QMainWindow):
             self._picker_students.text(),
             "--pool",
             self._picker_pool.text(),
+            "--pool-type",
+            "matrix",
             "--output",
             self._picker_alloc_out.text(),
             "--capacity-column",
