@@ -60,6 +60,11 @@ from app.core.policy_loader import MentorStatus, PolicyConfig, load_policy
 from app.core.qa.invariants import QaReport, run_all_invariants
 from app.infra import history_store, pool_loader
 from app.infra.audit_allocations import audit_allocations, summarize_report
+from app.infra.config_flags import (
+    UserSettings,
+    coerce_user_settings,
+    load_user_settings,
+)
 from app.infra.console import safe_print
 from app.infra.errors import (
     DatabaseCorruptError,
@@ -803,6 +808,14 @@ def _empty_history_metrics_df() -> pd.DataFrame:
     """دیتافریم خالی با ستون‌های KPI تاریخچه."""
 
     return pd.DataFrame(columns=METRIC_COLUMNS)
+
+
+def _resolve_user_settings(ui_overrides: Mapping[str, object] | None) -> UserSettings:
+    if ui_overrides:
+        override_val = ui_overrides.get("user_settings")
+        if override_val is not None:
+            return coerce_user_settings(override_val)
+    return load_user_settings()
 
 
 def _log_history_metrics(
@@ -2686,12 +2699,14 @@ def _allocate_and_write(
     input_students_path: Path | None,
     input_pool_path: Path | None,
     policy_path: Path,
+    user_settings: UserSettings | None = None,
 ) -> int:
     """اجرای تخصیص، الصاق شناسه‌ها و نوشتن خروجی‌های Excel."""
     run_uuid = uuid4().hex
     started_at = datetime.now(UTC)
     cli_args_text = " ".join(getattr(args, "_raw_argv", [])).strip() or None
     ui_overrides: dict[str, object] = getattr(args, "_ui_overrides", {}) or {}
+    resolved_settings = coerce_user_settings(user_settings) if user_settings else _resolve_user_settings(ui_overrides)
     qa_report: QaReport | None = None
     join_key_audit: JoinKeyAuditResult | None = None
     history_metrics_df: pd.DataFrame | None = None
@@ -2896,7 +2911,7 @@ def _allocate_and_write(
         summary_df_attr = trace_extras.summary_df if trace_extras else None
         ui_overrides = getattr(args, "_ui_overrides", {}) or {}
         history_metrics_df = _empty_history_metrics_df()
-        if (
+        if resolved_settings.enable_history_metrics and (
             isinstance(summary_df_attr, pd.DataFrame)
             and not summary_df_attr.empty
             and history_info_df is not None
@@ -2912,13 +2927,14 @@ def _allocate_and_write(
             except KeyError:
                 history_metrics_df = _empty_history_metrics_df()
 
-        history_metrics_df = _log_history_metrics(
-            summary_df_attr,
-            students_df=students_base,
-            history_info_df=history_info_df,
-            policy=policy,
-            history_metrics_df=history_metrics_df,
-        )
+        if resolved_settings.enable_history_metrics:
+            history_metrics_df = _log_history_metrics(
+                summary_df_attr,
+                students_df=students_base,
+                history_info_df=history_info_df,
+                policy=policy,
+                history_metrics_df=history_metrics_df,
+            )
 
         metrics_callback = ui_overrides.get("history_metrics_callback")
         if callable(metrics_callback):
@@ -2931,16 +2947,19 @@ def _allocate_and_write(
         header_overrides: dict[str, HeaderMode | None] = {}
         prepare_overrides: dict[str, Literal["default", "raw"]] = {}
 
-        debug_sheets = collect_trace_debug_sheets(
-            trace_df,
-            students_df=students_base,
-            history_info_df=history_info_df,
-            policy=policy,
-            summary_df=summary_df_attr,
-            unallocated_summary=trace_extras.unallocated_summary if trace_extras else None,
-            policy_violations=trace_extras.policy_violations if trace_extras else None,
-            final_status_counts=trace_extras.final_status_counts if trace_extras else None,
-        )
+        debug_sheets: dict[str, pd.DataFrame] = {}
+        if resolved_settings.enable_trace_debug_sheets:
+            debug_sheets = collect_trace_debug_sheets(
+                trace_df,
+                students_df=students_base,
+                history_info_df=history_info_df,
+                policy=policy,
+                summary_df=summary_df_attr,
+                unallocated_summary=trace_extras.unallocated_summary if trace_extras else None,
+                policy_violations=trace_extras.policy_violations if trace_extras else None,
+                final_status_counts=trace_extras.final_status_counts if trace_extras else None,
+                enable_history_metrics=resolved_settings.enable_history_metrics,
+            )
         for name, df in debug_sheets.items():
             sheets[name] = _make_excel_safe(df)
             header_overrides[name] = None
@@ -2969,7 +2988,8 @@ def _allocate_and_write(
         allocations_df = _make_excel_safe(allocations_df)
         updated_pool_df = _make_excel_safe(updated_pool_df)
         logs_df = _make_excel_safe(logs_df)
-        trace_df = _make_excel_safe(trace_df)
+        if resolved_settings.enable_trace_export:
+            trace_df = _make_excel_safe(trace_df)
         selection_reasons_df = _make_excel_safe(selection_reasons_df)
         # sabt_allocations_df با هدر اصلی حفظ می‌شود اما از مسیر آماده‌سازی پیش‌فرض
         # عبور می‌کند تا ستون‌های موبایل/رهگیری به‌صورت متن و با صفر پیشتاز ذخیره شوند.
@@ -2984,7 +3004,8 @@ def _allocate_and_write(
             sheets["allocations"] = allocations_df
         sheets["updated_pool"] = updated_pool_df
         sheets["logs"] = logs_df
-        sheets["trace"] = trace_df
+        if resolved_settings.enable_trace_export:
+            sheets["trace"] = trace_df
         sheets[sheet_name] = selection_reasons_df
         sheets["allocation_vs_pool_audit"] = join_key_audit_sheet
 
@@ -3099,11 +3120,15 @@ def _allocate_and_write(
         history_store.log_allocation_run(
             run_uuid=run_uuid,
             ctx=run_ctx,
-            history_metrics=history_metrics_df if success else None,
+            history_metrics=history_metrics_df if success and resolved_settings.enable_history_metrics else None,
             qa_outcome=qa_outcome,
             qa_report=qa_report,
-            trace_snapshot=trace_df if success else None,
-            trace_summary_df=trace_extras.summary_df if trace_extras else None,
+            trace_snapshot=trace_df if success and resolved_settings.enable_trace_export else None,
+            trace_summary_df=(
+                trace_extras.summary_df
+                if trace_extras and resolved_settings.enable_trace_debug_sheets
+                else None
+            ),
             qa_extras=getattr(qa_report, "extras", None),
             db=db,
         )
@@ -3117,6 +3142,7 @@ def _run_allocate(args: argparse.Namespace, policy: PolicyConfig, progress: Prog
     capacity_column = args.capacity_column or policy.columns.remaining_capacity
 
     db = _resolve_local_db(args)
+    user_settings: UserSettings | None = getattr(args, "_user_settings", None)
 
     progress(0, "loading inputs")
     students_df, student_inputs, _ = _resolve_students_frame(args, policy, db=db)
@@ -3152,6 +3178,7 @@ def _run_allocate(args: argparse.Namespace, policy: PolicyConfig, progress: Prog
             Path(args.pool) if getattr(args, "pool", None) else (db.path if db else None)
         ),
         policy_path=policy_path,
+        user_settings=user_settings,
     )
 
 
@@ -3181,6 +3208,7 @@ def _run_rule_engine(args: argparse.Namespace, policy: PolicyConfig, progress: P
     pool_base = _apply_mentor_pool_overrides(pool_base, policy, args)
 
     db = _resolve_local_db(args)
+    user_settings: UserSettings | None = getattr(args, "_user_settings", None)
     return _allocate_and_write(
         students_base,
         pool_base,
@@ -3194,6 +3222,7 @@ def _run_rule_engine(args: argparse.Namespace, policy: PolicyConfig, progress: P
         input_students_path=students_path,
         input_pool_path=matrix_path,
         policy_path=policy_path,
+        user_settings=user_settings,
     )
 
 
@@ -3691,6 +3720,7 @@ def main(
 
     args._ui_overrides = ui_overrides or {}
     args._ui_mode = ui_overrides is not None
+    args._user_settings = _resolve_user_settings(args._ui_overrides)
 
     if not hasattr(args, "policy"):
         args.policy = str(_DEFAULT_POLICY_PATH)

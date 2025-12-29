@@ -445,6 +445,7 @@ def collect_trace_debug_sheets(
     unallocated_summary: pd.DataFrame | None = None,
     policy_violations: pd.DataFrame | None = None,
     final_status_counts: pd.Series | None = None,
+    enable_history_metrics: bool = True,
 ) -> dict[str, pd.DataFrame]:
     """ساخت شیت‌های تشخیصی از تریس برای خروجی Excel بدون تغییر رفتار اصلی.
 
@@ -471,12 +472,13 @@ def collect_trace_debug_sheets(
             counts_df = value_counts.reset_index()
             counts_df.columns = ["final_status", "count"]
             sheets["FinalStatus_counts"] = counts_df
-        history_metrics_df = _build_history_metrics_sheet(
-            summary_df,
-            students_df=students_df,
-            history_info_df=history_info_df,
-            policy=policy,
-        )
+        if enable_history_metrics:
+            history_metrics_df = _build_history_metrics_sheet(
+                summary_df,
+                students_df=students_df,
+                history_info_df=history_info_df,
+                policy=policy,
+            )
         sheets["JoinKeyProvenance_counts"] = _build_join_key_provenance_summary(
             summary_df,
             policy=policy,
