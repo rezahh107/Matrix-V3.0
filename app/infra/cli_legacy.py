@@ -3776,8 +3776,8 @@ def main(
             pool_sheet = getattr(args, "pool_sheet", None)
             pool_path = Path(args.inspactor)
             if pool_type_val == "auto":
-                if pool_sheet == "matrix":
-                    resolved_pool_type = "matrix"
+                if pool_sheet:
+                    resolved_pool_type = "matrix" if pool_sheet == "matrix" else "inspactor"
                 else:
                     with pd.ExcelFile(pool_path) as excel:
                         resolved_pool_type = (
