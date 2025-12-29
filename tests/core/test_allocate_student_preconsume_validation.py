@@ -67,7 +67,11 @@ def test_allocate_student_preconsume_validation_catches_conflict(
         conflicting_pool[key] = 0
     conflicting_pool[policy.stage_column("group")] = 27
 
-    monkeypatch.setattr(alloc_mod, "apply_join_filters", lambda pool, *_args, **_kwargs: pool)
+    def _fake_apply_eligibility(pool, *_args, **_kwargs):
+        priority = pd.Series(0, index=pool.index, dtype=int)
+        return pool, priority, {"stage_counts": {}}
+
+    monkeypatch.setattr(alloc_mod, "apply_eligibility", _fake_apply_eligibility)
     monkeypatch.setattr(
         alloc_mod,
         "_filter_candidates_by_join_map",
