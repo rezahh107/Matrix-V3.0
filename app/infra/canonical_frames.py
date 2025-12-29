@@ -102,6 +102,6 @@ def canonicalize_mentor_pool_frame(
                 raise ValueError(
                     "mentor_status value is not allowed by governance.allowed_statuses"
                 )
-            normalized_status.iloc[idx] = status.value
+            normalized_status.loc[idx] = status.value
         canonical["mentor_status"] = normalized_status
     return canonical
