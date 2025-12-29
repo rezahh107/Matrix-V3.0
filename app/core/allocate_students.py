@@ -17,6 +17,7 @@ from .canonical_frames import canonicalize_pool_frame, canonicalize_students_fra
 from .center_manager import resolve_center_manager_config, validate_center_config
 from .common.columns import CANON_EN_TO_FA, canonicalize_headers, dedupe_columns, ensure_series
 from .common.eligibility_channel import (
+    EligibilitySpec,
     JoinBucketIndex,
     apply_eligibility,
     build_join_bucket_index as _build_join_bucket_index,
@@ -1789,13 +1790,25 @@ def allocate_student(
     progress(5, "prefilter")
 
     resolver = JoinKeyResolver(policy)
-    eligibility_spec = resolver.resolve_candidate_scope(
-        student,
+    eligibility_spec = EligibilitySpec(
+        effective_join_keys=resolver.resolve_center(
+            student,
+            student_join_map=join_map,
+        ),
+        finance_keys=resolver.resolve_finance(
+            student,
+            student_join_map=join_map,
+        ),
+        school_code=resolver.resolve_school(
+            student,
+            student_join_map=join_map,
+        ),
+        student=student,
+        policy=policy,
         student_join_map=join_map,
         join_bucket_index=join_bucket_index,
         manager_preference_index=manager_preference_index,
         manager_priority_enabled=manager_priority_enabled,
-        phase="allocation",
     )
     with measure_time("join_filters", perf_tracker):
         eligible, eligibility_priority, eligibility_trace = apply_eligibility(
@@ -2060,9 +2073,9 @@ def allocate_student(
             f"Capacity column '{resolved_capacity_column}' not found after canonicalization"
         )
 
-    def _apply_capacity_gate(candidates: pd.DataFrame) -> pd.DataFrame:
-        nonlocal capacity_series
-        nonlocal capacity_mask
+    def _apply_capacity_gate(
+        candidates: pd.DataFrame,
+    ) -> tuple[pd.DataFrame, pd.Series, pd.Series, int]:
         with measure_time("capacity_gate", perf_tracker):
             capacity_series = ensure_series(
                 state_view_en.loc[candidates.index, capacity_column_name]
@@ -2072,14 +2085,26 @@ def allocate_student(
             )
             capacity_mask = capacity_numeric > 0
             filtered = candidates.loc[capacity_mask.values]
-            stage_candidate_counts["capacity_gate"] = int(capacity_mask.sum())
-            return filtered
+            capacity_count = int(capacity_mask.sum())
+            return filtered, capacity_series, capacity_mask, capacity_count
 
-    capacity_filtered = _apply_capacity_gate(eligible_for_capacity)
+    (
+        capacity_filtered,
+        capacity_series,
+        capacity_mask,
+        capacity_count,
+    ) = _apply_capacity_gate(eligible_for_capacity)
+    stage_candidate_counts["capacity_gate"] = capacity_count
     if capacity_filtered.empty and manager_pass == "preferred":
         eligible_for_capacity = eligible_full
         manager_pass = "fallback"
-        capacity_filtered = _apply_capacity_gate(eligible_for_capacity)
+        (
+            capacity_filtered,
+            capacity_series,
+            capacity_mask,
+            capacity_count,
+        ) = _apply_capacity_gate(eligible_for_capacity)
+        stage_candidate_counts["capacity_gate"] = capacity_count
 
     stage_candidate_counts = _canonical_stage_counts(stage_candidate_counts)
     log["stage_candidate_counts"] = stage_candidate_counts

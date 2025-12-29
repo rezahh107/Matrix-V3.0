@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from app.core.common.eligibility_channel import apply_eligibility
+from app.core.common.eligibility_channel import EligibilitySpec, apply_eligibility
 from app.core.common.join_resolver import JoinKeyResolver
 from app.core.policy_loader import load_policy
 
@@ -34,8 +34,12 @@ def test_eligibility_priority_alignment_with_shuffled_index() -> None:
     }
 
     resolver = JoinKeyResolver(policy)
-    spec = resolver.resolve_candidate_scope(
-        student,
+    spec = EligibilitySpec(
+        effective_join_keys=resolver.resolve_center(student),
+        finance_keys=resolver.resolve_finance(student),
+        school_code=resolver.resolve_school(student),
+        student=student,
+        policy=policy,
         manager_preference_index=pd.Index([20, 30]),
         manager_priority_enabled=True,
     )
