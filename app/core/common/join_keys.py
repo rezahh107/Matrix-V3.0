@@ -61,12 +61,20 @@ class JoinKeyMismatchDetail(TypedDict):
 class JoinKeyCanonicalizationError(ValueError):
     """Raised when a join-key value cannot be canonicalized to ``int``."""
 
-    def __init__(self, column: str, value: object, *, index: Hashable | None = None) -> None:
+    def __init__(
+        self,
+        column: str,
+        value: object,
+        *,
+        index: Hashable | None = None,
+        error_code: str = "DATA_INVALID",
+    ) -> None:
         suffix = "" if index is None else f" at index {index!r}"
         super().__init__(f"Cannot canonicalize join key '{column}'{suffix} from value {value!r}")
         self.column = column
         self.value = value
         self.index = index
+        self.error_code = error_code
 
 
 _SCHOOL_CODE_TRANSLATION = str.maketrans(
@@ -128,11 +136,7 @@ def _canonicalize_join_key_value_safe(
         coerced = canonicalize_join_key_value(column, value, policy=policy)
         return coerced, None
     except JoinKeyCanonicalizationError as exc:
-        error_code = "DATA_INVALID"
-        inner = exc.__cause__
-        if isinstance(inner, ValueError):
-            error_code = inner.args[0] if inner.args else "DATA_INVALID"
-        return None, error_code
+        return None, exc.error_code
 
 
 def _canonical_join_key_name(column: str) -> JoinKeyName:
@@ -318,7 +322,12 @@ def canonicalize_join_key_value(column: str, value: object, *, policy: PolicyCon
             return _canonicalize_group_value(value)
         return _canonicalize_numeric_value(value, allow_zero_from_empty=False)
     except ValueError as exc:
-        raise JoinKeyCanonicalizationError(column, value) from exc
+        error_code = "DATA_INVALID"
+        if exc.args:
+            candidate = str(exc.args[0])
+            if candidate in {"DATA_MISSING", "DATA_INVALID"}:
+                error_code = candidate
+        raise JoinKeyCanonicalizationError(column, value, error_code=error_code) from exc
 
 
 def _canonicalize_center_value(value: object, policy: PolicyConfig) -> int:

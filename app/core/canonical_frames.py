@@ -300,7 +300,12 @@ def _safe_canonical_join_value(
         return canonicalize_join_key_value(column, raw, policy=policy)
     except JoinKeyCanonicalizationError as exc:
         if raise_on_invalid and not (allow_missing_when_strict and _is_missing_value(exc.value)):
-            raise JoinKeyCanonicalizationError(column, raw, index=index) from exc
+            raise JoinKeyCanonicalizationError(
+                column,
+                raw,
+                index=index,
+                error_code=exc.error_code,
+            ) from exc
         return pd.NA
 
 
