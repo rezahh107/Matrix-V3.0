@@ -42,7 +42,15 @@ from app.core.allocation.engine import enrich_summary_with_history
 from app.core.allocation.history_metrics import METRIC_COLUMNS, compute_history_metrics
 from app.core.canonical_frames import canonicalize_allocation_frames, canonicalize_pool_frame
 from app.core.common.join_keys import JoinKeyCanonicalizationError
+from app.core.common.join_resolver import JoinKeyResolver
+from app.core.common.payloads import json_safe_value
 from app.core.common.types import JoinKeyValidationIssue, JoinKeyValidationResult
+from app.core.common.unknown_data_channel import (
+    UnknownDataChannel,
+    UnknownIssue,
+    validate_join_key_columns_numeric,
+    validate_pool_join_keys,
+)
 from app.core.counter import (
     assert_unique_student_ids,
     assign_counters,
@@ -109,6 +117,7 @@ from app.infra.groupcode.groupcode_repository import GroupCodeRepository
 from app.infra.io_utils import (
     ALT_CODE_COLUMN,
     read_excel_first_sheet,
+    write_json_report,
     write_xlsx_atomic,
 )
 from app.infra.local_database import LocalDatabase
@@ -2719,6 +2728,191 @@ def _run_pool_alignment_preflight(
     return preflight_df
 
 
+_UNKNOWN_REPORT_VERSION = "1.0"
+_UNKNOWN_REPORT_NAME = "unknown_data_report.json"
+
+
+def _unknown_issue_sort_key(issue: UnknownIssue) -> tuple[int, int, str, str, str]:
+    column = issue.column or ""
+    row_index = -1 if issue.row_index is None else int(issue.row_index)
+    raw_value = repr(issue.raw_value)
+    return (
+        _unknown_entity_priority(issue.entity_type),
+        row_index,
+        column,
+        issue.code,
+        raw_value,
+    )
+
+
+def _unknown_entity_priority(entity_type: str) -> int:
+    order = {"student": 0, "pool": 1, "mentor": 2}
+    return order.get(entity_type, 99)
+
+
+def _summarize_unknown_issues(issues: Sequence[UnknownIssue]) -> dict[str, object]:
+    by_entity: dict[str, int] = {}
+    by_code: dict[str, int] = {}
+    for issue in issues:
+        by_entity[issue.entity_type] = by_entity.get(issue.entity_type, 0) + 1
+        by_code[issue.code] = by_code.get(issue.code, 0) + 1
+    return {
+        "total": int(len(issues)),
+        "by_entity_type": dict(sorted(by_entity.items())),
+        "by_code": dict(sorted(by_code.items())),
+    }
+
+
+def _unknown_issue_payload(issue: UnknownIssue) -> dict[str, object]:
+    payload = issue.to_dict()
+    payload["raw_value"] = json_safe_value(issue.raw_value)
+    details = payload.get("details")
+    if isinstance(details, dict):
+        payload["details"] = {key: json_safe_value(val) for key, val in details.items()}
+    return payload
+
+
+def _build_unknowns_report(
+    issues: Sequence[UnknownIssue],
+    *,
+    policy: PolicyConfig,
+    sample_limit: int = 20,
+) -> dict[str, object]:
+    ordered = sorted(issues, key=_unknown_issue_sort_key)
+    payloads = [_unknown_issue_payload(issue) for issue in ordered]
+    return {
+        "version": _UNKNOWN_REPORT_VERSION,
+        "policy": {
+            "unknown_data_mode": policy.unknown_data_mode,
+            "unknown_manager_mode": policy.center_management.unknown_manager_mode,
+        },
+        "summary": _summarize_unknown_issues(ordered),
+        "issues": payloads,
+        "sample": payloads[: max(0, sample_limit)],
+    }
+
+
+def _unknown_report_path(output: Path) -> Path:
+    output_path = output.expanduser()
+    output_dir = output_path if output_path.is_dir() else output_path.parent
+    return (output_dir / "reports" / _UNKNOWN_REPORT_NAME).resolve()
+
+
+def _issues_from_join_validation(
+    result: JoinKeyValidationResult,
+) -> list[UnknownIssue]:
+    issues: list[UnknownIssue] = []
+    for issue in result.issues:
+        issues.append(
+            UnknownIssue(
+                code="INVALID_JOIN_KEY",
+                entity_type=issue.entity_type,
+                column=issue.column,
+                row_index=issue.row_index,
+                raw_value=issue.raw_value,
+                error_code=issue.error_code,
+            )
+        )
+    return issues
+
+
+def collect_unknown_issues(
+    *,
+    students_df: pd.DataFrame,
+    pool_df: pd.DataFrame,
+    policy: PolicyConfig,
+) -> tuple[tuple[UnknownIssue, ...], bool]:
+    channel = UnknownDataChannel(strict=False)
+    validate_join_key_columns_numeric(
+        students_df,
+        join_keys=policy.join_keys,
+        entity_type="student",
+        channel=channel,
+    )
+    validate_join_key_columns_numeric(
+        pool_df,
+        join_keys=policy.join_keys,
+        entity_type="pool",
+        channel=channel,
+    )
+    validate_pool_join_keys(pool_df, policy=policy, channel=channel)
+    resolver = JoinKeyResolver(policy, unknown_channel=channel)
+    for _, row in students_df.iterrows():
+        resolver.resolve_center(row.to_dict())
+    ordered = tuple(sorted(channel.issues, key=_unknown_issue_sort_key))
+    blocking = any(issue.code == "MISSING_JOIN_KEY_COLUMN" for issue in ordered)
+    return ordered, blocking
+
+
+def compute_preflight_exit_code(
+    issues: Sequence[UnknownIssue],
+    *,
+    policy: PolicyConfig,
+    blocking: bool,
+) -> int:
+    if not issues:
+        return 0
+    if blocking or policy.unknown_data_mode == "strict":
+        return 3
+    return 2
+
+
+def _run_preflight_unknowns(
+    args: argparse.Namespace, policy: PolicyConfig, progress: ProgressFn
+) -> int:
+    """Run UNKNOWN-ASK-01 preflight and write a deterministic JSON report."""
+
+    output = Path(args.output)
+    report_path = _unknown_report_path(output)
+
+    progress(0, "loading inputs for unknowns preflight")
+    db = _resolve_local_db(args)
+    try:
+        students_df, _, _ = _resolve_students_frame(args, policy, db=db)
+        pool_source_arg = getattr(args, "pool_type", "inspactor")
+        pool_df, _, _ = _resolve_mentor_pool_frame(
+            args, policy, db=db, pool_arg="pool", pool_source=pool_source_arg
+        )
+    except JoinKeyValidationError as exc:
+        issues = _issues_from_join_validation(exc.result)
+        report = _build_unknowns_report(issues, policy=policy)
+        write_json_report(report_path, report)
+        progress(
+            100,
+            f"unknowns report: {report_path} (issues={len(issues)})",
+        )
+        return 3
+
+    detection = pool_df.attrs.get("pool_detection")
+    pool_source = getattr(detection, "pool_type", None) or pool_df.attrs.get(
+        "pool_source", pool_source_arg
+    )
+    students_base, pool_base = _prepare_allocation_frames(
+        students_df,
+        pool_df,
+        policy=policy,
+        sanitize_pool=True,
+        pool_source=pool_source,
+    )
+    pool_base = _apply_mentor_pool_overrides(pool_base, policy, args)
+
+    issues, blocking = collect_unknown_issues(
+        students_df=students_base,
+        pool_df=pool_base,
+        policy=policy,
+    )
+    report = _build_unknowns_report(issues, policy=policy)
+    write_json_report(report_path, report)
+    exit_code = compute_preflight_exit_code(
+        issues, policy=policy, blocking=blocking
+    )
+    progress(
+        100,
+        f"unknowns report: {report_path} (issues={len(issues)})",
+    )
+    return exit_code
+
+
 def _sanitize_pool_for_allocation(
     pool_df: pd.DataFrame, *, policy: PolicyConfig, pool_source: str = "inspactor"
 ) -> pd.DataFrame:
@@ -3681,6 +3875,45 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     _add_local_db_args(alloc_cmd)
 
+    preflight_cmd = sub.add_parser(
+        "preflight-unknowns",
+        aliases=["preflight_unknowns"],
+        help="پیش‌بررسی داده‌های ناشناخته قبل از تخصیص",
+    )
+    preflight_cmd.add_argument(
+        "--students",
+        required=False,
+        help="مسیر فایل دانش‌آموزان؛ در صورت عدم ارائه از کش SQLite خوانده می‌شود",
+    )
+    preflight_cmd.add_argument(
+        "--pool",
+        required=False,
+        help="مسیر استخر منتورها؛ در صورت عدم ارائه از کش SQLite خوانده می‌شود",
+    )
+    preflight_cmd.add_argument(
+        "--pool-type",
+        choices=("inspactor", "matrix"),
+        default="inspactor",
+        help="نوع استخر منتورها برای انتخاب شیت ورودی",
+    )
+    preflight_cmd.add_argument(
+        "--pool-sheet",
+        required=False,
+        help="نام شیت ورودی استخر (اختیاری؛ پیش‌فرض بر اساس شناسایی خودکار)",
+    )
+    preflight_cmd.add_argument(
+        "--output",
+        required=True,
+        help="مسیر خروجی تخصیص یا پوشه خروجی برای ذخیرهٔ گزارش ناشناخته‌ها",
+    )
+    preflight_cmd.add_argument(
+        "--policy",
+        default=str(_DEFAULT_POLICY_PATH),
+        help="مسیر فایل policy.json",
+    )
+    _add_center_management_args(preflight_cmd)
+    _add_local_db_args(preflight_cmd)
+
     rule_cmd = sub.add_parser(
         "rule-engine",
         help="اجرای موتور قواعد روی ماتریس ساخته‌شده بدون استخر مجزا",
@@ -3899,6 +4132,9 @@ def main(
 
         if args.command == "sync-forms":
             return _run_sync_forms(args, policy, progress)
+
+        if args.command == "preflight-unknowns":
+            return _run_preflight_unknowns(args, policy, progress)
 
         if args.command == "allocate":
             runner = allocate_runner or _run_allocate

@@ -7,16 +7,21 @@ formatters:
   detailed:
     format: "[%(asctime)s] %(levelname)s %(name)s | session=%(session_id)s user=%(user)s error=%(error_id)s report=%(report_path)s | %(message)s"
     datefmt: "%Y-%m-%d %H:%M:%S"
+filters:
+  safe_extras:
+    (): app.infra.logging.SafeExtraFilter
 handlers:
   console:
     class: logging.StreamHandler
     level: INFO
     formatter: console
+    filters: [safe_extras]
     stream: ext://sys.stdout
   app_file:
     class: logging.handlers.RotatingFileHandler
     level: INFO
     formatter: detailed
+    filters: [safe_extras]
     filename: logs/app.log
     maxBytes: 1048576
     backupCount: 5
@@ -25,6 +30,7 @@ handlers:
     class: logging.handlers.RotatingFileHandler
     level: ERROR
     formatter: detailed
+    filters: [safe_extras]
     filename: logs/errors.log
     maxBytes: 1048576
     backupCount: 10

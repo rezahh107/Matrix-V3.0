@@ -5,6 +5,10 @@ from typing import cast
 
 import pandas as pd
 
+from app.core.common.unknown_data_channel import (
+    UnknownDataChannel,
+    validate_join_key_columns_numeric,
+)
 from app.core.matrix.capacity_gates import CapacityOutcome, evaluate_capacity
 from app.core.matrix.eligibility_rules import evaluate_eligibility
 from app.core.matrix.matrix_schema import CAPACITY_COLUMNS, MatrixSchema
@@ -46,6 +50,7 @@ def build_matrix_core(
     students: pd.DataFrame,
     *,
     schema: MatrixSchema | None = None,
+    unknown_channel: UnknownDataChannel | None = None,
 ) -> pd.DataFrame:
     """Build the MatrixCore DataFrame from canonical mentor and student frames."""
 
@@ -65,6 +70,21 @@ def build_matrix_core(
             ]
         )
         return pd.DataFrame(columns=columns)
+
+    channel = unknown_channel or UnknownDataChannel(strict=True)
+    join_key_list = list(schema.join_keys)
+    validate_join_key_columns_numeric(
+        mentors,
+        join_keys=join_key_list,
+        entity_type="mentor",
+        channel=channel,
+    )
+    validate_join_key_columns_numeric(
+        students,
+        join_keys=join_key_list,
+        entity_type="student",
+        channel=channel,
+    )
 
     records: list[dict[str, object]] = []
     mentor_records = list(_ensure_iterable_records(mentors))
@@ -106,8 +126,13 @@ def build_matrix_core(
     if df.empty:
         return df
 
-    join_key_list = list(schema.join_keys)
-    df[join_key_list] = df[join_key_list].apply(pd.to_numeric, errors="coerce").fillna(0).astype(int)
+    validate_join_key_columns_numeric(
+        df,
+        join_keys=join_key_list,
+        entity_type="pool",
+        channel=channel,
+    )
+    df[join_key_list] = df[join_key_list].apply(pd.to_numeric, errors="raise").astype(int)
     df = df.sort_values(list(schema.ranking_fields), ascending=[False, True, True]).reset_index(
         drop=True
     )

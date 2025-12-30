@@ -113,8 +113,11 @@ def _infer_center_from_manager(
             if key and norm and key in norm:
                 cache[norm] = val
                 return val
-        cache[norm] = wildcard
-        return wildcard
+        if wildcard is not None and policy.center_management.unknown_manager_mode == "wildcard":
+            cache[norm] = wildcard
+            return cache[norm]
+        cache[norm] = None
+        return None
 
     inferred_vals: list[int | None] = []
     inferred_index = manager_series.index[mask]
@@ -191,7 +194,7 @@ def _infer_center_from_manager(
             best_key = min(matches, key=lambda key: (-len(key), key))
             cache[norm] = center_map_norm[best_key]
             return cache[norm]
-        if wildcard is not None:
+        if wildcard is not None and policy.center_management.unknown_manager_mode == "wildcard":
             cache[norm] = wildcard
             return wildcard
         cache[norm] = 0

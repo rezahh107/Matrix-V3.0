@@ -3,6 +3,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
+from app.core.common.unknown_data_channel import UnknownDataError
 from app.core.matrix.build_matrix_core import build_matrix_core
 from app.core.matrix.matrix_schema import JOIN_KEY_COLUMNS, MatrixSchema
 
@@ -91,4 +92,25 @@ def test_build_matrix_core_missing_student_id_raises() -> None:
     students_df = pd.DataFrame([student_row])
 
     with pytest.raises(KeyError):
+        build_matrix_core(mentors_df, students_df, schema=MatrixSchema())
+
+
+def test_build_matrix_core_rejects_unknown_join_keys() -> None:
+    mentors_df = pd.DataFrame(
+        [
+            _mentor_row(101, capacity_limit=1, center_code=1, school_code=1),
+        ]
+    )
+    students_df = pd.DataFrame(
+        [
+            {
+                **{key: 1 for key in JOIN_KEY_COLUMNS},
+                "student_id": 201,
+                "center_code": "نامعتبر",
+                "school_code": 1,
+            }
+        ]
+    )
+
+    with pytest.raises(UnknownDataError):
         build_matrix_core(mentors_df, students_df, schema=MatrixSchema())

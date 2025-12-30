@@ -31,6 +31,7 @@
   "dedup_removed_ratio_threshold": 0.05,
   "school_lookup_mismatch_threshold": 0.0,
   "join_key_duplicate_threshold": 0,
+  "unknown_data_mode": "issue",
   "center_map": {
     "شهدخت کشاورز": 1,
     "آیناز هوشمند": 2,
@@ -39,6 +40,7 @@
   "center_management": {
     "enabled": true,
     "strict_manager_validation": false,
+    "unknown_manager_mode": "wildcard",
     "school_student_column": "is_school_student",
     "default_center_for_invalid": 0,
     "priority_order": [

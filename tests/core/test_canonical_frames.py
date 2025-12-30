@@ -74,7 +74,9 @@ def test_canonicalize_students_frame_infers_center_from_manager_substring() -> N
 
 
 def test_canonicalize_students_frame_infers_center_from_wildcard() -> None:
-    policy = replace(load_policy(), center_map={"*": 9})
+    base_policy = load_policy()
+    center_management = replace(base_policy.center_management, unknown_manager_mode="wildcard")
+    policy = replace(base_policy, center_map={"*": 9}, center_management=center_management)
     students = pd.DataFrame(
         {
             "student_id": ["s1"],

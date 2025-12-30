@@ -56,6 +56,7 @@ def test_apply_ranking_policy_rejects_ratio_metrics() -> None:
         virtual_name_patterns=policy.virtual_name_patterns,
         emission=policy.emission,
         fairness_strategy=policy.fairness_strategy,
+        unknown_data_mode=policy.unknown_data_mode,
         center_management=policy.center_management,
         mentor_pool_governance=policy.mentor_pool_governance,
         coverage_options=policy.coverage_options,

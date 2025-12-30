@@ -81,6 +81,7 @@ from .common.types import (
     TraceStageRecord,
     ensure_trace_stage_name,
 )
+from .common.unknown_data_channel import UnknownDataChannel, validate_pool_join_keys
 from .counter import normalize_digits, strip_hidden_chars
 from .perf import PerfTracker, measure_time
 from .policy_loader import PolicyConfig, load_policy
@@ -1722,6 +1723,7 @@ def allocate_student(
     manager_preference_index: pd.Index | None = None,
     manager_priority_enabled: bool = False,
     heap_manager: HeapRankingManager | None = None,
+    unknown_channel: UnknownDataChannel | None = None,
 ) -> AllocationResult:
     """تخصیص تک‌دانش‌آموز با حفظ Trace و لاگ کامل مطابق §5 Technical SSoT."""
     if policy is None:
@@ -1790,7 +1792,7 @@ def allocate_student(
 
     progress(5, "prefilter")
 
-    resolver = JoinKeyResolver(policy)
+    resolver = JoinKeyResolver(policy, unknown_channel=unknown_channel)
     eligibility_spec = EligibilitySpec(
         effective_join_keys=resolver.resolve_center(
             student,
@@ -2440,6 +2442,7 @@ def allocate_batch(
     """تخصیص دسته‌ای دانش‌آموزان و بازگشت خروجی‌های چهارتایی + تریس مطابق §3 Technical SSoT."""
     if policy is None:
         policy = load_policy()
+    unknown_channel = UnknownDataChannel.from_policy(policy)
     resolved_capacity_column = _resolve_capacity_column(policy, capacity_column)
 
     capacity_internal = canonicalize_headers(
@@ -2488,6 +2491,7 @@ def allocate_batch(
     extra_columns = [column for column in pool_norm.columns if column not in candidate_pool.columns]
 
     pool_with_ids = inject_mentor_id(pool_norm, build_mentor_id_map(pool_norm))
+    validate_pool_join_keys(pool_with_ids, policy=policy, channel=unknown_channel)
     join_bucket_index = (
         _build_join_bucket_index(pool_with_ids, policy) if use_join_buckets else None
     )
@@ -2626,6 +2630,7 @@ def allocate_batch(
                 manager_preference_index=manager_preference_index,
                 manager_priority_enabled=manager_preference_enabled,
                 heap_manager=heap_manager,
+                unknown_channel=unknown_channel,
             )
 
             if invalid_center_payload is not None:
@@ -2816,6 +2821,8 @@ def allocate_batch(
 
     if run_warnings:
         logs_df.attrs["warnings"] = tuple(run_warnings)
+    if unknown_channel.issues:
+        logs_df.attrs["unknown_data_issues"] = unknown_channel.to_payload()
     with measure_time("trace_detail", perf_tracker):
         trace_df = pd.DataFrame(trace_rows)
     trace_summary_df: pd.DataFrame | None = None

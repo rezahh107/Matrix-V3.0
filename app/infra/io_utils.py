@@ -34,6 +34,7 @@ from app.infra.excel.exporter import apply_workbook_formatting
 __all__ = [
     "ALT_CODE_COLUMN",
     "write_xlsx_atomic",
+    "write_json_report",
     "read_inspactor_workbook",
     "read_excel_first_sheet",
     "read_crosswalk_workbook",
@@ -193,6 +194,15 @@ def _stringify_cell(value: object) -> str:
     if isinstance(value, (pd.Series, pd.DataFrame)):
         return json.dumps(value.to_dict(), ensure_ascii=False, sort_keys=True)
     return str(value)
+
+
+def write_json_report(path: Path, payload: Mapping[str, object]) -> Path:
+    """Write a JSON report with deterministic formatting."""
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    data = json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2)
+    path.write_text(data, encoding="utf-8")
+    return path
 
 
 def _normalize_mobile_columns(df: pd.DataFrame) -> None:

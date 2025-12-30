@@ -19,6 +19,7 @@ from app.core.common.join_keys import (
 )
 from app.core.common.normalization import normalize_fa
 from app.core.common.types import JoinKeySource, JoinKeySourceMap
+from app.core.common.unknown_data_channel import UnknownDataChannel, UnknownIssue
 from app.core.policy_loader import PolicyConfig
 
 CenterSource = Literal[
@@ -52,9 +53,15 @@ class EffectiveFinanceKeys:
 class JoinKeyResolver:
     """Resolve student join keys with deterministic inference for center."""
 
-    def __init__(self, policy: PolicyConfig) -> None:
+    def __init__(
+        self,
+        policy: PolicyConfig,
+        *,
+        unknown_channel: UnknownDataChannel | None = None,
+    ) -> None:
         self._policy = policy
         self._center_map = _normalize_center_map(policy.center_map)
+        self._unknown_channel = unknown_channel
 
     def resolve_center(
         self,
@@ -178,10 +185,35 @@ class JoinKeyResolver:
                 center_source="manager_substring",
             )
         wildcard = self._center_map.get("*")
-        if wildcard is not None:
+        if wildcard is not None and self._policy.center_management.unknown_manager_mode == "wildcard":
+            if self._unknown_channel is not None:
+                self._unknown_channel.report(
+                    [
+                        UnknownIssue(
+                            code="UNKNOWN_MANAGER_WILDCARD",
+                            entity_type="student",
+                            column="manager_name",
+                            row_index=None,
+                            raw_value=manager_name,
+                            details={"center_code": int(wildcard)},
+                        )
+                    ]
+                )
             return EffectiveJoinKeys(
                 center_code=wildcard,
                 center_source="manager_wildcard",
+            )
+        if self._unknown_channel is not None:
+            self._unknown_channel.report(
+                [
+                    UnknownIssue(
+                        code="UNKNOWN_MANAGER_NAME",
+                        entity_type="student",
+                        column="manager_name",
+                        row_index=None,
+                        raw_value=manager_name,
+                    )
+                ]
             )
         return None
 

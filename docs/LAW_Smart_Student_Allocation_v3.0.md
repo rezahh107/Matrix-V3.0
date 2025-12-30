@@ -159,6 +159,29 @@
 
 ---
 
+### 2.5. قانون UNKNOWN-ASK-01 — دادهٔ ناشناخته و تصمیم‌گیری
+
+- هر مقدار **ناشناخته/غیرقابل‌تفسیر** در ورودی‌ها (به‌ویژه join keys و نام مدیر) باید
+  به‌عنوان **Decision Required** ثبت شود و **نباید** به‌صورت ضمنی coercion یا drop شود.
+- تنها کانال‌های مجاز برای تصمیم‌گیری/نرمال‌سازی دادهٔ ناشناخته:
+  - **Header canonicalization** (HeaderResolver/FieldRegistry)
+  - **JoinKeyResolver** (Effective Join Keys)
+  - **UnknownDataChannel** (issue/strict)
+  - **EligibilityChannel** (گیت اهلیت و QA تصمیم)
+- حالت‌های UnknownDataChannel:
+  - **Strict mode** ⇒ خطای سخت (`UnknownDataError`).
+  - **Issue mode** ⇒ ثبت issue برای نمایش در UI/QA و درخواست تصمیم کاربر.
+- مقادیر پیش‌فرض سیاست:
+  - `unknown_data_mode = "issue"`
+  - `center_management.unknown_manager_mode = "wildcard"`
+- fallback به wildcard برای `manager_name → center_code` تنها در صورتی مجاز است که
+  Policy به‌صراحت `unknown_manager_mode = "wildcard"` را تعریف کرده باشد؛
+  در غیر این صورت، هیچ wildcard پیش‌فرضی اعمال نمی‌شود.
+- در UI، در صورت وجود issue ناشناخته، قبل از تخصیص باید دیالوگ «Decision Required»
+  نمایش داده شود و گزارش JSON پایدار ذخیره گردد.
+
+---
+
 ## 3. Alias و کد جایگزین (ALIAS-01)
 
 ### 3.1. قانون ALIAS-01 — تعریف
