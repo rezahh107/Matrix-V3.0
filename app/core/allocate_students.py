@@ -1118,8 +1118,14 @@ def _collect_join_key_map(
                 value = canonicalize_join_key_value(column, value, policy=policy)
             join_map[normalized] = value
         except JoinKeyCanonicalizationError as exc:
-            join_map[normalized] = -2
-            invalid_map[column] = exc.value
+            # Missing join keys must remain distinguishable from invalid values so
+            # join-bucket eligibility does not activate on absent data.
+            if exc.error_code == "DATA_MISSING":
+                join_map[normalized] = -1
+                missing_columns.append(column)
+            else:
+                join_map[normalized] = -2
+                invalid_map[column] = exc.value
             continue
 
     if invalid_map:
