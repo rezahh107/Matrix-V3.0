@@ -13,7 +13,7 @@ except ImportError as exc:  # pragma: no cover - skipped when Qt missing
 from app.infra.groupcode.groupcode_repository import GroupCodeRepository
 from app.infra.local_database import LocalDatabase
 from app.infra.schools.school_repository import SchoolRepository
-from app.ui.main_window import MainWindow
+from app.ui.main_window import MainWindow, UnknownsPreflightResult
 
 
 def _write_excel(df: pd.DataFrame, path: Path) -> None:
@@ -115,6 +115,14 @@ def test_run_allowed_when_references_ready(
     warnings: list[tuple[str, str]] = []
     monkeypatch.setattr(
         QMessageBox, "warning", staticmethod(lambda *_: warnings.append(("warn", "warn")))
+    )
+
+    monkeypatch.setattr(
+        window,
+        "_preflight_result_override",
+        lambda _: UnknownsPreflightResult(
+            status="clean", report_path=tmp_path / "noop.json", exit_code=0, summary=None
+        ),
     )
 
     window._start_allocate()

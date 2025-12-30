@@ -1509,8 +1509,6 @@ def _to_center_management_config(data: RawCenterManagement) -> CenterManagementC
     else:
         raise TypeError("default_center_for_invalid must be an integer or null")
     unknown_manager_mode = str(data.get("unknown_manager_mode", "wildcard")).strip().lower()
-    if unknown_manager_mode not in {"issue", "wildcard"}:
-        raise ValueError("unknown_manager_mode must be 'issue' or 'wildcard'")
     return CenterManagementConfig(
         enabled=bool(data.get("enabled", True)),
         centers=tuple(centers),

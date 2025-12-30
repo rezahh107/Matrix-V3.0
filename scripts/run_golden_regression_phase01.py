@@ -219,7 +219,24 @@ def _run_phase01() -> Phase01Run:
         try:
             db.initialize()
             _log("Importing school report into temporary cache...")
-            import_school_report_from_excel(GOLDEN_SCHOOL, db=db)
+            schools_df = import_school_report_from_excel(
+                GOLDEN_SCHOOL,
+                db=db,
+                compat_mode=True,
+            )
+            compat_notes = (
+                schools_df.attrs.get("compat_notes")
+                if isinstance(schools_df, pd.DataFrame)
+                else None
+            )
+            if compat_notes:
+                missing_summary = ", ".join(
+                    f"{note.get('column')}→{note.get('default')}" for note in compat_notes
+                )
+                _log(
+                    "SchoolReport compat mode applied defaults for missing columns: "
+                    f"{missing_summary}"
+                )
             _log("Importing mentor pool with join-key validation...")
             validation = import_mentor_pool_with_validation(
                 GOLDEN_INSPACTOR, db=db, policy=policy, pool_source="inspactor"

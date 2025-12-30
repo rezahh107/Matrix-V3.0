@@ -6,8 +6,10 @@ import logging
 import re
 import threading
 from collections.abc import Callable, Iterable, Sequence
+from dataclasses import dataclass
 from html import escape, unescape
 from pathlib import Path
+from typing import Literal
 
 import pandas as pd
 from PySide6.QtCore import (
@@ -85,6 +87,7 @@ from app.ui.dialogs.join_key_validation_dialog import JoinKeyValidationDialog
 from app.ui.dialogs.qa_dashboard_dialog import QADashboardDialog
 from app.ui.dialogs.unknown_data_dialog import (
     UnknownDataDialog,
+    UnknownsReportSummary,
     load_unknowns_report,
     summarize_unknowns_report,
 )
@@ -127,6 +130,14 @@ logger = logging.getLogger(__name__)
 _LOG_FLUSH_THRESHOLD = 20
 _LOG_MAX_BLOCKS = 1200
 _LOG_TAG_RE = re.compile(r"<[^>]+>")
+
+
+@dataclass(frozen=True)
+class UnknownsPreflightResult:
+    status: Literal["clean", "issues", "blocking", "error"]
+    report_path: Path
+    exit_code: int
+    summary: UnknownsReportSummary | None = None
 
 _EN_TEXT_DEFAULTS: dict[str, str] = {
     "app.title": "Student-Mentor Allocation",
@@ -1818,6 +1829,51 @@ class MainWindow(QMainWindow):
         output_dir = output if output.is_dir() else output.parent
         return (output_dir / "reports" / "unknown_data_report.json").resolve()
 
+    def _preflight_result_override(
+        self, report_path: Path
+    ) -> UnknownsPreflightResult | None:
+        return None
+
+    def _get_unknowns_preflight_result(
+        self, *, exit_code: int, report_path: Path
+    ) -> UnknownsPreflightResult:
+        if exit_code == 0:
+            return UnknownsPreflightResult(
+                status="clean",
+                report_path=report_path,
+                exit_code=exit_code,
+                summary=None,
+            )
+        if exit_code == 3:
+            return UnknownsPreflightResult(
+                status="blocking",
+                report_path=report_path,
+                exit_code=exit_code,
+                summary=None,
+            )
+        if exit_code != 2:
+            return UnknownsPreflightResult(
+                status="error",
+                report_path=report_path,
+                exit_code=exit_code,
+                summary=None,
+            )
+        if not report_path.exists():
+            return UnknownsPreflightResult(
+                status="error",
+                report_path=report_path,
+                exit_code=exit_code,
+                summary=None,
+            )
+        report = load_unknowns_report(report_path)
+        summary = summarize_unknowns_report(report, sample_limit=5)
+        return UnknownsPreflightResult(
+            status="issues",
+            report_path=report_path,
+            exit_code=exit_code,
+            summary=summary,
+        )
+
     def _run_unknowns_preflight(
         self,
         argv: Sequence[str],
@@ -1826,6 +1882,10 @@ class MainWindow(QMainWindow):
         report_path: Path,
         on_proceed: Callable[[], None],
     ) -> None:
+        override = self._preflight_result_override(report_path)
+        if override is not None:
+            self._handle_preflight_result(override, on_proceed=on_proceed)
+            return
         result: dict[str, int] = {}
         override_payload = dict(overrides)
         override_payload.pop("history_metrics_callback", None)
@@ -1842,7 +1902,10 @@ class MainWindow(QMainWindow):
 
         def _after() -> None:
             exit_code = result.get("exit_code", 0)
-            self._handle_preflight_result(exit_code, report_path, on_proceed=on_proceed)
+            preflight = self._get_unknowns_preflight_result(
+                exit_code=exit_code, report_path=report_path
+            )
+            self._handle_preflight_result(preflight, on_proceed=on_proceed)
 
         action = self._t(
             "status.preflight_unknowns",
@@ -1852,15 +1915,14 @@ class MainWindow(QMainWindow):
 
     def _handle_preflight_result(
         self,
-        exit_code: int,
-        report_path: Path,
+        result: UnknownsPreflightResult,
         *,
         on_proceed: Callable[[], None],
     ) -> None:
-        if exit_code == 0:
+        if result.status == "clean":
             on_proceed()
             return
-        if exit_code == 3:
+        if result.status == "blocking":
             QMessageBox.warning(
                 self,
                 self._t("error.unknowns.blocking.title", "خطای دادهٔ ناشناخته"),
@@ -1870,7 +1932,7 @@ class MainWindow(QMainWindow):
                 ),
             )
             return
-        if exit_code != 2:
+        if result.status != "issues":
             unexpected_template = self._t(
                 "error.unknowns.unexpected",
                 "کد خروج پیش‌بررسی ناشناخته‌ها نامعتبر است: {code}",
@@ -1878,10 +1940,10 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(
                 self,
                 self._t("status.error", "خطا"),
-                unexpected_template.format(code=exit_code),
+                unexpected_template.format(code=result.exit_code),
             )
             return
-        if not report_path.exists():
+        if result.summary is None:
             QMessageBox.warning(
                 self,
                 self._t("status.error", "خطا"),
@@ -1891,21 +1953,19 @@ class MainWindow(QMainWindow):
                 ),
             )
             return
-        report = load_unknowns_report(report_path)
-        summary = summarize_unknowns_report(report, sample_limit=5)
         counts_template = self._t(
             "dialog.unknowns.counts",
             "تعداد موارد: {total} | دانش‌آموز: {student} | استخر: {pool} | منتور: {mentor}",
         )
         counts_text = counts_template.format(
-            total=summary.total,
-            student=summary.by_entity_type.get("student", 0),
-            pool=summary.by_entity_type.get("pool", 0),
-            mentor=summary.by_entity_type.get("mentor", 0),
+            total=result.summary.total,
+            student=result.summary.by_entity_type.get("student", 0),
+            pool=result.summary.by_entity_type.get("pool", 0),
+            mentor=result.summary.by_entity_type.get("mentor", 0),
         )
         dialog = UnknownDataDialog(
-            summary,
-            report_path=report_path,
+            result.summary,
+            report_path=result.report_path,
             title=self._t(
                 "dialog.unknowns.title",
                 "دادهٔ ناشناخته تشخیص داده شد",

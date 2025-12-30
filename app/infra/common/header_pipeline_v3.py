@@ -45,6 +45,9 @@ class HeaderResolution:
         hint = ", ".join(self.missing_required) if self.missing_required else None
         raise DatabasePreparationError(path=path, reason=reason_fa, hint=hint)
 
+    def add_issues(self, new_issues: Iterable[HeaderIssue]) -> None:
+        self.issues.extend(list(new_issues))
+
 
 class HeaderPipelineV3:
     """Unified header/alias normalization across mentor/student/school payloads."""
