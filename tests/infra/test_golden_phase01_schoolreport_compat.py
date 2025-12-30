@@ -40,3 +40,23 @@ def test_schoolreport_compat_applies_defaults(tmp_path: Path) -> None:
     assert normalized["مرکز گلستان صدرا"].fillna(0).astype(int).eq(0).all()
     compat_notes = normalized.attrs.get("compat_notes")
     assert compat_notes
+
+
+def test_schoolreport_compat_handles_wide_center_columns(tmp_path: Path) -> None:
+    report_path = tmp_path / "SchoolReport.xlsx"
+    frame = pd.DataFrame(
+        {
+            "کد مدرسه": [101, 102],
+            "نام مدرسه": ["الف", "ب"],
+            "جنسیت": [1, 0],
+            "مرکز 12": [1, 1],
+        }
+    )
+    frame.to_excel(report_path, index=False)
+    db = LocalDatabase(tmp_path / "schools.db")
+    db.initialize()
+    normalized = import_school_report_from_excel(report_path, db=db, compat_mode=True)
+    assert "مرکز گلستان صدرا" in normalized.columns
+    compat_warnings = normalized.attrs.get("compat_warnings")
+    assert compat_warnings
+    assert compat_warnings[0]["issue"] == "WIDE_CENTER_COLUMN"
