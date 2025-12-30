@@ -1,5 +1,10 @@
 {
   "version": "1.1",
+  "compat": {
+    "policy_version": "1.0.4",
+    "unknown_data_mode": "issue",
+    "unknown_manager_mode": "wildcard"
+  },
   "maps": {
     "registration_status": {
       "0": "عادی",

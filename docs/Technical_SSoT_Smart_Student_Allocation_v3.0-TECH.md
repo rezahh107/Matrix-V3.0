@@ -451,6 +451,29 @@ Core باید:
 
 ---
 
+### 6.1.2. UNKNOWN-ASK-01 — UnknownDataChannel و منع coercion پنهان
+
+- هر دادهٔ ناشناخته/غیرقابل‌تفسیر (به‌خصوص در join keys یا manager_name) باید از مسیر
+  **UnknownDataChannel** عبور کند؛ هیچ مسیر دیگری حق ندارد دادهٔ ناشناخته را
+  به‌صورت ضمنی `0` یا `NaN` تبدیل کند.
+- کانال‌های رسمی مجاز برای عبور دادهٔ ناشناخته:
+  - Header canonicalization (FieldRegistry/ValueCanonicalizer)
+  - JoinKeyResolver (Effective Join Keys)
+  - UnknownDataChannel
+  - EligibilityChannel (گیت اهلیت)
+- UnknownDataChannel تنها دو خروجی مجاز دارد:
+  - **Strict** ⇒ پرتاب `UnknownDataError` با لیست issueهای ساخت‌یافته.
+  - **Issue** ⇒ بازگرداندن issueها برای UI/QA (Decision Required).
+- پیش‌فرض‌های سیاست:
+  - `unknown_data_mode = "issue"`
+  - `center_management.unknown_manager_mode = "wildcard"`
+- fallback به wildcard در `manager_name → center_code` فقط با
+  `center_management.unknown_manager_mode = "wildcard"` مجاز است؛ در غیر این صورت
+  باید issue ثبت شود و wildcard اعمال نگردد.
+- UI باید قبل از تخصیص، گزارش ناشناخته‌ها را نمایش دهد و تصمیم کاربر را ثبت کند.
+
+---
+
 ### 6.2. CAPACITY-01 — ظرفیت و state
 
 - تعریف `capacity_limit`, `assigned_baseline`, `allocations_new`, `remaining_capacity` در Core و QA باید یکسان باشد.

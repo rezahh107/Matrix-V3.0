@@ -734,7 +734,7 @@ def center_from_manager(name: Any, *, cfg: BuildConfig) -> int:
             matches.sort(key=lambda item: (-len(item[0]), item[0]))
             return matches[0][1]
 
-    if wildcard is not None:
+    if wildcard is not None and cfg.policy.center_management.unknown_manager_mode == "wildcard":
         return wildcard
 
     raise InvalidCenterMappingError(func="center_from_manager", value=name)

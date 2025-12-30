@@ -6,8 +6,10 @@ import logging
 import re
 import threading
 from collections.abc import Callable, Iterable, Sequence
+from dataclasses import dataclass
 from html import escape, unescape
 from pathlib import Path
+from typing import Literal
 
 import pandas as pd
 from PySide6.QtCore import (
@@ -83,6 +85,12 @@ from app.ui.database_manager_dialog import DatabaseManagerDialog
 from app.ui.database_tab import DatabaseTab
 from app.ui.dialogs.join_key_validation_dialog import JoinKeyValidationDialog
 from app.ui.dialogs.qa_dashboard_dialog import QADashboardDialog
+from app.ui.dialogs.unknown_data_dialog import (
+    UnknownDataDialog,
+    UnknownsReportSummary,
+    load_unknowns_report,
+    summarize_unknowns_report,
+)
 from app.ui.fonts import get_app_font
 from app.ui.helpers.counter_helpers import detect_year_candidates
 from app.ui.helpers.manager_helpers import extract_manager_names, load_manager_names_from_pool
@@ -122,6 +130,14 @@ logger = logging.getLogger(__name__)
 _LOG_FLUSH_THRESHOLD = 20
 _LOG_MAX_BLOCKS = 1200
 _LOG_TAG_RE = re.compile(r"<[^>]+>")
+
+
+@dataclass(frozen=True)
+class UnknownsPreflightResult:
+    status: Literal["clean", "issues", "blocking", "error"]
+    report_path: Path
+    exit_code: int
+    summary: UnknownsReportSummary | None = None
 
 _EN_TEXT_DEFAULTS: dict[str, str] = {
     "app.title": "Student-Mentor Allocation",
@@ -1808,6 +1824,176 @@ class MainWindow(QMainWindow):
             if not self._user_settings.enable_history_metrics:
                 self._reset_history_metrics()
 
+    def _unknown_report_path(self, output_path: str) -> Path:
+        output = Path(output_path).expanduser()
+        output_dir = output if output.is_dir() else output.parent
+        return (output_dir / "reports" / "unknown_data_report.json").resolve()
+
+    def _preflight_result_override(
+        self, report_path: Path
+    ) -> UnknownsPreflightResult | None:
+        return None
+
+    def _get_unknowns_preflight_result(
+        self, *, exit_code: int, report_path: Path
+    ) -> UnknownsPreflightResult:
+        if exit_code == 0:
+            return UnknownsPreflightResult(
+                status="clean",
+                report_path=report_path,
+                exit_code=exit_code,
+                summary=None,
+            )
+        if exit_code == 3:
+            return UnknownsPreflightResult(
+                status="blocking",
+                report_path=report_path,
+                exit_code=exit_code,
+                summary=None,
+            )
+        if exit_code != 2:
+            return UnknownsPreflightResult(
+                status="error",
+                report_path=report_path,
+                exit_code=exit_code,
+                summary=None,
+            )
+        if not report_path.exists():
+            return UnknownsPreflightResult(
+                status="error",
+                report_path=report_path,
+                exit_code=exit_code,
+                summary=None,
+            )
+        report = load_unknowns_report(report_path)
+        summary = summarize_unknowns_report(report, sample_limit=5)
+        return UnknownsPreflightResult(
+            status="issues",
+            report_path=report_path,
+            exit_code=exit_code,
+            summary=summary,
+        )
+
+    def _run_unknowns_preflight(
+        self,
+        argv: Sequence[str],
+        *,
+        overrides: dict[str, object],
+        report_path: Path,
+        on_proceed: Callable[[], None],
+    ) -> None:
+        override = self._preflight_result_override(report_path)
+        if override is not None:
+            self._handle_preflight_result(override, on_proceed=on_proceed)
+            return
+        result: dict[str, int] = {}
+        override_payload = dict(overrides)
+        override_payload.pop("history_metrics_callback", None)
+        if self._local_db is not None:
+            override_payload = {"local_db_path": str(self._local_db.path), **override_payload}
+
+        def _task(*, progress: ProgressFn) -> None:
+            exit_code = cli.main(
+                argv,
+                progress_factory=lambda: progress,
+                ui_overrides=override_payload,
+            )
+            result["exit_code"] = exit_code
+
+        def _after() -> None:
+            exit_code = result.get("exit_code", 0)
+            preflight = self._get_unknowns_preflight_result(
+                exit_code=exit_code, report_path=report_path
+            )
+            self._handle_preflight_result(preflight, on_proceed=on_proceed)
+
+        action = self._t(
+            "status.preflight_unknowns",
+            "پیش‌بررسی داده‌های ناشناخته",
+        )
+        self._launch_worker(_task, action, on_success=_after)
+
+    def _handle_preflight_result(
+        self,
+        result: UnknownsPreflightResult,
+        *,
+        on_proceed: Callable[[], None],
+    ) -> None:
+        if result.status == "clean":
+            on_proceed()
+            return
+        if result.status == "blocking":
+            QMessageBox.warning(
+                self,
+                self._t("error.unknowns.blocking.title", "خطای دادهٔ ناشناخته"),
+                self._t(
+                    "error.unknowns.blocking.detail",
+                    "پیش‌بررسی داده‌های ناشناخته با خطای مسدودکننده مواجه شد.",
+                ),
+            )
+            return
+        if result.status != "issues":
+            unexpected_template = self._t(
+                "error.unknowns.unexpected",
+                "کد خروج پیش‌بررسی ناشناخته‌ها نامعتبر است: {code}",
+            )
+            QMessageBox.warning(
+                self,
+                self._t("status.error", "خطا"),
+                unexpected_template.format(code=result.exit_code),
+            )
+            return
+        if result.summary is None:
+            QMessageBox.warning(
+                self,
+                self._t("status.error", "خطا"),
+                self._t(
+                    "error.unknowns.report_missing",
+                    "گزارش پیش‌بررسی داده‌های ناشناخته یافت نشد.",
+                ),
+            )
+            return
+        counts_template = self._t(
+            "dialog.unknowns.counts",
+            "تعداد موارد: {total} | دانش‌آموز: {student} | استخر: {pool} | منتور: {mentor}",
+        )
+        counts_text = counts_template.format(
+            total=result.summary.total,
+            student=result.summary.by_entity_type.get("student", 0),
+            pool=result.summary.by_entity_type.get("pool", 0),
+            mentor=result.summary.by_entity_type.get("mentor", 0),
+        )
+        dialog = UnknownDataDialog(
+            result.summary,
+            report_path=result.report_path,
+            title=self._t(
+                "dialog.unknowns.title",
+                "دادهٔ ناشناخته تشخیص داده شد",
+            ),
+            body=self._t(
+                "dialog.unknowns.body",
+                "پیش از تخصیص، برخی داده‌ها ناشناخته هستند و نیاز به تصمیم دارند.",
+            ),
+            counts_text=counts_text,
+            headers=[
+                self._t("dialog.unknowns.table.entity", "نوع"),
+                self._t("dialog.unknowns.table.row", "ردیف"),
+                self._t("dialog.unknowns.table.column", "ستون"),
+                self._t("dialog.unknowns.table.value", "مقدار"),
+                self._t("dialog.unknowns.table.error", "کد خطا"),
+            ],
+            cancel_text=self._t("dialog.unknowns.cancel", "لغو تخصیص"),
+            proceed_text=self._t("dialog.unknowns.proceed", "ادامه به‌رغم ریسک"),
+            open_report_text=self._t(
+                "dialog.unknowns.open_report",
+                "بازکردن پوشه گزارش",
+            ),
+            parent=self,
+        )
+        dialog.setModal(True)
+        if dialog.exec() == QDialog.DialogCode.Accepted and dialog.should_proceed:
+            on_proceed()
+
     def _start_allocate(self) -> None:
         """اجرای سناریوی تخصیص با فراخوانی CLI."""
 
@@ -1895,7 +2081,7 @@ class MainWindow(QMainWindow):
                 QMessageBox.warning(self, "فایل یافت نشد", f"{label} قابل دسترسی نیست: {path}")
                 return
 
-        argv = [
+        alloc_argv = [
             "allocate",
             "--students",
             self._picker_students.text(),
@@ -1914,9 +2100,9 @@ class MainWindow(QMainWindow):
         ]
 
         if prior_path:
-            argv.extend(["--prior-roster", prior_path])
+            alloc_argv.extend(["--prior-roster", prior_path])
         if current_path:
-            argv.extend(["--current-roster", current_path])
+            alloc_argv.extend(["--current-roster", current_path])
 
         def _remember_allocate_outputs() -> None:
             alloc_out = self._picker_alloc_out.text().strip()
@@ -1932,11 +2118,34 @@ class MainWindow(QMainWindow):
             self._prefs.record_last_run("allocate")
             self._refresh_last_run_badge()
 
-        self._launch_cli(
-            argv,
-            "تخصیص",
+        preflight_argv = [
+            "preflight-unknowns",
+            "--students",
+            self._picker_students.text(),
+            "--pool",
+            self._picker_pool.text(),
+            "--pool-type",
+            "matrix",
+            "--output",
+            self._picker_alloc_out.text(),
+            "--policy",
+            policy_path,
+        ]
+        report_path = self._unknown_report_path(self._picker_alloc_out.text())
+
+        def _run_allocation() -> None:
+            self._launch_cli(
+                alloc_argv,
+                "تخصیص",
+                overrides=overrides,
+                on_success=_remember_allocate_outputs,
+            )
+
+        self._run_unknowns_preflight(
+            preflight_argv,
             overrides=overrides,
-            on_success=_remember_allocate_outputs,
+            report_path=report_path,
+            on_proceed=_run_allocation,
         )
 
     def _start_rule_engine(self) -> None:

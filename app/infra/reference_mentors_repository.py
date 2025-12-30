@@ -377,7 +377,7 @@ def _derive_pool_join_keys(
         try:
             center_value = domain_center_from_manager(manager_name, cfg=cfg)
         except InvalidCenterMappingError:
-            center_value = 0
+            center_value = pd.NA
             _append_issue(
                 qa_issues,
                 reason="UNKNOWN_CENTER",

@@ -26,6 +26,7 @@ from scripts.ci_summarize_mentor_join_key_issues import summarize
 from scripts.run_golden_regression_phase01 import (
     GoldenRegressionError,
     _canonicalize_pool,
+    _compare_frames,
     _format_join_key_error,
     _require_files,
     _run_phase01,
@@ -135,11 +136,18 @@ def test_phase02_mentor_pipeline_uses_local_db(monkeypatch: pytest.MonkeyPatch, 
         }
     )
 
-    captured: dict[str, LocalDatabase] = {}
+    captured: dict[str, object] = {}
 
     def _fake_import(path: Path, *, db: LocalDatabase, policy: object, pool_source: str) -> JoinKeyValidationResult:
         captured["db"] = db
         return JoinKeyValidationResult(canonical_df=canonical, issues=[])
+
+    def _fake_import_school_report(
+        _: Path, *, db: LocalDatabase, compat_mode: bool = False
+    ) -> pd.DataFrame:
+        captured["school_db"] = db
+        captured["compat_mode"] = compat_mode
+        return pd.DataFrame({"کد مدرسه": [1], "نام مدرسه": ["الف"], "جنسیت": [0], "مرکز گلستان صدرا": [0]})
 
     scenario = regression_runner.MentorPipelineV3Scenario(
         name="mentor-pipeline-v3",
@@ -156,9 +164,7 @@ def test_phase02_mentor_pipeline_uses_local_db(monkeypatch: pytest.MonkeyPatch, 
 
     monkeypatch.setattr(regression_runner, "_materialize_inspactor_input", _fake_materialize)
     monkeypatch.setattr(regression_runner, "load_policy", lambda *_: object())
-    monkeypatch.setattr(
-        regression_runner, "import_school_report_from_excel", lambda *_, **__: None
-    )
+    monkeypatch.setattr(regression_runner, "import_school_report_from_excel", _fake_import_school_report)
     monkeypatch.setattr(regression_runner, "import_mentor_pool_with_validation", _fake_import)
 
     passed, status = regression_runner._run_mentor_pipeline_scenario(
@@ -168,6 +174,8 @@ def test_phase02_mentor_pipeline_uses_local_db(monkeypatch: pytest.MonkeyPatch, 
     assert passed is True
     assert status == "success"
     assert isinstance(captured.get("db"), LocalDatabase)
+    assert isinstance(captured.get("school_db"), LocalDatabase)
+    assert captured.get("compat_mode") is True
 
 
 def test_phase02_diff_failure_prompts_auditor(
@@ -383,6 +391,39 @@ def test_phase01_diff_column_drift_detection() -> None:
     hypothesis = _hypothesize_root_cause(stats)
 
     assert "Column mismatch" in hypothesis
+
+
+def test_phase01_compare_allows_extra_columns() -> None:
+    expected = pd.DataFrame({"mentor_id": [1], "group_code": [10]})
+    current = pd.DataFrame({"mentor_id": [1], "group_code": [10], "__extra__": ["x"]})
+    _compare_frames(
+        "mentor_pool",
+        expected,
+        current,
+        required_columns=list(expected.columns),
+    )
+    missing = pd.DataFrame({"mentor_id": [1]})
+    with pytest.raises(GoldenRegressionError):
+        _compare_frames(
+            "mentor_pool",
+            expected,
+            missing,
+            required_columns=list(expected.columns),
+        )
+
+
+def test_phase02_compare_allows_extra_columns() -> None:
+    expected = pd.DataFrame({"mentor_id": [1], "group_code": [10]})
+    current = pd.DataFrame({"mentor_id": [1], "group_code": [10], "__extra__": ["x"]})
+    assert (
+        regression_runner._compare_frames(
+            "mentor-pool",
+            expected,
+            current,
+            required_columns=list(expected.columns),
+        )
+        is True
+    )
 
 
 def test_summarize_dumped_issue_csv(tmp_path: Path) -> None:

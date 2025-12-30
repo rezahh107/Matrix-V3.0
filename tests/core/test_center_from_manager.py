@@ -1,6 +1,12 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
+import pytest
+
 from app.core.common.domain import BuildConfig, center_from_manager
+from app.core.common.errors import InvalidCenterMappingError
+from app.core.policy_loader import load_policy
 
 
 def test_center_from_manager_exact_match() -> None:
@@ -29,6 +35,23 @@ def test_center_from_manager_tie_breaks_lexicographically() -> None:
 
 
 def test_center_from_manager_falls_back_to_wildcard() -> None:
-    cfg = BuildConfig(center_map={"*": 99})
+    policy = load_policy()
+    center_management = replace(policy.center_management, unknown_manager_mode="wildcard")
+    cfg = BuildConfig(
+        center_map={"*": 99},
+        policy=replace(policy, center_management=center_management),
+    )
 
     assert center_from_manager("نام ناشناخته", cfg=cfg) == 99
+
+
+def test_center_from_manager_unknown_requires_policy() -> None:
+    policy = load_policy()
+    center_management = replace(policy.center_management, unknown_manager_mode="issue")
+    cfg = BuildConfig(
+        center_map={"*": 99},
+        policy=replace(policy, center_management=center_management),
+    )
+
+    with pytest.raises(InvalidCenterMappingError):
+        center_from_manager("نام ناشناخته", cfg=cfg)

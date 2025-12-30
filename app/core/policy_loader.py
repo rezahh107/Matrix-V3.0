@@ -217,6 +217,7 @@ class CenterManagementConfig:
     strict_manager_validation: bool
     default_center_for_invalid: int | None
     school_student_column: str
+    unknown_manager_mode: str
 
     def center_ids(self) -> tuple[int, ...]:
         """لیست پایدار شناسه‌های مراکز تعریف‌شده."""
@@ -420,6 +421,7 @@ class PolicyConfig:
     virtual_name_patterns: tuple[str, ...]
     emission: EmissionOptions
     fairness_strategy: str
+    unknown_data_mode: str
     center_management: CenterManagementConfig
     allocation_channels: AllocationChannelConfig = field(
         default_factory=AllocationChannelConfig.empty
@@ -587,6 +589,7 @@ def _normalize_policy_payload(data: RawPolicy) -> Mapping[str, object]:
         data.get("fairness_strategy") or data.get("fairness")
     )
     ranking_mode = _normalize_ranking_mode(data.get("ranking_mode"))
+    unknown_data_mode = _normalize_unknown_data_mode(data.get("unknown_data_mode"))
     matrix_section = data.get("matrix")
     if matrix_section is None:
         coverage_source: Mapping[str, object] = {}
@@ -639,6 +642,7 @@ def _normalize_policy_payload(data: RawPolicy) -> Mapping[str, object]:
         "virtual_name_patterns": virtual_name_patterns,
         "emission": data.get("emission", {}),
         "fairness_strategy": fairness_strategy,
+        "unknown_data_mode": unknown_data_mode,
         "ranking_mode": ranking_mode,
         "coverage_options": coverage_options,
         "mentor_pool_governance": mentor_pool_governance,
@@ -751,6 +755,10 @@ def _normalize_center_management(
         raise TypeError("center_management must be a mapping of options")
     enabled = bool(value.get("enabled", True))
     strict_validation = bool(value.get("strict_manager_validation", False))
+    unknown_manager_mode_raw = value.get("unknown_manager_mode", "wildcard")
+    unknown_manager_mode = str(unknown_manager_mode_raw).strip().lower()
+    if unknown_manager_mode not in {"issue", "wildcard"}:
+        raise ValueError("unknown_manager_mode must be 'issue' or 'wildcard'")
     default_invalid = value.get("default_center_for_invalid")
     if default_invalid is None or default_invalid == "":
         fallback_center = center_map.get("*")
@@ -872,6 +880,7 @@ def _normalize_center_management(
         "priority_order": priority,
         "centers": centers,
         "school_student_column": school_student_column,
+        "unknown_manager_mode": unknown_manager_mode,
     }
 
 
@@ -1137,6 +1146,14 @@ def _normalize_ranking_mode(raw: object) -> str:
     allowed = {"legacy_sort", "heap_queue"}
     if value not in allowed:
         raise ValueError("ranking_mode must be one of legacy_sort, heap_queue")
+    return value
+
+
+def _normalize_unknown_data_mode(raw: object) -> str:
+    value = "issue" if raw is None else str(raw).strip().lower() or "issue"
+    allowed = {"issue", "strict"}
+    if value not in allowed:
+        raise ValueError("unknown_data_mode must be 'issue' or 'strict'")
     return value
 
 
@@ -1423,6 +1440,7 @@ def _to_config(data: RawPolicy) -> PolicyConfig:
         virtual_name_patterns=tuple(str(item) for item in virtual_name_patterns_raw),
         emission=_to_emission_options(emission_raw),
         fairness_strategy=str(data.get("fairness_strategy", "none")),
+        unknown_data_mode=str(data.get("unknown_data_mode", "issue")),
         ranking_mode=str(data.get("ranking_mode", "legacy_sort")),
         center_management=_to_center_management_config(center_management_raw),
         coverage_options=MatrixCoverageOptions(
@@ -1490,6 +1508,7 @@ def _to_center_management_config(data: RawCenterManagement) -> CenterManagementC
         fallback = int(default_invalid)
     else:
         raise TypeError("default_center_for_invalid must be an integer or null")
+    unknown_manager_mode = str(data.get("unknown_manager_mode", "wildcard")).strip().lower()
     return CenterManagementConfig(
         enabled=bool(data.get("enabled", True)),
         centers=tuple(centers),
@@ -1497,6 +1516,7 @@ def _to_center_management_config(data: RawCenterManagement) -> CenterManagementC
         strict_manager_validation=bool(data.get("strict_manager_validation", False)),
         default_center_for_invalid=fallback,
         school_student_column=str(data.get("school_student_column", "is_school_student")),
+        unknown_manager_mode=unknown_manager_mode,
     )
 
 
@@ -1608,6 +1628,7 @@ def _apply_schema_defaults(data: dict[str, object]) -> dict[str, object]:
     data.setdefault("virtual_alias_ranges", list(_DEFAULT_VIRTUAL_ALIAS_RANGES))
     data.setdefault("virtual_name_patterns", list(_DEFAULT_VIRTUAL_NAME_PATTERNS))
     data.setdefault("ranking_mode", "legacy_sort")
+    data.setdefault("unknown_data_mode", "issue")
 
     meta_raw = data.get("meta")
     if not isinstance(meta_raw, Mapping):

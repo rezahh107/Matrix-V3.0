@@ -1,3 +1,4 @@
+from dataclasses import replace
 from pathlib import Path
 
 import pandas as pd
@@ -32,7 +33,11 @@ def _write_pool_excel(df: pd.DataFrame, path: Path) -> None:
 
 
 def test_mentor_pool_cache_roundtrip(tmp_path: Path) -> None:
-    policy = load_policy()
+    base_policy = load_policy()
+    center_management = replace(
+        base_policy.center_management, unknown_manager_mode="wildcard"
+    )
+    policy = replace(base_policy, center_management=center_management)
     db = LocalDatabase(tmp_path / "cache.sqlite")
 
     raw = pd.DataFrame(

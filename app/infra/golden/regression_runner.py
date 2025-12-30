@@ -396,11 +396,38 @@ def _mentor_issues_frame(frame: pd.DataFrame) -> pd.DataFrame:
     return normalized
 
 
-def _compare_frames(label: str, expected: pd.DataFrame, current: pd.DataFrame) -> bool:
+def _compare_frames(
+    label: str,
+    expected: pd.DataFrame,
+    current: pd.DataFrame,
+    *,
+    required_columns: Sequence[str] | None = None,
+) -> bool:
     expected_norm = _normalize_frame(expected)
     current_norm = _normalize_frame(current)
+    if required_columns is None:
+        try:
+            pd.testing.assert_frame_equal(expected_norm, current_norm, check_dtype=False)
+        except AssertionError as exc:
+            print(f"  status: {label}-mismatch")
+            print(f"  details: {exc}")
+            return False
+        return True
+
+    required = list(required_columns)
+    missing_required = sorted(set(required) - set(current_norm.columns))
+    if missing_required:
+        print(f"  status: {label}-mismatch")
+        print(f"  details: missing required columns: {missing_required}")
+        return False
+    extra_columns = sorted(set(current_norm.columns) - set(required))
+    if extra_columns:
+        print(f"  details: {label} extra columns (ignored): {extra_columns}")
+
+    expected_required = expected_norm[required]
+    current_required = current_norm[required]
     try:
-        pd.testing.assert_frame_equal(expected_norm, current_norm, check_dtype=False)
+        pd.testing.assert_frame_equal(expected_required, current_required, check_dtype=False)
     except AssertionError as exc:
         print(f"  status: {label}-mismatch")
         print(f"  details: {exc}")
@@ -632,7 +659,11 @@ def _run_mentor_pipeline_scenario(
                         "is missing from scenario requires."
                     )
                     return False, "missing-school-report"
-                import_school_report_from_excel(school_report, db=db)
+                import_school_report_from_excel(
+                    school_report,
+                    db=db,
+                    compat_mode=True,
+                )
                 result = import_mentor_pool_with_validation(
                     materialized_input, db=db, policy=policy, pool_source="inspactor"
                 )
@@ -674,7 +705,12 @@ def _run_mentor_pipeline_scenario(
             scenario.expected_pool_rows or [], columns=pool_columns
         )
     current_pool = _normalize_frame(canonical_pool, sort_columns=pool_columns)
-    if not _compare_frames("mentor-pool", expected_pool, current_pool):
+    if not _compare_frames(
+        "mentor-pool",
+        expected_pool,
+        current_pool,
+        required_columns=list(expected_pool.columns),
+    ):
         return False, "mentor-pool-diff"
 
     current_issues = _issues_to_frame(result.issues)

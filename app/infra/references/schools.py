@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 
 import pandas as pd
 
+from app.core.common.normalization import normalize_fa
+from app.infra.common.header_pipeline_v3 import HeaderIssue
 from app.infra.io_utils import ALT_CODE_COLUMN, read_crosswalk_workbook, read_excel_first_sheet
 from app.infra.local_database import LocalDatabase
 from app.infra.reference_repository import SQLiteReferenceRepository
@@ -20,17 +23,139 @@ def _coerce_school_code(series: pd.Series, *, fill_value: int | None = None) -> 
     return coerce_int_series(series, fill_value=fill_value)
 
 
-def _normalize_schools_frame(df: pd.DataFrame, *, path: Path | str | None = None) -> pd.DataFrame:
+_SCHOOL_COMPAT_DEFAULTS: dict[str, object] = {
+    "مرکز گلستان صدرا": 0,
+    "جنسیت": 0,
+    "نام مدرسه": "",
+}
+
+
+_CENTER_HEADER_BASE = normalize_fa("مرکز")
+_KNOWN_CENTER_HEADERS = {
+    normalize_fa("مرکز گلستان صدرا"),
+    normalize_fa("مرکز ثبت نام"),
+    normalize_fa("مرکز ثبت‌نام"),
+}
+
+
+def _find_wide_center_columns(columns: Sequence[str]) -> list[str]:
+    """Detect legacy wide center columns (e.g., "مرکز <name>")."""
+
+    wide_columns: list[str] = []
+    for column in columns:
+        normalized = normalize_fa(column).strip()
+        if normalized in _KNOWN_CENTER_HEADERS:
+            continue
+        if normalized.startswith(f"{_CENTER_HEADER_BASE} "):
+            wide_columns.append(column)
+    return wide_columns
+
+
+def _log_missing_required_columns(
+    *,
+    raw_columns: Sequence[str],
+    canonical_columns: Sequence[str],
+    missing_required: Sequence[str],
+) -> None:
+    print("[SCHOOLREPORT] missing required school columns detected")
+    print(f"[SCHOOLREPORT] raw_columns={list(raw_columns)}")
+    print(f"[SCHOOLREPORT] canonical_columns={list(canonical_columns)}")
+    print(
+        "[SCHOOLREPORT] missing_required_canonical_columns="
+        f"{sorted({str(column) for column in missing_required})}"
+    )
+
+
+def _normalize_schools_frame(
+    df: pd.DataFrame,
+    *,
+    path: Path | str | None = None,
+    compat_mode: bool = False,
+) -> pd.DataFrame:
     """نرمال‌سازی دیتافریم مدارس برای ذخیره‌سازی قابل‌اتکا در SQLite."""
 
     resolver = SchoolHeaderResolver(
         required_fields=list(SchoolRepository.REQUIRED_COLUMNS)
     )
     resolution = resolver.resolve(df)
-    canonical = resolution.require_can_continue(
-        path=str(path) if path is not None else "SchoolReport",
-        reason_fa="ستون‌های الزامی مدارس در فایل موجود نیست.",
-    )
+    missing_required = list(resolution.missing_required)
+    raw_columns = [str(column) for column in df.columns]
+    canonical_columns = [str(column) for column in resolution.resolved_df.columns]
+    wide_center_columns = _find_wide_center_columns(raw_columns)
+    compat_warnings: list[dict[str, object]] = []
+    if wide_center_columns:
+        compat_warnings = [
+            {"issue": "WIDE_CENTER_COLUMN", "column": column}
+            for column in wide_center_columns
+        ]
+        resolution.add_issues(
+            [
+                HeaderIssue(
+                    severity="P2",
+                    header=str(column),
+                    message="WIDE_CENTER_COLUMN",
+                    canonical_field="مرکز گلستان صدرا",
+                )
+                for column in wide_center_columns
+            ]
+        )
+    if missing_required and compat_mode:
+        allowed_missing = sorted(
+            [col for col in missing_required if col in _SCHOOL_COMPAT_DEFAULTS]
+        )
+        blocking_missing = sorted(
+            [col for col in missing_required if col not in _SCHOOL_COMPAT_DEFAULTS]
+        )
+        if blocking_missing:
+            _log_missing_required_columns(
+                raw_columns=raw_columns,
+                canonical_columns=canonical_columns,
+                missing_required=blocking_missing,
+            )
+            resolution.require_can_continue(
+                path=str(path) if path is not None else "SchoolReport",
+                reason_fa="ستون‌های الزامی مدارس در فایل موجود نیست.",
+            )
+        canonical = resolution.resolved_df.copy()
+        compat_notes: list[dict[str, object]] = []
+        issues: list[HeaderIssue] = []
+        for column in allowed_missing:
+            default_value = _SCHOOL_COMPAT_DEFAULTS[column]
+            canonical[column] = default_value
+            compat_notes.append(
+                {
+                    "column": column,
+                    "default": default_value,
+                    "issue": "COMPAT_DEFAULT_APPLIED",
+                }
+            )
+            issues.append(
+                HeaderIssue(
+                    severity="P1",
+                    header=str(column),
+                    message="COMPAT_DEFAULT_APPLIED",
+                    canonical_field=str(column),
+                    extras={"default": default_value},
+                )
+            )
+        if compat_notes:
+            canonical.attrs = dict(canonical.attrs or {})
+            canonical.attrs["compat_notes"] = compat_notes
+            resolution.add_issues(issues)
+    else:
+        if missing_required:
+            _log_missing_required_columns(
+                raw_columns=raw_columns,
+                canonical_columns=canonical_columns,
+                missing_required=missing_required,
+            )
+        canonical = resolution.require_can_continue(
+            path=str(path) if path is not None else "SchoolReport",
+            reason_fa="ستون‌های الزامی مدارس در فایل موجود نیست.",
+        )
+    if compat_warnings:
+        canonical.attrs = dict(canonical.attrs or {})
+        canonical.attrs["compat_warnings"] = compat_warnings
     code_col = "کد مدرسه"
     if code_col in canonical.columns:
         canonical = canonical.copy()
@@ -47,7 +172,12 @@ def _schools_repository(db: LocalDatabase) -> SQLiteReferenceRepository:
     )
 
 
-def import_school_report_from_excel(path: Path, db: LocalDatabase) -> pd.DataFrame:
+def import_school_report_from_excel(
+    path: Path,
+    db: LocalDatabase,
+    *,
+    compat_mode: bool = False,
+) -> pd.DataFrame:
     """ورود SchoolReport از Excel و ذخیره در SQLite.
 
     این تابع فایل گزارش مدارس را یک‌بار می‌خواند، سرستون‌ها را به حالت
@@ -56,7 +186,7 @@ def import_school_report_from_excel(path: Path, db: LocalDatabase) -> pd.DataFra
     """
 
     raw_df = read_excel_first_sheet(path)
-    normalized = _normalize_schools_frame(raw_df, path=path)
+    normalized = _normalize_schools_frame(raw_df, path=path, compat_mode=compat_mode)
     _schools_repository(db).upsert_frame(normalized, source=str(path))
     return normalized
 

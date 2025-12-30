@@ -31,7 +31,9 @@ def test_join_key_resolver_center_substring_match() -> None:
 
 
 def test_join_key_resolver_center_wildcard_match() -> None:
-    policy = replace(load_policy(), center_map={"*": 9})
+    base_policy = load_policy()
+    center_management = replace(base_policy.center_management, unknown_manager_mode="wildcard")
+    policy = replace(base_policy, center_map={"*": 9}, center_management=center_management)
     resolver = JoinKeyResolver(policy)
 
     effective = resolver.resolve_center(

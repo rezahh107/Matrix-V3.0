@@ -290,7 +290,9 @@ def test_build_trace_plan_rejects_noncanonical_order() -> None:
             strict_manager_validation=False,
             default_center_for_invalid=0,
             school_student_column="is_school_student",
+            unknown_manager_mode="issue",
         ),
+        unknown_data_mode="issue",
     )
 
     with pytest.raises(ValueError, match="canonical 8-stage order"):

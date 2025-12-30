@@ -89,6 +89,22 @@ class LoggingContext:
         return report_path
 
 
+def _resolve_user() -> str:
+    """Resolve current user with safe fallbacks for constrained environments."""
+
+    try:
+        user = getpass.getuser()
+    except (OSError, KeyError):
+        user = ""
+    if user:
+        return user
+    for env_key in ("LOGNAME", "USER", "LNAME", "USERNAME"):
+        env_value = os.environ.get(env_key)
+        if env_value:
+            return env_value
+    return "unknown"
+
+
 class SessionContextFilter(logging.Filter):
     """افزودن اطلاعات نشست به همهٔ رکوردهای لاگ."""
 
@@ -103,6 +119,25 @@ class SessionContextFilter(logging.Filter):
         record.app_version = getattr(record, "app_version", self._context.version)
         record.error_id = getattr(record, "error_id", "")
         record.report_path = getattr(record, "report_path", "")
+        return True
+
+
+class SafeExtraFilter(logging.Filter):
+    """Ensure logging extras exist to avoid formatter KeyError crashes."""
+
+    _defaults: dict[str, str] = {
+        "session_id": "",
+        "user": "",
+        "error_id": "",
+        "report_path": "",
+        "application": "",
+        "app_version": "",
+    }
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        for key, value in self._defaults.items():
+            if not hasattr(record, key):
+                setattr(record, key, value)
         return True
 
 
@@ -218,7 +253,7 @@ def configure_logging(
         application=app_name,
         version=app_version,
         session_id=uuid.uuid4().hex,
-        user=getpass.getuser(),
+        user=_resolve_user(),
         pid=os.getpid(),
         log_dir=log_directory,
         error_dir=error_directory,
@@ -331,6 +366,7 @@ def install_exception_hook(logger: logging.Logger, context: LoggingContext) -> C
 __all__ = [
     "LoggingContext",
     "SessionContextFilter",
+    "SafeExtraFilter",
     "configure_logging",
     "structured_event",
     "install_exception_hook",

@@ -11,6 +11,9 @@ center_management:
   
   # validation سخت‌گیرانه - اگر true باشد، در صورت نبود مدیر خطا می‌دهد
   strict_manager_validation: false
+
+  # رفتار در مواجهه با مدیر ناشناخته (issue یا wildcard)
+  unknown_manager_mode: "wildcard"
   
   # نام ستونی که دانش‌آموزان مدرسه‌ای را مشخص می‌کند
   school_student_column: "is_school_student"
@@ -37,6 +40,9 @@ center_management:
   
   # ترتیب اولویت پردازش مراکز
   priority_order: [1, 2, 0]
+
+# رفتار داده‌های ناشناخته (issue یا strict)
+unknown_data_mode: "issue"
 
 # سایر تنظیمات Policy...
 # stage_columns:
