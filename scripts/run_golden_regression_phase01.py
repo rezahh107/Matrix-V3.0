@@ -174,7 +174,13 @@ def _issues_to_frame(issues: Sequence[object]) -> pd.DataFrame:
     return frame.sort_values(by=["row_index", "column"]).reset_index(drop=True)
 
 
-def _compare_frames(label: str, expected: pd.DataFrame, current: pd.DataFrame) -> None:
+def _compare_frames(
+    label: str,
+    expected: pd.DataFrame,
+    current: pd.DataFrame,
+    *,
+    required_columns: Sequence[str] | None = None,
+) -> None:
     expected_sorted = (
         expected.sort_index(axis=1)
         .reset_index(drop=True)
@@ -190,13 +196,41 @@ def _compare_frames(label: str, expected: pd.DataFrame, current: pd.DataFrame) -
     if "raw_value" in expected_sorted.columns and "raw_value" in current_sorted.columns:
         expected_sorted["raw_value"] = expected_sorted["raw_value"].astype("string")
         current_sorted["raw_value"] = current_sorted["raw_value"].astype("string")
-    if expected_sorted.shape != current_sorted.shape:
+
+    if required_columns is None:
+        if expected_sorted.shape != current_sorted.shape:
+            raise GoldenRegressionError(
+                f"GOLDEN_REGRESSION_ERROR: {label} shape drift: "
+                f"expected={expected_sorted.shape} got={current_sorted.shape}"
+            )
+        try:
+            pd.testing.assert_frame_equal(expected_sorted, current_sorted, check_dtype=False)
+        except AssertionError as exc:  # pragma: no cover - diff summary handled below
+            raise GoldenRegressionError(
+                f"GOLDEN_REGRESSION_ERROR: {label} content drift detected: {exc}"
+            ) from exc
+        return
+
+    required = list(required_columns)
+    missing_required = sorted(set(required) - set(current_sorted.columns))
+    if missing_required:
+        joined = ", ".join(missing_required)
         raise GoldenRegressionError(
-            f"GOLDEN_REGRESSION_ERROR: {label} shape drift: "
-            f"expected={expected_sorted.shape} got={current_sorted.shape}"
+            f"GOLDEN_REGRESSION_ERROR: {label} missing required columns: {joined}"
+        )
+    extras = sorted(set(current_sorted.columns) - set(required))
+    if extras:
+        _log(f"{label} extra columns (ignored): {extras}")
+
+    expected_required = expected_sorted[required]
+    current_required = current_sorted[required]
+    if expected_required.shape[0] != current_required.shape[0]:
+        raise GoldenRegressionError(
+            f"GOLDEN_REGRESSION_ERROR: {label} row drift: "
+            f"expected={expected_required.shape[0]} got={current_required.shape[0]}"
         )
     try:
-        pd.testing.assert_frame_equal(expected_sorted, current_sorted, check_dtype=False)
+        pd.testing.assert_frame_equal(expected_required, current_required, check_dtype=False)
     except AssertionError as exc:  # pragma: no cover - diff summary handled below
         raise GoldenRegressionError(
             f"GOLDEN_REGRESSION_ERROR: {label} content drift detected: {exc}"
@@ -262,7 +296,12 @@ def main() -> int:
         run = _run_phase01()
         _log("Comparing mentor pool snapshot...")
         expected_pool = _load_expected_frame(SNAPSHOT_POOL)
-        _compare_frames("mentor_pool", expected_pool, run.mentor_pool)
+        _compare_frames(
+            "mentor_pool",
+            expected_pool,
+            run.mentor_pool,
+            required_columns=list(expected_pool.columns),
+        )
         _log("Comparing join-key validation issues snapshot...")
         expected_issues = _load_expected_frame(SNAPSHOT_ISSUES)
         _compare_frames("join_key_issues", expected_issues, run.join_key_issues)

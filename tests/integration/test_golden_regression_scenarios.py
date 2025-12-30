@@ -26,6 +26,7 @@ from scripts.ci_summarize_mentor_join_key_issues import summarize
 from scripts.run_golden_regression_phase01 import (
     GoldenRegressionError,
     _canonicalize_pool,
+    _compare_frames,
     _format_join_key_error,
     _require_files,
     _run_phase01,
@@ -383,6 +384,25 @@ def test_phase01_diff_column_drift_detection() -> None:
     hypothesis = _hypothesize_root_cause(stats)
 
     assert "Column mismatch" in hypothesis
+
+
+def test_phase01_compare_allows_extra_columns() -> None:
+    expected = pd.DataFrame({"mentor_id": [1], "group_code": [10]})
+    current = pd.DataFrame({"mentor_id": [1], "group_code": [10], "__extra__": ["x"]})
+    _compare_frames(
+        "mentor_pool",
+        expected,
+        current,
+        required_columns=list(expected.columns),
+    )
+    missing = pd.DataFrame({"mentor_id": [1]})
+    with pytest.raises(GoldenRegressionError):
+        _compare_frames(
+            "mentor_pool",
+            expected,
+            missing,
+            required_columns=list(expected.columns),
+        )
 
 
 def test_summarize_dumped_issue_csv(tmp_path: Path) -> None:
