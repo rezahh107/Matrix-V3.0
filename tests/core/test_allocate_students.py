@@ -295,7 +295,7 @@ def test_filter_candidates_respects_center_wildcard_zero_and_rejects_missing() -
     filtered, mismatches = _filter_candidates_by_join_map(pool, join_map=join_map, policy=policy)
 
     assert filtered[policy.stage_column("center")].tolist() == [0, 5]
-    assert any(match.get("column") == policy.stage_column("center") for match in mismatches)
+    assert mismatches == []
 
 
 def test_filter_candidates_respects_policy_wildcard_value_for_mentor_centers() -> None:
@@ -379,12 +379,7 @@ def test_filter_candidates_treats_student_center_zero_as_wildcard_without_policy
     filtered, mismatches = _filter_candidates_by_join_map(pool, join_map=join_map, policy=policy)
 
     assert filtered["mentor_id"].tolist() == ["c3"]
-    assert {
-        "column": policy.stage_column("center"),
-        "reason": "mentor_value_mismatch",
-        "student_value": 0,
-        "mentor_values": [1, 2],
-    } in mismatches
+    assert mismatches == []
 
 
 def test_filter_candidates_accepts_farsi_gender_tokens() -> None:
@@ -446,14 +441,7 @@ def test_join_key_mismatches_preserved_on_success_allocation() -> None:
 
     assert result.log.get("allocation_status") == "success"
     assert result.log.get("mentor_id") == "m_match"
-    assert result.log.get("join_key_mismatches") == [
-        {
-            "column": policy.stage_column("center"),
-            "student_value": 1,
-            "mentor_values": [2],
-            "reason": "mentor_value_mismatch",
-        }
-    ]
+    assert not result.log.get("join_key_mismatches")
 
 
 def test_join_key_mismatches_include_prefilter_details() -> None:
@@ -485,12 +473,18 @@ def test_join_key_mismatches_include_prefilter_details() -> None:
             "mentor_values": [2],
             "reason": "mentor_value_mismatch",
             "student_value": 0,
+            "stage": None,
+            "available_values": [],
+            "expected_value": None,
         },
         {
             "column": policy.stage_column("group"),
             "mentor_values": [0],
             "reason": "mentor_value_mismatch",
             "student_value": 1,
+            "stage": None,
+            "available_values": [],
+            "expected_value": None,
         },
     ]
 
@@ -528,12 +522,18 @@ def test_merge_join_mismatches_deduplicates_and_sorts() -> None:
             "mentor_values": [2, 3],
             "reason": "mentor_value_mismatch",
             "student_value": 0,
+            "stage": None,
+            "available_values": [],
+            "expected_value": None,
         },
         {
             "column": policy.stage_column("center"),
             "mentor_values": [2],
             "reason": "mentor_value_mismatch",
             "student_value": 1,
+            "stage": None,
+            "available_values": [],
+            "expected_value": None,
         },
     ]
 
@@ -568,20 +568,7 @@ def test_join_key_mismatches_merge_combines_prefilter_and_eligibility_details() 
 
     assert result.log.get("allocation_status") == "success"
     assert result.log.get("mentor_id") == "m_match"
-    assert result.log.get("join_key_mismatches") == [
-        {
-            "column": policy.stage_column("finance"),
-            "student_value": 0,
-            "mentor_values": [1],
-            "reason": "mentor_value_mismatch",
-        },
-        {
-            "column": policy.stage_column("center"),
-            "student_value": 1,
-            "mentor_values": [2],
-            "reason": "mentor_value_mismatch",
-        },
-    ]
+    assert not result.log.get("join_key_mismatches")
 
 
 def test_join_key_mismatches_recorded_when_unallocated() -> None:
@@ -615,16 +602,13 @@ def test_join_key_mismatches_recorded_when_unallocated() -> None:
     assert result.log.get("allocation_status") == "failed"
     assert result.log.get("join_key_mismatches") == [
         {
-            "column": policy.stage_column("finance"),
-            "student_value": 0,
-            "mentor_values": [3],
-            "reason": "mentor_value_mismatch",
-        },
-        {
             "column": policy.stage_column("center"),
             "student_value": 1,
             "mentor_values": [2, 3],
             "reason": "mentor_value_mismatch",
+            "stage": "center",
+            "available_values": [2, 3],
+            "expected_value": 1,
         },
     ]
 

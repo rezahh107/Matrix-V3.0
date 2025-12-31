@@ -75,4 +75,14 @@ def all_law_mappings() -> dict[RuleId, LawMapping]:
             law_refs=("LAW-STU-GRAD-01",),
             description="دامنهٔ وضعیت فارغ‌التحصیلی باید با گروه/پایه سازگار باشد.",
         ),
+        "QA_RULE_POOL_COVERAGE_01": LawMapping(
+            rule_id="QA_RULE_POOL_COVERAGE_01",
+            law_refs=("LAW-JOIN-COVERAGE-01",),
+            description="هر دانش‌آموز باید حداقل یک کاندید از استخر منتور مطابق کلیدهای join داشته باشد.",
+        ),
+        "QA_RULE_POOL_DIVERSITY_01": LawMapping(
+            rule_id="QA_RULE_POOL_DIVERSITY_01",
+            law_refs=("LAW-POOL-DIVERSITY-01",),
+            description="تنوع مقادیر کلیدی استخر منتور نباید به‌صورت غیرعادی محدود باشد.",
+        ),
     }

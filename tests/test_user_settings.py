@@ -24,6 +24,10 @@ def test_save_and_load_user_settings_roundtrip(tmp_path: Path) -> None:
         enable_trace_debug_sheets=False,
         enable_trace_export=True,
         enable_mentor_trace_debug=True,
+        enable_bucket_trace=True,
+        enable_pool_governance_trace=True,
+        enable_qa_pool_coverage_rules=True,
+        use_join_buckets=True,
     )
 
     save_user_settings(settings, settings_path)
@@ -40,6 +44,10 @@ def test_user_settings_to_dict_is_limited_to_indicators() -> None:
         enable_trace_debug_sheets=True,
         enable_trace_export=False,
         enable_mentor_trace_debug=True,
+        enable_bucket_trace=False,
+        enable_pool_governance_trace=True,
+        enable_qa_pool_coverage_rules=False,
+        use_join_buckets=True,
     )
 
     settings_dict = settings.to_dict()
@@ -49,6 +57,10 @@ def test_user_settings_to_dict_is_limited_to_indicators() -> None:
         "enable_trace_debug_sheets": True,
         "enable_trace_export": False,
         "enable_mentor_trace_debug": True,
+        "enable_bucket_trace": False,
+        "enable_pool_governance_trace": True,
+        "enable_qa_pool_coverage_rules": False,
+        "use_join_buckets": True,
     }
 
 

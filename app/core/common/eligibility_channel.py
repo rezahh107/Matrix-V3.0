@@ -36,6 +36,7 @@ class EligibilitySpec:
     policy: PolicyConfig
     student_join_map: Mapping[str, int] | None = None
     join_bucket_index: JoinBucketIndex | None = None
+    join_bucket_enabled: bool = False
     manager_preference_index: pd.Index | None = None
     manager_priority_enabled: bool = False
 
@@ -73,6 +74,7 @@ class EligibilitySpec:
             "school_code": self.school_code.value,
             "school_wildcard": self.school_code.wildcard,
             "manager_priority_enabled": self.manager_priority_enabled,
+            "join_bucket_enabled": self.join_bucket_enabled,
         }
 
 
@@ -148,15 +150,25 @@ def _bucket_candidate_pool_with_trace(
         "bucket_sizes": [],
     }
     join_bucket_index = spec.join_bucket_index
+    if not spec.join_bucket_enabled:
+        trace["bucket_skip_reason"] = "disabled_by_setting"
+        return candidate_pool, trace
     if join_bucket_index is None:
         trace["bucket_skip_reason"] = "no_join_bucket_index"
+        return candidate_pool, trace
+    if not join_bucket_index:
+        trace["bucket_skip_reason"] = "empty_bucket_index"
         return candidate_pool, trace
     join_map = spec.student_join_map
     if join_map is None:
         trace["bucket_skip_reason"] = "missing_student_join_map"
         return candidate_pool, trace
-    if not _should_use_join_bucket(spec, candidate_pool):
-        trace["bucket_skip_reason"] = "not_eligible_for_bucket"
+    if any(column not in candidate_pool.columns for column in spec.policy.join_keys):
+        trace["bucket_skip_reason"] = "missing_pool_join_columns"
+        return candidate_pool, trace
+    should_bucket, reason = _should_use_join_bucket(spec, candidate_pool)
+    if not should_bucket:
+        trace["bucket_skip_reason"] = reason or "not_eligible_for_bucket"
         return candidate_pool, trace
 
     key_variants = _join_bucket_key_variants(join_map, spec.policy)
@@ -201,30 +213,32 @@ def _format_bucket_keys(keys: Sequence[tuple[int, ...]]) -> str | None:
 def _should_use_join_bucket(
     spec: EligibilitySpec,
     candidate_pool: pd.DataFrame,
-) -> bool:
+) -> tuple[bool, str | None]:
     join_map = spec.student_join_map
     if join_map is None:
-        return False
+        return False, "missing_student_join_map"
     for column in spec.policy.join_keys:
         normalized = normalize_join_key_name(column)
         value = join_map.get(normalized)
         if value is None or int(value) < 0:
-            return False
+            return False, "invalid_join_keys"
     school_code = spec.school_code
     if school_code.wildcard or school_code.missing or school_code.value is None:
-        return False
+        return False, "school_wildcard_or_missing"
     center_info = spec.effective_join_keys
     if center_info.center_code is None:
-        return False
+        return False, "missing_center_code"
     wildcard_center = center_wildcard_value(spec.policy)
     if wildcard_center is not None and int(center_info.center_code) == wildcard_center:
-        return False
+        return False, "center_wildcard"
 
     if "has_school_constraint" in candidate_pool.columns:
         constraint = ensure_series(candidate_pool["has_school_constraint"]).fillna(False).astype(bool)
         if (~constraint).any():
-            return False
-    return "mentor_school_binding_mode" not in candidate_pool.columns
+            return False, "invalid_pool_bucket_values"
+    if "mentor_school_binding_mode" in candidate_pool.columns:
+        return False, "invalid_pool_bucket_values"
+    return True, None
 
 
 def _join_bucket_key_variants(

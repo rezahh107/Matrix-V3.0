@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Hashable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
+from typing import cast
 
 import pandas as pd
 from pandas.api import types as ptypes
@@ -19,6 +20,7 @@ from app.core.common.domain import (
     classify_student_binding,
 )
 from app.core.common.national_id import canonical_national_code
+from app.core.common.types import CANONICAL_TRACE_ORDER, TraceStageName
 from app.core.debug.models import QABreadcrumb
 from app.core.policy_loader import MentorStatus, PolicyConfig
 
@@ -40,6 +42,8 @@ __all__ = [
     "check_GOV_01",
     "check_ALLOC_01",
     "check_HISTORY_CHANNEL_01",
+    "check_POOL_COVERAGE_01",
+    "check_POOL_DIVERSITY_01",
 ]
 
 
@@ -56,7 +60,7 @@ class QaViolation:
     rule_id:
         شناسهٔ پایدار قانون (مثلاً ``"QA_RULE_STU_01"``).
     level:
-        سطح تخطی؛ در این نسخه فقط ``"error"`` پشتیبانی می‌شود.
+        سطح تخطی؛ ``"error"`` و ``"warning"`` پشتیبانی می‌شوند.
     message:
         توضیح خوانا از علت تخطی.
     details:
@@ -122,12 +126,16 @@ class QaReport:
         descriptions = descriptions or {}
         rows = []
         for result in sorted(self.results, key=lambda item: item.rule_id):
+            violations_count = len(result.violations)
+            status = "PASS" if result.passed else "FAIL"
+            if result.passed and violations_count:
+                status = "WARN"
             rows.append(
                 {
                     "rule_id": result.rule_id,
                     "description": descriptions.get(result.rule_id, ""),
-                    "status": "PASS" if result.passed else "FAIL",
-                    "violations_count": len(result.violations),
+                    "status": status,
+                    "violations_count": violations_count,
                 }
             )
         return pd.DataFrame(rows)
@@ -179,6 +187,8 @@ def run_all_invariants(
     pool: pd.DataFrame | None = None,
     extras: Mapping[str, pd.DataFrame] | None = None,
     history_info: pd.DataFrame | None = None,
+    pool_alignment_preflight: pd.DataFrame | None = None,
+    enable_pool_coverage_rules: bool = False,
 ) -> QaReport:
     """اجرای همهٔ قوانین QA و تولید گزارش تجمیعی.
 
@@ -220,6 +230,19 @@ def run_all_invariants(
         ),
         check_HISTORY_CHANNEL_01(history_info=history_info),
     ]
+    if enable_pool_coverage_rules:
+        checks.append(
+            check_POOL_COVERAGE_01(
+                pool_alignment_preflight=pool_alignment_preflight,
+                policy=policy,
+            )
+        )
+        checks.append(
+            check_POOL_DIVERSITY_01(
+                allocation_summary=allocation_summary,
+                policy=policy,
+            )
+        )
     pool_result, pool_conflicts = check_POOL_JOIN_01(pool=pool, policy=policy)
     checks.append(pool_result)
 
@@ -1047,5 +1070,123 @@ def check_HISTORY_CHANNEL_01(*, history_info: pd.DataFrame | None) -> QaRuleResu
     return QaRuleResult(
         rule_id="QA_RULE_HISTORY_CHANNEL_01",
         passed=not violations,
+        violations=violations,
+    )
+
+
+def _infer_failure_stage_from_counts(value: object) -> TraceStageName | None:
+    if not isinstance(value, Mapping):
+        return None
+    for stage in CANONICAL_TRACE_ORDER:
+        if stage == "capacity_gate":
+            continue
+        try:
+            if int(value.get(stage, 0)) == 0:
+                return stage
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def check_POOL_COVERAGE_01(  # noqa: N802
+    *,
+    pool_alignment_preflight: pd.DataFrame | None,
+    policy: PolicyConfig,
+) -> QaRuleResult:
+    """QA_RULE_POOL_COVERAGE_01 — هشدار در صورت نبود کاندید برای دانش‌آموز."""
+
+    if pool_alignment_preflight is None or pool_alignment_preflight.empty:
+        return QaRuleResult("QA_RULE_POOL_COVERAGE_01", True, [])
+
+    violations: list[QaViolation] = []
+    for _, row in pool_alignment_preflight.iterrows():
+        try:
+            candidate_final = int(row.get("candidate_count_final", 0) or 0)
+        except (TypeError, ValueError):
+            candidate_final = 0
+        if candidate_final != 0:
+            continue
+
+        stage = row.get("first_failing_stage")
+        stage_name = cast(TraceStageName | None, stage) if stage is not None else None
+        if stage_name is None:
+            stage_name = _infer_failure_stage_from_counts(row.get("stage_counts"))
+
+        expected_value = row.get("expected_value")
+        available_values = row.get("available_values")
+        available_values_list: list[object] = []
+        if isinstance(available_values, Sequence) and not isinstance(
+            available_values, (str, bytes)
+        ):
+            available_values_list = list(available_values)[:10]
+
+        join_key_values_raw = row.get("join_key_values")
+        join_key_values = (
+            dict(join_key_values_raw)
+            if isinstance(join_key_values_raw, Mapping)
+            else {}
+        )
+        if expected_value is None and stage_name is not None:
+            column = policy.stage_column(stage_name)
+            expected_value = join_key_values.get(column)
+
+        details: dict[str, object] = {
+            "student_id": row.get("student_id"),
+            "first_failing_stage": stage_name,
+            "expected_value": expected_value,
+            "available_values": available_values_list,
+        }
+        details.update(join_key_values)
+        violations.append(
+            QaViolation(
+                rule_id="QA_RULE_POOL_COVERAGE_01",
+                level="error",
+                message="No mentor candidates matched join keys in the final pool.",
+                details=details,
+            )
+        )
+    return QaRuleResult(
+        rule_id="QA_RULE_POOL_COVERAGE_01",
+        passed=not violations,
+        violations=violations,
+    )
+
+
+def check_POOL_DIVERSITY_01(  # noqa: N802
+    *,
+    allocation_summary: pd.DataFrame | None,
+    policy: PolicyConfig,
+) -> QaRuleResult:
+    """QA_RULE_POOL_DIVERSITY_01 — هشدار برای تنوع پایین مقادیر کلیدی."""
+
+    if allocation_summary is None or allocation_summary.empty:
+        return QaRuleResult("QA_RULE_POOL_DIVERSITY_01", True, [])
+
+    violations: list[QaViolation] = []
+    for stage in ("group", "gender", "graduation_status"):
+        column = policy.stage_column(stage)
+        if column not in allocation_summary.columns:
+            continue
+        series = pd.to_numeric(allocation_summary[column], errors="coerce").dropna()
+        distinct_count = int(series.nunique())
+        if distinct_count <= 1:
+            value_counts = series.value_counts().head(5)
+            top_values = [int(value) for value in value_counts.index.tolist()]
+            violations.append(
+                QaViolation(
+                    rule_id="QA_RULE_POOL_DIVERSITY_01",
+                    level="warning",
+                    message="Pool diversity appears unusually narrow.",
+                    details={
+                        "column": column,
+                        "distinct_count": distinct_count,
+                        "top_values": top_values,
+                    },
+                )
+            )
+
+    return QaRuleResult(
+        rule_id="QA_RULE_POOL_DIVERSITY_01",
+        passed=True,
         violations=violations,
     )

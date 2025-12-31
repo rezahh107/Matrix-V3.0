@@ -21,6 +21,8 @@ _RULE_DESCRIPTIONS: dict[str, str] = {
     "QA_RULE_SCHOOL_01": "تفکیک منتورهای آزاد و مقید به مدرسه",
     "QA_RULE_ALLOC_01": "کنترل ظرفیت و نسبت اشغال منتورها",
     "QA_RULE_POOL_JOIN_01": "ردیف تکراری روی کلید ترکیبی mentor_id و کلیدهای اتصال",
+    "QA_RULE_POOL_COVERAGE_01": "پوشش استخر منتور برای کلیدهای join دانش‌آموز",
+    "QA_RULE_POOL_DIVERSITY_01": "تنوع مقادیر کلیدی در استخر منتور",
 }
 
 
@@ -125,6 +127,50 @@ def _join_key_sheet(report: QaReport) -> pd.DataFrame:
     if details.empty:
         return pd.DataFrame(columns=["message", "level"])
     return details
+
+
+def _pool_coverage_failures_sheet(report: QaReport) -> pd.DataFrame:
+    details = report.to_details_frame("QA_RULE_POOL_COVERAGE_01")
+    if details.empty:
+        return pd.DataFrame(
+            columns=[
+                "student_id",
+                "first_failing_stage",
+                "expected_value",
+                "available_values",
+                "level",
+                "message",
+            ]
+        )
+    preferred = [
+        "student_id",
+        "first_failing_stage",
+        "expected_value",
+        "available_values",
+        "level",
+        "message",
+    ]
+    cols = [col for col in preferred if col in details.columns]
+    remaining = [col for col in details.columns if col not in cols]
+    return details.loc[:, cols + remaining]
+
+
+def _pool_diversity_sheet(report: QaReport) -> pd.DataFrame:
+    details = report.to_details_frame("QA_RULE_POOL_DIVERSITY_01")
+    if details.empty:
+        return pd.DataFrame(
+            columns=[
+                "column",
+                "distinct_count",
+                "top_values",
+                "level",
+                "message",
+            ]
+        )
+    preferred = ["column", "distinct_count", "top_values", "level", "message"]
+    cols = [col for col in preferred if col in details.columns]
+    remaining = [col for col in details.columns if col not in cols]
+    return details.loc[:, cols + remaining]
 
 
 def _join_key_duplicates_sheet(context: QaValidationContext) -> pd.DataFrame:
@@ -279,6 +325,10 @@ def export_qa_validation(
         "pool_join_conflicts": _pool_join_conflicts_sheet(ctx, report),
         "pool_detection": _pool_detection_sheet(ctx),
     }
+    if any(result.rule_id == "QA_RULE_POOL_COVERAGE_01" for result in report.results):
+        sheets["PoolCoverageFailures"] = _pool_coverage_failures_sheet(report)
+    if any(result.rule_id == "QA_RULE_POOL_DIVERSITY_01" for result in report.results):
+        sheets["PoolDiversityReport"] = _pool_diversity_sheet(report)
     if ctx.alloc_join_summary is not None:
         sheets["alloc_join_summary"] = ctx.alloc_join_summary
     if ctx.alloc_join_audit is not None:

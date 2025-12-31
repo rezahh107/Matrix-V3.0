@@ -34,6 +34,13 @@ class MentorPipelineTraceEntry:
     raw_count: int | None = None
     predicate_summary: str | None = None
     after_count: int | None = None
+    profile_rows: int | None = None
+    unique_mentor_ids: int | None = None
+    multi_profile_mentor_count: int | None = None
+    multi_profile_ratio: float | None = None
+    predicate_expr: str | None = None
+    predicate_source: str | None = None
+    prefilter_removed: int | None = None
 
     def to_record(self) -> dict[str, object]:
         return {
@@ -44,6 +51,13 @@ class MentorPipelineTraceEntry:
             "raw_count": self.raw_count,
             "predicate_summary": self.predicate_summary,
             "after_count": self.after_count,
+            "profile_rows": self.profile_rows,
+            "unique_mentor_ids": self.unique_mentor_ids,
+            "multi_profile_mentor_count": self.multi_profile_mentor_count,
+            "multi_profile_ratio": self.multi_profile_ratio,
+            "predicate_expr": self.predicate_expr,
+            "predicate_source": self.predicate_source,
+            "prefilter_removed": self.prefilter_removed,
         }
 
 
@@ -152,7 +166,13 @@ class MentorPipelineV3:
         if self._trace_enabled:
             trace_entries.append(self._trace_entry("join_keys", join_key_result.canonical_df))
             trace_entries.append(
+                self._trace_entry("all_profiles", join_key_result.all_profiles)
+            )
+            trace_entries.append(
                 self._trace_entry("usable_profiles", join_key_result.usable_profiles)
+            )
+            trace_entries.append(
+                _condense_trace_entry(join_key_result.all_profiles)
             )
         build_result = self._builder.build(join_key_result)
         if self._trace_enabled:
@@ -168,6 +188,7 @@ class MentorPipelineV3:
 
     def _trace_entry(self, stage: str, frame: pd.DataFrame) -> MentorPipelineTraceEntry:
         columns = self._trace_columns(frame.columns)
+        profile_rows, unique_mentors, multi_count, multi_ratio = _profile_metrics(frame)
         return MentorPipelineTraceEntry(
             stage=stage,
             rows=int(frame.shape[0]),
@@ -177,6 +198,10 @@ class MentorPipelineV3:
                 columns,
                 max_rows=self._trace_max_rows,
             ),
+            profile_rows=profile_rows,
+            unique_mentor_ids=unique_mentors,
+            multi_profile_mentor_count=multi_count,
+            multi_profile_ratio=multi_ratio,
         )
 
     def _trace_columns(self, columns: Iterable[str]) -> Sequence[str]:
@@ -219,6 +244,40 @@ class MentorPipelineV3:
             )
 
 
+def _profile_metrics(
+    frame: pd.DataFrame,
+) -> tuple[int | None, int | None, int | None, float | None]:
+    profile_rows = int(frame.shape[0])
+    if "mentor_id" not in frame.columns:
+        return profile_rows, None, None, None
+    mentor_series = ensure_series(frame["mentor_id"]).astype("string").str.strip()
+    mentor_series = mentor_series[mentor_series != ""]
+    if mentor_series.empty:
+        return profile_rows, 0, 0, 0.0
+    unique_mentors = int(mentor_series.nunique())
+    counts = mentor_series.value_counts()
+    multi_profile = int((counts > 1).sum())
+    ratio = float(multi_profile / unique_mentors) if unique_mentors else 0.0
+    return profile_rows, unique_mentors, multi_profile, ratio
+
+
+def _condense_trace_entry(all_profiles: pd.DataFrame) -> MentorPipelineTraceEntry:
+    profile_rows, unique_mentors, multi_profile, multi_ratio = _profile_metrics(all_profiles)
+    return MentorPipelineTraceEntry(
+        stage="condense_profiles_to_unique_mentors",
+        rows=int(all_profiles.shape[0]),
+        columns=int(all_profiles.shape[1]),
+        fingerprint=None,
+        raw_count=profile_rows,
+        predicate_summary="mentor_id distinct",
+        after_count=unique_mentors,
+        profile_rows=profile_rows,
+        unique_mentor_ids=unique_mentors,
+        multi_profile_mentor_count=multi_profile,
+        multi_profile_ratio=multi_ratio,
+    )
+
+
 def canonicalize_join_keys_for_cache(payload: pd.DataFrame, policy: PolicyConfig) -> pd.DataFrame:
     registry = FieldRegistry(policy)
     canonicalizer = ValueCanonicalizer(registry)
@@ -247,6 +306,9 @@ def build_global_prefilter_trace_entry(
             raw_count=raw_count,
             predicate_summary=predicate_summary,
             after_count=raw_count,
+            predicate_expr=predicate_summary,
+            predicate_source="policy.trace_stages[type].column",
+            prefilter_removed=0,
         )
 
     student_series = pd.to_numeric(
@@ -269,6 +331,9 @@ def build_global_prefilter_trace_entry(
         raw_count=raw_count,
         predicate_summary=predicate_summary,
         after_count=after_count,
+        predicate_expr=predicate_summary,
+        predicate_source="policy.trace_stages[type].column",
+        prefilter_removed=int(raw_count - after_count),
     )
 
 
