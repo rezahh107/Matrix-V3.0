@@ -128,6 +128,7 @@ from app.infra.mentors.value_canonicalizer import ValueCanonicalizer
 from app.infra.qa.alloc_join_validation import validate_allocation_join_keys_with_wildcard
 from app.infra.reference_managers_repository import import_managers_from_excel
 from app.infra.reference_mentors_repository import (
+    _POOL_PIPELINE_TRACE_ATTR,
     import_mentor_pool_from_dataframe,
     import_mentor_pool_from_excel,
     load_mentor_pool_from_cache,
@@ -1236,6 +1237,13 @@ def _resolve_mentor_pool_frame(
         pool_path = Path(path_text)
         pool_type: str
         detection: pool_loader.PoolDetectionResult | None = None
+        ui_overrides: dict[str, object] = getattr(args, "_ui_overrides", {}) or {}
+        user_settings_payload = getattr(args, "_user_settings", None)
+        if user_settings_payload is not None:
+            resolved_settings = coerce_user_settings(user_settings_payload)
+        else:
+            resolved_settings = _resolve_user_settings(ui_overrides)
+        trace_enabled = resolved_settings.enable_mentor_trace_debug
 
         def _load_raw(resolved_type: str) -> pd.DataFrame:
             nonlocal detection
@@ -1259,7 +1267,11 @@ def _resolve_mentor_pool_frame(
         pool_source_value = pool_source if pool_source != "auto" else pool_type
         if db:
             df = import_mentor_pool_from_dataframe(
-                raw_df, db=db, policy=policy, pool_source=pool_source_value
+                raw_df,
+                db=db,
+                policy=policy,
+                pool_source=pool_source_value,
+                trace_enabled=trace_enabled,
             )
             detection = detection or df.attrs.get("pool_detection")
         else:
@@ -2682,6 +2694,7 @@ def _prepare_allocation_frames(
         sanitize_pool=sanitize_pool,
         pool_source=pool_source,
     )
+    pool_clean.attrs.update(pool_df.attrs)
     return students_clean, pool_clean
 
 
@@ -3232,9 +3245,13 @@ def _allocate_and_write(
         prepare_overrides: dict[str, Literal["default", "raw"]] = {}
 
         debug_sheets: dict[str, pd.DataFrame] = {}
-        if resolved_settings.enable_trace_debug_sheets:
+        if (
+            resolved_settings.enable_trace_debug_sheets
+            or resolved_settings.enable_mentor_trace_debug
+        ):
             debug_sheets = collect_trace_debug_sheets(
                 trace_df,
+                logs_df=logs_df,
                 students_df=students_base,
                 history_info_df=history_info_df,
                 policy=policy,
@@ -3242,6 +3259,9 @@ def _allocate_and_write(
                 unallocated_summary=trace_extras.unallocated_summary if trace_extras else None,
                 policy_violations=trace_extras.policy_violations if trace_extras else None,
                 final_status_counts=trace_extras.final_status_counts if trace_extras else None,
+                pool_trace=pool_base.attrs.get(_POOL_PIPELINE_TRACE_ATTR),
+                enable_standard_debug_sheets=resolved_settings.enable_trace_debug_sheets,
+                enable_mentor_trace_debug=resolved_settings.enable_mentor_trace_debug,
                 enable_history_metrics=resolved_settings.enable_history_metrics,
             )
         for name, df in debug_sheets.items():

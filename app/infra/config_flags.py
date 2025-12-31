@@ -34,12 +34,14 @@ class UserSettings:
     enable_history_metrics: bool = False
     enable_trace_debug_sheets: bool = False
     enable_trace_export: bool = False
+    enable_mentor_trace_debug: bool = False
 
     def to_dict(self) -> dict[str, bool]:
         return {
             "enable_history_metrics": self.enable_history_metrics,
             "enable_trace_debug_sheets": self.enable_trace_debug_sheets,
             "enable_trace_export": self.enable_trace_export,
+            "enable_mentor_trace_debug": self.enable_mentor_trace_debug,
         }
 
     @classmethod
@@ -50,6 +52,7 @@ class UserSettings:
             enable_history_metrics=bool(payload.get("enable_history_metrics", False)),
             enable_trace_debug_sheets=bool(payload.get("enable_trace_debug_sheets", False)),
             enable_trace_export=bool(payload.get("enable_trace_export", False)),
+            enable_mentor_trace_debug=bool(payload.get("enable_mentor_trace_debug", False)),
         )
 
 

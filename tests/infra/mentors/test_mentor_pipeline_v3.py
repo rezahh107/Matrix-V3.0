@@ -158,6 +158,30 @@ def test_pipeline_handles_canonical_mentor_id_with_alias_column() -> None:
     assert "mentor_code" not in result.build_result.pool.columns
 
 
+def test_pipeline_trace_records_stage_counts() -> None:
+    payload = _make_simple_df()
+    pipeline = MentorPipelineV3(
+        policy=policy.config,
+        reference_mode="excel",
+        enable_trace=True,
+        trace_max_rows=10,
+    )
+
+    result = pipeline.run(payload)
+
+    assert result.trace is not None
+    stages = [entry.stage for entry in result.trace.entries]
+    assert stages == [
+        "raw",
+        "header_resolved",
+        "canonicalized",
+        "join_keys",
+        "usable_profiles",
+        "pool_built",
+    ]
+    assert all(entry.rows == 2 for entry in result.trace.entries)
+
+
 def test_reference_repository_delegates_pipeline(monkeypatch: pytest.MonkeyPatch) -> None:
     class _FakeDB:
         def __init__(self) -> None:

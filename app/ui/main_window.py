@@ -314,6 +314,9 @@ class SettingsDialog(QDialog):
         self._debug_checkbox = QCheckBox("Trace Debug Sheets", self)
         self._debug_checkbox.setChecked(settings.enable_trace_debug_sheets)
 
+        self._mentor_trace_checkbox = QCheckBox("Mentor Pipeline Trace", self)
+        self._mentor_trace_checkbox.setChecked(settings.enable_mentor_trace_debug)
+
         self._trace_checkbox = QCheckBox("Trace Sheet Export", self)
         self._trace_checkbox.setChecked(settings.enable_trace_export)
 
@@ -321,6 +324,7 @@ class SettingsDialog(QDialog):
         layout.addWidget(QLabel("Toggle optional diagnostics and exports", self))
         layout.addWidget(self._history_checkbox)
         layout.addWidget(self._debug_checkbox)
+        layout.addWidget(self._mentor_trace_checkbox)
         layout.addWidget(self._trace_checkbox)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self)
@@ -334,6 +338,7 @@ class SettingsDialog(QDialog):
             enable_history_metrics=self._history_checkbox.isChecked(),
             enable_trace_debug_sheets=self._debug_checkbox.isChecked(),
             enable_trace_export=self._trace_checkbox.isChecked(),
+            enable_mentor_trace_debug=self._mentor_trace_checkbox.isChecked(),
         )
 
 
@@ -1781,6 +1786,7 @@ class MainWindow(QMainWindow):
             "enable_history_metrics": "History",
             "enable_trace_debug_sheets": "Debug Sheets",
             "enable_trace_export": "Trace",
+            "enable_mentor_trace_debug": "Mentor Trace",
         }
 
     def _build_settings_indicator_strip(self) -> QHBoxLayout:
