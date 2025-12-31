@@ -93,6 +93,13 @@ def test_collect_trace_debug_sheets_exports_eligibility_and_pipeline_trace() -> 
                     "eligible": {"rows": 2},
                     "preferred_count": 1,
                     "stage_counts": {"type": 5, "group": 3, "gender": 2},
+                    "bucket_trace": {
+                        "pool_built_size": 5250,
+                        "pool_size_before_bucket": 5250,
+                        "bucket_key": "(1,2,3,4,5,6)",
+                        "bucket_size": 90,
+                        "bucket_skip_reason": None,
+                    },
                 }
             ],
         }
@@ -115,6 +122,10 @@ def test_collect_trace_debug_sheets_exports_eligibility_and_pipeline_trace() -> 
     assert eligibility.loc[0, "bucketed_candidates"] == 3
     assert eligibility.loc[0, "eligible_candidates"] == 2
     assert eligibility.loc[0, "preferred_count"] == 1
+    assert eligibility.loc[0, "pool_built_size"] == 5250
+    assert eligibility.loc[0, "pool_size_before_bucket"] == 5250
+    assert eligibility.loc[0, "bucket_key"] == "(1,2,3,4,5,6)"
+    assert eligibility.loc[0, "bucket_size"] == 90
     assert "stage_type_count" in eligibility.columns
 
     assert "MentorPipelineTrace" in sheets

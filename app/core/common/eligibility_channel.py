@@ -55,7 +55,7 @@ class EligibilitySpec:
         )
 
     def hard_mask(self, pool_df: pd.DataFrame) -> pd.Series:
-        _, eligible = _apply_join_filters(pool_df, self, tracker=None)
+        _, eligible, _ = _apply_join_filters(pool_df, self, tracker=None)
         return pd.Series(pool_df.index.isin(eligible.index), index=pool_df.index, dtype=bool)
 
     def priority_score(self, pool_df: pd.DataFrame) -> pd.Series:
@@ -85,7 +85,7 @@ def apply_eligibility(
     def _tracker(stage: str, count: int) -> None:
         stage_counts[stage] = int(count)
 
-    bucketed, _ = _apply_join_filters(pool_df, spec, tracker=_tracker)
+    bucketed, _, bucket_trace = _apply_join_filters(pool_df, spec, tracker=_tracker)
     mask = spec.hard_mask(pool_df)
     eligible = pool_df.loc[mask]
     priority = spec.priority_score(eligible)
@@ -100,6 +100,7 @@ def apply_eligibility(
         "eligible": _trace_entry(eligible, fingerprint_columns),
         "stage_counts": dict(stage_counts),
         "preferred_count": preferred_count,
+        "bucket_trace": bucket_trace,
         "explain": spec.explain(),
     }
     return eligible, priority, trace
@@ -121,8 +122,8 @@ def _apply_join_filters(
     spec: EligibilitySpec,
     *,
     tracker: Any,
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    candidate_pool = _bucket_candidate_pool(pool_df, spec)
+) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, object]]:
+    candidate_pool, bucket_trace = _bucket_candidate_pool_with_trace(pool_df, spec)
     eligible = apply_join_filters(
         candidate_pool,
         spec.student,
@@ -130,41 +131,71 @@ def _apply_join_filters(
         student_join_map=spec.student_join_map,
         tracker=tracker,
     )
-    return candidate_pool, eligible
+    return candidate_pool, eligible, bucket_trace
 
 
-def _bucket_candidate_pool(
+def _bucket_candidate_pool_with_trace(
     candidate_pool: pd.DataFrame,
     spec: EligibilitySpec,
-) -> pd.DataFrame:
+) -> tuple[pd.DataFrame, dict[str, object]]:
+    trace: dict[str, object] = {
+        "pool_built_size": int(candidate_pool.shape[0]),
+        "pool_size_before_bucket": int(candidate_pool.shape[0]),
+        "bucket_key": None,
+        "bucket_size": None,
+        "bucket_skip_reason": None,
+        "bucket_key_variants": [],
+        "bucket_sizes": [],
+    }
     join_bucket_index = spec.join_bucket_index
     if join_bucket_index is None:
-        return candidate_pool
+        trace["bucket_skip_reason"] = "no_join_bucket_index"
+        return candidate_pool, trace
     join_map = spec.student_join_map
     if join_map is None:
-        return candidate_pool
+        trace["bucket_skip_reason"] = "missing_student_join_map"
+        return candidate_pool, trace
     if not _should_use_join_bucket(spec, candidate_pool):
-        return candidate_pool
+        trace["bucket_skip_reason"] = "not_eligible_for_bucket"
+        return candidate_pool, trace
 
     key_variants = _join_bucket_key_variants(join_map, spec.policy)
     if not key_variants:
-        return candidate_pool
+        trace["bucket_skip_reason"] = "no_bucket_variants"
+        return candidate_pool, trace
+    trace["bucket_key_variants"] = list(key_variants)
 
+    bucket_entries: list[tuple[tuple[int, ...], int]] = []
     combined_values: list[object] = []
     for key in key_variants:
         bucket = join_bucket_index.get(key)
         if bucket is None or bucket.empty:
             continue
+        bucket_entries.append((key, int(bucket.size)))
         combined_values.extend(bucket.to_list())
 
     if not combined_values:
-        return candidate_pool
+        trace["bucket_skip_reason"] = "no_bucket_matches"
+        return candidate_pool, trace
+
+    bucket_entries = sorted(bucket_entries, key=lambda item: item[0])
+    trace["bucket_sizes"] = [size for _, size in bucket_entries]
+    trace["bucket_key"] = _format_bucket_keys([key for key, _ in bucket_entries])
 
     combined_index = pd.Index(pd.unique(pd.Index(combined_values)))
+    trace["bucket_size"] = int(len(combined_index))
     selected_index = candidate_pool.index.intersection(combined_index, sort=False)
     if selected_index.empty:
-        return candidate_pool
-    return candidate_pool.loc[selected_index]
+        trace["bucket_skip_reason"] = "bucket_intersection_empty"
+        return candidate_pool, trace
+    return candidate_pool.loc[selected_index], trace
+
+
+def _format_bucket_keys(keys: Sequence[tuple[int, ...]]) -> str | None:
+    if not keys:
+        return None
+    rendered = ["(" + ",".join(str(value) for value in key) + ")" for key in keys]
+    return ";".join(rendered)
 
 
 def _should_use_join_bucket(
