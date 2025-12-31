@@ -461,6 +461,8 @@ def _build_eligibility_trace_sheet(
         "bucket_key",
         "bucket_size",
         "bucket_skip_reason",
+        "bucket_key_variants",
+        "bucket_sizes",
         "initial_candidates",
         "bucketed_candidates",
         "eligible_candidates",
@@ -503,6 +505,8 @@ def _build_eligibility_trace_sheet(
             "bucket_key": bucket_trace.get("bucket_key"),
             "bucket_size": bucket_trace.get("bucket_size"),
             "bucket_skip_reason": bucket_trace.get("bucket_skip_reason"),
+            "bucket_key_variants": bucket_trace.get("bucket_key_variants"),
+            "bucket_sizes": bucket_trace.get("bucket_sizes"),
             "initial_candidates": initial,
             "bucketed_candidates": bucketed,
             "eligible_candidates": eligible,
@@ -538,6 +542,75 @@ def _build_pipeline_trace_sheet(trace_payload: object) -> pd.DataFrame:
     if not rows:
         return pd.DataFrame(columns=["stage", "rows", "columns", "fingerprint"])
     return pd.DataFrame(rows)
+
+
+def _build_trace_ladder_sheet(
+    trace_df: pd.DataFrame,
+    *,
+    logs_df: pd.DataFrame | None,
+) -> pd.DataFrame:
+    bucket_columns = [
+        "pool_built_size",
+        "pool_size_before_bucket",
+        "bucket_key",
+        "bucket_size",
+        "bucket_skip_reason",
+        "bucket_key_variants",
+        "bucket_sizes",
+    ]
+    trace_ladder = trace_df.copy()
+    if trace_ladder.empty:
+        return trace_ladder
+    if "student_id" not in trace_ladder.columns:
+        for column in bucket_columns:
+            if column not in trace_ladder.columns:
+                trace_ladder[column] = None
+        return trace_ladder
+    if logs_df is None or logs_df.empty:
+        for column in bucket_columns:
+            if column not in trace_ladder.columns:
+                trace_ladder[column] = None
+        return trace_ladder
+
+    logs_en = canonicalize_headers(logs_df, header_mode="en").copy()
+    if "student_id" not in logs_en.columns or "eligibility_trace" not in logs_en.columns:
+        for column in bucket_columns:
+            if column not in trace_ladder.columns:
+                trace_ladder[column] = None
+        return trace_ladder
+
+    bucket_records: list[dict[str, object]] = []
+    for _, row in logs_en.iterrows():
+        trace = row.get("eligibility_trace")
+        if not isinstance(trace, Mapping):
+            continue
+        bucket_trace_raw = trace.get("bucket_trace", {})
+        if not isinstance(bucket_trace_raw, Mapping):
+            continue
+        bucket_records.append(
+            {
+                "student_id": row.get("student_id"),
+                "pool_built_size": bucket_trace_raw.get("pool_built_size"),
+                "pool_size_before_bucket": bucket_trace_raw.get("pool_size_before_bucket"),
+                "bucket_key": bucket_trace_raw.get("bucket_key"),
+                "bucket_size": bucket_trace_raw.get("bucket_size"),
+                "bucket_skip_reason": bucket_trace_raw.get("bucket_skip_reason"),
+                "bucket_key_variants": bucket_trace_raw.get("bucket_key_variants"),
+                "bucket_sizes": bucket_trace_raw.get("bucket_sizes"),
+            }
+        )
+
+    if not bucket_records:
+        for column in bucket_columns:
+            if column not in trace_ladder.columns:
+                trace_ladder[column] = None
+        return trace_ladder
+
+    bucket_df = pd.DataFrame(bucket_records)
+    if "student_id" in bucket_df.columns:
+        bucket_df = bucket_df.drop_duplicates(subset=["student_id"], keep="last")
+    trace_ladder = trace_ladder.merge(bucket_df, on="student_id", how="left")
+    return trace_ladder
 
 
 def collect_trace_debug_sheets(
@@ -606,6 +679,7 @@ def collect_trace_debug_sheets(
 
     if enable_mentor_trace_debug:
         sheets["EligibilityTrace"] = _build_eligibility_trace_sheet(logs_df, policy=policy)
+        sheets["TraceLadder"] = _build_trace_ladder_sheet(trace_df, logs_df=logs_df)
         if pool_trace is not None:
             sheets["MentorPipelineTrace"] = _build_pipeline_trace_sheet(pool_trace)
 
