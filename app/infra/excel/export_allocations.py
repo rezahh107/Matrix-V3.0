@@ -16,6 +16,7 @@ from app.core.allocation.history_metrics import METRIC_COLUMNS, compute_history_
 from app.core.common.columns import CANON_EN_TO_FA, canonicalize_headers, ensure_series
 from app.core.common.normalization import normalize_fa
 from app.core.common.trace import JOIN_STAGE_SOURCE_KEYS
+from app.core.common.types import CANONICAL_TRACE_ORDER
 from app.core.pipeline import enrich_student_contacts
 from app.core.policy_loader import PolicyConfig
 from app.infra.excel.common import (
@@ -435,9 +436,100 @@ def _build_join_key_provenance_summary(
     return pd.DataFrame(rows)
 
 
+def _trace_count(entry: object) -> int | None:
+    if not isinstance(entry, Mapping):
+        return None
+    value = entry.get("rows")
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _build_eligibility_trace_sheet(
+    logs_df: pd.DataFrame | None,
+    *,
+    policy: PolicyConfig | None,
+) -> pd.DataFrame:
+    stage_order = tuple(policy.trace_stage_names) if policy is not None else CANONICAL_TRACE_ORDER
+    columns = [
+        "student_id",
+        "initial_candidates",
+        "bucketed_candidates",
+        "eligible_candidates",
+        "preferred_count",
+        *[f"stage_{stage}_count" for stage in stage_order],
+    ]
+    if logs_df is None or logs_df.empty:
+        return pd.DataFrame(columns=columns)
+
+    logs_en = canonicalize_headers(logs_df, header_mode="en").copy()
+    if "student_id" not in logs_en.columns or "eligibility_trace" not in logs_en.columns:
+        return pd.DataFrame(columns=columns)
+
+    rows: list[dict[str, object]] = []
+    for _, row in logs_en.iterrows():
+        trace = row.get("eligibility_trace")
+        stage_counts: Mapping[str, object] = {}
+        if isinstance(trace, Mapping):
+            stage_counts_raw = trace.get("stage_counts", {})
+            if isinstance(stage_counts_raw, Mapping):
+                stage_counts = stage_counts_raw
+            initial = _trace_count(trace.get("initial"))
+            bucketed = _trace_count(trace.get("bucketed"))
+            eligible = _trace_count(trace.get("eligible"))
+            preferred = trace.get("preferred_count")
+        else:
+            initial = None
+            bucketed = None
+            eligible = None
+            preferred = None
+
+        record: dict[str, object] = {
+            "student_id": row.get("student_id"),
+            "initial_candidates": initial,
+            "bucketed_candidates": bucketed,
+            "eligible_candidates": eligible,
+            "preferred_count": preferred,
+        }
+        for stage in stage_order:
+            value = stage_counts.get(stage)
+            try:
+                record[f"stage_{stage}_count"] = int(value) if value is not None else None
+            except (TypeError, ValueError):
+                record[f"stage_{stage}_count"] = None
+        rows.append(record)
+
+    return pd.DataFrame(rows, columns=columns)
+
+
+def _build_pipeline_trace_sheet(trace_payload: object) -> pd.DataFrame:
+    if not isinstance(trace_payload, Sequence):
+        return pd.DataFrame(columns=["stage", "rows", "columns", "fingerprint"])
+
+    rows: list[dict[str, object]] = []
+    for entry in trace_payload:
+        if not isinstance(entry, Mapping):
+            continue
+        rows.append(
+            {
+                "stage": entry.get("stage"),
+                "rows": entry.get("rows"),
+                "columns": entry.get("columns"),
+                "fingerprint": entry.get("fingerprint"),
+            }
+        )
+    if not rows:
+        return pd.DataFrame(columns=["stage", "rows", "columns", "fingerprint"])
+    return pd.DataFrame(rows)
+
+
 def collect_trace_debug_sheets(
     trace_df: pd.DataFrame | None,
     *,
+    logs_df: pd.DataFrame | None = None,
     students_df: pd.DataFrame | None = None,
     history_info_df: pd.DataFrame | None = None,
     policy: PolicyConfig | None = None,
@@ -445,6 +537,9 @@ def collect_trace_debug_sheets(
     unallocated_summary: pd.DataFrame | None = None,
     policy_violations: pd.DataFrame | None = None,
     final_status_counts: pd.Series | None = None,
+    pool_trace: object | None = None,
+    enable_standard_debug_sheets: bool = True,
+    enable_mentor_trace_debug: bool = False,
     enable_history_metrics: bool = True,
 ) -> dict[str, pd.DataFrame]:
     """ساخت شیت‌های تشخیصی از تریس برای خروجی Excel بدون تغییر رفتار اصلی.
@@ -462,35 +557,43 @@ def collect_trace_debug_sheets(
 
     if trace_df is None:
         return {}
+    if not enable_standard_debug_sheets and not enable_mentor_trace_debug:
+        return {}
 
     sheets: dict[str, pd.DataFrame] = {}
     history_metrics_df = _empty_history_metrics_df()
-    if isinstance(summary_df, pd.DataFrame) and not summary_df.empty:
-        sheets["summary_df"] = summary_df.copy()
-        value_counts = final_status_counts
-        if isinstance(value_counts, pd.Series):
-            counts_df = value_counts.reset_index()
-            counts_df.columns = ["final_status", "count"]
-            sheets["FinalStatus_counts"] = counts_df
-        if enable_history_metrics:
-            history_metrics_df = _build_history_metrics_sheet(
+    if enable_standard_debug_sheets:
+        if isinstance(summary_df, pd.DataFrame) and not summary_df.empty:
+            sheets["summary_df"] = summary_df.copy()
+            value_counts = final_status_counts
+            if isinstance(value_counts, pd.Series):
+                counts_df = value_counts.reset_index()
+                counts_df.columns = ["final_status", "count"]
+                sheets["FinalStatus_counts"] = counts_df
+            if enable_history_metrics:
+                history_metrics_df = _build_history_metrics_sheet(
+                    summary_df,
+                    students_df=students_df,
+                    history_info_df=history_info_df,
+                    policy=policy,
+                )
+            sheets["JoinKeyProvenance_counts"] = _build_join_key_provenance_summary(
                 summary_df,
-                students_df=students_df,
-                history_info_df=history_info_df,
                 policy=policy,
             )
-        sheets["JoinKeyProvenance_counts"] = _build_join_key_provenance_summary(
-            summary_df,
-            policy=policy,
-        )
 
-    if isinstance(unallocated_summary, pd.DataFrame) and not unallocated_summary.empty:
-        sheets["unallocated_summary"] = unallocated_summary.copy()
+        if isinstance(unallocated_summary, pd.DataFrame) and not unallocated_summary.empty:
+            sheets["unallocated_summary"] = unallocated_summary.copy()
 
-    if isinstance(policy_violations, pd.DataFrame) and not policy_violations.empty:
-        sheets["policy_violations"] = policy_violations.copy()
+        if isinstance(policy_violations, pd.DataFrame) and not policy_violations.empty:
+            sheets["policy_violations"] = policy_violations.copy()
 
-    sheets["HistoryMetrics"] = history_metrics_df
+        sheets["HistoryMetrics"] = history_metrics_df
+
+    if enable_mentor_trace_debug:
+        sheets["EligibilityTrace"] = _build_eligibility_trace_sheet(logs_df, policy=policy)
+        if pool_trace is not None:
+            sheets["MentorPipelineTrace"] = _build_pipeline_trace_sheet(pool_trace)
 
     return sheets
 

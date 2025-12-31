@@ -22,6 +22,7 @@ def test_save_and_load_user_settings_roundtrip(tmp_path: Path) -> None:
         enable_history_metrics=True,
         enable_trace_debug_sheets=False,
         enable_trace_export=True,
+        enable_mentor_trace_debug=True,
     )
 
     save_user_settings(settings, settings_path)
@@ -37,6 +38,7 @@ def test_user_settings_to_dict_is_limited_to_indicators() -> None:
         enable_history_metrics=True,
         enable_trace_debug_sheets=True,
         enable_trace_export=False,
+        enable_mentor_trace_debug=True,
     )
 
     settings_dict = settings.to_dict()
@@ -45,6 +47,7 @@ def test_user_settings_to_dict_is_limited_to_indicators() -> None:
         "enable_history_metrics": True,
         "enable_trace_debug_sheets": True,
         "enable_trace_export": False,
+        "enable_mentor_trace_debug": True,
     }
 
 
@@ -76,3 +79,56 @@ def test_collect_trace_debug_sheets_respects_history_toggle() -> None:
     )
     assert "HistoryMetrics" in enabled
     assert not enabled["HistoryMetrics"].empty
+
+
+def test_collect_trace_debug_sheets_exports_eligibility_and_pipeline_trace() -> None:
+    trace_df = pd.DataFrame({"stage": ["type"]})
+    logs_df = pd.DataFrame(
+        {
+            "student_id": ["s1"],
+            "eligibility_trace": [
+                {
+                    "initial": {"rows": 5},
+                    "bucketed": {"rows": 3},
+                    "eligible": {"rows": 2},
+                    "preferred_count": 1,
+                    "stage_counts": {"type": 5, "group": 3, "gender": 2},
+                }
+            ],
+        }
+    )
+    pool_trace = [
+        {"stage": "raw", "rows": 10, "columns": 7, "fingerprint": "abc123"}
+    ]
+
+    sheets = export_allocations.collect_trace_debug_sheets(
+        trace_df,
+        logs_df=logs_df,
+        pool_trace=pool_trace,
+        enable_mentor_trace_debug=True,
+        enable_history_metrics=False,
+    )
+
+    assert "EligibilityTrace" in sheets
+    eligibility = sheets["EligibilityTrace"]
+    assert eligibility.loc[0, "initial_candidates"] == 5
+    assert eligibility.loc[0, "bucketed_candidates"] == 3
+    assert eligibility.loc[0, "eligible_candidates"] == 2
+    assert eligibility.loc[0, "preferred_count"] == 1
+    assert "stage_type_count" in eligibility.columns
+
+    assert "MentorPipelineTrace" in sheets
+    pipeline_df = sheets["MentorPipelineTrace"]
+    assert list(pipeline_df["stage"]) == ["raw"]
+
+
+def test_collect_trace_debug_sheets_off_returns_empty() -> None:
+    trace_df = pd.DataFrame({"stage": ["type"]})
+
+    sheets = export_allocations.collect_trace_debug_sheets(
+        trace_df,
+        enable_standard_debug_sheets=False,
+        enable_mentor_trace_debug=False,
+    )
+
+    assert sheets == {}

@@ -101,13 +101,15 @@ def _run_allocation(settings: UserSettings) -> tuple[pd.DataFrame, pd.DataFrame,
         capacity_column=capacity_column,
     )
 
-    if settings.enable_trace_debug_sheets:
+    if settings.enable_trace_debug_sheets or settings.enable_mentor_trace_debug:
         export_allocations.collect_trace_debug_sheets(
             batch_result.trace_df,
             summary_df=batch_result.trace_extras.summary_df,
             unallocated_summary=batch_result.trace_extras.unallocated_summary,
             policy_violations=batch_result.trace_extras.policy_violations,
             final_status_counts=batch_result.trace_extras.final_status_counts,
+            enable_standard_debug_sheets=settings.enable_trace_debug_sheets,
+            enable_mentor_trace_debug=settings.enable_mentor_trace_debug,
             enable_history_metrics=settings.enable_history_metrics,
         )
 
@@ -179,11 +181,13 @@ def test_allocation_invariant_with_toggles_on_vs_off() -> None:
         enable_history_metrics=False,
         enable_trace_debug_sheets=False,
         enable_trace_export=False,
+        enable_mentor_trace_debug=False,
     )
     settings_on = UserSettings(
         enable_history_metrics=True,
         enable_trace_debug_sheets=True,
         enable_trace_export=True,
+        enable_mentor_trace_debug=True,
     )
 
     off_allocations, off_pool, off_logs = _run_allocation(settings_off)
@@ -199,6 +203,7 @@ def test_allocation_deterministic_with_same_settings() -> None:
         enable_history_metrics=False,
         enable_trace_debug_sheets=False,
         enable_trace_export=False,
+        enable_mentor_trace_debug=False,
     )
 
     first_allocations, first_pool, first_logs = _run_allocation(settings)

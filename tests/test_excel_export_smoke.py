@@ -82,7 +82,7 @@ def _build_workbook(settings: UserSettings, output: Path) -> Path:
     if settings.enable_trace_export:
         sheets["trace"] = _make_excel_safe(batch_result.trace_df)
 
-    if settings.enable_trace_debug_sheets:
+    if settings.enable_trace_debug_sheets or settings.enable_mentor_trace_debug:
         debug_sheets = export_allocations.collect_trace_debug_sheets(
             batch_result.trace_df,
             students_df=students,
@@ -92,6 +92,8 @@ def _build_workbook(settings: UserSettings, output: Path) -> Path:
             unallocated_summary=batch_result.trace_extras.unallocated_summary,
             policy_violations=batch_result.trace_extras.policy_violations,
             final_status_counts=batch_result.trace_extras.final_status_counts,
+            enable_standard_debug_sheets=settings.enable_trace_debug_sheets,
+            enable_mentor_trace_debug=settings.enable_mentor_trace_debug,
             enable_history_metrics=settings.enable_history_metrics,
         )
         for name, df in debug_sheets.items():
@@ -117,6 +119,7 @@ def test_excel_export_core_and_diagnostic_sheets_off(tmp_path: Path) -> None:
         enable_history_metrics=False,
         enable_trace_debug_sheets=False,
         enable_trace_export=False,
+        enable_mentor_trace_debug=False,
     )
     workbook_path = _build_workbook(settings, tmp_path / "export-off.xlsx")
 
@@ -132,6 +135,8 @@ def test_excel_export_core_and_diagnostic_sheets_off(tmp_path: Path) -> None:
         "policy_violations",
         "FinalStatus_counts",
         "JoinKeyProvenance_counts",
+        "EligibilityTrace",
+        "MentorPipelineTrace",
     }
 
     assert sheet_names.isdisjoint(diagnostic_sheets)
@@ -145,6 +150,7 @@ def test_excel_export_core_and_diagnostic_sheets_on(tmp_path: Path) -> None:
         enable_history_metrics=True,
         enable_trace_debug_sheets=True,
         enable_trace_export=True,
+        enable_mentor_trace_debug=True,
     )
     workbook_path = _build_workbook(settings, tmp_path / "export-on.xlsx")
 
@@ -152,7 +158,7 @@ def test_excel_export_core_and_diagnostic_sheets_on(tmp_path: Path) -> None:
     sheet_names = set(workbook.sheetnames)
     _assert_core_sheets_present(sheet_names)
 
-    expected_diagnostics = {"trace", "HistoryMetrics"}
+    expected_diagnostics = {"trace", "HistoryMetrics", "EligibilityTrace"}
     assert expected_diagnostics.issubset(sheet_names)
 
     header_row = {str(cell.value) for cell in next(workbook["allocations"].iter_rows(max_row=1))}

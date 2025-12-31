@@ -61,6 +61,7 @@ def import_mentor_pool_from_excel(
     pool_source: str = "inspactor",
     pool_type: pool_loader.PoolType = "inspactor",
     pool_sheet: str | None = None,
+    trace_enabled: bool = False,
 ) -> pd.DataFrame:
     """وارد کردن استخر منتورها از Inspactor و ذخیره در کش."""
 
@@ -68,7 +69,11 @@ def import_mentor_pool_from_excel(
         path, pool_type=pool_type, pool_sheet=pool_sheet
     )
     normalized = import_mentor_pool_from_dataframe(
-        raw_df, db=db, policy=policy, pool_source=pool_source
+        raw_df,
+        db=db,
+        policy=policy,
+        pool_source=pool_source,
+        trace_enabled=trace_enabled,
     )
     if detection is not None:
         normalized.attrs["pool_detection"] = detection
@@ -81,6 +86,7 @@ def import_mentor_pool_from_dataframe(
     db: LocalDatabase | None,
     policy: PolicyConfig,
     pool_source: str = "inspactor",
+    trace_enabled: bool = False,
 ) -> pd.DataFrame:
     """Normalize mentor pool payloads via MentorPipelineV3 as the single SSoT."""
 
@@ -97,6 +103,7 @@ def import_mentor_pool_from_dataframe(
         header_mode="fa",
         reference_mode="excel",
         db=db,
+        enable_trace=trace_enabled,
     )
     result = pipeline.run(working_df)
     _raise_on_join_key_failure(result)
@@ -111,6 +118,8 @@ def import_mentor_pool_from_dataframe(
     normalized.attrs[_POOL_QA_PAYLOAD_ATTR] = normalized.attrs.get(
         _POOL_QA_PAYLOAD_ATTR, result.build_result.qa_payload
     )
+    if trace_enabled and result.trace is not None:
+        normalized.attrs[_POOL_PIPELINE_TRACE_ATTR] = result.trace.to_records()
     duplicate_report = _detect_duplicate_mentor_join_profiles(
         normalized, policy=policy, pool_source=pool_source
     )
@@ -220,6 +229,7 @@ __all__ = [
     "import_mentor_pool_from_dataframe",
     "load_mentor_pool_from_cache",
     "_POOL_JOIN_KEY_QA_ATTR",
+    "_POOL_PIPELINE_TRACE_ATTR",
     "_detect_duplicate_mentor_join_profiles",
 ]
 
@@ -473,6 +483,7 @@ def _derive_pool_join_keys(
 
 _POOL_JOIN_KEY_QA_ATTR: Final[str] = "pool_join_key_derivation_issues"
 _POOL_QA_PAYLOAD_ATTR: Final[str] = "mentor_pool_qa_payload"
+_POOL_PIPELINE_TRACE_ATTR: Final[str] = "mentor_pool_pipeline_trace"
 
 
 def _detect_duplicate_mentor_join_profiles(
