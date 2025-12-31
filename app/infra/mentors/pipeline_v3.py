@@ -8,6 +8,7 @@ from typing import Any, Literal
 
 import pandas as pd
 
+from app.core.common.columns import ensure_series
 from app.core.common.types import HeaderMode
 from app.core.policy_loader import PolicyConfig
 from app.infra import pool_loader
@@ -29,7 +30,21 @@ class MentorPipelineTraceEntry:
     stage: str
     rows: int
     columns: int
-    fingerprint: str
+    fingerprint: str | None
+    raw_count: int | None = None
+    predicate_summary: str | None = None
+    after_count: int | None = None
+
+    def to_record(self) -> dict[str, object]:
+        return {
+            "stage": self.stage,
+            "rows": self.rows,
+            "columns": self.columns,
+            "fingerprint": self.fingerprint,
+            "raw_count": self.raw_count,
+            "predicate_summary": self.predicate_summary,
+            "after_count": self.after_count,
+        }
 
 
 @dataclass(frozen=True)
@@ -37,15 +52,7 @@ class MentorPipelineTrace:
     entries: list[MentorPipelineTraceEntry]
 
     def to_records(self) -> list[dict[str, object]]:
-        return [
-            {
-                "stage": entry.stage,
-                "rows": entry.rows,
-                "columns": entry.columns,
-                "fingerprint": entry.fingerprint,
-            }
-            for entry in self.entries
-        ]
+        return [entry.to_record() for entry in self.entries]
 
 
 @dataclass(frozen=True)
@@ -219,6 +226,50 @@ def canonicalize_join_keys_for_cache(payload: pd.DataFrame, policy: PolicyConfig
     if not value_result.can_continue:
         return payload
     return _coerce_int_columns(value_result.canonical_df, registry.join_fields)
+
+
+def build_global_prefilter_trace_entry(
+    pool_df: pd.DataFrame,
+    students_df: pd.DataFrame,
+    *,
+    policy: PolicyConfig,
+) -> MentorPipelineTraceEntry:
+    type_column = policy.stage_column("type")
+    raw_count = int(pool_df.shape[0])
+    columns = int(pool_df.shape[1])
+    if type_column not in pool_df.columns or type_column not in students_df.columns:
+        predicate_summary = f"missing column: {type_column}"
+        return MentorPipelineTraceEntry(
+            stage="global_prefilter",
+            rows=raw_count,
+            columns=columns,
+            fingerprint=None,
+            raw_count=raw_count,
+            predicate_summary=predicate_summary,
+            after_count=raw_count,
+        )
+
+    student_series = pd.to_numeric(
+        ensure_series(students_df[type_column]), errors="coerce"
+    ).dropna()
+    student_values = sorted({int(value) for value in student_series})
+    predicate_summary = f"{type_column} in {student_values}"
+    if not student_values:
+        after_count = 0
+    else:
+        pool_series = pd.to_numeric(
+            ensure_series(pool_df[type_column]), errors="coerce"
+        ).dropna()
+        after_count = int(pool_series.isin(student_values).sum())
+    return MentorPipelineTraceEntry(
+        stage="global_prefilter",
+        rows=after_count,
+        columns=columns,
+        fingerprint=None,
+        raw_count=raw_count,
+        predicate_summary=predicate_summary,
+        after_count=after_count,
+    )
 
 
 def _frame_fingerprint(

@@ -25,6 +25,7 @@ from app.infra.excel.common import (
     identify_code_headers,
 )
 from app.infra.io_utils import write_xlsx_atomic
+from app.infra.mentors.pipeline_v3 import build_global_prefilter_trace_entry
 
 __all__ = [
     "AllocationExportColumn",
@@ -525,23 +526,35 @@ def _build_eligibility_trace_sheet(
 
 def _build_pipeline_trace_sheet(trace_payload: object) -> pd.DataFrame:
     if not isinstance(trace_payload, Sequence):
-        return pd.DataFrame(columns=["stage", "rows", "columns", "fingerprint"])
+        return pd.DataFrame(
+            columns=[
+                "stage",
+                "rows",
+                "columns",
+                "fingerprint",
+                "raw_count",
+                "predicate_summary",
+                "after_count",
+            ]
+        )
 
+    columns = [
+        "stage",
+        "rows",
+        "columns",
+        "fingerprint",
+        "raw_count",
+        "predicate_summary",
+        "after_count",
+    ]
     rows: list[dict[str, object]] = []
     for entry in trace_payload:
         if not isinstance(entry, Mapping):
             continue
-        rows.append(
-            {
-                "stage": entry.get("stage"),
-                "rows": entry.get("rows"),
-                "columns": entry.get("columns"),
-                "fingerprint": entry.get("fingerprint"),
-            }
-        )
+        rows.append({column: entry.get(column) for column in columns})
     if not rows:
-        return pd.DataFrame(columns=["stage", "rows", "columns", "fingerprint"])
-    return pd.DataFrame(rows)
+        return pd.DataFrame(columns=columns)
+    return pd.DataFrame(rows, columns=columns)
 
 
 def _build_trace_ladder_sheet(
@@ -625,6 +638,7 @@ def collect_trace_debug_sheets(
     policy_violations: pd.DataFrame | None = None,
     final_status_counts: pd.Series | None = None,
     pool_trace: object | None = None,
+    pool_df: pd.DataFrame | None = None,
     enable_standard_debug_sheets: bool = True,
     enable_mentor_trace_debug: bool = False,
     enable_history_metrics: bool = True,
@@ -680,8 +694,22 @@ def collect_trace_debug_sheets(
     if enable_mentor_trace_debug:
         sheets["EligibilityTrace"] = _build_eligibility_trace_sheet(logs_df, policy=policy)
         sheets["TraceLadder"] = _build_trace_ladder_sheet(trace_df, logs_df=logs_df)
-        if pool_trace is not None:
-            sheets["MentorPipelineTrace"] = _build_pipeline_trace_sheet(pool_trace)
+        pipeline_trace_payload: object | None = pool_trace
+        if policy is not None and pool_df is not None and students_df is not None:
+            prefilter_entry = build_global_prefilter_trace_entry(
+                pool_df,
+                students_df,
+                policy=policy,
+            )
+            merged_trace: list[dict[str, object]] = []
+            if isinstance(pool_trace, Sequence) and not isinstance(pool_trace, (str, bytes)):
+                for entry in pool_trace:
+                    if isinstance(entry, Mapping):
+                        merged_trace.append(dict(entry))
+            merged_trace.append(prefilter_entry.to_record())
+            pipeline_trace_payload = merged_trace
+        if pipeline_trace_payload is not None:
+            sheets["MentorPipelineTrace"] = _build_pipeline_trace_sheet(pipeline_trace_payload)
 
     return sheets
 

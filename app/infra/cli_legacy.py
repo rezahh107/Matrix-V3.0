@@ -3192,8 +3192,10 @@ def _allocate_and_write(
             trace_debug_sheets = collect_trace_debug_sheets(
                 trace_df,
                 logs_df=logs_df,
+                students_df=students_base,
                 policy=policy,
                 pool_trace=pool_base.attrs.get(_POOL_PIPELINE_TRACE_ATTR),
+                pool_df=pool_base,
                 enable_standard_debug_sheets=False,
                 enable_mentor_trace_debug=True,
                 enable_history_metrics=False,
@@ -3279,6 +3281,7 @@ def _allocate_and_write(
                 policy_violations=trace_extras.policy_violations if trace_extras else None,
                 final_status_counts=trace_extras.final_status_counts if trace_extras else None,
                 pool_trace=pool_base.attrs.get(_POOL_PIPELINE_TRACE_ATTR),
+                pool_df=pool_base,
                 enable_standard_debug_sheets=resolved_settings.enable_trace_debug_sheets,
                 enable_mentor_trace_debug=resolved_settings.enable_mentor_trace_debug,
                 enable_history_metrics=resolved_settings.enable_history_metrics,
