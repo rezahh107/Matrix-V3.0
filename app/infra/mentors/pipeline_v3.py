@@ -121,7 +121,10 @@ class MentorPipelineV3:
         canonical_df = value_result.canonical_df
         if self._trace_enabled:
             trace_entries.append(self._trace_entry("canonicalized", canonical_df))
-        if not self._registry.has_required_fields(canonical_df.columns) and self._db is not None:
+        has_required_fields = self._registry.has_required_fields(canonical_df.columns)
+        if self._trace_enabled and has_required_fields:
+            trace_entries.append(self._trace_entry("join_keys_present", canonical_df))
+        if not has_required_fields and self._db is not None:
             derived_df, derive_issues = _derive_pool_join_keys(
                 working, db=self._db, policy=self._policy
             )

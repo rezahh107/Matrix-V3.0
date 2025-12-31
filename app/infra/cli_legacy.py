@@ -2708,6 +2708,12 @@ def _run_pool_alignment_preflight(
     preflight_df = pd.DataFrame(reports)
     if preflight_df.empty:
         return preflight_df
+    if "student_id" in preflight_df.columns:
+        normalized_ids = _normalize_student_id(preflight_df["student_id"])
+        missing_mask = _student_id_missing_mask(normalized_ids)
+        if missing_mask.any():
+            normalized_ids = normalized_ids.mask(missing_mask, other="<missing>")
+        preflight_df["student_id"] = normalized_ids
 
     def _stage_type_zero(counts: object) -> bool:
         if not isinstance(counts, dict):
@@ -3181,6 +3187,17 @@ def _allocate_and_write(
             if isinstance(pool_alignment_preflight, pd.DataFrame)
             else None
         )
+        trace_debug_sheets: dict[str, pd.DataFrame] = {}
+        if resolved_settings.enable_mentor_trace_debug:
+            trace_debug_sheets = collect_trace_debug_sheets(
+                trace_df,
+                logs_df=logs_df,
+                policy=policy,
+                pool_trace=pool_base.attrs.get(_POOL_PIPELINE_TRACE_ATTR),
+                enable_standard_debug_sheets=False,
+                enable_mentor_trace_debug=True,
+                enable_history_metrics=False,
+            )
         qa_context = QaValidationContext(
             allocation=allocations_df,
             allocation_summary=updated_pool_df,
@@ -3189,6 +3206,8 @@ def _allocate_and_write(
             alloc_join_summary=join_key_summary_sheet,
             pool_join_conflicts=merged_extras.get("pool_join_conflicts"),
             pool_alignment_preflight=preflight_sheet,
+            eligibility_trace=trace_debug_sheets.get("EligibilityTrace"),
+            mentor_pipeline_trace=trace_debug_sheets.get("MentorPipelineTrace"),
         )
         merged_extras["pool_join_conflicts"] = qa_context.pool_join_conflicts
         qa_report.extras = merged_extras

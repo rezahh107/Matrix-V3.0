@@ -175,6 +175,7 @@ def test_pipeline_trace_records_stage_counts() -> None:
         "raw",
         "header_resolved",
         "canonicalized",
+        "join_keys_present",
         "join_keys",
         "usable_profiles",
         "pool_built",
@@ -238,6 +239,29 @@ def test_db_derivation_and_cache_canonicalization(monkeypatch: pytest.MonkeyPatc
     assert calls and calls[0]["db"] is not None
     assert not result.can_continue
     assert result.build_result.qa_issues[0]["reason"] == "CENTER_FALLBACK_WILDCARD"
+
+
+def test_join_keys_present_fast_path_skips_derivation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payload = _make_simple_df()
+
+    def _fail_if_called(*args: object, **kwargs: object) -> None:
+        raise AssertionError("_derive_pool_join_keys should not be called when join keys exist")
+
+    monkeypatch.setattr("app.infra.mentors.pipeline_v3._derive_pool_join_keys", _fail_if_called)
+
+    pipeline = MentorPipelineV3(
+        policy=policy.config,
+        db=object(),
+        reference_mode="excel",
+        enable_trace=True,
+    )
+    result = pipeline.run(payload)
+
+    assert result.can_continue
+    assert result.trace is not None
+    assert "join_keys_present" in [entry.stage for entry in result.trace.entries]
     cache_ready = result.build_result.pool
     for col in policy.config.join_keys:
         assert pd.api.types.is_integer_dtype(cache_ready[col])

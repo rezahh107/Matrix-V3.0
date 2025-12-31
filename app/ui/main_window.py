@@ -2019,6 +2019,7 @@ class MainWindow(QMainWindow):
             )
             return
 
+        pool_type = "matrix"
         try:
             readiness = compute_reference_readiness(
                 school_repo=self._school_repository, groupcode_repo=self._groupcode_repository
@@ -2040,7 +2041,7 @@ class MainWindow(QMainWindow):
             )
             return
 
-        if not readiness.is_ready_for_run:
+        if not readiness.is_ready_for_run and (not readiness.schools_ready or pool_type != "matrix"):
             title = self._t("error.reference_not_ready.title", "داده مرجع آماده نیست")
             detail = self._t(
                 "error.reference_not_ready.detail",
@@ -2094,7 +2095,7 @@ class MainWindow(QMainWindow):
             "--pool",
             self._picker_pool.text(),
             "--pool-type",
-            "matrix",
+            pool_type,
             "--output",
             self._picker_alloc_out.text(),
             "--capacity-column",
@@ -2131,7 +2132,7 @@ class MainWindow(QMainWindow):
             "--pool",
             self._picker_pool.text(),
             "--pool-type",
-            "matrix",
+            pool_type,
             "--output",
             self._picker_alloc_out.text(),
             "--policy",

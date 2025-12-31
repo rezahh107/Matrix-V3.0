@@ -456,6 +456,11 @@ def _build_eligibility_trace_sheet(
     stage_order = tuple(policy.trace_stage_names) if policy is not None else CANONICAL_TRACE_ORDER
     columns = [
         "student_id",
+        "pool_built_size",
+        "pool_size_before_bucket",
+        "bucket_key",
+        "bucket_size",
+        "bucket_skip_reason",
         "initial_candidates",
         "bucketed_candidates",
         "eligible_candidates",
@@ -473,6 +478,7 @@ def _build_eligibility_trace_sheet(
     for _, row in logs_en.iterrows():
         trace = row.get("eligibility_trace")
         stage_counts: Mapping[str, object] = {}
+        bucket_trace: Mapping[str, object] = {}
         if isinstance(trace, Mapping):
             stage_counts_raw = trace.get("stage_counts", {})
             if isinstance(stage_counts_raw, Mapping):
@@ -481,6 +487,9 @@ def _build_eligibility_trace_sheet(
             bucketed = _trace_count(trace.get("bucketed"))
             eligible = _trace_count(trace.get("eligible"))
             preferred = trace.get("preferred_count")
+            bucket_trace_raw = trace.get("bucket_trace", {})
+            if isinstance(bucket_trace_raw, Mapping):
+                bucket_trace = bucket_trace_raw
         else:
             initial = None
             bucketed = None
@@ -489,6 +498,11 @@ def _build_eligibility_trace_sheet(
 
         record: dict[str, object] = {
             "student_id": row.get("student_id"),
+            "pool_built_size": bucket_trace.get("pool_built_size"),
+            "pool_size_before_bucket": bucket_trace.get("pool_size_before_bucket"),
+            "bucket_key": bucket_trace.get("bucket_key"),
+            "bucket_size": bucket_trace.get("bucket_size"),
+            "bucket_skip_reason": bucket_trace.get("bucket_skip_reason"),
             "initial_candidates": initial,
             "bucketed_candidates": bucketed,
             "eligible_candidates": eligible,

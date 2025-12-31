@@ -39,6 +39,8 @@ class QaValidationContext:
     alloc_join_summary: pd.DataFrame | None = None
     pool_join_conflicts: pd.DataFrame | None = None
     pool_alignment_preflight: pd.DataFrame | None = None
+    eligibility_trace: pd.DataFrame | None = None
+    mentor_pipeline_trace: pd.DataFrame | None = None
 
 
 def _summary_sheet(report: QaReport) -> pd.DataFrame:
@@ -286,5 +288,9 @@ def export_qa_validation(
         sheets["alloc_join_mismatches"] = audit
     if ctx.pool_alignment_preflight is not None:
         sheets["pool_alignment_preflight"] = ctx.pool_alignment_preflight
+    if ctx.eligibility_trace is not None:
+        sheets["eligibility_trace"] = ctx.eligibility_trace
+    if ctx.mentor_pipeline_trace is not None:
+        sheets["mentor_pipeline_trace"] = ctx.mentor_pipeline_trace
     sheet_modes = {name: None for name in sheets}
     write_xlsx_atomic(sheets, output, header_mode=None, sheet_header_modes=sheet_modes)
