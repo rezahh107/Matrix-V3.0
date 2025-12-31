@@ -11,7 +11,11 @@ from app.core.common.join_keys import validate_and_canonicalize_join_keys
 from app.core.policy_adapter import policy
 from app.infra.mentors.field_registry import FieldRegistry
 from app.infra.mentors.header_resolver import HeaderResolver
-from app.infra.mentors.pipeline_v3 import MentorPipelineV3, canonicalize_join_keys_for_cache
+from app.infra.mentors.pipeline_v3 import (
+    MentorPipelineV3,
+    build_global_prefilter_trace_entry,
+    canonicalize_join_keys_for_cache,
+)
 from app.infra.reference_mentors_repository import (
     _POOL_JOIN_KEY_QA_ATTR,
     _POOL_QA_PAYLOAD_ATTR,
@@ -181,6 +185,29 @@ def test_pipeline_trace_records_stage_counts() -> None:
         "pool_built",
     ]
     assert all(entry.rows == 2 for entry in result.trace.entries)
+
+
+def test_global_prefilter_trace_entry_counts_union_of_student_types() -> None:
+    type_column = policy.config.stage_column("type")
+    pool_df = pd.DataFrame(
+        {
+            "mentor_id": ["m1", "m2", "m3", "m4"],
+            type_column: [1, 2, 3, 2],
+        }
+    )
+    students_df = pd.DataFrame({type_column: [3, 1, 3]})
+
+    entry = build_global_prefilter_trace_entry(
+        pool_df,
+        students_df,
+        policy=policy.config,
+    )
+
+    assert entry.stage == "global_prefilter"
+    assert entry.raw_count == 4
+    assert entry.after_count == 2
+    assert entry.rows == 2
+    assert entry.predicate_summary == f"{type_column} in [1, 3]"
 
 
 def test_reference_repository_delegates_pipeline(monkeypatch: pytest.MonkeyPatch) -> None:

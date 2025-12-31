@@ -6,6 +6,7 @@ from pathlib import Path
 import pandas as pd
 
 from app.core.allocation.dedupe import HistoryStatus
+from app.core.policy_adapter import policy
 from app.infra.config_flags import UserSettings, load_user_settings, save_user_settings
 from app.infra.excel import export_allocations
 
@@ -82,6 +83,9 @@ def test_collect_trace_debug_sheets_respects_history_toggle() -> None:
 
 
 def test_collect_trace_debug_sheets_exports_eligibility_and_pipeline_trace() -> None:
+    type_column = policy.config.stage_column("type")
+    students_df = pd.DataFrame({type_column: [1, 2]})
+    pool_df = pd.DataFrame({type_column: [1, 2, 2], "mentor_id": ["m1", "m2", "m3"]})
     trace_df = pd.DataFrame({"student_id": ["s1"], "stage": ["type"]})
     logs_df = pd.DataFrame(
         {
@@ -116,6 +120,9 @@ def test_collect_trace_debug_sheets_exports_eligibility_and_pipeline_trace() -> 
     sheets = export_allocations.collect_trace_debug_sheets(
         trace_df,
         logs_df=logs_df,
+        students_df=students_df,
+        pool_df=pool_df,
+        policy=policy.config,
         pool_trace=pool_trace,
         enable_mentor_trace_debug=True,
         enable_history_metrics=False,
@@ -144,7 +151,11 @@ def test_collect_trace_debug_sheets_exports_eligibility_and_pipeline_trace() -> 
 
     assert "MentorPipelineTrace" in sheets
     pipeline_df = sheets["MentorPipelineTrace"]
-    assert list(pipeline_df["stage"]) == ["raw"]
+    assert list(pipeline_df["stage"]) == ["raw", "global_prefilter"]
+    prefilter = pipeline_df.loc[pipeline_df["stage"] == "global_prefilter"].iloc[0]
+    assert prefilter["raw_count"] == 3
+    assert prefilter["after_count"] == 3
+    assert prefilter["predicate_summary"] == f"{type_column} in [1, 2]"
 
 
 def test_collect_trace_debug_sheets_off_returns_empty() -> None:
