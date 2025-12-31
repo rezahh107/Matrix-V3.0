@@ -82,7 +82,7 @@ def test_collect_trace_debug_sheets_respects_history_toggle() -> None:
 
 
 def test_collect_trace_debug_sheets_exports_eligibility_and_pipeline_trace() -> None:
-    trace_df = pd.DataFrame({"stage": ["type"]})
+    trace_df = pd.DataFrame({"student_id": ["s1"], "stage": ["type"]})
     logs_df = pd.DataFrame(
         {
             "student_id": ["s1"],
@@ -99,6 +99,11 @@ def test_collect_trace_debug_sheets_exports_eligibility_and_pipeline_trace() -> 
                         "bucket_key": "(1,2,3,4,5,6)",
                         "bucket_size": 90,
                         "bucket_skip_reason": None,
+                        "bucket_key_variants": [
+                            "(1,2,3,4,5,6)",
+                            "(1,2,3,4,0,6)",
+                        ],
+                        "bucket_sizes": [90, 12],
                     },
                 }
             ],
@@ -126,7 +131,16 @@ def test_collect_trace_debug_sheets_exports_eligibility_and_pipeline_trace() -> 
     assert eligibility.loc[0, "pool_size_before_bucket"] == 5250
     assert eligibility.loc[0, "bucket_key"] == "(1,2,3,4,5,6)"
     assert eligibility.loc[0, "bucket_size"] == 90
+    assert eligibility.loc[0, "bucket_key_variants"] == [
+        "(1,2,3,4,5,6)",
+        "(1,2,3,4,0,6)",
+    ]
+    assert eligibility.loc[0, "bucket_sizes"] == [90, 12]
     assert "stage_type_count" in eligibility.columns
+
+    assert "TraceLadder" in sheets
+    ladder = sheets["TraceLadder"]
+    assert list(ladder["bucket_key"].dropna()) == ["(1,2,3,4,5,6)"]
 
     assert "MentorPipelineTrace" in sheets
     pipeline_df = sheets["MentorPipelineTrace"]
