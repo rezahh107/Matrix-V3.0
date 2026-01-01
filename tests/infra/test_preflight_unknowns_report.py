@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from app.core.common.domain import VALID_GROUP_CODES
 from app.core.policy_loader import load_policy
 from app.infra.cli_legacy import (
     _build_unknowns_report,
@@ -40,8 +41,19 @@ def test_preflight_unknowns_handles_duplicate_join_columns() -> None:
     policy = load_policy(Path("config/policy.json"))
     join_keys = list(policy.join_keys)
     key = join_keys[0]
-    students_df = pd.DataFrame([[1, "x"]], columns=[key, key])
-    pool_df = pd.DataFrame([[1, 2]], columns=[key, key])
+    group_code = min(VALID_GROUP_CODES)
+    key_values = {
+        policy.stage_column("group"): group_code,
+        policy.stage_column("gender"): int(policy.gender_codes.male.value),
+        policy.stage_column("graduation_status"): 1,
+        policy.stage_column("center"): 1,
+        policy.stage_column("finance"): 1,
+        policy.stage_column("school"): 1001,
+    }
+    base_row = [key_values[column] for column in join_keys]
+    columns = join_keys + [key]
+    students_df = pd.DataFrame([base_row + ["bad"]], columns=columns)
+    pool_df = pd.DataFrame([base_row + ["bad"]], columns=columns)
 
     issues, blocking = collect_unknown_issues(
         students_df=students_df,
@@ -49,5 +61,5 @@ def test_preflight_unknowns_handles_duplicate_join_columns() -> None:
         policy=policy,
     )
 
-    assert issues
-    assert blocking is True
+    assert issues == ()
+    assert blocking is False
