@@ -21,6 +21,8 @@ QA_RULE_GOV_01 = "QA_RULE_GOV_01"
 QA_RULE_ALLOC_01 = "QA_RULE_ALLOC_01"
 QA_RULE_HISTORY_CHANNEL_01 = "QA_RULE_HISTORY_CHANNEL_01"
 QA_RULE_STATUS_DOMAIN_01 = "QA_RULE_STATUS_DOMAIN_01"
+QA_RULE_POOL_COVERAGE_01 = "QA_RULE_POOL_COVERAGE_01"
+QA_RULE_POOL_DIVERSITY_01 = "QA_RULE_POOL_DIVERSITY_01"
 
 QA_RULE_IDS: tuple[RuleId, ...] = (
     QA_RULE_STU_01,
@@ -34,6 +36,8 @@ QA_RULE_IDS: tuple[RuleId, ...] = (
     QA_RULE_ALLOC_01,
     QA_RULE_HISTORY_CHANNEL_01,
     QA_RULE_STATUS_DOMAIN_01,
+    QA_RULE_POOL_COVERAGE_01,
+    QA_RULE_POOL_DIVERSITY_01,
 )
 
 __all__ = [
@@ -51,6 +55,8 @@ __all__ = [
     "QA_RULE_ALLOC_01",
     "QA_RULE_HISTORY_CHANNEL_01",
     "QA_RULE_STATUS_DOMAIN_01",
+    "QA_RULE_POOL_COVERAGE_01",
+    "QA_RULE_POOL_DIVERSITY_01",
     "get_rule_definitions",
 ]
 
@@ -244,6 +250,45 @@ def get_rule_definitions() -> dict[RuleId, QaRuleDefinition]:
                 source_tables=("matrix",),
                 lineage_keys=(_GRADUATION_STATUS, _GROUP_CODE),
                 diagnosis_hints=("کدرشته‌های دوحالته باید در دامنهٔ مجاز فارغ/دانش‌آموز باشند.",),
+                canary_thresholds=_frozen_thresholds({}),
+            ),
+        ),
+        QA_RULE_POOL_COVERAGE_01: QaRuleDefinition(
+            rule_id=QA_RULE_POOL_COVERAGE_01,
+            title="پوشش استخر منتور برای کلیدهای join",
+            law_mapping=mappings[QA_RULE_POOL_COVERAGE_01],
+            debug_context=QADebugContext.from_sequences(
+                important_columns=(
+                    _GROUP_CODE,
+                    _GENDER,
+                    _GRADUATION_STATUS,
+                    _CENTER,
+                    _FINANCE,
+                    _SCHOOL_CODE,
+                ),
+                source_tables=("student_report", "pool"),
+                lineage_keys=("student_id",),
+                diagnosis_hints=(
+                    "دانش‌آموزانی که کاندید نهایی ندارند را با پیش‌وارسی استخر بررسی کنید.",
+                ),
+                canary_thresholds=_frozen_thresholds({}),
+            ),
+        ),
+        QA_RULE_POOL_DIVERSITY_01: QaRuleDefinition(
+            rule_id=QA_RULE_POOL_DIVERSITY_01,
+            title="تنوع دسته‌بندی‌های کلیدی در استخر",
+            law_mapping=mappings[QA_RULE_POOL_DIVERSITY_01],
+            debug_context=QADebugContext.from_sequences(
+                important_columns=(
+                    _GROUP_CODE,
+                    _GENDER,
+                    _GRADUATION_STATUS,
+                ),
+                source_tables=("allocation_summary",),
+                lineage_keys=("mentor_id",),
+                diagnosis_hints=(
+                    "اگر استخر نهایی تنها یک مقدار برای گروه/جنسیت/فارغ‌التحصیلی دارد، داده‌های ورودی را بررسی کنید.",
+                ),
                 canary_thresholds=_frozen_thresholds({}),
             ),
         ),

@@ -483,7 +483,6 @@ def build_allocation_trace(
     resolved_rules = (
         dict(stage_rules) if stage_rules is not None else dict(build_stage_rule_map(policy))
     )
-
     non_capacity_plan = [plan for plan in stage_plan if plan.stage != "capacity_gate"]
     capacity_stage = next((plan for plan in stage_plan if plan.stage == "capacity_gate"), None)
     if capacity_stage is None:

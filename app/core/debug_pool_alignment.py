@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import Literal, SupportsInt, TypedDict, cast
 
 import pandas as pd
@@ -11,7 +11,16 @@ from app.core.allocate_students import (
     _collect_join_key_map,
     _filter_candidates_by_join_map,
 )
-from app.core.common.filters import apply_join_filters
+from app.core.common.filters import (
+    apply_join_filters,
+    filter_by_center,
+    filter_by_finance,
+    filter_by_gender,
+    filter_by_graduation_status,
+    filter_by_group,
+    filter_by_school,
+    filter_by_type,
+)
 from app.core.common.types import CANONICAL_TRACE_ORDER, TraceStageName
 from app.core.policy_loader import PolicyConfig, load_policy
 
@@ -50,6 +59,9 @@ class PoolAlignmentReport(TypedDict):
     candidate_count_final: int
     join_key_mismatches: list[JoinKeyMismatchDetail]
     missing_pool_indexes: list[int]
+    first_failing_stage: TraceStageName | None
+    expected_value: int | None
+    available_values: list[int]
     error: str | None
 
 
@@ -165,6 +177,53 @@ def _convert_mismatches(
     return results
 
 
+def _sample_available_values(series: pd.Series, *, limit: int = 10) -> list[int]:
+    numeric = pd.to_numeric(series, errors="coerce").dropna().astype(int)
+    values = sorted({int(value) for value in numeric.tolist()})
+    return values[:limit]
+
+
+def _first_failing_stage_info(
+    student: Mapping[str, object],
+    candidate_pool: pd.DataFrame,
+    *,
+    policy: PolicyConfig,
+    join_map: Mapping[str, int],
+) -> tuple[TraceStageName | None, int | None, list[int]]:
+    stage_filters: dict[TraceStageName, Callable[..., pd.DataFrame]] = {
+        "type": filter_by_type,
+        "group": filter_by_group,
+        "gender": filter_by_gender,
+        "graduation_status": filter_by_graduation_status,
+        "center": filter_by_center,
+        "finance": filter_by_finance,
+        "school": filter_by_school,
+    }
+    current = candidate_pool
+    for stage in CANONICAL_TRACE_ORDER:
+        if stage == "capacity_gate":
+            continue
+        filter_fn = stage_filters[stage]
+        if current.empty:
+            return None, None, []
+        column = policy.stage_column(stage)
+        normalized = column.replace(" ", "_")
+        expected_value = join_map.get(normalized)
+        if column not in current.columns:
+            return stage, expected_value, []
+        filtered = filter_fn(
+            current,
+            student,
+            policy,
+            student_join_map=join_map,
+        )
+        if filtered.empty:
+            available_values = _sample_available_values(current[column])
+            return stage, expected_value, available_values
+        current = filtered
+    return None, None, []
+
+
 def _mentors_match_value(
     pool: pd.DataFrame,
     column: str,
@@ -254,6 +313,9 @@ def analyze_pool_alignment_for_student(
             "candidate_count_final": 0,
             "join_key_mismatches": [],
             "missing_pool_indexes": [],
+            "first_failing_stage": None,
+            "expected_value": None,
+            "available_values": [],
             "error": str(exc),
         }
 
@@ -302,6 +364,12 @@ def analyze_pool_alignment_for_student(
             )
 
     missing_pool_indexes = _unique_missing_indexes(candidate_pool, resolved_policy.join_keys)
+    failing_stage, expected_value, available_values = _first_failing_stage_info(
+        student,
+        candidate_pool,
+        policy=resolved_policy,
+        join_map=join_map,
+    )
 
     return {
         "student_id": str(student.get("student_id", "")),
@@ -311,6 +379,9 @@ def analyze_pool_alignment_for_student(
         "candidate_count_final": capacity_count,
         "join_key_mismatches": join_key_mismatches,
         "missing_pool_indexes": missing_pool_indexes,
+        "first_failing_stage": failing_stage,
+        "expected_value": expected_value,
+        "available_values": available_values,
         "error": None,
     }
 
@@ -353,6 +424,9 @@ def analyze_pool_alignment_batch(
                     "candidate_count_final": 0,
                     "join_key_mismatches": [],
                     "missing_pool_indexes": [],
+                    "first_failing_stage": None,
+                    "expected_value": None,
+                    "available_values": [],
                     "error": str(exc),
                 }
             )

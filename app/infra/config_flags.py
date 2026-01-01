@@ -35,6 +35,10 @@ class UserSettings:
     enable_trace_debug_sheets: bool = False
     enable_trace_export: bool = False
     enable_mentor_trace_debug: bool = False
+    enable_bucket_trace: bool = False
+    enable_pool_governance_trace: bool = False
+    enable_qa_pool_coverage_rules: bool = False
+    use_join_buckets: bool = False
 
     def to_dict(self) -> dict[str, bool]:
         return {
@@ -42,6 +46,10 @@ class UserSettings:
             "enable_trace_debug_sheets": self.enable_trace_debug_sheets,
             "enable_trace_export": self.enable_trace_export,
             "enable_mentor_trace_debug": self.enable_mentor_trace_debug,
+            "enable_bucket_trace": self.enable_bucket_trace,
+            "enable_pool_governance_trace": self.enable_pool_governance_trace,
+            "enable_qa_pool_coverage_rules": self.enable_qa_pool_coverage_rules,
+            "use_join_buckets": self.use_join_buckets,
         }
 
     @classmethod
@@ -53,6 +61,12 @@ class UserSettings:
             enable_trace_debug_sheets=bool(payload.get("enable_trace_debug_sheets", False)),
             enable_trace_export=bool(payload.get("enable_trace_export", False)),
             enable_mentor_trace_debug=bool(payload.get("enable_mentor_trace_debug", False)),
+            enable_bucket_trace=bool(payload.get("enable_bucket_trace", False)),
+            enable_pool_governance_trace=bool(payload.get("enable_pool_governance_trace", False)),
+            enable_qa_pool_coverage_rules=bool(
+                payload.get("enable_qa_pool_coverage_rules", False)
+            ),
+            use_join_buckets=bool(payload.get("use_join_buckets", False)),
         )
 
 

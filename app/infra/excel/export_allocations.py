@@ -26,6 +26,7 @@ from app.infra.excel.common import (
 )
 from app.infra.io_utils import write_xlsx_atomic
 from app.infra.mentors.pipeline_v3 import build_global_prefilter_trace_entry
+from app.infra.reference_mentors_repository import _POOL_QA_PAYLOAD_ATTR
 
 __all__ = [
     "AllocationExportColumn",
@@ -455,6 +456,7 @@ def _build_eligibility_trace_sheet(
     policy: PolicyConfig | None,
 ) -> pd.DataFrame:
     stage_order = tuple(policy.trace_stage_names) if policy is not None else CANONICAL_TRACE_ORDER
+    alias_metadata = _trace_alias_metadata(policy)
     columns = [
         "student_id",
         "pool_built_size",
@@ -468,6 +470,7 @@ def _build_eligibility_trace_sheet(
         "bucketed_candidates",
         "eligible_candidates",
         "preferred_count",
+        *alias_metadata.keys(),
         *[f"stage_{stage}_count" for stage in stage_order],
     ]
     if logs_df is None or logs_df.empty:
@@ -512,6 +515,7 @@ def _build_eligibility_trace_sheet(
             "bucketed_candidates": bucketed,
             "eligible_candidates": eligible,
             "preferred_count": preferred,
+            **alias_metadata,
         }
         for stage in stage_order:
             value = stage_counts.get(stage)
@@ -535,6 +539,13 @@ def _build_pipeline_trace_sheet(trace_payload: object) -> pd.DataFrame:
                 "raw_count",
                 "predicate_summary",
                 "after_count",
+                "profile_rows",
+                "unique_mentor_ids",
+                "multi_profile_mentor_count",
+                "multi_profile_ratio",
+                "predicate_expr",
+                "predicate_source",
+                "prefilter_removed",
             ]
         )
 
@@ -546,6 +557,13 @@ def _build_pipeline_trace_sheet(trace_payload: object) -> pd.DataFrame:
         "raw_count",
         "predicate_summary",
         "after_count",
+        "profile_rows",
+        "unique_mentor_ids",
+        "multi_profile_mentor_count",
+        "multi_profile_ratio",
+        "predicate_expr",
+        "predicate_source",
+        "prefilter_removed",
     ]
     rows: list[dict[str, object]] = []
     for entry in trace_payload:
@@ -561,6 +579,7 @@ def _build_trace_ladder_sheet(
     trace_df: pd.DataFrame,
     *,
     logs_df: pd.DataFrame | None,
+    policy: PolicyConfig | None,
 ) -> pd.DataFrame:
     bucket_columns = [
         "pool_built_size",
@@ -572,17 +591,22 @@ def _build_trace_ladder_sheet(
         "bucket_sizes",
     ]
     trace_ladder = trace_df.copy()
+    alias_metadata = _trace_alias_metadata(policy)
     if trace_ladder.empty:
         return trace_ladder
     if "student_id" not in trace_ladder.columns:
         for column in bucket_columns:
             if column not in trace_ladder.columns:
                 trace_ladder[column] = None
+        for key, value in alias_metadata.items():
+            trace_ladder[key] = value
         return trace_ladder
     if logs_df is None or logs_df.empty:
         for column in bucket_columns:
             if column not in trace_ladder.columns:
                 trace_ladder[column] = None
+        for key, value in alias_metadata.items():
+            trace_ladder[key] = value
         return trace_ladder
 
     logs_en = canonicalize_headers(logs_df, header_mode="en").copy()
@@ -590,6 +614,8 @@ def _build_trace_ladder_sheet(
         for column in bucket_columns:
             if column not in trace_ladder.columns:
                 trace_ladder[column] = None
+        for key, value in alias_metadata.items():
+            trace_ladder[key] = value
         return trace_ladder
 
     bucket_records: list[dict[str, object]] = []
@@ -617,13 +643,202 @@ def _build_trace_ladder_sheet(
         for column in bucket_columns:
             if column not in trace_ladder.columns:
                 trace_ladder[column] = None
+        for key, value in alias_metadata.items():
+            trace_ladder[key] = value
         return trace_ladder
 
     bucket_df = pd.DataFrame(bucket_records)
     if "student_id" in bucket_df.columns:
         bucket_df = bucket_df.drop_duplicates(subset=["student_id"], keep="last")
     trace_ladder = trace_ladder.merge(bucket_df, on="student_id", how="left")
+    for key, value in alias_metadata.items():
+        trace_ladder[key] = value
     return trace_ladder
+
+
+def _trace_alias_metadata(policy: PolicyConfig | None) -> dict[str, object]:
+    if policy is None:
+        return {
+            "stage_type_alias_of": None,
+            "stage_type_source_col": None,
+            "stage_group_source_col": None,
+        }
+    type_column = policy.stage_column("type")
+    group_column = policy.stage_column("group")
+    if type_column != group_column:
+        return {
+            "stage_type_alias_of": None,
+            "stage_type_source_col": type_column,
+            "stage_group_source_col": group_column,
+        }
+    return {
+        "stage_type_alias_of": "group",
+        "stage_type_source_col": type_column,
+        "stage_group_source_col": group_column,
+    }
+
+
+def _build_bucket_trace_sheet(logs_df: pd.DataFrame | None) -> pd.DataFrame:
+    columns = [
+        "student_id",
+        "pool_built_size",
+        "pool_size_before_bucket",
+        "bucket_key",
+        "bucket_size",
+        "bucket_skip_reason",
+        "bucket_key_variants",
+        "bucket_sizes",
+    ]
+    if logs_df is None or logs_df.empty:
+        return pd.DataFrame(columns=columns)
+    logs_en = canonicalize_headers(logs_df, header_mode="en").copy()
+    if "student_id" not in logs_en.columns or "eligibility_trace" not in logs_en.columns:
+        return pd.DataFrame(columns=columns)
+    records: list[dict[str, object]] = []
+    for _, row in logs_en.iterrows():
+        trace = row.get("eligibility_trace")
+        if not isinstance(trace, Mapping):
+            continue
+        bucket_trace = trace.get("bucket_trace")
+        if not isinstance(bucket_trace, Mapping):
+            continue
+        records.append(
+            {
+                "student_id": row.get("student_id"),
+                "pool_built_size": bucket_trace.get("pool_built_size"),
+                "pool_size_before_bucket": bucket_trace.get("pool_size_before_bucket"),
+                "bucket_key": bucket_trace.get("bucket_key"),
+                "bucket_size": bucket_trace.get("bucket_size"),
+                "bucket_skip_reason": bucket_trace.get("bucket_skip_reason"),
+                "bucket_key_variants": bucket_trace.get("bucket_key_variants"),
+                "bucket_sizes": bucket_trace.get("bucket_sizes"),
+            }
+        )
+    if not records:
+        return pd.DataFrame(columns=columns)
+    bucket_df = pd.DataFrame(records)
+    if "student_id" in bucket_df.columns:
+        bucket_df = bucket_df.drop_duplicates(subset=["student_id"], keep="last")
+    return bucket_df
+
+
+def _build_pool_governance_trace_sheet(pool_df: pd.DataFrame | None) -> pd.DataFrame:
+    columns = [
+        "stage_name",
+        "raw_rows",
+        "after_rows",
+        "removed_rows",
+        "removed_breakdown",
+        "distribution_before",
+        "distribution_after",
+        "profile_rows_before",
+        "profile_rows_after",
+        "unique_mentor_ids_before",
+        "unique_mentor_ids_after",
+    ]
+    if pool_df is None:
+        return pd.DataFrame(columns=columns)
+    trace_payload = pool_df.attrs.get("mentor_pool_governance_trace")
+    if not isinstance(trace_payload, Sequence):
+        return pd.DataFrame(columns=columns)
+    rows: list[dict[str, object]] = []
+    for entry in trace_payload:
+        if isinstance(entry, Mapping):
+            rows.append({column: entry.get(column) for column in columns})
+    if not rows:
+        return pd.DataFrame(columns=columns)
+    return pd.DataFrame(rows, columns=columns)
+
+
+def _build_pool_condense_trace_sheet(pool_df: pd.DataFrame | None) -> pd.DataFrame:
+    columns = [
+        "profile_rows_before",
+        "unique_mentor_ids_before",
+        "profile_rows_after",
+        "unique_mentor_ids_after",
+        "profiles_per_mentor_min",
+        "profiles_per_mentor_p50",
+        "profiles_per_mentor_p90",
+        "profiles_per_mentor_max",
+    ]
+    if pool_df is None:
+        return pd.DataFrame(columns=columns)
+    payload = pool_df.attrs.get(_POOL_QA_PAYLOAD_ATTR)
+    if not isinstance(payload, Mapping):
+        return pd.DataFrame(columns=columns)
+    all_profiles = payload.get("all_profiles")
+    all_df = pd.DataFrame(all_profiles) if isinstance(all_profiles, list) else pd.DataFrame()
+    profile_rows_before = int(all_df.shape[0])
+    unique_before = (
+        int(all_df["mentor_id"].nunique()) if "mentor_id" in all_df.columns else 0
+    )
+    profile_rows_after = int(pool_df.shape[0])
+    unique_after = int(pool_df["mentor_id"].nunique()) if "mentor_id" in pool_df.columns else 0
+    stats = {
+        "profiles_per_mentor_min": None,
+        "profiles_per_mentor_p50": None,
+        "profiles_per_mentor_p90": None,
+        "profiles_per_mentor_max": None,
+    }
+    if "mentor_id" in all_df.columns and not all_df.empty:
+        counts = all_df["mentor_id"].astype("string").value_counts()
+        stats = {
+            "profiles_per_mentor_min": int(counts.min()),
+            "profiles_per_mentor_p50": float(counts.quantile(0.5, interpolation="lower")),
+            "profiles_per_mentor_p90": float(counts.quantile(0.9, interpolation="lower")),
+            "profiles_per_mentor_max": int(counts.max()),
+        }
+    row = {
+        "profile_rows_before": profile_rows_before,
+        "unique_mentor_ids_before": unique_before,
+        "profile_rows_after": profile_rows_after,
+        "unique_mentor_ids_after": unique_after,
+        **stats,
+    }
+    return pd.DataFrame([row], columns=columns)
+
+
+def _build_multi_profile_summary_sheet(pool_df: pd.DataFrame | None) -> pd.DataFrame:
+    columns = [
+        "profile_rows",
+        "unique_mentor_ids",
+        "multi_profile_mentor_count",
+        "multi_profile_ratio",
+    ]
+    if pool_df is None:
+        return pd.DataFrame(columns=columns)
+    payload = pool_df.attrs.get(_POOL_QA_PAYLOAD_ATTR)
+    if not isinstance(payload, Mapping):
+        return pd.DataFrame(columns=columns)
+    all_profiles = payload.get("all_profiles")
+    all_df = pd.DataFrame(all_profiles) if isinstance(all_profiles, list) else pd.DataFrame()
+    if "mentor_id" not in all_df.columns or all_df.empty:
+        return pd.DataFrame(
+            [
+                {
+                    "profile_rows": int(all_df.shape[0]),
+                    "unique_mentor_ids": 0,
+                    "multi_profile_mentor_count": 0,
+                    "multi_profile_ratio": 0.0,
+                }
+            ],
+            columns=columns,
+        )
+    counts = all_df["mentor_id"].astype("string").value_counts()
+    unique_mentors = int(counts.shape[0])
+    multi_profile = int((counts > 1).sum())
+    ratio = float(multi_profile / unique_mentors) if unique_mentors else 0.0
+    return pd.DataFrame(
+        [
+            {
+                "profile_rows": int(all_df.shape[0]),
+                "unique_mentor_ids": unique_mentors,
+                "multi_profile_mentor_count": multi_profile,
+                "multi_profile_ratio": ratio,
+            }
+        ],
+        columns=columns,
+    )
 
 
 def collect_trace_debug_sheets(
@@ -642,6 +857,8 @@ def collect_trace_debug_sheets(
     enable_standard_debug_sheets: bool = True,
     enable_mentor_trace_debug: bool = False,
     enable_history_metrics: bool = True,
+    enable_pool_governance_trace: bool = False,
+    enable_bucket_trace: bool = False,
 ) -> dict[str, pd.DataFrame]:
     """ساخت شیت‌های تشخیصی از تریس برای خروجی Excel بدون تغییر رفتار اصلی.
 
@@ -658,7 +875,12 @@ def collect_trace_debug_sheets(
 
     if trace_df is None:
         return {}
-    if not enable_standard_debug_sheets and not enable_mentor_trace_debug:
+    if (
+        not enable_standard_debug_sheets
+        and not enable_mentor_trace_debug
+        and not enable_pool_governance_trace
+        and not enable_bucket_trace
+    ):
         return {}
 
     sheets: dict[str, pd.DataFrame] = {}
@@ -693,7 +915,11 @@ def collect_trace_debug_sheets(
 
     if enable_mentor_trace_debug:
         sheets["EligibilityTrace"] = _build_eligibility_trace_sheet(logs_df, policy=policy)
-        sheets["TraceLadder"] = _build_trace_ladder_sheet(trace_df, logs_df=logs_df)
+        sheets["TraceLadder"] = _build_trace_ladder_sheet(
+            trace_df,
+            logs_df=logs_df,
+            policy=policy,
+        )
         pipeline_trace_payload: object | None = pool_trace
         if policy is not None and pool_df is not None and students_df is not None:
             prefilter_entry = build_global_prefilter_trace_entry(
@@ -710,6 +936,14 @@ def collect_trace_debug_sheets(
             pipeline_trace_payload = merged_trace
         if pipeline_trace_payload is not None:
             sheets["MentorPipelineTrace"] = _build_pipeline_trace_sheet(pipeline_trace_payload)
+
+    if enable_bucket_trace:
+        sheets["BucketTrace"] = _build_bucket_trace_sheet(logs_df)
+
+    if enable_pool_governance_trace:
+        sheets["PoolGovernanceTrace"] = _build_pool_governance_trace_sheet(pool_df)
+        sheets["PoolCondenseTrace"] = _build_pool_condense_trace_sheet(pool_df)
+        sheets["MultiProfileSummary"] = _build_multi_profile_summary_sheet(pool_df)
 
     return sheets
 

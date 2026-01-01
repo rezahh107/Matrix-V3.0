@@ -181,7 +181,9 @@ def test_pipeline_trace_records_stage_counts() -> None:
         "canonicalized",
         "join_keys_present",
         "join_keys",
+        "all_profiles",
         "usable_profiles",
+        "condense_profiles_to_unique_mentors",
         "pool_built",
     ]
     assert all(entry.rows == 2 for entry in result.trace.entries)

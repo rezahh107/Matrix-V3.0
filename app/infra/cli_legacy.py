@@ -1401,8 +1401,17 @@ def _apply_mentor_pool_overrides(
     config: MentorPoolGovernanceConfig = getattr(
         policy, "mentor_pool_governance", _default_governance_config()
     )
+    ui_overrides: dict[str, object] = getattr(args, "_ui_overrides", {}) or {}
+    user_settings_payload = getattr(args, "_user_settings", None)
+    if user_settings_payload is not None:
+        resolved_settings = coerce_user_settings(user_settings_payload)
+    else:
+        resolved_settings = _resolve_user_settings(ui_overrides)
     return apply_mentor_pool_governance(
-        pool, config, overrides=cast(Mapping[int | str | float, bool], overrides)
+        pool,
+        config,
+        overrides=cast(Mapping[int | str | float, bool], overrides),
+        enable_trace=resolved_settings.enable_pool_governance_trace,
     )
 
 
@@ -3037,6 +3046,7 @@ def _allocate_and_write(
             ui_center_manager_map=ui_center_map,
             center_priority=center_priority,
             strict_center_validation=strict_validation,
+            use_join_buckets=resolved_settings.use_join_buckets,
         )
         allocations_df = batch_result.allocations_df
         updated_pool_df = batch_result.pool_output
@@ -3163,6 +3173,10 @@ def _allocate_and_write(
             student_report=None,
             pool=pool_base,
             history_info=history_info_df,
+            pool_alignment_preflight=pool_alignment_preflight
+            if resolved_settings.enable_qa_pool_coverage_rules
+            else None,
+            enable_pool_coverage_rules=resolved_settings.enable_qa_pool_coverage_rules,
         )
         qa_meta = _build_qa_meta(
             run_uuid=run_uuid,
@@ -3199,6 +3213,8 @@ def _allocate_and_write(
                 enable_standard_debug_sheets=False,
                 enable_mentor_trace_debug=True,
                 enable_history_metrics=False,
+                enable_pool_governance_trace=resolved_settings.enable_pool_governance_trace,
+                enable_bucket_trace=resolved_settings.enable_bucket_trace,
             )
         qa_context = QaValidationContext(
             allocation=allocations_df,
@@ -3269,6 +3285,8 @@ def _allocate_and_write(
         if (
             resolved_settings.enable_trace_debug_sheets
             or resolved_settings.enable_mentor_trace_debug
+            or resolved_settings.enable_pool_governance_trace
+            or resolved_settings.enable_bucket_trace
         ):
             debug_sheets = collect_trace_debug_sheets(
                 trace_df,
@@ -3285,6 +3303,8 @@ def _allocate_and_write(
                 enable_standard_debug_sheets=resolved_settings.enable_trace_debug_sheets,
                 enable_mentor_trace_debug=resolved_settings.enable_mentor_trace_debug,
                 enable_history_metrics=resolved_settings.enable_history_metrics,
+                enable_pool_governance_trace=resolved_settings.enable_pool_governance_trace,
+                enable_bucket_trace=resolved_settings.enable_bucket_trace,
             )
         for name, df in debug_sheets.items():
             sheets[name] = _make_excel_safe(df)
@@ -3361,6 +3381,7 @@ def _allocate_and_write(
                 ui_center_manager_map=ui_center_map,
                 center_priority=center_priority,
                 strict_center_validation=strict_validation,
+                use_join_buckets=resolved_settings.use_join_buckets,
             )
 
             header_internal = _coerce_header_mode(policy.excel.header_mode_internal)

@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import dataclass
 
 import pandas as pd
 
@@ -21,6 +22,54 @@ __all__ = [
     "apply_mentor_pool_governance",
     "apply_manager_mentor_governance",
 ]
+
+
+@dataclass(frozen=True)
+class PoolGovernanceTraceEntry:
+    stage_name: str
+    raw_rows: int
+    after_rows: int
+    removed_rows: int
+    removed_breakdown: dict[str, int]
+    distribution_before: dict[str, dict[int, int]]
+    distribution_after: dict[str, dict[int, int]]
+    profile_rows_before: int
+    profile_rows_after: int
+    unique_mentor_ids_before: int | None
+    unique_mentor_ids_after: int | None
+
+    def to_record(self) -> dict[str, object]:
+        return {
+            "stage_name": self.stage_name,
+            "raw_rows": self.raw_rows,
+            "after_rows": self.after_rows,
+            "removed_rows": self.removed_rows,
+            "removed_breakdown": dict(self.removed_breakdown),
+            "distribution_before": self.distribution_before,
+            "distribution_after": self.distribution_after,
+            "profile_rows_before": self.profile_rows_before,
+            "profile_rows_after": self.profile_rows_after,
+            "unique_mentor_ids_before": self.unique_mentor_ids_before,
+            "unique_mentor_ids_after": self.unique_mentor_ids_after,
+        }
+
+
+def _distribution_counts(frame: pd.DataFrame) -> dict[str, dict[int, int]]:
+    distributions: dict[str, dict[int, int]] = {}
+    for column in ("group_code", "gender", "graduation_status"):
+        if column not in frame.columns:
+            continue
+        series = pd.to_numeric(frame[column], errors="coerce").dropna().astype(int)
+        counts = series.value_counts().sort_index()
+        distributions[column] = {int(key): int(value) for key, value in counts.items()}
+    return distributions
+
+
+def _unique_mentor_ids(frame: pd.DataFrame) -> int | None:
+    if "mentor_id" not in frame.columns:
+        return None
+    series = pd.to_numeric(frame["mentor_id"], errors="coerce").dropna().astype(int)
+    return int(series.nunique())
 
 
 def _normalize_overrides(
@@ -193,6 +242,7 @@ def apply_mentor_pool_governance(
     governance: MentorPoolGovernanceConfig,
     *,
     overrides: Mapping[int | str | float, bool] | None = None,
+    enable_trace: bool = False,
 ) -> pd.DataFrame:
     """اعمال حاکمیت استخر منتورها بر اساس Policy و override نوبتی.
 
@@ -215,6 +265,7 @@ def apply_mentor_pool_governance(
     """
 
     normalized_overrides = _normalize_overrides(overrides)
+    trace_entries: list[PoolGovernanceTraceEntry] = []
 
     if mentors_df is None:
         result = pd.DataFrame()
@@ -224,6 +275,8 @@ def apply_mentor_pool_governance(
             "removed_duplicates": 0,
             "overrides_count": len(normalized_overrides),
         }
+        if enable_trace:
+            result.attrs["mentor_pool_governance_trace"] = []
         return result
 
     result = mentors_df.copy(deep=True)
@@ -235,9 +288,34 @@ def apply_mentor_pool_governance(
             "removed_duplicates": 0,
             "overrides_count": len(normalized_overrides),
         }
+        if enable_trace:
+            result.attrs["mentor_pool_governance_trace"] = []
         return result
 
     canonical = canonicalize_headers(result, header_mode="en")
+
+    def _append_trace(
+        stage_name: str,
+        before_df: pd.DataFrame,
+        after_df: pd.DataFrame,
+        breakdown: dict[str, int],
+    ) -> None:
+        if not enable_trace:
+            return
+        entry = PoolGovernanceTraceEntry(
+            stage_name=stage_name,
+            raw_rows=int(before_df.shape[0]),
+            after_rows=int(after_df.shape[0]),
+            removed_rows=int(before_df.shape[0] - after_df.shape[0]),
+            removed_breakdown=breakdown,
+            distribution_before=_distribution_counts(before_df),
+            distribution_after=_distribution_counts(after_df),
+            profile_rows_before=int(before_df.shape[0]),
+            profile_rows_after=int(after_df.shape[0]),
+            unique_mentor_ids_before=_unique_mentor_ids(before_df),
+            unique_mentor_ids_after=_unique_mentor_ids(after_df),
+        )
+        trace_entries.append(entry)
 
     subset_columns = ["mentor_id"] + [
         key for key in CANONICAL_JOIN_KEYS if key in canonical.columns
@@ -247,25 +325,89 @@ def apply_mentor_pool_governance(
     if duplicate_mask.any():
         keep_mask = ~canonical.duplicated(subset=subset_columns, keep="first")
         duplicates_removed = int(total_rows - keep_mask.sum())
+        before = canonical.copy()
         result = result.loc[keep_mask].copy()
         canonical = canonical.loc[keep_mask].copy()
+        _append_trace(
+            "deduplicate_profiles",
+            before,
+            canonical,
+            {
+                "inactive_removed": 0,
+                "zero_capacity_removed": 0,
+                "duplicate_removed": duplicates_removed,
+                "overrides_removed": 0,
+                "prefilter_removed": 0,
+            },
+        )
+    elif enable_trace:
+        _append_trace(
+            "deduplicate_profiles",
+            canonical,
+            canonical,
+            {
+                "inactive_removed": 0,
+                "zero_capacity_removed": 0,
+                "duplicate_removed": 0,
+                "overrides_removed": 0,
+                "prefilter_removed": 0,
+            },
+        )
 
+    base_statuses = compute_effective_status(result, governance, None)
     statuses = compute_effective_status(result, governance, normalized_overrides)
     active_mask = statuses == MentorStatus.ACTIVE
+    overrides_removed = int(((base_statuses == MentorStatus.ACTIVE) & ~active_mask).sum())
+    inactive_removed = int((~active_mask).sum()) - overrides_removed
+    if inactive_removed < 0:
+        inactive_removed = 0
 
-    capacity_mask = pd.Series(True, index=result.index)
-    if "remaining_capacity" in canonical.columns:
-        capacity_numeric = pd.to_numeric(canonical["remaining_capacity"], errors="coerce")
+    status_canonical = canonical.loc[active_mask].copy()
+    capacity_mask = pd.Series(True, index=status_canonical.index)
+    if "remaining_capacity" in status_canonical.columns:
+        capacity_numeric = pd.to_numeric(
+            status_canonical["remaining_capacity"], errors="coerce"
+        )
         capacity_mask = capacity_numeric > 0
 
-    filtered_mask = active_mask & capacity_mask
+    filtered_mask = active_mask.copy()
+    filtered_mask.loc[status_canonical.index] = capacity_mask
     filtered = result.loc[filtered_mask].copy()
+    if enable_trace:
+        _append_trace(
+            "status_filter",
+            canonical,
+            status_canonical,
+            {
+                "inactive_removed": inactive_removed,
+                "zero_capacity_removed": 0,
+                "duplicate_removed": 0,
+                "overrides_removed": overrides_removed,
+                "prefilter_removed": 0,
+            },
+        )
+        _append_trace(
+            "capacity_filter",
+            status_canonical,
+            status_canonical.loc[capacity_mask].copy(),
+            {
+                "inactive_removed": 0,
+                "zero_capacity_removed": int((~capacity_mask).sum()),
+                "duplicate_removed": 0,
+                "overrides_removed": 0,
+                "prefilter_removed": 0,
+            },
+        )
     filtered.attrs["mentor_pool_governance"] = {
         "total": total_rows,
         "removed": duplicates_removed + int((~filtered_mask).sum()),
         "removed_duplicates": duplicates_removed,
         "overrides_count": len(normalized_overrides),
     }
+    if enable_trace:
+        filtered.attrs["mentor_pool_governance_trace"] = [
+            entry.to_record() for entry in trace_entries
+        ]
     return filtered
 
 
@@ -289,6 +431,7 @@ def apply_manager_mentor_governance(
     *,
     mentor_overrides: Mapping[int | str | float, bool] | None = None,
     manager_overrides: Mapping[int | str | float, bool] | None = None,
+    enable_trace: bool = False,
 ) -> pd.DataFrame:
     """اعمال حاکمیت مدیر→منتور به‌صورت دترمینیستیک و بدون I/O.
 
@@ -307,6 +450,8 @@ def apply_manager_mentor_governance(
             "overrides_count": len(_normalize_overrides(mentor_overrides)),
             "manager_overrides_count": len(normalized_managers),
         }
+        if enable_trace:
+            empty.attrs["mentor_pool_governance_trace"] = []
         return empty
 
     source = mentors_df.copy(deep=True)
@@ -318,6 +463,8 @@ def apply_manager_mentor_governance(
             "overrides_count": len(_normalize_overrides(mentor_overrides)),
             "manager_overrides_count": len(normalized_managers),
         }
+        if enable_trace:
+            source.attrs["mentor_pool_governance_trace"] = []
         return source
 
     canonical = canonicalize_headers(source, header_mode="en")
@@ -338,12 +485,15 @@ def apply_manager_mentor_governance(
             "overrides_count": len(_normalize_overrides(mentor_overrides)),
             "manager_overrides_count": len(normalized_managers),
         }
+        if enable_trace:
+            filtered_managers.attrs["mentor_pool_governance_trace"] = []
         return filtered_managers
 
     governed = apply_mentor_pool_governance(
         filtered_managers,
         governance,
         overrides=mentor_overrides,
+        enable_trace=enable_trace,
     )
     governed_attrs = governed.attrs.get("mentor_pool_governance", {})
     governed.attrs["mentor_pool_governance"] = {

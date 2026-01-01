@@ -124,6 +124,9 @@ class JoinMismatch(TypedDict):
     student_value: object
     mentor_values: list[object]
     reason: str
+    stage: str | None
+    available_values: list[object]
+    expected_value: object | None
 
 
 __all__ = [
@@ -797,7 +800,10 @@ def _normalize_mismatch_entry(entry: Mapping[str, object]) -> JoinMismatch:
     """نرمال‌سازی ورودی مغایرت برای گزارش یکپارچه."""
     column = str(entry.get("column", ""))
     reason = str(entry.get("reason", ""))
+    stage = entry.get("stage")
+    stage_name = str(stage) if stage is not None else None
     student_value = _normalize_mismatch_scalar(entry.get("student_value"))
+    expected_value = _normalize_mismatch_scalar(entry.get("expected_value"))
     raw_mentor_values = entry.get("mentor_values")
     mentor_values: list[object]
     if isinstance(raw_mentor_values, Sequence) and not isinstance(
@@ -813,11 +819,20 @@ def _normalize_mismatch_entry(entry: Mapping[str, object]) -> JoinMismatch:
         dict.fromkeys(mentor_values),
         key=_sort_key_for_mismatch_value,
     )
+    available_raw = entry.get("available_values")
+    available_values: list[object] = []
+    if isinstance(available_raw, Sequence) and not isinstance(available_raw, (str, bytes)):
+        available_values = [
+            _normalize_mismatch_scalar(value) for value in available_raw[:10]
+        ]
     return {
         "column": column,
         "reason": reason,
         "student_value": student_value,
         "mentor_values": mentor_values_sorted,
+        "stage": stage_name,
+        "available_values": available_values,
+        "expected_value": expected_value,
     }
 
 
@@ -857,45 +872,54 @@ def _filter_candidates_by_join_map(
     """اعمال فیلتر تطابق کامل ۶ کلید join روی استخر کاندید."""
     if candidates.empty:
         return candidates, []
-    mask = pd.Series(True, index=candidates.index)
-    mismatches: list[JoinMismatch] = []
     center_wildcard = center_wildcard_value(policy)
+    stage_order = [stage for stage in CANONICAL_TRACE_ORDER if stage != "capacity_gate"]
 
-    for column in policy.join_keys:
+    def _available_values(series: pd.Series, *, limit: int = 10) -> list[object]:
+        values = series.dropna().unique().tolist()
+        values = sorted(values, key=_sort_key_for_mismatch_value)
+        return values[:limit]
+
+    current = candidates
+    mismatch: JoinMismatch | None = None
+    for stage in stage_order:
+        column = policy.stage_column(stage)
         normalized = _normalize_join_key_name(column)
         student_value = join_map.get(normalized)
+        expected_value = int(student_value) if student_value is not None else None
         if student_value is None:
-            mask &= False
-            mismatches.append(
-                {
-                    "column": column,
-                    "student_value": None,
-                    "mentor_values": [],
-                    "reason": "student_join_key_missing",
-                }
-            )
-            continue
-        if column not in candidates.columns:
-            mask &= False
-            mismatches.append(
-                {
-                    "column": column,
-                    "student_value": student_value,
-                    "mentor_values": [],
-                    "reason": "mentor_column_missing",
-                }
-            )
-            continue
+            mismatch = {
+                "column": column,
+                "student_value": None,
+                "mentor_values": [],
+                "reason": "student_join_key_missing",
+                "stage": stage,
+                "available_values": [],
+                "expected_value": None,
+            }
+            current = current.iloc[0:0]
+            break
+        if column not in current.columns:
+            mismatch = {
+                "column": column,
+                "student_value": expected_value,
+                "mentor_values": [],
+                "reason": "mentor_column_missing",
+                "stage": stage,
+                "available_values": [],
+                "expected_value": expected_value,
+            }
+            current = current.iloc[0:0]
+            break
 
-        mentor_series_raw = ensure_series(candidates[column])
-
+        mentor_series_raw = ensure_series(current[column])
         if column == policy.stage_column("center"):
             mentor_series = pd.to_numeric(mentor_series_raw, errors="coerce").astype("Int64")
             col_mask = _center_mask_series(mentor_series, int(student_value), center_wildcard)
         elif column == policy.columns.school_code:
             school_constraint = (
-                ensure_series(candidates.get("has_school_constraint"))
-                if "has_school_constraint" in candidates.columns
+                ensure_series(current.get("has_school_constraint"))
+                if "has_school_constraint" in current.columns
                 else None
             )
             col_mask = school_mask_series(
@@ -905,7 +929,6 @@ def _filter_candidates_by_join_map(
                 constraint_series=school_constraint,
             )
         elif column == policy.stage_column("finance"):
-            # بهبود برای BUG_FNC_01 - استفاده از variants مالی
             allowed_finance = resolve_finance_variants(int(student_value), policy)
             col_mask = finance_mask_series(
                 mentor_series_raw,
@@ -919,21 +942,36 @@ def _filter_candidates_by_join_map(
                 mentor_series = pd.to_numeric(mentor_series_raw, errors="coerce").astype("Int64")
             col_mask = mentor_series == int(student_value)
 
-        mask &= col_mask.fillna(False)
+        mask = col_mask.fillna(False)
+        filtered = current.loc[mask]
+        if filtered.empty:
+            available_values = _available_values(mentor_series_raw)
+            mismatch = {
+                "column": column,
+                "student_value": expected_value,
+                "mentor_values": available_values,
+                "reason": "mentor_value_mismatch",
+                "stage": stage,
+                "available_values": available_values,
+                "expected_value": expected_value,
+            }
+            current = filtered
+            break
+        if mismatch is None and filtered.shape[0] < current.shape[0]:
+            dropped_values = _available_values(mentor_series_raw.loc[~mask])
+            mismatch = {
+                "column": column,
+                "student_value": expected_value,
+                "mentor_values": dropped_values,
+                "reason": "mentor_value_mismatch",
+                "stage": stage,
+                "available_values": dropped_values,
+                "expected_value": expected_value,
+            }
+        current = filtered
 
-        if not bool(col_mask.all()):
-            mentor_sample = mentor_series.loc[~col_mask].dropna().unique().tolist()[:5]
-            mismatches.append(
-                {
-                    "column": column,
-                    "student_value": student_value,
-                    "mentor_values": mentor_sample,
-                    "reason": "mentor_value_mismatch",
-                }
-            )
-
-    filtered = candidates.loc[mask]
-    return filtered, mismatches
+    mismatches: list[JoinMismatch] = [mismatch] if mismatch is not None else []
+    return current, mismatches
 
 
 def _student_value(student: Mapping[str, object], column: str) -> object:
@@ -1726,6 +1764,7 @@ def allocate_student(
     perf_tracker: PerfTracker | None = None,
     debug_trace: bool = False,
     join_bucket_index: JoinBucketIndex | None = None,
+    join_bucket_enabled: bool = False,
     manager_preference_index: pd.Index | None = None,
     manager_priority_enabled: bool = False,
     heap_manager: HeapRankingManager | None = None,
@@ -1816,6 +1855,7 @@ def allocate_student(
         policy=policy,
         student_join_map=join_map,
         join_bucket_index=join_bucket_index,
+        join_bucket_enabled=join_bucket_enabled,
         manager_preference_index=manager_preference_index,
         manager_priority_enabled=manager_priority_enabled,
     )
@@ -2633,6 +2673,7 @@ def allocate_batch(
                 perf_tracker=perf_tracker,
                 debug_trace=debug_trace,
                 join_bucket_index=join_bucket_index,
+                join_bucket_enabled=use_join_buckets,
                 manager_preference_index=manager_preference_index,
                 manager_priority_enabled=manager_preference_enabled,
                 heap_manager=heap_manager,

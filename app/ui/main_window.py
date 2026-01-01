@@ -317,6 +317,18 @@ class SettingsDialog(QDialog):
         self._mentor_trace_checkbox = QCheckBox("Mentor Pipeline Trace", self)
         self._mentor_trace_checkbox.setChecked(settings.enable_mentor_trace_debug)
 
+        self._pool_governance_checkbox = QCheckBox("Pool Governance Trace", self)
+        self._pool_governance_checkbox.setChecked(settings.enable_pool_governance_trace)
+
+        self._bucket_trace_checkbox = QCheckBox("Bucket Trace", self)
+        self._bucket_trace_checkbox.setChecked(settings.enable_bucket_trace)
+
+        self._qa_pool_coverage_checkbox = QCheckBox("QA Pool Coverage Rules", self)
+        self._qa_pool_coverage_checkbox.setChecked(settings.enable_qa_pool_coverage_rules)
+
+        self._join_bucket_checkbox = QCheckBox("Use Join Buckets", self)
+        self._join_bucket_checkbox.setChecked(settings.use_join_buckets)
+
         self._trace_checkbox = QCheckBox("Trace Sheet Export", self)
         self._trace_checkbox.setChecked(settings.enable_trace_export)
 
@@ -325,6 +337,10 @@ class SettingsDialog(QDialog):
         layout.addWidget(self._history_checkbox)
         layout.addWidget(self._debug_checkbox)
         layout.addWidget(self._mentor_trace_checkbox)
+        layout.addWidget(self._pool_governance_checkbox)
+        layout.addWidget(self._bucket_trace_checkbox)
+        layout.addWidget(self._qa_pool_coverage_checkbox)
+        layout.addWidget(self._join_bucket_checkbox)
         layout.addWidget(self._trace_checkbox)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self)
@@ -339,6 +355,10 @@ class SettingsDialog(QDialog):
             enable_trace_debug_sheets=self._debug_checkbox.isChecked(),
             enable_trace_export=self._trace_checkbox.isChecked(),
             enable_mentor_trace_debug=self._mentor_trace_checkbox.isChecked(),
+            enable_bucket_trace=self._bucket_trace_checkbox.isChecked(),
+            enable_pool_governance_trace=self._pool_governance_checkbox.isChecked(),
+            enable_qa_pool_coverage_rules=self._qa_pool_coverage_checkbox.isChecked(),
+            use_join_buckets=self._join_bucket_checkbox.isChecked(),
         )
 
 
@@ -1787,6 +1807,10 @@ class MainWindow(QMainWindow):
             "enable_trace_debug_sheets": "Debug Sheets",
             "enable_trace_export": "Trace",
             "enable_mentor_trace_debug": "Mentor Trace",
+            "enable_pool_governance_trace": "Pool Trace",
+            "enable_bucket_trace": "Bucket Trace",
+            "enable_qa_pool_coverage_rules": "QA Coverage",
+            "use_join_buckets": "Join Buckets",
         }
 
     def _build_settings_indicator_strip(self) -> QHBoxLayout:
