@@ -32,6 +32,6 @@ def test_trace_stage_aliasing_marks_type_group_overlap() -> None:
     type_stage = next(record for record in trace if record["stage"] == "type")
     extras = type_stage.get("extras") or {}
 
-    assert extras.get("stage_type_alias_of") == "group"
-    assert extras.get("stage_type_source_col") == policy.stage_column("type")
-    assert extras.get("stage_group_source_col") == policy.stage_column("group")
+    assert "stage_type_alias_of" not in extras
+    assert "stage_type_source_col" not in extras
+    assert "stage_group_source_col" not in extras

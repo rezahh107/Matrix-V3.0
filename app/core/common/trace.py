@@ -483,10 +483,6 @@ def build_allocation_trace(
     resolved_rules = (
         dict(stage_rules) if stage_rules is not None else dict(build_stage_rule_map(policy))
     )
-    type_column = policy.stage_column("type")
-    group_column = policy.stage_column("group")
-    type_group_alias = type_column == group_column
-
     non_capacity_plan = [plan for plan in stage_plan if plan.stage != "capacity_gate"]
     capacity_stage = next((plan for plan in stage_plan if plan.stage == "capacity_gate"), None)
     if capacity_stage is None:
@@ -506,13 +502,6 @@ def build_allocation_trace(
         expected_op: str | None = "="
         expected_threshold: object | None = None
         stage_extras: dict[str, Any] = {}
-        if type_group_alias and plan.stage in {"type", "group"}:
-            stage_extras["stage_type_source_col"] = type_column
-            stage_extras["stage_group_source_col"] = group_column
-            if plan.stage == "type":
-                stage_extras["stage_type_alias_of"] = "group"
-            elif plan.stage == "group":
-                stage_extras["stage_group_alias_of"] = "type"
         mentor_join_value = _candidate_join_value(current, plan.column)
         if plan.stage == "school":
             filtered, school_extras, norm_value = _school_stage_filter(
