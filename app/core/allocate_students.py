@@ -1273,7 +1273,8 @@ def _phase_stage_extras(
     if stage == "school_phase_start":
         return {"message": "شروع فاز مدرسه‌ای"}
     if stage == "center_phase_start" and capacity_column in pool.columns:
-        remaining = pd.to_numeric(pool[capacity_column], errors="coerce").fillna(0)
+        capacity_series = ensure_series(pool[capacity_column])
+        remaining = pd.to_numeric(capacity_series, errors="coerce").fillna(0)
         return {
             "message": "شروع فاز مرکزی پس از اتمام مدرسه‌ای",
             "remaining_capacity": int(remaining.sum()),
@@ -1333,7 +1334,7 @@ def _sort_students_by_center_priority(
     target_column = next((name for name in candidates if name in students.columns), None)
     if target_column is None:
         raise ValueError("students dataframe missing center column for sorting")
-    numeric = pd.to_numeric(students[target_column], errors="coerce")
+    numeric = pd.to_numeric(ensure_series(students[target_column]), errors="coerce")
     fallback_center = policy.default_center_for_invalid
     fill_value = fallback_center if fallback_center is not None else -1
     numeric = numeric.fillna(fill_value).astype(int)
@@ -1364,7 +1365,7 @@ def _separate_school_students(
         empty = students.iloc[0:0].copy()
         return empty, students.copy()
 
-    series = students[column]
+    series = ensure_series(students[column])
     if pd_types.is_bool_dtype(series):
         school_mask = series.fillna(False).astype(bool)
     else:
@@ -1716,7 +1717,7 @@ def _ensure_students_canonical(df: pd.DataFrame, policy: PolicyConfig) -> pd.Dat
         if empty_mask.any():
             raise ValueError("Canonical student frame contains empty student_id values")
     for column in policy.join_keys:
-        series = pd.to_numeric(students[column], errors="coerce")
+        series = pd.to_numeric(ensure_series(students[column]), errors="coerce")
         if series.isna().any():
             raise ValueError(f"Canonical student join key '{column}' has invalid values")
     return students
@@ -1739,14 +1740,18 @@ def _ensure_pool_canonical(
     missing = [column for column in required if column not in pool.columns]
     if missing:
         raise ValueError(f"Canonical pool frame missing columns: {missing}")
-    numeric_candidates = {
-        capacity_column,
-        policy.columns.remaining_capacity,
-        "remaining_capacity",
-    }
+    numeric_candidates = tuple(
+        dict.fromkeys(
+            [
+                capacity_column,
+                policy.columns.remaining_capacity,
+                "remaining_capacity",
+            ]
+        )
+    )
     for column in numeric_candidates:
         if column in pool.columns:
-            numeric = pd.to_numeric(pool[column], errors="coerce")
+            numeric = pd.to_numeric(ensure_series(pool[column]), errors="coerce")
             if numeric.isna().any():
                 raise ValueError(f"Canonical pool column '{column}' has non-numeric values")
     return pool
