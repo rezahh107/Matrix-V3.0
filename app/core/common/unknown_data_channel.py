@@ -8,6 +8,7 @@ from typing import Literal
 
 import pandas as pd
 
+from app.core.common.columns import ensure_series
 from app.core.common.join_keys import JoinKeyCanonicalizationError, canonicalize_join_key_value
 from app.core.policy_loader import PolicyConfig
 
@@ -98,7 +99,7 @@ def validate_pool_join_keys(
                 )
             )
             continue
-        series = pool[column]
+        series = ensure_series(pool[column])
         for index, raw_value in series.items():
             try:
                 canonicalize_join_key_value(column, raw_value, policy=policy)
@@ -142,7 +143,7 @@ def validate_join_key_columns_numeric(
                 )
             )
             continue
-        series = frame[column]
+        series = ensure_series(frame[column])
         numeric = pd.to_numeric(series, errors="coerce")
         for index, raw_value in series.items():
             if _is_missing_value(raw_value):

@@ -72,3 +72,15 @@ def test_pool_join_key_unknown_handling(strict: bool) -> None:
         validate_pool_join_keys(pool, policy=policy, channel=channel)
         assert channel.issues
         assert channel.issues[0].code == "UNKNOWN_JOIN_KEY_VALUE"
+
+
+def test_pool_join_key_duplicate_columns_are_handled() -> None:
+    policy = load_policy()
+    channel = UnknownDataChannel(strict=False)
+    key = policy.join_keys[0]
+    pool = pd.DataFrame([[1, "نامعتبر"]], columns=[key, key])
+
+    validate_pool_join_keys(pool, policy=policy, channel=channel)
+
+    assert channel.issues
+    assert any(issue.code == "MISSING_JOIN_KEY_COLUMN" for issue in channel.issues)
