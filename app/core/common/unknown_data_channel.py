@@ -99,6 +99,7 @@ def validate_pool_join_keys(
                 )
             )
             continue
+        # Coerce duplicated column selections to a 1-D Series (first column wins).
         series = ensure_series(pool[column])
         for index, raw_value in series.items():
             try:
@@ -143,6 +144,7 @@ def validate_join_key_columns_numeric(
                 )
             )
             continue
+        # Coerce duplicated column selections to a 1-D Series (first column wins).
         series = ensure_series(frame[column])
         numeric = pd.to_numeric(series, errors="coerce")
         for index, raw_value in series.items():
