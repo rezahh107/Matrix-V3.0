@@ -50,6 +50,19 @@ def _column_as_int(df: pd.DataFrame, column: str | None) -> pd.Series | None:
     return numeric.astype("Int64")
 
 
+def _ensure_int_values(name: str, values: object) -> tuple[int, ...]:
+    if values is None:
+        return tuple()
+    if isinstance(values, (str, bytes)) or not isinstance(values, Iterable):
+        raise TypeError(f"{name} must be a sequence of ints; got {values!r}")
+    normalized: list[int] = []
+    for item in values:
+        if not isinstance(item, int):
+            raise TypeError(f"{name} must contain only ints; got {item!r}")
+        normalized.append(int(item))
+    return tuple(normalized)
+
+
 def _graduation_status_series(students_df: pd.DataFrame, policy: PolicyConfig) -> pd.Series | None:
     try:
         status_column = policy.stage_column("graduation_status")
@@ -60,7 +73,10 @@ def _graduation_status_series(students_df: pd.DataFrame, policy: PolicyConfig) -
 
 def _active_student_mask(students_df: pd.DataFrame, policy: PolicyConfig) -> pd.Series:
     rules = policy.allocation_channels
-    if not rules.active_status_values:
+    active_status_values = _ensure_int_values(
+        "allocation_channels.active_status_values", rules.active_status_values
+    )
+    if not active_status_values:
         return pd.Series(True, index=students_df.index, dtype=bool)
     column = rules.educational_status_column
     if not column or column not in students_df.columns:
@@ -68,7 +84,7 @@ def _active_student_mask(students_df: pd.DataFrame, policy: PolicyConfig) -> pd.
     status_series = _column_as_int(students_df, column)
     if status_series is None:
         return pd.Series(True, index=students_df.index, dtype=bool)
-    mask = status_series.isin(rules.active_status_values) | status_series.isna()
+    mask = status_series.isin(active_status_values) | status_series.isna()
     return mask.fillna(True)
 
 
@@ -81,7 +97,10 @@ def _apply_center_channel(
 ) -> None:
     if center_values is None:
         return
-    center_ids: Iterable[int] = rules.center_channels.get(channel.value, tuple())
+    center_ids = _ensure_int_values(
+        f"allocation_channels.center_channels.{channel.value}",
+        rules.center_channels.get(channel.value, tuple()),
+    )
     if not center_ids:
         return
     mask = center_values.isin(center_ids)
