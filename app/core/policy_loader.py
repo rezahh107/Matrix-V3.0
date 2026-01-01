@@ -653,11 +653,11 @@ def _normalize_policy_payload(data: RawPolicy) -> Mapping[str, object]:
 
 def _ensure_int_sequence(name: str, value: object) -> list[int]:
     if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
-        raise TypeError(f"{name} must be a sequence of ints")
+        raise TypeError(f"{name} must be a sequence of ints; got {value!r}")
     result: list[int] = []
     for item in value:
         if not isinstance(item, int):
-            raise TypeError(f"All {name} items must be int")
+            raise TypeError(f"All {name} items must be int; got {item!r}")
         result.append(int(item))
     return result
 

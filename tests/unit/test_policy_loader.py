@@ -141,6 +141,17 @@ def test_ranking_rule_requires_string_columns() -> None:
         parse_policy_dict(payload)
 
 
+def test_allocation_channels_active_status_scalar_raises() -> None:
+    payload = _valid_payload()
+    payload["allocation_channels"] = {"active_status_values": 1}
+
+    with pytest.raises(
+        TypeError,
+        match=r"allocation_channels\.active_status_values must be a sequence of ints; got 1",
+    ):
+        parse_policy_dict(payload)
+
+
 def test_ranking_must_have_four_items() -> None:
     payload = _valid_payload()
     payload["ranking_rules"].pop()

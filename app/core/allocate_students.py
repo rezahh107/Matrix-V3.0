@@ -1367,13 +1367,24 @@ def _separate_school_students(
     if pd_types.is_bool_dtype(series):
         school_mask = series.fillna(False).astype(bool)
     else:
-        statuses = {int(value) for value in policy.school_statuses}
+        statuses = _ensure_int_sequence_values("school_statuses", policy.school_statuses)
         values = pd.to_numeric(series, errors="coerce").fillna(0).astype(int)
         school_mask = values.isin(statuses)
 
     school_students = students.loc[school_mask].copy()
     center_students = students.loc[~school_mask].copy()
     return school_students, center_students
+
+
+def _ensure_int_sequence_values(name: str, values: object) -> tuple[int, ...]:
+    if not isinstance(values, Sequence) or isinstance(values, (str, bytes)):
+        raise TypeError(f"{name} must be a sequence of ints; got {values!r}")
+    normalized: list[int] = []
+    for item in values:
+        if not isinstance(item, int):
+            raise TypeError(f"{name} must contain only ints; got {item!r}")
+        normalized.append(int(item))
+    return tuple(normalized)
 
 
 def _build_center_manager_index(
