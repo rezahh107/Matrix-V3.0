@@ -34,3 +34,20 @@ def test_preflight_unknowns_report(tmp_path: Path) -> None:
     assert len(loaded["issues"]) == len(issues)
     assert loaded["summary"]["by_entity_type"]["student"] >= 1
     assert compute_preflight_exit_code(issues, policy=policy, blocking=blocking) == 3
+
+
+def test_preflight_unknowns_handles_duplicate_join_columns() -> None:
+    policy = load_policy(Path("config/policy.json"))
+    join_keys = list(policy.join_keys)
+    key = join_keys[0]
+    students_df = pd.DataFrame([[1, "x"]], columns=[key, key])
+    pool_df = pd.DataFrame([[1, 2]], columns=[key, key])
+
+    issues, blocking = collect_unknown_issues(
+        students_df=students_df,
+        pool_df=pool_df,
+        policy=policy,
+    )
+
+    assert issues
+    assert blocking is True
