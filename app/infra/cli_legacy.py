@@ -41,6 +41,7 @@ from app.core.allocate_students import (
 from app.core.allocation.engine import enrich_summary_with_history
 from app.core.allocation.history_metrics import METRIC_COLUMNS, compute_history_metrics
 from app.core.canonical_frames import canonicalize_allocation_frames, canonicalize_pool_frame
+from app.core.common.isin_guard import isin_mask
 from app.core.common.join_keys import JoinKeyCanonicalizationError
 from app.core.common.join_resolver import JoinKeyResolver
 from app.core.common.payloads import json_safe_value
@@ -490,7 +491,9 @@ def _build_success_spine(
 
     students_en = canonicalize_headers(students_spine, header_mode="en").copy()
     students_en["student_id"] = _normalize_student_id(students_en["student_id"])
-    success_spine = students_en.loc[students_en["student_id"].isin(success_set)].copy()
+    success_spine = students_en.loc[
+        isin_mask(students_en["student_id"], success_set, name="success_set")
+    ].copy()
 
     if len(success_spine) != len(success_set):
         missing = sorted(success_set - set(success_spine["student_id"].tolist()))[:5]
@@ -2590,7 +2593,11 @@ def _run_build_matrix(args: argparse.Namespace, policy: PolicyConfig, progress: 
             unseen_slice = group_coverage_df[group_coverage_df["is_unseen_viable"]]
         else:
             unseen_slice = group_coverage_df[
-                group_coverage_df["status"].isin(["candidate_only", "blocked_candidate"])
+                isin_mask(
+                    group_coverage_df["status"],
+                    ["candidate_only", "blocked_candidate"],
+                    name="group_coverage_statuses",
+                )
             ]
         sheets["group_coverage_unseen"] = unseen_slice
     header_internal = _coerce_header_mode(policy.excel.header_mode_internal)

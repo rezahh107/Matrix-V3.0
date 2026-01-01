@@ -9,6 +9,7 @@ from typing import Any, Literal
 import pandas as pd
 
 from app.core.common.columns import ensure_series
+from app.core.common.isin_guard import isin_mask
 from app.core.common.types import HeaderMode
 from app.core.policy_loader import PolicyConfig
 from app.infra import pool_loader
@@ -322,7 +323,7 @@ def build_global_prefilter_trace_entry(
         pool_series = pd.to_numeric(
             ensure_series(pool_df[type_column]), errors="coerce"
         ).dropna()
-        after_count = int(pool_series.isin(student_values).sum())
+        after_count = int(isin_mask(pool_series, student_values, name="student_values").sum())
     return MentorPipelineTraceEntry(
         stage="global_prefilter",
         rows=after_count,

@@ -10,6 +10,7 @@ from pandas.api import types as pd_types
 
 from app.core.common.errors import ContractIssue, ContractViolationError
 from app.core.common.index_contract import assert_index_preserved, assert_no_new_labels
+from app.core.common.isin_guard import isin_mask
 from app.core.common.types import CANONICAL_TRACE_ORDER
 from app.core.policy_loader import PolicyConfig
 
@@ -219,7 +220,9 @@ def validate_trace_contract(
         return
     if "stage" in trace_df.columns:
         stage_series = trace_df["stage"].astype("string")
-        unknown = stage_series[~stage_series.isin(_TRACE_STAGE_ORDER.keys())]
+        unknown = stage_series[
+            ~isin_mask(stage_series, _TRACE_STAGE_ORDER.keys(), name="trace_stage_order")
+        ]
         if not unknown.empty:
             issues.append(
                 _issue(

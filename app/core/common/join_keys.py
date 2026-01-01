@@ -13,6 +13,7 @@ import pandas as pd
 
 from app.core.common.columns import _GENDER_TOKEN_MAP, CANON_EN_TO_FA, ensure_series
 from app.core.common.domain import VALID_GROUP_CODES
+from app.core.common.isin_guard import isin_mask
 from app.core.common.normalization import normalize_fa, to_numlike_str
 from app.core.common.types import (
     CANONICAL_JOIN_KEYS,
@@ -300,7 +301,10 @@ def finance_mask_series(
     series = ensure_series(mentor_series)
     if pd.api.types.is_integer_dtype(series):
         numeric = pd.to_numeric(series, errors="coerce").astype("Int64")
-        return numeric.isin(student_variants).fillna(False)
+        return cast(
+            pd.Series,
+            isin_mask(numeric, student_variants, name="student_variants"),
+        ).fillna(False)
     mentor_variants = series.map(lambda cell: finance_variants_from_cell(cell, policy))
     return mentor_variants.map(
         lambda variants: bool(variants and student_variants.intersection(variants))

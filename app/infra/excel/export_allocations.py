@@ -14,6 +14,7 @@ import pandas as pd
 from app.core.allocation.engine import enrich_summary_with_history
 from app.core.allocation.history_metrics import METRIC_COLUMNS, compute_history_metrics
 from app.core.common.columns import CANON_EN_TO_FA, canonicalize_headers, ensure_series
+from app.core.common.isin_guard import isin_mask
 from app.core.common.normalization import normalize_fa
 from app.core.common.trace import JOIN_STAGE_SOURCE_KEYS
 from app.core.common.types import CANONICAL_TRACE_ORDER
@@ -424,8 +425,16 @@ def _build_join_key_provenance_summary(
         defaulted = 0
         if source_column in summary_df.columns:
             series = summary_df[source_column].astype("string").fillna("")
-            inferred = int(series.isin(_INFERRED_SOURCES.get(stage, set())).sum())
-            defaulted = int(series.isin(_DEFAULTED_SOURCES).sum())
+            inferred = int(
+                isin_mask(
+                    series,
+                    _INFERRED_SOURCES.get(stage, set()),
+                    name="inferred_sources",
+                ).sum()
+            )
+            defaulted = int(
+                isin_mask(series, _DEFAULTED_SOURCES, name="defaulted_sources").sum()
+            )
         rows.append(
             {
                 "join_key_stage": stage,

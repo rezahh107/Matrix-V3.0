@@ -9,11 +9,12 @@ from collections import OrderedDict
 from collections.abc import Callable, Iterable, Mapping, MutableMapping, Sequence
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Final, NamedTuple, TypedDict
+from typing import TYPE_CHECKING, Any, Final, NamedTuple, TypedDict, cast
 
 import pandas as pd
 
 from app.core.common.columns import canonicalize_headers, ensure_series
+from app.core.common.isin_guard import isin_mask
 from app.core.common.normalization import normalize_fa
 from app.core.common.phone_rules import (
     normalize_landline_series,
@@ -1067,7 +1068,14 @@ def build_sheet2_frame(
                         cond_map = _resolve_map(condition_spec.get("map"), exporter_cfg)
                         if cond_map and condition_val in cond_map:
                             targets.add(cond_map[condition_val])
-                    mask = sheet[condition_col].astype("string").isin(targets)
+                    mask = cast(
+                        pd.Series,
+                        isin_mask(
+                            sheet[condition_col].astype("string"),
+                            targets,
+                            name="import_condition_targets",
+                        ),
+                    )
                     inactive = ~mask.fillna(False)
                     if inactive.any():
                         series = series.copy()
