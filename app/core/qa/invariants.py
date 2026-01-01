@@ -11,6 +11,7 @@ from pandas.api import types as ptypes
 
 from app.core.allocation.mentor_pool import compute_effective_status
 from app.core.canonical_frames import POOL_JOIN_KEY_DUPLICATES_ATTR
+from app.core.common.columns import ensure_series
 from app.core.common.domain import (
     COL_MENTOR_TYPE,
     BuildConfig,
@@ -21,6 +22,7 @@ from app.core.common.domain import (
 )
 from app.core.common.isin_guard import isin_mask
 from app.core.common.national_id import canonical_national_code
+from app.core.common.normalization import to_numlike_str
 from app.core.common.types import CANONICAL_TRACE_ORDER, TraceStageName
 from app.core.debug.models import QABreadcrumb
 from app.core.policy_loader import MentorStatus, PolicyConfig
@@ -565,11 +567,126 @@ def _normalize_str(value: object) -> str:
     return text
 
 
-def _source_sheet_series(matrix: pd.DataFrame) -> pd.Series:
+@dataclass(frozen=True)
+class DuplicateAnalysis:
+    is_duplicate: bool
+    is_identical: bool
+    conflict_rows_count: int
+    sample_conflict_row_positions: list[int]
+    sample_conflict_row_labels: list[str]
+
+
+def _get_column_view(frame: pd.DataFrame, column: str) -> pd.Series | pd.DataFrame:
+    return frame[column]
+
+
+def _normalize_cell_for_compare(value: object) -> str:
+    if value is None or value is pd.NA or pd.isna(value):
+        return ""
+    text = str(value).strip()
+    if not text:
+        return ""
+    numlike = to_numlike_str(text)
+    if numlike:
+        return numlike
+    return text
+
+
+def _normalize_series_for_compare(series: pd.Series) -> pd.Series:
+    return series.map(_normalize_cell_for_compare)
+
+
+def _analyze_duplicate_columns(df_dup: pd.DataFrame) -> DuplicateAnalysis:
+    if df_dup.shape[1] < 2:
+        return DuplicateAnalysis(False, True, 0, [], [])
+    base = _normalize_series_for_compare(df_dup.iloc[:, 0])
+    conflict_mask = pd.Series(False, index=df_dup.index)
+    for idx in range(1, df_dup.shape[1]):
+        current = _normalize_series_for_compare(df_dup.iloc[:, idx])
+        equal_mask = base.eq(current)
+        conflict_mask |= ~equal_mask
+    conflict_positions = conflict_mask.to_numpy().nonzero()[0]
+    sample_positions = [int(pos) for pos in conflict_positions[:5]]
+    sample_labels = [str(df_dup.index[pos]) for pos in conflict_positions[:5]]
+    conflict_rows_count = int(conflict_mask.sum())
+    return DuplicateAnalysis(
+        True,
+        conflict_rows_count == 0,
+        conflict_rows_count,
+        sample_positions,
+        sample_labels,
+    )
+
+
+def _series_for_column(
+    frame: pd.DataFrame,
+    column: str,
+    *,
+    issues: list[QaViolation],
+    critical: bool,
+    context: dict[str, object],
+) -> pd.Series:
+    view = _get_column_view(frame, column)
+    if isinstance(view, pd.DataFrame) and view.shape[1] > 1:
+        analysis = _analyze_duplicate_columns(view)
+        duplicates = int(view.shape[1])
+        sample_source_rows: list[object] = []
+        if analysis.sample_conflict_row_positions and "source_row_index" in frame.columns:
+            source_series = ensure_series(frame["source_row_index"])
+            sample_source_rows = [
+                source_series.iloc[pos] for pos in analysis.sample_conflict_row_positions
+            ]
+        if analysis.is_identical:
+            issues.append(
+                QaViolation(
+                    rule_id="QA_SCHEMA_DUPLICATE_COLUMNS",
+                    level="warning",
+                    message="ستون تکراری یکسان در ورودی QA",
+                    details={
+                        "code": "SCHEMA_DUPLICATE_COLUMNS_IDENTICAL",
+                        "column": column,
+                        "duplicates": duplicates,
+                        "stage": "qa_invariants",
+                        "hint": "Upstream schema must be fixed; duplicates are not allowed.",
+                        **context,
+                    },
+                )
+            )
+            return ensure_series(view)
+        level = "error" if critical else "warning"
+        issues.append(
+            QaViolation(
+                rule_id="QA_SCHEMA_DUPLICATE_COLUMNS",
+                level=level,
+                message="ستون‌های تکراری ناسازگار در ورودی QA",
+                details={
+                    "code": "SCHEMA_DUPLICATE_COLUMNS_CONFLICT",
+                    "column": column,
+                    "duplicates": duplicates,
+                    "conflict_rows_count": analysis.conflict_rows_count,
+                    "sample_conflict_row_positions": analysis.sample_conflict_row_positions,
+                    "sample_conflict_row_labels": analysis.sample_conflict_row_labels,
+                    "sample_conflict_source_rows": sample_source_rows,
+                    "stage": "qa_invariants",
+                    **context,
+                },
+            )
+        )
+        return ensure_series(view)
+    return ensure_series(view)
+
+
+def _source_sheet_series(matrix: pd.DataFrame, *, issues: list[QaViolation]) -> pd.Series:
     candidates = ("source_sheet", "sheet_name", "sheet", "sheet_label")
     for column in candidates:
         if column in matrix.columns:
-            series = matrix[column].astype("string").fillna("")
+            series = _series_for_column(
+                matrix,
+                column,
+                issues=issues,
+                critical=False,
+                context={"column_role": "source_sheet"},
+            ).astype("string").fillna("")
             return series.str.strip()
     attr_sheet = matrix.attrs.get("sheet_name") or matrix.attrs.get("sheet_label")
     if attr_sheet is None:
@@ -579,11 +696,20 @@ def _source_sheet_series(matrix: pd.DataFrame) -> pd.Series:
     return pd.Series([""] * len(matrix), index=matrix.index, dtype="string")
 
 
-def _source_row_series(matrix: pd.DataFrame) -> pd.Series:
+def _source_row_series(matrix: pd.DataFrame, *, issues: list[QaViolation]) -> pd.Series:
     fallback = pd.Series(range(len(matrix)), index=matrix.index, dtype="Int64")
     for column in ("source_row_index", "row_index", "pool_row_index"):
         if column in matrix.columns:
-            series = pd.to_numeric(matrix[column], errors="coerce")
+            series = pd.to_numeric(
+                _series_for_column(
+                    matrix,
+                    column,
+                    issues=issues,
+                    critical=False,
+                    context={"column_role": "source_row_index"},
+                ),
+                errors="coerce",
+            )
             series = series.reindex(matrix.index)
             return series.fillna(fallback).astype("Int64")
     return fallback
@@ -615,12 +741,37 @@ def check_MENTOR_TYPE_01(  # noqa: N802
             )
         )
         return QaRuleResult("QA_RULE_MENTOR_TYPE_01", False, violations)
+    assert mentor_col is not None
 
     cfg = BuildConfig(policy=policy)
-    type_series = matrix[type_col].astype("string").str.strip()
-    mentor_series = matrix[mentor_col].astype("string").str.strip()
-    alias_series = matrix["جایگزین"].astype("string").str.strip()
-    raw_school_series = matrix[school_col]
+    type_series = _series_for_column(
+        matrix,
+        type_col,
+        issues=violations,
+        critical=True,
+        context={"column_role": "mentor_type"},
+    ).astype("string").str.strip()
+    mentor_series = _series_for_column(
+        matrix,
+        mentor_col,
+        issues=violations,
+        critical=True,
+        context={"column_role": "mentor_id"},
+    ).astype("string").str.strip()
+    alias_series = _series_for_column(
+        matrix,
+        "جایگزین",
+        issues=violations,
+        critical=True,
+        context={"column_role": "alias"},
+    ).astype("string").str.strip()
+    raw_school_series = _series_for_column(
+        matrix,
+        school_col,
+        issues=violations,
+        critical=True,
+        context={"column_role": "school_code"},
+    )
     school_series = pd.to_numeric(raw_school_series, errors="coerce").fillna(0).astype(int)
 
     allowed_types = {"عادی", "مدرسه‌ای"}
@@ -671,8 +822,8 @@ def check_MENTOR_TYPE_01(  # noqa: N802
     school_zero = (school_series[school_mask] == 0).reindex(matrix.index, fill_value=False)
     if bool(school_zero.any()):
         offenders = mentor_series[school_mask & school_zero]
-        source_sheets = _source_sheet_series(matrix)
-        source_rows = _source_row_series(matrix)
+        source_sheets = _source_sheet_series(matrix, issues=violations)
+        source_rows = _source_row_series(matrix, issues=violations)
         offender_rows = pd.DataFrame(
             {
                 "source_sheet": source_sheets[school_mask & school_zero],
@@ -762,9 +913,12 @@ def check_MENTOR_TYPE_01(  # noqa: N802
     breadcrumbs_payload.append(qa_step.to_payload())
     matrix.attrs["qa_debug_breadcrumbs"] = breadcrumbs_payload
 
+    blocking_violations = [
+        violation for violation in violations if violation.level.strip().lower() == "error"
+    ]
     return QaRuleResult(
         rule_id="QA_RULE_MENTOR_TYPE_01",
-        passed=not violations,
+        passed=not blocking_violations,
         violations=violations,
     )
 
