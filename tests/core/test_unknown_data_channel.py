@@ -9,6 +9,7 @@ from app.core.common.join_resolver import JoinKeyResolver
 from app.core.common.unknown_data_channel import (
     UnknownDataChannel,
     UnknownDataError,
+    validate_join_key_columns_numeric,
     validate_pool_join_keys,
 )
 from app.core.policy_loader import load_policy
@@ -84,3 +85,19 @@ def test_pool_join_key_duplicate_columns_are_handled() -> None:
 
     assert channel.issues
     assert any(issue.code == "MISSING_JOIN_KEY_COLUMN" for issue in channel.issues)
+
+
+def test_join_key_columns_numeric_duplicate_columns_are_handled() -> None:
+    policy = load_policy()
+    channel = UnknownDataChannel(strict=False)
+    key = policy.join_keys[0]
+    frame = pd.DataFrame([[1, 2]], columns=[key, key])
+
+    validate_join_key_columns_numeric(
+        frame,
+        join_keys=[key],
+        entity_type="student",
+        channel=channel,
+    )
+
+    assert not channel.issues
