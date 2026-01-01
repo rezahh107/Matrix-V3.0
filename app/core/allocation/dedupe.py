@@ -6,6 +6,7 @@ from collections.abc import Iterable
 import pandas as pd
 
 from app.core.common.columns import CANON_EN_TO_FA
+from app.core.common.isin_guard import isin_mask
 from app.core.common.national_id import canonical_national_code
 
 __all__ = [
@@ -166,7 +167,11 @@ def dedupe_by_national_id(
     history_snapshot = build_history_snapshot_from_df(history_df)
 
     history_codes = set(history_norm[history_norm != ""].unique())
-    already_mask = student_norm.ne("") & student_norm.isin(history_codes)
+    already_mask = student_norm.ne("") & isin_mask(
+        student_norm,
+        history_codes,
+        name="history_codes",
+    )
 
     invalid_mask = student_norm.eq("")
 

@@ -21,6 +21,7 @@ from app.core.common.filters import (
     filter_by_school,
     filter_by_type,
 )
+from app.core.common.isin_guard import isin_mask
 from app.core.common.types import CANONICAL_TRACE_ORDER, TraceStageName
 from app.core.policy_loader import PolicyConfig, load_policy
 
@@ -237,7 +238,9 @@ def _mentors_match_value(
     if column == policy.stage_column("finance"):
         allowed_variants = set(policy.finance_variants)
         if student_value in allowed_variants:
-            return bool(series.isin(tuple(sorted(allowed_variants))).any())
+            return bool(
+                isin_mask(series, tuple(sorted(allowed_variants)), name="allowed_variants").any()
+            )
         return bool((series == student_value).any())
     if column == policy.stage_column("center"):
         wildcard = _coerce_optional_int(policy.center_map.get("*"))

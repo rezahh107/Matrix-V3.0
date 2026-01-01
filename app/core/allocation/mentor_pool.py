@@ -13,6 +13,7 @@ from dataclasses import dataclass
 import pandas as pd
 
 from app.core.common.columns import canonicalize_headers
+from app.core.common.isin_guard import isin_mask
 from app.core.common.types import CANONICAL_JOIN_KEYS
 from app.core.policy_loader import MentorPoolGovernanceConfig, MentorStatus
 
@@ -159,7 +160,10 @@ def compute_effective_status(
         base_statuses = base_statuses.where(parsed_statuses.isna(), parsed_statuses)
 
     policy_status = mentor_ids.map(governance.mentor_status_map)
-    policy_status = policy_status.where(policy_status.isin(allowed_statuses), pd.NA)
+    policy_status = policy_status.where(
+        isin_mask(policy_status, allowed_statuses, name="allowed_statuses"),
+        pd.NA,
+    )
     statuses = base_statuses.where(policy_status.isna(), policy_status)
 
     override_map: dict[int, MentorStatus] = {}
@@ -176,7 +180,9 @@ def compute_effective_status(
         override_status = mentor_ids.map(override_map)
         statuses = statuses.where(override_status.isna(), override_status)
 
-    invalid_statuses = statuses[~statuses.isin(governance.allowed_statuses)]
+    invalid_statuses = statuses[
+        ~isin_mask(statuses, governance.allowed_statuses, name="allowed_statuses")
+    ]
     if not invalid_statuses.empty:
         raise ValueError(
             "mentor_status contains values outside governance.allowed_statuses: "

@@ -29,6 +29,7 @@ from .common.filters import (
     resolve_student_school_code,
 )
 from .common.ids import build_mentor_id_map, inject_mentor_id, natural_key
+from .common.isin_guard import isin_mask
 from .common.join_keys import (
     JoinKeyCanonicalizationError,
     canonicalize_join_key_value,
@@ -747,7 +748,7 @@ def _center_mask_series(
     if wildcard_center is not None:
         wildcard_values.add(int(wildcard_center))
 
-    wildcard_mask = numeric.isin(wildcard_values)
+    wildcard_mask = isin_mask(numeric, wildcard_values, name="wildcard_values")
     mentor_mask = numeric.eq(student_center) | wildcard_mask
     return mentor_mask.fillna(False)
 
@@ -1369,7 +1370,7 @@ def _separate_school_students(
     else:
         statuses = _ensure_int_sequence_values("school_statuses", policy.school_statuses)
         values = pd.to_numeric(series, errors="coerce").fillna(0).astype(int)
-        school_mask = values.isin(statuses)
+        school_mask = isin_mask(values, statuses, name="school_statuses")
 
     school_students = students.loc[school_mask].copy()
     center_students = students.loc[~school_mask].copy()
@@ -1425,7 +1426,11 @@ def _build_center_manager_index(
         normalized_names = [str(name).strip() for name in names if str(name).strip()]
         if not normalized_names:
             continue
-        mask = center_series.eq(int(center_value)) & manager_series.isin(normalized_names)
+        mask = center_series.eq(int(center_value)) & isin_mask(
+            manager_series,
+            normalized_names,
+            name="manager_names",
+        )
         if mask.any():
             result[int(center_value)] = pool.index[mask]
         else:

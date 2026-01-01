@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import pandas as pd
 
+from app.core.common.isin_guard import isin_mask
+
 
 def normalize_missing_raw_values(frame: pd.DataFrame) -> pd.DataFrame:
     """Return a copy with missing-like raw values normalized to ``pd.NA``.
@@ -34,7 +36,7 @@ def normalize_missing_raw_values(frame: pd.DataFrame) -> pd.DataFrame:
     lowered = raw.str.strip().str.lower()
 
     # Anything that "looks empty" should be treated as missing.
-    missing_like = lowered.isin({"", "nan", "na", "none"})
+    missing_like = isin_mask(lowered, {"", "nan", "na", "none"}, name="missing_like_values")
 
     # Replace missing-like entries with proper NA; preserve already-null values.
     raw = raw.mask(missing_like, pd.NA)

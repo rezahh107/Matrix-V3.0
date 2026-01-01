@@ -19,6 +19,7 @@ from app.core.common.domain import (
     allowed_statuses_for_group,
     classify_student_binding,
 )
+from app.core.common.isin_guard import isin_mask
 from app.core.common.national_id import canonical_national_code
 from app.core.common.types import CANONICAL_TRACE_ORDER, TraceStageName
 from app.core.debug.models import QABreadcrumb
@@ -410,7 +411,11 @@ def check_STU_BINDING_01(  # noqa: N802
 
     allowed_bindings = {StudentBindingKind.NORMAL, StudentBindingKind.SCHOOL}
     legacy_mask = bindings == StudentBindingKind.MENTOR_BASED
-    unexpected_mask = ~bindings.isin(allowed_bindings | {StudentBindingKind.MENTOR_BASED})
+    unexpected_mask = ~isin_mask(
+        bindings,
+        allowed_bindings | {StudentBindingKind.MENTOR_BASED},
+        name="allowed_bindings",
+    )
     if bool(legacy_mask.any()):
         violations.append(
             QaViolation(
@@ -619,7 +624,7 @@ def check_MENTOR_TYPE_01(  # noqa: N802
     school_series = pd.to_numeric(raw_school_series, errors="coerce").fillna(0).astype(int)
 
     allowed_types = {"عادی", "مدرسه‌ای"}
-    invalid_types = type_series[~type_series.isin(allowed_types)]
+    invalid_types = type_series[~isin_mask(type_series, allowed_types, name="allowed_types")]
     if not invalid_types.empty:
         violations.append(
             QaViolation(

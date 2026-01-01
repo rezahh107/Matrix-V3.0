@@ -13,6 +13,7 @@ from app.core.common.domain import (
     StudentBindingKind,
     classify_student_binding,
 )
+from app.core.common.isin_guard import isin_mask, require_isin_values
 from app.core.policy.config import AllocationChannelConfig
 from app.core.policy_loader import PolicyConfig
 
@@ -55,10 +56,9 @@ def _column_as_int(df: pd.DataFrame, column: str | None) -> pd.Series | None:
 def _ensure_int_values(name: str, values: object) -> tuple[int, ...]:
     if values is None:
         return tuple()
-    if isinstance(values, (str, bytes)) or not isinstance(values, Iterable):
-        raise TypeError(f"{name} must be a sequence of ints; got {values!r}")
+    checked = require_isin_values(name, values)
     normalized: list[int] = []
-    for item in values:
+    for item in cast(Iterable[object], checked):
         if not isinstance(item, int):
             raise TypeError(f"{name} must contain only ints; got {item!r}")
         normalized.append(int(item))
@@ -86,7 +86,14 @@ def _active_student_mask(students_df: pd.DataFrame, policy: PolicyConfig) -> pd.
     status_series = _column_as_int(students_df, column)
     if status_series is None:
         return pd.Series(True, index=students_df.index, dtype=bool)
-    mask = status_series.isin(active_status_values) | status_series.isna()
+    mask = cast(
+        pd.Series,
+        isin_mask(
+            status_series,
+            active_status_values,
+            name="allocation_channels.active_status_values",
+        ),
+    ) | status_series.isna()
     return mask.fillna(True)
 
 
@@ -105,7 +112,14 @@ def _apply_center_channel(
     )
     if not center_ids:
         return
-    mask = center_values.isin(center_ids)
+    mask = cast(
+        pd.Series,
+        isin_mask(
+            center_values,
+            center_ids,
+            name=f"allocation_channels.center_channels.{channel.value}",
+        ),
+    )
     if mask.empty:
         return
     unresolved = result == AllocationChannel.GENERIC

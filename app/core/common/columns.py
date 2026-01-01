@@ -13,6 +13,7 @@ import pandas as pd
 
 from app.core.policy_loader import get_policy
 
+from .isin_guard import isin_mask
 from .normalization import normalize_fa, strip_school_code_separators, to_numlike_str
 
 if TYPE_CHECKING:
@@ -542,8 +543,8 @@ def normalize_bool_like(series: pd.Series | None) -> pd.Series:
         return pd.Series(dtype="Int64")
     text = sanitize_digits(series).str.lower()
     result = pd.Series(0, index=text.index, dtype="Int64")
-    mask_truthy = text.isin(_TRUTHY_TOKENS)
-    mask_falsy = text.isin(_FALSY_TOKENS)
+    mask_truthy = isin_mask(text, _TRUTHY_TOKENS, name="truthy_tokens")
+    mask_falsy = isin_mask(text, _FALSY_TOKENS, name="falsy_tokens")
     numeric = pd.to_numeric(text.replace("", pd.NA), errors="coerce")
     result = result.astype("Int64")
     result.loc[mask_truthy] = 1
@@ -579,7 +580,7 @@ def enforce_join_key_types(df: pd.DataFrame, join_keys: Sequence[str]) -> pd.Dat
             result[column] = series.astype("Int64")
             continue
         if series.dtype == "object":
-            boolean_mask = series.isin([True, False])
+            boolean_mask = isin_mask(series, [True, False], name="bool_literals")
             if boolean_mask.any():
                 series = series.copy()
                 series.loc[boolean_mask] = series.loc[boolean_mask].map({True: 1, False: 0})

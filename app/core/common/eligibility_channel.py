@@ -11,6 +11,7 @@ import pandas as pd
 
 from app.core.common.columns import ensure_series
 from app.core.common.filters import apply_join_filters
+from app.core.common.isin_guard import isin_mask
 from app.core.common.join_keys import (
     JoinKeyCanonicalizationError,
     StudentSchoolCode,
@@ -57,12 +58,20 @@ class EligibilitySpec:
 
     def hard_mask(self, pool_df: pd.DataFrame) -> pd.Series:
         _, eligible, _ = _apply_join_filters(pool_df, self, tracker=None)
-        return pd.Series(pool_df.index.isin(eligible.index), index=pool_df.index, dtype=bool)
+        return pd.Series(
+            isin_mask(pool_df.index, eligible.index, name="eligible_index"),
+            index=pool_df.index,
+            dtype=bool,
+        )
 
     def priority_score(self, pool_df: pd.DataFrame) -> pd.Series:
         if not self.manager_priority_enabled or self.manager_preference_index is None:
             return pd.Series(0, index=pool_df.index, dtype=int)
-        mask = pool_df.index.isin(self.manager_preference_index)
+        mask = isin_mask(
+            pool_df.index,
+            self.manager_preference_index,
+            name="manager_preference_index",
+        )
         return pd.Series(mask.astype(int), index=pool_df.index, dtype=int)
 
     def explain(self) -> dict[str, object]:

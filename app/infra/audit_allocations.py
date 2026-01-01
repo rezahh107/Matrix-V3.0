@@ -17,6 +17,7 @@ from app.core.common.columns import (
     ensure_series,
     parse_header_mode,
 )
+from app.core.common.isin_guard import isin_mask
 from app.core.policy_loader import PolicyConfig, get_policy
 
 __all__ = ["audit_allocations", "audit_allocations_cli", "summarize_report"]
@@ -162,7 +163,11 @@ def _trace_mismatch(
     if "matched" in df.columns:
         matched_series = df["matched"]
         if matched_series.dtype != bool:
-            df["matched"] = matched_series.astype(str).str.lower().isin({"true", "1", "yes"})
+            df["matched"] = isin_mask(
+                matched_series.astype(str).str.lower(),
+                {"true", "1", "yes"},
+                name="trace_matched_values",
+            )
 
     grouped = df.groupby("student_id")
     failing_ids: list[Any] = []

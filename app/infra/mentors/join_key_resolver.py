@@ -5,6 +5,7 @@ from typing import Any, cast
 
 import pandas as pd
 
+from app.core.common.isin_guard import isin_mask
 from app.core.common.join_keys import validate_and_canonicalize_join_keys
 from app.core.common.types import JoinKeyValidationIssue
 from app.core.policy_loader import PolicyConfig
@@ -66,7 +67,7 @@ class JoinKeyResolver:
         usable_profiles = all_profiles.copy()
         if "mentor_id" in usable_profiles.columns:
             usable_profiles = usable_profiles.loc[
-                ~usable_profiles["mentor_id"].isin(multi_profile)
+                ~isin_mask(usable_profiles["mentor_id"], multi_profile, name="multi_profile_ids")
             ].copy()
         blocking_issues = [issue for issue in issues if self._is_blocking_issue(issue)]
         return JoinKeyResolutionResult(
