@@ -151,8 +151,17 @@ _CODE_TO_RECORD: dict[int, EducationalRecord] = {
     record.field_code: record for record in EDUCATIONAL_STRUCTURE
 }
 
+
+def _normalize_edu_text(value: str) -> str:
+    return " ".join(normalize_fa(value).split())
+
+
 _GROUP_TO_CODES: dict[tuple[str, str], int] = {
     (record.educational_level, record.experimental_group): record.field_code
+    for record in EDUCATIONAL_STRUCTURE
+}
+_GROUP_TO_CODES_NORMALIZED: dict[tuple[str, str], int] = {
+    (_normalize_edu_text(record.educational_level), _normalize_edu_text(record.experimental_group)): record.field_code
     for record in EDUCATIONAL_STRUCTURE
 }
 
@@ -162,6 +171,10 @@ if len(_CODE_TO_RECORD) != len(EDUCATIONAL_STRUCTURE):
 if len(_GROUP_TO_CODES) != len(EDUCATIONAL_STRUCTURE):
     raise ValueError(
         "Duplicate (educational_level, experimental_group) detected in EDUCATIONAL_STRUCTURE"
+    )
+if len(_GROUP_TO_CODES_NORMALIZED) != len(EDUCATIONAL_STRUCTURE):
+    raise ValueError(
+        "Duplicate normalized (educational_level, experimental_group) detected in EDUCATIONAL_STRUCTURE"
     )
 
 
@@ -182,12 +195,21 @@ def get_code_from_group(experimental_group_name: str, educational_level: str | N
         code = _GROUP_TO_CODES.get((educational_level, experimental_group_name))
         if code is not None:
             return code
+        normalized_level = _normalize_edu_text(educational_level)
+        normalized_group = _normalize_edu_text(experimental_group_name)
+        code = _GROUP_TO_CODES_NORMALIZED.get((normalized_level, normalized_group))
+        if code is not None:
+            return code
     else:
         matches = [
             code
             for (level, group), code in _GROUP_TO_CODES.items()
             if group == experimental_group_name
         ]
+        normalized_group = _normalize_edu_text(experimental_group_name)
+        for (level, group), code in _GROUP_TO_CODES_NORMALIZED.items():
+            if group == normalized_group and code not in matches:
+                matches.append(code)
         if len(matches) == 1:
             return matches[0]
     raise DataMissingError(
