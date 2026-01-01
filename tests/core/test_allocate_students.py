@@ -295,7 +295,17 @@ def test_filter_candidates_respects_center_wildcard_zero_and_rejects_missing() -
     filtered, mismatches = _filter_candidates_by_join_map(pool, join_map=join_map, policy=policy)
 
     assert filtered[policy.stage_column("center")].tolist() == [0, 5]
-    assert mismatches == []
+    assert mismatches == [
+        {
+            "column": policy.stage_column("center"),
+            "student_value": 5,
+            "mentor_values": [7],
+            "reason": "mentor_value_mismatch",
+            "stage": "center",
+            "available_values": [7],
+            "expected_value": 5,
+        }
+    ]
 
 
 def test_filter_candidates_respects_policy_wildcard_value_for_mentor_centers() -> None:
@@ -379,7 +389,17 @@ def test_filter_candidates_treats_student_center_zero_as_wildcard_without_policy
     filtered, mismatches = _filter_candidates_by_join_map(pool, join_map=join_map, policy=policy)
 
     assert filtered["mentor_id"].tolist() == ["c3"]
-    assert mismatches == []
+    assert mismatches == [
+        {
+            "column": policy.stage_column("center"),
+            "student_value": 0,
+            "mentor_values": [1, 2],
+            "reason": "mentor_value_mismatch",
+            "stage": "center",
+            "available_values": [1, 2],
+            "expected_value": 0,
+        }
+    ]
 
 
 def test_filter_candidates_accepts_farsi_gender_tokens() -> None:
@@ -441,7 +461,17 @@ def test_join_key_mismatches_preserved_on_success_allocation() -> None:
 
     assert result.log.get("allocation_status") == "success"
     assert result.log.get("mentor_id") == "m_match"
-    assert not result.log.get("join_key_mismatches")
+    assert result.log.get("join_key_mismatches") == [
+        {
+            "column": policy.stage_column("center"),
+            "student_value": 1,
+            "mentor_values": [2],
+            "reason": "mentor_value_mismatch",
+            "stage": "center",
+            "available_values": [2],
+            "expected_value": 1,
+        }
+    ]
 
 
 def test_join_key_mismatches_include_prefilter_details() -> None:
@@ -568,7 +598,17 @@ def test_join_key_mismatches_merge_combines_prefilter_and_eligibility_details() 
 
     assert result.log.get("allocation_status") == "success"
     assert result.log.get("mentor_id") == "m_match"
-    assert not result.log.get("join_key_mismatches")
+    assert result.log.get("join_key_mismatches") == [
+        {
+            "column": policy.stage_column("center"),
+            "student_value": 1,
+            "mentor_values": [2],
+            "reason": "mentor_value_mismatch",
+            "stage": "center",
+            "available_values": [2],
+            "expected_value": 1,
+        }
+    ]
 
 
 def test_join_key_mismatches_recorded_when_unallocated() -> None:

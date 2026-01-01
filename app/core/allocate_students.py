@@ -942,7 +942,8 @@ def _filter_candidates_by_join_map(
                 mentor_series = pd.to_numeric(mentor_series_raw, errors="coerce").astype("Int64")
             col_mask = mentor_series == int(student_value)
 
-        filtered = current.loc[col_mask.fillna(False)]
+        mask = col_mask.fillna(False)
+        filtered = current.loc[mask]
         if filtered.empty:
             available_values = _available_values(mentor_series_raw)
             mismatch = {
@@ -956,6 +957,17 @@ def _filter_candidates_by_join_map(
             }
             current = filtered
             break
+        if mismatch is None and filtered.shape[0] < current.shape[0]:
+            dropped_values = _available_values(mentor_series_raw.loc[~mask])
+            mismatch = {
+                "column": column,
+                "student_value": expected_value,
+                "mentor_values": dropped_values,
+                "reason": "mentor_value_mismatch",
+                "stage": stage,
+                "available_values": dropped_values,
+                "expected_value": expected_value,
+            }
         current = filtered
 
     mismatches: list[JoinMismatch] = [mismatch] if mismatch is not None else []
