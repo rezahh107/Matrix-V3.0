@@ -101,7 +101,19 @@ def _validate_join_keys(
         )
         return
     for column in join_keys:
-        series = pd.to_numeric(df[column], errors="coerce")
+        raw_values = df[column]
+        if isinstance(raw_values, pd.DataFrame):
+            issues.append(
+                _issue(
+                    "JOIN_KEYS_DUPLICATE_COLUMN",
+                    f"{context}: join-key column '{column}' is duplicated; using first occurrence for validation.",
+                    context=context,
+                )
+            )
+            series = raw_values.iloc[:, 0]
+        else:
+            series = raw_values
+        series = pd.to_numeric(series, errors="coerce")
         if series.isna().any():
             issues.append(
                 _issue(
