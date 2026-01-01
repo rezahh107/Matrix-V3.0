@@ -6,6 +6,7 @@ from typing import SupportsInt, cast
 
 import pandas as pd
 
+from app.core.common.columns import ensure_series
 from app.core.common.domain import (
     BuildConfig,
     Status,
@@ -46,7 +47,8 @@ def _to_int_safe(value: object) -> int | None:
 def _column_as_int(df: pd.DataFrame, column: str | None) -> pd.Series | None:
     if column is None or column not in df.columns:
         return None
-    numeric = pd.to_numeric(df[column], errors="coerce")
+    values = ensure_series(df[column])
+    numeric = pd.to_numeric(values, errors="coerce")
     return numeric.astype("Int64")
 
 
