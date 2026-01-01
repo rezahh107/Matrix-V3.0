@@ -1273,7 +1273,8 @@ def _phase_stage_extras(
     if stage == "school_phase_start":
         return {"message": "شروع فاز مدرسه‌ای"}
     if stage == "center_phase_start" and capacity_column in pool.columns:
-        capacity_series = ensure_series(pool[capacity_column])
+        capacity_values = pool[capacity_column]
+        capacity_series = ensure_series(capacity_values)
         remaining = pd.to_numeric(capacity_series, errors="coerce").fillna(0)
         return {
             "message": "شروع فاز مرکزی پس از اتمام مدرسه‌ای",

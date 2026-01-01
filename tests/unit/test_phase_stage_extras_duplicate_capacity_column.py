@@ -7,9 +7,12 @@ from app.core.allocate_students import _phase_stage_extras
 
 
 def test_phase_stage_extras_duplicate_capacity_column_uses_first_column() -> None:
-    pool = pd.DataFrame(
-        [[1, 10], [2, 20]],
-        columns=["remaining_capacity", "remaining_capacity"],
+    pool = pd.DataFrame([[1], [2]], columns=["remaining_capacity"])
+    pool.insert(
+        1,
+        "remaining_capacity",
+        [10, 20],
+        allow_duplicates=True,
     )
 
     selection = pool["remaining_capacity"]
