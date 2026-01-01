@@ -6,7 +6,12 @@ from typing import Any
 import pandas as pd
 
 from app.core.build_matrix import DUAL_STATUS_GROUPS
-from app.core.common.domain import COL_MENTOR_TYPE, STUDENT_ONLY_GROUPS, StudentBindingKind
+from app.core.common.domain import (
+    COL_MENTOR_TYPE,
+    STUDENT_ONLY_GROUPS,
+    BuildConfig,
+    StudentBindingKind,
+)
 from app.core.policy_loader import PolicyConfig, load_policy
 from app.core.qa.invariants import (
     QaRuleResult,
@@ -118,7 +123,71 @@ def test_mentor_type_invariant_validates_alias_and_school_code() -> None:
     result = check_MENTOR_TYPE_01(matrix=matrix, policy=policy)
 
     assert result.passed
-    assert not result.violations
+
+
+def test_mentor_type_invariant_duplicate_school_column_identical_emits_issue_but_passes() -> None:
+    cfg = BuildConfig()
+    matrix = pd.DataFrame(
+        [
+            {
+                "جایگزین": "1234",
+                "کد کارمندی پشتیبان": "M1",
+                "عادی مدرسه": "عادی",
+                cfg.policy.columns.school_code: 0,
+            }
+        ]
+    )
+    matrix.insert(
+        len(matrix.columns), cfg.policy.columns.school_code, 0, allow_duplicates=True
+    )
+
+    result = check_MENTOR_TYPE_01(matrix=matrix, policy=cfg.policy)
+
+    assert result.passed
+    matches = [
+        violation
+        for violation in result.violations
+        if violation.details
+        and violation.details.get("code") == "SCHEMA_DUPLICATE_COLUMNS_IDENTICAL"
+    ]
+    assert matches
+    assert matches[0].level == "warning"
+    assert matches[0].details.get("column") == cfg.policy.columns.school_code
+    assert matches[0].details.get("duplicates") == 2
+
+
+def test_mentor_type_invariant_duplicate_school_column_conflicting_fails_with_issue() -> None:
+    cfg = BuildConfig()
+    matrix = pd.DataFrame(
+        [
+            {
+                "جایگزین": "1234",
+                "کد کارمندی پشتیبان": "M1",
+                "عادی مدرسه": "عادی",
+                cfg.policy.columns.school_code: 0,
+            }
+        ]
+    )
+    matrix.insert(
+        len(matrix.columns), cfg.policy.columns.school_code, 1, allow_duplicates=True
+    )
+
+    result = check_MENTOR_TYPE_01(matrix=matrix, policy=cfg.policy)
+
+    assert not result.passed
+    matches = [
+        violation
+        for violation in result.violations
+        if violation.details
+        and violation.details.get("code") == "SCHEMA_DUPLICATE_COLUMNS_CONFLICT"
+    ]
+    assert matches
+    assert matches[0].level == "error"
+    assert matches[0].details.get("column") == cfg.policy.columns.school_code
+    assert matches[0].details.get("conflict_rows_count", 0) >= 1
+    assert matches[0].details.get("sample_conflict_row_positions")
+    assert matches[0].details.get("sample_conflict_row_labels")
+    assert "sample_conflict_source_rows" in matches[0].details
 
 
 def test_mentor_type_invariant_detects_normal_with_school_code() -> None:
