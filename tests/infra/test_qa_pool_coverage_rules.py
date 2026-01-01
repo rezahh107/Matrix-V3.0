@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pandas as pd
 
-from app.core.qa.invariants import run_all_invariants
 from app.core.policy_loader import load_policy
+from app.core.qa.invariants import run_all_invariants
 
 
 def test_pool_coverage_rule_flags_missing_candidates() -> None:

@@ -944,13 +944,14 @@ def _filter_candidates_by_join_map(
 
         filtered = current.loc[col_mask.fillna(False)]
         if filtered.empty:
+            available_values = _available_values(mentor_series_raw)
             mismatch = {
                 "column": column,
                 "student_value": expected_value,
-                "mentor_values": _available_values(mentor_series_raw),
+                "mentor_values": available_values,
                 "reason": "mentor_value_mismatch",
                 "stage": stage,
-                "available_values": _available_values(mentor_series_raw),
+                "available_values": available_values,
                 "expected_value": expected_value,
             }
             current = filtered

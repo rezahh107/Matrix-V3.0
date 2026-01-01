@@ -2544,13 +2544,13 @@ def _run_build_matrix(args: argparse.Namespace, policy: PolicyConfig, progress: 
         meta["column_normalization_reports"] = normalization_reports
 
     progress(72, "qa invariants")
-        qa_report = run_all_invariants(
-            policy=policy,
-            matrix=matrix,
-            inspactor=insp_df,
-            invalid_mentors=invalid_mentors,
-            extras={"pool_join_conflicts": pd.DataFrame()},
-        )
+    qa_report = run_all_invariants(
+        policy=policy,
+        matrix=matrix,
+        inspactor=insp_df,
+        invalid_mentors=invalid_mentors,
+        extras={"pool_join_conflicts": pd.DataFrame()},
+    )
     pool_join_key_duplicates = join_key_duplicates.copy()
     merged_extras = dict(getattr(qa_report, "extras", None) or {})
     merged_extras["pool_join_key_duplicates"] = pool_join_key_duplicates
