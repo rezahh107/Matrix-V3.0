@@ -11,6 +11,11 @@ from typing import Any
 
 import pandas as pd
 
+from app.core.allocate_students import (
+    _collect_join_key_map,
+    _filter_candidates_by_join_map,
+    _materialize_effective_center_in_join_map,
+)
 from app.core.canonical_frames import canonicalize_pool_frame, canonicalize_students_frame
 from app.core.common.filters import (
     filter_by_center,
@@ -23,14 +28,13 @@ from app.core.common.filters import (
 )
 from app.core.common.join_resolver import JoinKeyResolver
 from app.core.debug_pool_alignment import analyze_pool_alignment_batch
-from app.core.allocate_students import (
-    _collect_join_key_map,
-    _filter_candidates_by_join_map,
-    _materialize_effective_center_in_join_map,
-)
 from app.core.policy_loader import load_policy
 from app.infra.io_utils import read_excel_first_sheet
-from app.infra.pool_loader import PoolType, load_pool_with_detection
+from app.infra.pool_loader import (
+    MatrixPoolRequiredError,
+    PoolType,
+    load_pool_with_detection,
+)
 
 
 def _die(msg: str, code: int = 2) -> None:
@@ -73,11 +77,6 @@ def _inspect_workbook(path: Path) -> dict[str, Any]:
             except Exception as exc:
                 info["sheets"].append({"sheet": sheet, "error": str(exc)})
     return info
-
-
-def _auto_pool_type(path: Path) -> PoolType:
-    with pd.ExcelFile(path) as wb:
-        return "matrix" if "matrix" in wb.sheet_names else "inspactor"
 
 
 def _write_output(path: Path, payload: dict[str, Any]) -> None:
@@ -276,14 +275,7 @@ def main() -> None:
     )
 
     parser.add_argument("--pool", type=Path, required=True, help="Path to mentor pool Excel file.")
-    parser.add_argument(
-        "--pool-type",
-        type=str,
-        default="auto",
-        choices=["auto", "matrix", "inspactor"],
-        help="Pool type: auto/matrix/inspactor. auto => uses 'matrix' if that sheet exists.",
-    )
-    parser.add_argument("--pool-sheet", type=str, default=None, help="Optional: explicit pool sheet name.")
+    parser.add_argument("--pool-sheet", type=str, default=None, help="Optional: explicit pool sheet name (must be 'matrix').")
 
     parser.add_argument("--limit", type=int, default=100, help="Max number of students to analyze (0 = all).")
     parser.add_argument("--output", type=Path, default=Path("debug_alignment_report.json"), help="Output JSON/CSV file.")
@@ -344,12 +336,24 @@ def main() -> None:
         return
 
     # Pool load
-    if args.pool_type == "auto":
-        pool_type: PoolType = _auto_pool_type(args.pool)
-    else:
-        pool_type = args.pool_type  # type: ignore[assignment]
-
-    pool_raw, detection = load_pool_with_detection(args.pool, pool_type=pool_type, pool_sheet=args.pool_sheet)
+    if args.pool_sheet and args.pool_sheet.lower() != "matrix":
+        _die("pool-sheet باید 'matrix' باشد (بدون fallback).")
+    pool_type: PoolType = "matrix"
+    try:
+        pool_raw, detection = load_pool_with_detection(
+            args.pool, pool_type=pool_type, pool_sheet=args.pool_sheet
+        )
+    except MatrixPoolRequiredError as exc:
+        sheets = exc.sheets
+        hint = ""
+        if any("inspactor" in str(name).lower() for name in sheets):
+            hint = (
+                " This file looks like an inspactor workbook; allocation diagnostics require the matrix pool output file."
+            )
+        _die(
+            "This Allocation program requires a mentor pool workbook containing a sheet named 'matrix'. "
+            f"Please provide the matrix pool file. File: {exc.source} | Sheets: {sheets}.{hint}"
+        )
     pool_df = canonicalize_pool_frame(pool_raw, policy=policy, pool_source=pool_type)
 
     if pool_df.empty:

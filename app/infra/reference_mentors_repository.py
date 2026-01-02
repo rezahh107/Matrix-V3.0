@@ -8,7 +8,8 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Final
+from types import SimpleNamespace
+from typing import TYPE_CHECKING, Any, Final, Literal
 
 import pandas as pd
 from pandas._libs.missing import NAType
@@ -59,15 +60,43 @@ def import_mentor_pool_from_excel(
     db: LocalDatabase,
     policy: PolicyConfig,
     pool_source: str = "inspactor",
-    pool_type: pool_loader.PoolType = "inspactor",
+    pool_type: str = "inspactor",
     pool_sheet: str | None = None,
     trace_enabled: bool = False,
 ) -> pd.DataFrame:
     """وارد کردن استخر منتورها از Inspactor و ذخیره در کش."""
 
-    raw_df, detection = pool_loader.load_pool_with_detection(
-        path, pool_type=pool_type, pool_sheet=pool_sheet
-    )
+    detection = None
+    if pool_type == "matrix":
+        raw_df, detection = pool_loader.load_pool_with_detection(
+            path, pool_type="matrix", pool_sheet=pool_sheet
+        )
+    else:
+        sheet_names: list[str]
+        if pool_sheet:
+            with pd.ExcelFile(path) as workbook:
+                sheet_names = list(workbook.sheet_names)
+                raw_df = workbook.parse(pool_sheet)
+                selected_sheet = pool_sheet
+                method: Literal["explicit", "auto"] = "explicit"
+        else:
+            with pd.ExcelFile(path) as workbook:
+                sheet_names = list(workbook.sheet_names)
+                if not sheet_names:
+                    raise ValueError(f"هیچ شیتی در فایل {path} یافت نشد.")
+                selected_sheet = next(
+                    (name for name in sheet_names if name.lower() != "matrix"),
+                    sheet_names[0],
+                )
+                raw_df = workbook.parse(selected_sheet)
+                method = "auto"
+        detection = SimpleNamespace(
+            pool_type=pool_type,
+            selected_sheet=selected_sheet,
+            detection_method=method,
+            confidence=1.0,
+            evidence={"path": str(path), "sheets": sheet_names},
+        )
     normalized = import_mentor_pool_from_dataframe(
         raw_df,
         db=db,

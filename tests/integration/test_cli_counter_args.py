@@ -84,7 +84,7 @@ def test_cli_allocate_accepts_counter_args(tmp_path: Path) -> None:
         if column not in pool.columns:
             pool[column] = ["v1", "v2"]
     pool_path = tmp_path / "pool.xlsx"
-    _write_excel(pool, pool_path, sheet_name="Pool")
+    _write_excel(pool, pool_path, sheet_name="matrix")
 
     prior = pd.DataFrame(
         {
