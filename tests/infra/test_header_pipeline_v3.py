@@ -204,7 +204,7 @@ def test_header_pipeline_non_critical_duplicates_are_non_blocking() -> None:
         alias_registry={"mentor": {"nickname": "nickname", "نام مستعار": "nickname"}},
         critical_fields={"mentor": set()},
     )
-    df = pd.DataFrame({"nickname": ["A"], "نام مستعار": ["A"]})
+    df = pd.DataFrame({"nickname": ["A"], "نام مستعار": ["B"]})
 
     result = pipeline.resolve(df, source="mentor")
     ambiguous = [issue for issue in result.issues if issue.message == "AMBIGUOUS_HEADER"]
