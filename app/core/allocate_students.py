@@ -1203,7 +1203,7 @@ def _materialize_effective_center_in_join_map(
         or effective_center.center_source not in _MANAGER_CENTER_SOURCES
     ):
         return
-    join_map[normalized] = int(effective_center.center_code)
+    join_map[normalized] = effective_center.center_code
 
 
 def _canonical_student_id(value: object) -> str:
