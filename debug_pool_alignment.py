@@ -11,6 +11,11 @@ from typing import Any
 
 import pandas as pd
 
+from app.core.allocate_students import (
+    _collect_join_key_map,
+    _filter_candidates_by_join_map,
+    _materialize_effective_center_in_join_map,
+)
 from app.core.canonical_frames import canonicalize_pool_frame, canonicalize_students_frame
 from app.core.common.filters import (
     filter_by_center,
@@ -23,11 +28,6 @@ from app.core.common.filters import (
 )
 from app.core.common.join_resolver import JoinKeyResolver
 from app.core.debug_pool_alignment import analyze_pool_alignment_batch
-from app.core.allocate_students import (
-    _collect_join_key_map,
-    _filter_candidates_by_join_map,
-    _materialize_effective_center_in_join_map,
-)
 from app.core.policy_loader import load_policy
 from app.infra.io_utils import read_excel_first_sheet
 from app.infra.pool_loader import (

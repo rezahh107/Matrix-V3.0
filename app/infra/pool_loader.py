@@ -108,9 +108,13 @@ def load_pool_with_detection(
     canonical.attrs.setdefault("pool_source", detection.pool_type)
     canonical.attrs.setdefault("raw_row_count", int(df.shape[0]))
     canonical.attrs.setdefault("raw_sheet_name", detection.selected_sheet)
-    if COL_MENTOR_ID in canonical.columns and canonical[COL_MENTOR_ID].dtype == object:
-        canonical = canonical.copy()
-        canonical[COL_MENTOR_ID] = canonical[COL_MENTOR_ID].astype(str)
+    if COL_MENTOR_ID in canonical.columns:
+        mentor_col = canonical[COL_MENTOR_ID]
+        if isinstance(mentor_col, pd.DataFrame):
+            mentor_col = mentor_col.iloc[:, 0]
+        if mentor_col.dtype == object:
+            canonical = canonical.copy()
+            canonical[COL_MENTOR_ID] = mentor_col.astype(str)
     return canonical, detection
 
 

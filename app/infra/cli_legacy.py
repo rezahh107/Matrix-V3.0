@@ -23,9 +23,9 @@ import argparse
 import hashlib
 import json
 import logging
+import os
 import platform
 import sys
-import os
 from collections.abc import Callable, Hashable, Mapping, Sequence
 from dataclasses import asdict
 from datetime import UTC, datetime
@@ -2962,6 +2962,7 @@ def _run_preflight_unknowns(
         )
         return 3
 
+    pool_source_arg = "matrix"
     detection = pool_df.attrs.get("pool_detection")
     pool_source = getattr(detection, "pool_type", None) or pool_df.attrs.get(
         "pool_source", pool_source_arg
@@ -4222,14 +4223,18 @@ def main(
             db = _resolve_local_db(args)
             if db is None:
                 raise ValueError("برای import-mentors باید --local-db مشخص شود.")
-            pool_type_val = getattr(args, "pool_type", "matrix")
+            pool_type_val = getattr(args, "pool_type", "inspactor") or "inspactor"
             pool_sheet = getattr(args, "pool_sheet", None)
             pool_path = Path(args.inspactor)
-            if pool_type_val != "matrix":
-                raise SystemExit("pool-type باید فقط 'matrix' باشد.")
-            if pool_sheet and pool_sheet.lower() != "matrix":
-                raise SystemExit("pool-sheet باید 'matrix' باشد.")
-            resolved_pool_type = "matrix"
+            if pool_type_val == "matrix":
+                if pool_sheet and pool_sheet.lower() != "matrix":
+                    raise SystemExit("pool-sheet باید 'matrix' باشد.")
+                pool_sheet = pool_sheet or "matrix"
+                resolved_pool_type = "matrix"
+            elif pool_type_val == "inspactor":
+                resolved_pool_type = "inspactor"
+            else:
+                raise SystemExit("pool-type باید 'inspactor' یا 'matrix' باشد.")
             resolved_pool_source = resolved_pool_type
             import_mentor_pool_from_excel(
                 pool_path,

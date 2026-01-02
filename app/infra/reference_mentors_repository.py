@@ -8,7 +8,8 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Final
+from types import SimpleNamespace
+from typing import TYPE_CHECKING, Any, Final, Literal
 
 import pandas as pd
 from pandas._libs.missing import NAType
@@ -45,7 +46,6 @@ from app.core.common.payloads import build_frame_payload
 from app.core.common.types import JoinKeyValidationIssue, JoinKeyValidationResult
 from app.core.policy_loader import PolicyConfig
 from app.infra import pool_loader
-from app.infra.io_utils import read_excel_first_sheet
 from app.infra.errors import JoinKeyValidationError
 from app.infra.local_database import LocalDatabase, _coerce_int_columns
 from app.infra.references.schools import get_school_reference_frames
@@ -72,7 +72,31 @@ def import_mentor_pool_from_excel(
             path, pool_type="matrix", pool_sheet=pool_sheet
         )
     else:
-        raw_df = read_excel_first_sheet(path, sheet_name=pool_sheet)
+        sheet_names: list[str]
+        if pool_sheet:
+            with pd.ExcelFile(path) as workbook:
+                sheet_names = list(workbook.sheet_names)
+                raw_df = workbook.parse(pool_sheet)
+                selected_sheet = pool_sheet
+                method: Literal["explicit", "auto"] = "explicit"
+        else:
+            with pd.ExcelFile(path) as workbook:
+                sheet_names = list(workbook.sheet_names)
+                if not sheet_names:
+                    raise ValueError(f"هیچ شیتی در فایل {path} یافت نشد.")
+                selected_sheet = next(
+                    (name for name in sheet_names if name.lower() != "matrix"),
+                    sheet_names[0],
+                )
+                raw_df = workbook.parse(selected_sheet)
+                method = "auto"
+        detection = SimpleNamespace(
+            pool_type=pool_type,
+            selected_sheet=selected_sheet,
+            detection_method=method,
+            confidence=1.0,
+            evidence={"path": str(path), "sheets": sheet_names},
+        )
     normalized = import_mentor_pool_from_dataframe(
         raw_df,
         db=db,
