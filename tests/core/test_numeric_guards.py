@@ -9,12 +9,15 @@ from app.core.common.errors import ContractIssue
 
 
 def test_count_null_school_codes_uses_first_duplicate_column() -> None:
-    matrix = pd.DataFrame({"کد مدرسه": [0, 0, 1]})
-    matrix.insert(1, "کد مدرسه", [1, 1, 1], allow_duplicates=True)
+    # The first "کد مدرسه" column contains valid numerics, nulls, and non-numeric strings
+    # to ensure all are handled correctly. The second is ignored.
+    matrix = pd.DataFrame({"کد مدرسه": [0, "bad", 1, None, 0.0]})
+    matrix.insert(1, "کد مدرسه", [1, 1, 1, 1, 1], allow_duplicates=True)
 
     nulls = _count_null_school_codes(matrix, "کد مدرسه")
 
-    assert nulls == 2
+    # Expects 4 nulls: 0, "bad" (coerced to NaN), None (coerced to NaN), and 0.0
+    assert nulls == 4
 
 
 def test_capacity_contract_ignores_duplicate_numeric_columns() -> None:
