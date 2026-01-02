@@ -34,6 +34,7 @@ __all__ = [
     "coerce_semantics",
     "canonicalize_headers",
     "ensure_series",
+    "to_numeric_1d",
     "collect_aliases_for",
     "accepted_synonyms",
     "parse_header_mode",
@@ -82,6 +83,21 @@ def ensure_series(values: pd.Series | pd.DataFrame) -> pd.Series:
             return pd.Series([pd.NA] * len(values), index=values.index, dtype="object")
         return values.iloc[:, 0]
     return values
+
+
+def to_numeric_1d(
+    values: pd.Series | pd.DataFrame,
+    *,
+    errors: Literal["ignore", "raise", "coerce"] = "coerce",
+) -> pd.Series:
+    """تبدیل امن به عدد با تضمین ورودی یک‌بعدی.
+
+    با استفاده از :func:`ensure_series` از خطای pandas هنگام تبدیل
+    DataFrame چندستونه جلوگیری می‌کند و همواره نخستین ستون را مبنا قرار می‌دهد.
+    """
+
+    series = ensure_series(values)
+    return pd.to_numeric(series, errors=errors)
 
 
 def dedupe_columns(df: pd.DataFrame, *, copy: bool = True) -> pd.DataFrame:

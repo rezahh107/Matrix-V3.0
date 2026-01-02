@@ -58,6 +58,7 @@ from app.core.common.columns import (
     ensure_required_columns,
     ensure_series,
     resolve_aliases,
+    to_numeric_1d,
 )
 from app.core.common.domain import (
     COL_CENTER as JOIN_COL_CENTER,
@@ -956,6 +957,13 @@ def safe_int_column(df: pd.DataFrame, col: str, default: int = 0) -> pd.Series:
     if default is not None:
         result = result.fillna(int(default))
     return result
+
+
+def _count_null_school_codes(matrix: pd.DataFrame, school_code_col: str) -> int:
+    if school_code_col not in matrix.columns:
+        return 0
+    school_codes_numeric = to_numeric_1d(matrix[school_code_col], errors="coerce")
+    return int((school_codes_numeric.fillna(0) == 0).sum())
 
 
 def safe_int_value(value: Any, default: int = 0) -> int:
@@ -2295,11 +2303,7 @@ def build_matrix(
     finance_col = cfg.policy.stage_column("finance")
     center_col = cfg.policy.stage_column("center")
 
-    if school_code_col in matrix.columns:
-        school_codes_numeric = pd.to_numeric(matrix[school_code_col], errors="coerce")
-        null_school_codes = int((school_codes_numeric.fillna(0) == 0).sum())
-    else:
-        null_school_codes = 0
+    null_school_codes = _count_null_school_codes(matrix, school_code_col)
 
     qa_breadcrumbs.append(
         QABreadcrumb(
