@@ -34,6 +34,7 @@ class HeaderResolver:
             required={"mentor": self._registry.required_fields},
             critical_required={"mentor": self._registry.required_fields},
             critical_fields={"mentor": critical_fields},
+            conflict_tolerant_aliases={"mentor": {"mentor_id": {"mentor_code"}}},
         )
 
     def resolve(self, df: pd.DataFrame) -> HeaderResolutionResult:

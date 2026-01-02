@@ -162,6 +162,17 @@ def test_pipeline_handles_canonical_mentor_id_with_alias_column() -> None:
     assert "mentor_code" not in result.build_result.pool.columns
 
 
+def test_pipeline_accepts_alias_only_mentor_id_column() -> None:
+    payload = _make_simple_df().drop(columns=["mentor_id"])
+    payload["mentor_code"] = ["m1", "m2"]
+
+    pipeline = MentorPipelineV3(policy=policy.config, reference_mode="excel")
+    result = pipeline.run(payload)
+
+    assert result.can_continue
+    assert list(result.build_result.pool["mentor_id"]) == ["m1", "m2"]
+
+
 def test_pipeline_trace_records_stage_counts() -> None:
     payload = _make_simple_df()
     pipeline = MentorPipelineV3(

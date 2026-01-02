@@ -75,6 +75,9 @@ class StudentPipelineV3:
             required={"report": list(policy.join_keys)},
             critical_required={"report": set(policy.join_keys)},
             critical_fields={"report": set(policy.join_keys)},
+            conflict_tolerant_aliases={
+                "report": {"مالی حکمت بنیاد": {"وضعیت ثبت نام"}}
+            },
         )
 
     def run_from_excel(self, path: Path) -> StudentPipelineResult:
