@@ -409,6 +409,9 @@ def analyze_pool_alignment_batch(
     """Run alignment analysis for a deterministic subset of students."""
 
     resolved_policy = policy or load_policy()
+    if candidate_pool.attrs:
+        candidate_pool = candidate_pool.copy(deep=False)
+        candidate_pool.attrs.clear()
     if "student_id" in students.columns:
         ordered_students = students.sort_values("student_id", kind="stable")
     else:

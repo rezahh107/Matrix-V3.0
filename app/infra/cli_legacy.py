@@ -11,6 +11,12 @@
     ...           "config/policy.json"])  # doctest: +SKIP
 """
 
+# Program boundaries:
+# - Pool Builder commands (build-matrix, import-mentors) may consume Inspactor workbooks
+#   to construct mentor pools.
+# - Allocation/QA commands (allocate, preflight-unknowns, rule-engine) are matrix-only
+#   and must never fall back to Inspactor sheets.
+
 from __future__ import annotations
 
 import argparse
@@ -19,6 +25,7 @@ import json
 import logging
 import platform
 import sys
+import os
 from collections.abc import Callable, Hashable, Mapping, Sequence
 from dataclasses import asdict
 from datetime import UTC, datetime
@@ -1229,16 +1236,21 @@ def _resolve_mentor_pool_frame(
     db: LocalDatabase | None,
     pool_arg: str = "inspactor",
     pool_source: str = "inspactor",
+    matrix_only: bool = False,
 ) -> tuple[pd.DataFrame, dict[str, str], dict[str, float]]:
-    """بارگذاری استخر منتورها از مسیر فایل یا کش SQLite."""
+    """Load mentor pool from file or SQLite cache.
 
-    pool_type_arg = getattr(args, "pool_type", pool_source)
+    Allocation/QA paths MUST pass ``matrix_only=True`` to enforce the matrix-only
+    contract. Pool-builder paths may keep ``matrix_only=False`` to allow
+    Inspactor inputs via the mentor pipeline.
+    """
+
+    pool_type_arg = getattr(args, "pool_type", "matrix" if matrix_only else "inspactor")
     pool_sheet = getattr(args, "pool_sheet", None)
     path_text = getattr(args, pool_arg, None)
 
     if path_text:
         pool_path = Path(path_text)
-        pool_type: str
         detection: pool_loader.PoolDetectionResult | None = None
         ui_overrides: dict[str, object] = getattr(args, "_ui_overrides", {}) or {}
         user_settings_payload = getattr(args, "_user_settings", None)
@@ -1248,24 +1260,45 @@ def _resolve_mentor_pool_frame(
             resolved_settings = _resolve_user_settings(ui_overrides)
         trace_enabled = resolved_settings.enable_mentor_trace_debug
 
-        def _load_raw(resolved_type: str) -> pd.DataFrame:
+        def _load_matrix_raw() -> pd.DataFrame:
             nonlocal detection
-            raw_df, detection = pool_loader.load_pool_with_detection(
-                pool_path, pool_type=resolved_type, pool_sheet=pool_sheet
-            )
+            try:
+                raw_df, detection = pool_loader.load_pool_with_detection(
+                    pool_path, pool_type="matrix", pool_sheet=pool_sheet
+                )
+            except pool_loader.MatrixPoolRequiredError as exc:
+                sheets = exc.sheets
+                hint = ""
+                if any("inspactor" in str(name).lower() for name in sheets):
+                    hint = (
+                        " This file looks like an inspactor workbook; allocation requires the matrix pool output file."
+                    )
+                message = (
+                    f"This Allocation program requires a mentor pool workbook containing a sheet named 'matrix'. "
+                    f"Please provide the matrix pool file. File: {pool_path} | Sheets: {sheets}.{hint}"
+                )
+                raise SystemExit(message)
             return raw_df
 
-        if pool_type_arg == "auto" and pool_sheet:
-            pool_type = "matrix" if pool_sheet == "matrix" else "inspactor"
-            raw_df = _load_raw(pool_type)
-        elif pool_type_arg == "auto":
-            pool_type = "inspactor"
-            raw_df = _load_raw(pool_type)
+        def _load_inspactor_raw() -> pd.DataFrame:
+            with pd.ExcelFile(pool_path) as excel:
+                sheet_to_parse = pool_sheet or excel.sheet_names[0]
+                return excel.parse(sheet_to_parse)
+
+        if matrix_only:
+            if pool_type_arg and pool_type_arg != "matrix":
+                raise SystemExit("pool-type باید فقط 'matrix' باشد.")
+            if pool_sheet and str(pool_sheet).lower() != "matrix":
+                raise SystemExit("pool-sheet باید 'matrix' باشد.")
+            raw_df = _load_matrix_raw()
+            pool_type = "matrix"
         else:
-            if pool_type_arg not in {"inspactor", "matrix"}:
-                raise ValueError("pool-type باید inspactor یا matrix باشد.")
-            pool_type = pool_type_arg
-            raw_df = _load_raw(pool_type)
+            if pool_type_arg == "matrix":
+                raw_df = _load_matrix_raw()
+                pool_type = "matrix"
+            else:
+                pool_type = pool_type_arg or "inspactor"
+                raw_df = _load_inspactor_raw()
 
         pool_source_value = pool_source if pool_source != "auto" else pool_type
         if db:
@@ -1305,6 +1338,13 @@ def _resolve_mentor_pool_frame(
         if detection is not None:
             df.attrs["pool_detection"] = detection
         df.attrs["pool_source"] = pool_source_value
+        if os.environ.get("ALLOC_DEBUG") and matrix_only:
+            raw_rows = getattr(detection, "evidence", {}).get("raw_row_count") if detection else raw_df.shape[0]
+            selected_sheet = getattr(detection, "selected_sheet", "?")
+            print(
+                f"[ALLOC_DEBUG] mentor_pool path={pool_path} sheet={selected_sheet} "
+                f"raw_rows={raw_rows} canonical_rows={df.shape[0]}"
+            )
         inputs = {pool_arg: str(pool_path)}
         inputs_mtime = {pool_arg: pool_path.stat().st_mtime}
         return df, inputs, inputs_mtime
@@ -2904,9 +2944,13 @@ def _run_preflight_unknowns(
     db = _resolve_local_db(args)
     try:
         students_df, _, _ = _resolve_students_frame(args, policy, db=db)
-        pool_source_arg = getattr(args, "pool_type", "inspactor")
         pool_df, _, _ = _resolve_mentor_pool_frame(
-            args, policy, db=db, pool_arg="pool", pool_source=pool_source_arg
+            args,
+            policy,
+            db=db,
+            pool_arg="pool",
+            pool_source="matrix",
+            matrix_only=True,
         )
     except JoinKeyValidationError as exc:
         issues = _issues_from_join_validation(exc.result)
@@ -3501,15 +3545,23 @@ def _run_allocate(args: argparse.Namespace, policy: PolicyConfig, progress: Prog
 
     progress(0, "loading inputs")
     students_df, student_inputs, _ = _resolve_students_frame(args, policy, db=db)
-    pool_source_arg = getattr(args, "pool_type", "inspactor")
     pool_df, pool_inputs, _ = _resolve_mentor_pool_frame(
-        args, policy, db=db, pool_arg="pool", pool_source=pool_source_arg
+        args,
+        policy,
+        db=db,
+        pool_arg="pool",
+        pool_source="matrix",
+        matrix_only=True,
     )
     detection = pool_df.attrs.get("pool_detection")
     detection_payload = asdict(detection) if detection is not None else None
     pool_source = getattr(detection, "pool_type", None) or pool_df.attrs.get(
-        "pool_source", pool_source_arg
+        "pool_source", "matrix"
     )
+    if pool_df.attrs:
+        pool_df = pool_df.copy(deep=False)
+        pool_df.attrs.clear()
+        pool_df.attrs["pool_source"] = pool_source
 
     students_base, pool_base = _prepare_allocation_frames(
         students_df,
@@ -3564,6 +3616,9 @@ def _run_rule_engine(args: argparse.Namespace, policy: PolicyConfig, progress: P
     pool_df = _load_matrix_candidate_pool(matrix_path, policy)
     detection = pool_df.attrs.get("pool_detection")
     detection_payload = asdict(detection) if detection is not None else None
+    if pool_df.attrs:
+        pool_df = pool_df.copy(deep=False)
+        pool_df.attrs.clear()
 
     students_base, pool_base = _prepare_allocation_frames(
         students_df,
@@ -3700,12 +3755,12 @@ def _build_parser() -> argparse.ArgumentParser:
         "--pool-type",
         choices=("inspactor", "matrix"),
         default="inspactor",
-        help="نوع استخر منتورها برای انتخاب شیت ورودی (شیت 'matrix' خروجی rule-engine است)",
+        help="نوع استخر منتورها برای ساخت ماتریس (پیش‌فرض inspactor)",
     )
     build_cmd.add_argument(
         "--pool-sheet",
         required=False,
-        help="نام شیت ورودی استخر (اختیاری؛ پیش‌فرض بر اساس شناسایی خودکار)",
+        help="نام شیت ورودی استخر (برای matrix باید 'matrix' باشد)",
     )
     build_cmd.add_argument(
         "--schools",
@@ -3778,17 +3833,19 @@ def _build_parser() -> argparse.ArgumentParser:
         "import-mentors",
         help="ورود Inspactor/MentorPool و ذخیرهٔ کش منتورها در SQLite",
     )
-    import_mentors_cmd.add_argument("--inspactor", required=True, help="مسیر فایل Inspactor")
+    import_mentors_cmd.add_argument(
+        "--inspactor", required=True, help="مسیر فایل Inspactor"
+    )
     import_mentors_cmd.add_argument(
         "--pool-type",
         choices=("inspactor", "matrix"),
         default="inspactor",
-        help="نوع استخر منتورها برای انتخاب شیت ورودی (شیت 'matrix' تنها با این گزینه انتخاب می‌شود)",
+        help="نوع استخر منتورها برای ورود به کش (پیش‌فرض inspactor)",
     )
     import_mentors_cmd.add_argument(
         "--pool-sheet",
         required=False,
-        help="نام شیت ورودی استخر (اختیاری؛ پیش‌فرض بر اساس شناسایی خودکار)",
+        help="نام شیت ورودی استخر (برای matrix باید 'matrix' باشد)",
     )
     _add_local_db_args(import_mentors_cmd)
 
@@ -3838,14 +3895,14 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     alloc_cmd.add_argument(
         "--pool-type",
-        choices=("inspactor", "matrix"),
-        default="inspactor",
-        help="نوع استخر منتورها برای انتخاب شیت ورودی (شیت خروجی rule-engine با گزینه matrix)",
+        choices=("matrix",),
+        default="matrix",
+        help="نوع استخر منتورها (تنها شیت 'matrix' مجاز است)",
     )
     alloc_cmd.add_argument(
         "--pool-sheet",
         required=False,
-        help="نام شیت ورودی استخر (اختیاری؛ پیش‌فرض بر اساس شناسایی خودکار)",
+        help="نام شیت ورودی استخر (فقط 'matrix' مجاز است)",
     )
     alloc_cmd.add_argument("--output", required=True, help="مسیر Excel خروجی تخصیص")
     alloc_cmd.add_argument(
@@ -3962,14 +4019,14 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     preflight_cmd.add_argument(
         "--pool-type",
-        choices=("inspactor", "matrix"),
-        default="inspactor",
-        help="نوع استخر منتورها برای انتخاب شیت ورودی",
+        choices=("matrix",),
+        default="matrix",
+        help="نوع استخر منتورها (تنها شیت 'matrix' مجاز است)",
     )
     preflight_cmd.add_argument(
         "--pool-sheet",
         required=False,
-        help="نام شیت ورودی استخر (اختیاری؛ پیش‌فرض بر اساس شناسایی خودکار)",
+        help="نام شیت ورودی استخر (فقط 'matrix' مجاز است)",
     )
     preflight_cmd.add_argument(
         "--output",
@@ -4165,12 +4222,14 @@ def main(
             db = _resolve_local_db(args)
             if db is None:
                 raise ValueError("برای import-mentors باید --local-db مشخص شود.")
-            pool_type_val = getattr(args, "pool_type", "inspactor")
+            pool_type_val = getattr(args, "pool_type", "matrix")
             pool_sheet = getattr(args, "pool_sheet", None)
             pool_path = Path(args.inspactor)
-            if pool_type_val not in {"inspactor", "matrix"}:
-                raise ValueError("pool-type باید inspactor یا matrix باشد.")
-            resolved_pool_type = "matrix" if pool_sheet == "matrix" else pool_type_val
+            if pool_type_val != "matrix":
+                raise SystemExit("pool-type باید فقط 'matrix' باشد.")
+            if pool_sheet and pool_sheet.lower() != "matrix":
+                raise SystemExit("pool-sheet باید 'matrix' باشد.")
+            resolved_pool_type = "matrix"
             resolved_pool_source = resolved_pool_type
             import_mentor_pool_from_excel(
                 pool_path,
