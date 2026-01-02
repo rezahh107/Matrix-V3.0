@@ -40,7 +40,7 @@ from .common.join_keys import (
     school_mask_series,
     validate_selected_mentor_join_keys,
 )
-from .common.join_resolver import JoinKeyResolver, resolve_join_key_sources
+from .common.join_resolver import EffectiveJoinKeys, JoinKeyResolver, resolve_join_key_sources
 from .common.ranking import (
     HeapRankingManager,
     MentorCapacityState,
@@ -92,6 +92,13 @@ ProgressFn = Callable[[int, str], None]
 
 apply_join_filters = _apply_join_filters
 
+_MANAGER_CENTER_SOURCES: frozenset[str] = frozenset(
+    {
+        "manager_exact",
+        "manager_substring",
+        "manager_wildcard",
+    }
+)
 
 @dataclass
 class ProgressReporter:
@@ -1176,30 +1183,27 @@ def _collect_join_key_map(
         column, invalid_value = next(iter(invalid_map.items()))
         raise JoinKeyDataInvalidError(column, invalid_value, join_map)
 
-    _apply_effective_center_to_join_map(student, policy, join_map)
-
     return join_map, tuple(missing_columns)
 
 
-def _apply_effective_center_to_join_map(
-    student: Mapping[str, object],
-    policy: PolicyConfig,
+def _materialize_effective_center_in_join_map(
     join_map: dict[str, int],
+    *,
+    policy: PolicyConfig,
+    effective_center: EffectiveJoinKeys,
 ) -> None:
     center_column = policy.stage_column("center")
     normalized = _normalize_join_key_name(center_column)
     center_value = join_map.get(normalized)
     if center_value != 0:
         return
-    resolver = JoinKeyResolver(policy)
-    effective = resolver.resolve_center(student, student_join_map=join_map)
     if (
-        effective.center_code is None
-        or effective.center_code == 0
-        or effective.center_source not in {"manager_exact", "manager_substring"}
+        effective_center.center_code is None
+        or effective_center.center_code == 0
+        or effective_center.center_source not in _MANAGER_CENTER_SOURCES
     ):
         return
-    join_map[normalized] = int(effective.center_code)
+    join_map[normalized] = int(effective_center.center_code)
 
 
 def _canonical_student_id(value: object) -> str:
@@ -1871,10 +1875,22 @@ def allocate_student(
         )
         log["initial_candidate_count"] = initial_candidates
         return AllocationResult(None, trace, log)
+    resolver = JoinKeyResolver(policy, unknown_channel=unknown_channel)
+    effective_center = resolver.resolve_center(
+        student,
+        student_join_map=join_map,
+    )
     join_sources = resolve_join_key_sources(
         student,
         policy=policy,
         student_join_map=join_map,
+    )
+    if effective_center.center_source in _MANAGER_CENTER_SOURCES:
+        join_sources = {**join_sources, "center_source": effective_center.center_source}
+    _materialize_effective_center_in_join_map(
+        join_map,
+        policy=policy,
+        effective_center=effective_center,
     )
 
     if pool_state_view is not None:
@@ -1882,12 +1898,8 @@ def allocate_student(
 
     progress(5, "prefilter")
 
-    resolver = JoinKeyResolver(policy, unknown_channel=unknown_channel)
     eligibility_spec = EligibilitySpec(
-        effective_join_keys=resolver.resolve_center(
-            student,
-            student_join_map=join_map,
-        ),
+        effective_join_keys=effective_center,
         finance_keys=resolver.resolve_finance(
             student,
             student_join_map=join_map,

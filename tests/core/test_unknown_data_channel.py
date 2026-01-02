@@ -5,6 +5,7 @@ from dataclasses import replace
 import pandas as pd
 import pytest
 
+from app.core.allocate_students import allocate_student
 from app.core.common.join_resolver import JoinKeyResolver
 from app.core.common.unknown_data_channel import (
     UnknownDataChannel,
@@ -57,6 +58,50 @@ def test_unknown_manager_wildcard_policy_records_issue() -> None:
     assert result.center_source == "manager_wildcard"
     assert channel.issues
     assert channel.issues[0].code == "UNKNOWN_MANAGER_WILDCARD"
+
+
+def test_allocate_student_reports_unknown_manager_once() -> None:
+    policy = load_policy()
+    center_management = replace(policy.center_management, unknown_manager_mode="issue")
+    policy = replace(
+        policy,
+        center_map={"مدیر الف": 1, "*": 0},
+        center_management=center_management,
+    )
+    pool = pd.DataFrame(
+        {
+            "پشتیبان": ["mentor"],
+            "کد کارمندی پشتیبان": ["EMP-01"],
+            "کدرشته": [27],
+            "گروه آزمایشی": [27],
+            "جنسیت": [1],
+            "دانش آموز فارغ": [0],
+            "مرکز گلستان صدرا": [0],
+            "مالی حکمت بنیاد": [0],
+            "کد مدرسه": [3581],
+            "remaining_capacity": [1],
+            "occupancy_ratio": [0.0],
+            "allocations_new": [0],
+        }
+    )
+    student = {
+        "student_id": "STD-UNKNOWN",
+        "کدرشته": 27,
+        "گروه آزمایشی": 27,
+        "جنسیت": 1,
+        "دانش آموز فارغ": 0,
+        "مرکز گلستان صدرا": 0,
+        "مالی حکمت بنیاد": 0,
+        "کد مدرسه": 3581,
+        "manager_name": "ناشناخته",
+    }
+    channel = UnknownDataChannel(strict=False)
+
+    allocate_student(student, pool, policy=policy, unknown_channel=channel)
+
+    unknown_issues = [issue for issue in channel.issues if issue.code == "UNKNOWN_MANAGER_NAME"]
+    assert unknown_issues
+    assert len(unknown_issues) == 1
 
 
 @pytest.mark.parametrize("strict", [True, False])

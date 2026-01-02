@@ -10,6 +10,7 @@ from app.core.allocate_students import (
     _canonical_stage_counts,
     _collect_join_key_map,
     _filter_candidates_by_join_map,
+    _materialize_effective_center_in_join_map,
 )
 from app.core.common.filters import (
     apply_join_filters,
@@ -22,6 +23,7 @@ from app.core.common.filters import (
     filter_by_type,
 )
 from app.core.common.isin_guard import isin_mask
+from app.core.common.join_resolver import JoinKeyResolver
 from app.core.common.types import CANONICAL_TRACE_ORDER, TraceStageName
 from app.core.policy_loader import PolicyConfig, load_policy
 
@@ -290,6 +292,13 @@ def analyze_pool_alignment_for_student(
     resolved_policy = policy or load_policy()
     stage_counts: StageCounts = _empty_stage_counts()
     join_map, missing_columns = _collect_join_key_map(student, resolved_policy)
+    resolver = JoinKeyResolver(resolved_policy)
+    effective_center = resolver.resolve_center(student, student_join_map=join_map)
+    _materialize_effective_center_in_join_map(
+        join_map,
+        policy=resolved_policy,
+        effective_center=effective_center,
+    )
     join_key_values = _build_join_key_values(join_map, resolved_policy)
 
     candidate_count_initial = int(candidate_pool.shape[0])
