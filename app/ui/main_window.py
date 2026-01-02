@@ -145,15 +145,16 @@ def _extract_origin_hint(exc: BaseException) -> str | None:
 
 
 def _format_exception_details(exc: BaseException) -> str:
-    exc_type = type(exc).__name__
-    exc_message = str(exc)
-    headline = f"{exc_type}: {exc_message}" if exc_message else exc_type
     origin_hint = _extract_origin_hint(exc)
-    detail_lines: list[str] = [headline]
+    # Use traceback.format_exception to be explicit about which exception is being formatted.
+    # This also includes the exception type and message, so the headline is redundant.
+    tb_str = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+
+    detail_lines: list[str] = []
     if origin_hint:
         detail_lines.append(f"Origin: {origin_hint}")
-    detail_lines.append("")
-    detail_lines.append(traceback.format_exc())
+        detail_lines.append("")
+    detail_lines.append(tb_str)
     return "\n".join(detail_lines).strip()
 
 
