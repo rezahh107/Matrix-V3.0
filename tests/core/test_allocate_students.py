@@ -15,6 +15,7 @@ from app.core.allocate_students import (
 from app.core.common.filters import apply_join_filters
 from app.core.common.join_keys import normalize_join_key_name
 from app.core.policy_loader import load_policy
+from app.core.debug_pool_alignment import analyze_pool_alignment_for_student
 
 
 def test_filter_candidates_respects_finance_variants() -> None:
@@ -92,6 +93,24 @@ def test_collect_join_key_map_marks_missing_none_values() -> None:
     assert join_map[normalize_join_key_name(policy.stage_column("gender"))] == -1
 
 
+def test_collect_join_key_map_materializes_manager_center_when_zero() -> None:
+    policy = load_policy()
+    student = {
+        policy.stage_column("group"): 1,
+        policy.stage_column("gender"): int(policy.gender_codes.male.value),
+        policy.stage_column("graduation_status"): 0,
+        policy.stage_column("center"): 0,
+        policy.stage_column("finance"): 0,
+        policy.columns.school_code: 0,
+        "نام مدیر": "شهدخت کشاورز",
+    }
+
+    join_map, missing = _collect_join_key_map(student, policy)
+
+    assert not missing
+    assert join_map[normalize_join_key_name(policy.stage_column("center"))] == 1
+
+
 def test_allocate_student_returns_data_missing_for_blank_join_key() -> None:
     policy = load_policy()
     student = {
@@ -121,6 +140,36 @@ def test_allocate_student_returns_data_missing_for_blank_join_key() -> None:
     assert result.mentor_row is None
     assert result.log.get("error_type") == "DATA_MISSING"
     assert "Missing student join key data" in str(result.log.get("detailed_reason"))
+
+
+def test_analyze_pool_alignment_handles_manager_center_inference() -> None:
+    policy = load_policy()
+    student = {
+        policy.stage_column("group"): 1,
+        policy.stage_column("gender"): int(policy.gender_codes.male.value),
+        policy.stage_column("graduation_status"): 0,
+        policy.stage_column("center"): 0,
+        policy.stage_column("finance"): 0,
+        policy.columns.school_code: 0,
+        "student_id": "student-1",
+        "نام مدیر": "شهدخت کشاورز",
+    }
+    candidate_pool = pd.DataFrame(
+        {
+            "mentor_id": ["m-center-1"],
+            policy.stage_column("group"): [1],
+            policy.stage_column("gender"): [int(policy.gender_codes.male.value)],
+            policy.stage_column("graduation_status"): [0],
+            policy.stage_column("center"): [1],
+            policy.stage_column("finance"): [0],
+            policy.columns.school_code: [0],
+            policy.columns.remaining_capacity: [1],
+        }
+    )
+
+    report = analyze_pool_alignment_for_student(student, candidate_pool, policy=policy)
+
+    assert report["candidate_count_final"] > 0
 
 
 def test_filter_candidates_allows_global_school_without_wildcard() -> None:
