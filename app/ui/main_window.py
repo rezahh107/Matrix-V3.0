@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import re
 import threading
+import traceback
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from html import escape, unescape
@@ -130,6 +131,30 @@ logger = logging.getLogger(__name__)
 _LOG_FLUSH_THRESHOLD = 20
 _LOG_MAX_BLOCKS = 1200
 _LOG_TAG_RE = re.compile(r"<[^>]+>")
+
+
+def _extract_origin_hint(exc: BaseException) -> str | None:
+    traceback_data = exc.__traceback__
+    if traceback_data is None:
+        return None
+    frames = traceback.extract_tb(traceback_data)
+    if not frames:
+        return None
+    last_frame = frames[-1]
+    return f"{last_frame.filename}:{last_frame.lineno} in {last_frame.name}"
+
+
+def _format_exception_details(exc: BaseException) -> str:
+    exc_type = type(exc).__name__
+    exc_message = str(exc)
+    headline = f"{exc_type}: {exc_message}" if exc_message else exc_type
+    origin_hint = _extract_origin_hint(exc)
+    detail_lines: list[str] = [headline]
+    if origin_hint:
+        detail_lines.append(f"Origin: {origin_hint}")
+    detail_lines.append("")
+    detail_lines.append(traceback.format_exc())
+    return "\n".join(detail_lines).strip()
 
 
 @dataclass(frozen=True)
@@ -2756,7 +2781,11 @@ class MainWindow(QMainWindow):
         try:
             policy = get_cached_policy()
         except Exception as exc:
-            QMessageBox.warning(self, "Policy", f"خطا در بارگذاری Policy: {exc}")
+            self._show_exception_dialog(
+                title="Policy",
+                user_text="خطا در بارگذاری Policy.",
+                exc=exc,
+            )
             return
         for center in policy.center_management.centers:
             if center.id == 0:
@@ -2847,7 +2876,11 @@ class MainWindow(QMainWindow):
         try:
             canonical = canonicalize_headers(dataframe, header_mode="en")
         except Exception as exc:
-            QMessageBox.warning(self, "خواندن فایل", str(exc))
+            self._show_exception_dialog(
+                title="خواندن فایل",
+                user_text="امکان پردازش فایل ورودی نبود.",
+                exc=exc,
+            )
             return
 
         strict_year, fallback_year = detect_year_candidates(canonical)
@@ -2863,7 +2896,11 @@ class MainWindow(QMainWindow):
         try:
             policy = get_policy()
         except Exception as exc:  # pragma: no cover - خطای policy در UI
-            QMessageBox.warning(self, "بارگذاری سیاست", f"امکان خواندن policy نبود: {exc}")
+            self._show_exception_dialog(
+                title="بارگذاری سیاست",
+                user_text="امکان خواندن policy نبود.",
+                exc=exc,
+            )
             self._status.setText("بارگذاری policy ناموفق")
             return
 
@@ -3114,7 +3151,11 @@ class MainWindow(QMainWindow):
         try:
             path.write_text(content, encoding="utf-8")
         except OSError as exc:
-            QMessageBox.warning(self, "ذخیره گزارش", f"امکان ذخیرهٔ فایل نبود: {exc}")
+            self._show_exception_dialog(
+                title="ذخیره گزارش",
+                user_text="امکان ذخیرهٔ فایل نبود.",
+                exc=exc,
+            )
             return
         QMessageBox.information(self, "ذخیره گزارش", "گزارش با موفقیت ذخیره شد.")
 
@@ -3142,6 +3183,26 @@ class MainWindow(QMainWindow):
         box.setStandardButtons(QMessageBox.StandardButton.Ok)
         box.setModal(True)
         box.open()
+
+    def _show_exception_dialog(
+        self,
+        *,
+        title: str,
+        user_text: str,
+        exc: BaseException,
+        icon: QMessageBox.Icon = QMessageBox.Icon.Warning,
+    ) -> None:
+        """نمایش خطا همراه با جزئیات فنی برای دیباگ."""
+
+        if self._is_closing or not self._is_widget_valid(self):
+            return
+        box = QMessageBox(self)
+        box.setIcon(icon)
+        box.setWindowTitle(title)
+        box.setText(user_text)
+        box.setDetailedText(_format_exception_details(exc))
+        box.setStandardButtons(QMessageBox.StandardButton.Ok)
+        box.exec()
 
     def _normalize_log_message(self, message: str) -> str:
         """پاک‌سازی ورودی‌ها از برچسب‌های HTML برای نمایش متن ساده."""
