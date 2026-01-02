@@ -1176,7 +1176,30 @@ def _collect_join_key_map(
         column, invalid_value = next(iter(invalid_map.items()))
         raise JoinKeyDataInvalidError(column, invalid_value, join_map)
 
+    _apply_effective_center_to_join_map(student, policy, join_map)
+
     return join_map, tuple(missing_columns)
+
+
+def _apply_effective_center_to_join_map(
+    student: Mapping[str, object],
+    policy: PolicyConfig,
+    join_map: dict[str, int],
+) -> None:
+    center_column = policy.stage_column("center")
+    normalized = _normalize_join_key_name(center_column)
+    center_value = join_map.get(normalized)
+    if center_value != 0:
+        return
+    resolver = JoinKeyResolver(policy)
+    effective = resolver.resolve_center(student, student_join_map=join_map)
+    if (
+        effective.center_code is None
+        or effective.center_code == 0
+        or effective.center_source not in {"manager_exact", "manager_substring"}
+    ):
+        return
+    join_map[normalized] = int(effective.center_code)
 
 
 def _canonical_student_id(value: object) -> str:
