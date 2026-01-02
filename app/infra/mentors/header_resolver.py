@@ -28,10 +28,12 @@ class HeaderResolver:
     def __init__(self, registry: FieldRegistry, *, header_mode: HeaderMode = "fa") -> None:
         self._registry = registry
         self._header_mode = header_mode
+        critical_fields = self._critical_fields()
         self._pipeline = HeaderPipelineV3(
             alias_registry={"mentor": self._registry.header_aliases},
             required={"mentor": self._registry.required_fields},
             critical_required={"mentor": self._registry.required_fields},
+            critical_fields={"mentor": critical_fields},
         )
 
     def resolve(self, df: pd.DataFrame) -> HeaderResolutionResult:
@@ -65,6 +67,17 @@ class HeaderResolver:
     def _missing_fields(self, columns: list[str] | pd.Index) -> list[str]:
         column_set = {col for col in columns}
         return [field for field in self._registry.required_fields if field not in column_set]
+
+    def _critical_fields(self) -> set[str]:
+        return {
+            *self._registry.required_fields,
+            "capacity_limit",
+            "capacity_current",
+            "capacity_special",
+            "assigned_baseline",
+            "allocations_new",
+            "remaining_capacity",
+        }
 
     def _resolve_school_binding_columns(
         self,

@@ -58,6 +58,7 @@ class HeaderPipelineV3:
         alias_registry: Mapping[str, Mapping[str, str]] | None = None,
         required: Mapping[str, Iterable[str]] | None = None,
         critical_required: Mapping[str, Iterable[str]] | None = None,
+        critical_fields: Mapping[str, Iterable[str]] | None = None,
     ) -> None:
         self._alias_registry = self._normalize_registry(
             alias_registry or self._default_alias_registry()
@@ -66,11 +67,15 @@ class HeaderPipelineV3:
         self._critical_required = {
             key: {value for value in values} for key, values in (critical_required or {}).items()
         }
+        self._critical_fields = {
+            key: {value for value in values} for key, values in (critical_fields or {}).items()
+        }
 
     def resolve(self, df: pd.DataFrame, source: str) -> HeaderResolution:
         normalized_aliases = self._alias_registry.get(source, {})
         issues: list[HeaderIssue] = []
         collisions: dict[str, list[str]] = defaultdict(list)
+        critical_fields = self._critical_fields.get(source, set())
 
         for column in df.columns:
             normalized = _normalize_header(str(column))
@@ -138,9 +143,12 @@ class HeaderPipelineV3:
                     resolution = "mentor_id alias merge (canonical preferred)"
                     if canonical not in conflict_counts and mentor_aliases:
                         _, conflict_count = self._coalesce_columns(df, mentor_aliases)
+                severity = "P1"
+                if conflict_count > 0 and canonical in critical_fields:
+                    severity = "P0"
                 issues.append(
                     HeaderIssue(
-                        severity="P1",
+                        severity=severity,
                         header=",".join(headers),
                         canonical_field=canonical,
                         message="AMBIGUOUS_HEADER",
