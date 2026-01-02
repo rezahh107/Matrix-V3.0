@@ -1323,6 +1323,7 @@ provides deterministic canonical import, and aligns code with LAW/TECH.
   - **Channel Layer:** هدرهای ورودی/خروجی در منابع مختلف (InspactorReport، Report، SchoolReport، DB/History/QA). هیچ هدر خامی بدون عبور از HeaderPipelineV3 قابل استفاده نیست.
   - HeaderPipelineV3 (FieldRegistry + HeaderResolver + ValueCanonicalizer + registry) تنها SSoT نگاشت `(channel, raw_header, raw_value) → (canonical_field, canonical_value)` است؛ هر hard-code خارج از این مسیر ممنوع است.
   - QA اجباری: هدر ناشناخته یا misspelled باید issue ساخت‌یافته (UNKNOWN_HEADER / UNMAPPED_HEADER) تولید کند، نه silent drop؛ نبود فیلدهای اجباری join-key همچنان P0 با `can_continue=false` است.
+  - **HEADER-DUP-01:** اگر چند هدر خام به یک فیلد canonical نگاشت شوند و مقدار ناسازگار داشته باشند، باید `AMBIGUOUS_HEADER` ثبت شود؛ برای فیلدهای critical (join keys + mentor_id + فیلدهای ظرفیت مانند `capacity_limit`/`allocations_new`/`remaining_capacity` بسته به کانال) شدت P0 است و `can_continue=false` می‌شود، در غیر این صورت P1/P2 و قابل ادامه.
   - **UNKNOWN-ASK-01:** هر مقدار ناشناخته باید یا از کانال‌های رسمی (HeaderPipelineV3، JoinKeyResolver،
     UnknownDataChannel، EligibilityChannel) عبور کند یا به Decision Required تبدیل شود؛
     گزارش JSON پایدار و دترمینیستیک باید در مرحلهٔ preflight تولید شود.

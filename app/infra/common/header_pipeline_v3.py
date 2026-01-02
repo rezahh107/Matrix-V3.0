@@ -58,6 +58,8 @@ class HeaderPipelineV3:
         alias_registry: Mapping[str, Mapping[str, str]] | None = None,
         required: Mapping[str, Iterable[str]] | None = None,
         critical_required: Mapping[str, Iterable[str]] | None = None,
+        critical_fields: Mapping[str, Iterable[str]] | None = None,
+        conflict_tolerant_aliases: Mapping[str, Mapping[str, Iterable[str]]] | None = None,
     ) -> None:
         self._alias_registry = self._normalize_registry(
             alias_registry or self._default_alias_registry()
@@ -66,11 +68,19 @@ class HeaderPipelineV3:
         self._critical_required = {
             key: {value for value in values} for key, values in (critical_required or {}).items()
         }
+        self._critical_fields = {
+            key: {value for value in values} for key, values in (critical_fields or {}).items()
+        }
+        self._conflict_tolerant_aliases = self._normalize_conflict_tolerant_aliases(
+            conflict_tolerant_aliases or {}
+        )
 
     def resolve(self, df: pd.DataFrame, source: str) -> HeaderResolution:
         normalized_aliases = self._alias_registry.get(source, {})
         issues: list[HeaderIssue] = []
         collisions: dict[str, list[str]] = defaultdict(list)
+        critical_fields = self._critical_fields.get(source, set())
+        tolerant_aliases = self._conflict_tolerant_aliases.get(source, {})
 
         for column in df.columns:
             normalized = _normalize_header(str(column))
@@ -138,9 +148,20 @@ class HeaderPipelineV3:
                     resolution = "mentor_id alias merge (canonical preferred)"
                     if canonical not in conflict_counts and mentor_aliases:
                         _, conflict_count = self._coalesce_columns(df, mentor_aliases)
+                severity = "P1"
+                if (
+                    conflict_count > 0
+                    and canonical in critical_fields
+                    and not self._is_conflict_tolerant(
+                        headers,
+                        canonical=canonical,
+                        tolerant_headers=tolerant_aliases.get(canonical, set()),
+                    )
+                ):
+                    severity = "P0"
                 issues.append(
                     HeaderIssue(
-                        severity="P1",
+                        severity=severity,
                         header=",".join(headers),
                         canonical_field=canonical,
                         message="AMBIGUOUS_HEADER",
@@ -257,6 +278,34 @@ class HeaderPipelineV3:
         for source, mapping in registry.items():
             normalized[source] = {_normalize_header(key): value for key, value in mapping.items()}
         return normalized
+
+    @staticmethod
+    def _normalize_conflict_tolerant_aliases(
+        aliases: Mapping[str, Mapping[str, Iterable[str]]]
+    ) -> dict[str, dict[str, set[str]]]:
+        normalized: dict[str, dict[str, set[str]]] = {}
+        for source, mappings in aliases.items():
+            normalized[source] = {
+                canonical: {_normalize_header(header) for header in headers}
+                for canonical, headers in mappings.items()
+            }
+        return normalized
+
+    @staticmethod
+    def _is_conflict_tolerant(
+        headers: Sequence[str],
+        *,
+        canonical: str,
+        tolerant_headers: set[str],
+    ) -> bool:
+        if not tolerant_headers:
+            return False
+        normalized_headers = {_normalize_header(header) for header in headers}
+        canonical_normalized = _normalize_header(canonical)
+        if canonical_normalized not in normalized_headers:
+            return False
+        allowed = {canonical_normalized, *tolerant_headers}
+        return normalized_headers.issubset(allowed)
 
     @staticmethod
     def _default_alias_registry() -> dict[str, dict[str, str]]:

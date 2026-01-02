@@ -197,3 +197,33 @@ def test_header_pipeline_resolves_join_key_collisions() -> None:
     assert isinstance(resolved, pd.Series)
     assert resolved.tolist() == [1, 2]
     assert any(issue.message == "AMBIGUOUS_HEADER" for issue in result.issues)
+
+
+def test_header_pipeline_non_critical_duplicates_are_non_blocking() -> None:
+    pipeline = HeaderPipelineV3(
+        alias_registry={"mentor": {"nickname": "nickname", "نام مستعار": "nickname"}},
+        critical_fields={"mentor": set()},
+    )
+    df = pd.DataFrame({"nickname": ["A"], "نام مستعار": ["B"]})
+
+    result = pipeline.resolve(df, source="mentor")
+    ambiguous = [issue for issue in result.issues if issue.message == "AMBIGUOUS_HEADER"]
+
+    assert result.can_continue
+    assert ambiguous
+    assert ambiguous[0].severity == "P1"
+
+
+def test_header_pipeline_conflicting_critical_duplicates_block() -> None:
+    pipeline = HeaderPipelineV3(
+        alias_registry={"mentor": {"mentor_id": "mentor_id", "employee_id": "mentor_id"}},
+        critical_fields={"mentor": {"mentor_id"}},
+    )
+    df = pd.DataFrame({"mentor_id": ["A"], "employee_id": ["B"]})
+
+    result = pipeline.resolve(df, source="mentor")
+    ambiguous = [issue for issue in result.issues if issue.message == "AMBIGUOUS_HEADER"]
+
+    assert not result.can_continue
+    assert ambiguous
+    assert ambiguous[0].severity == "P0"

@@ -293,6 +293,7 @@ conflict محسوب نمی‌شود.
 - **Channel** لایهٔ هدرهای منبع/خروجی است (InspactorReport، Report، SchoolReport، DB/History/QA)؛ هر هدر خام باید از مسیر HeaderPipelineV3 عبور کند.
 - HeaderPipelineV3 (FieldRegistry + HeaderResolver + ValueCanonicalizer + registry) تنها SSoT نگاشت `(channel, raw_header, raw_value) → (canonical_field, canonical_value)` است؛ هیچ کد دیگری مجاز به hard-code کردن هدر یا bypass این نگاشت نیست.
 - QA الزامی: هدر ناشناخته یا غلط‌املایی باید به QA ساخت‌یافته (UNKNOWN_HEADER / UNMAPPED_HEADER) تبدیل شود و بی‌صدا حذف نشود. کمبود فیلدهای اجباری join-key همچنان P0 و با `can_continue=false` است.
+- **HEADER-DUP-01:** اگر چند هدر خام به یک فیلد canonical نگاشت شوند و مقدار ناسازگار داشته باشند، باید `AMBIGUOUS_HEADER` ثبت شود؛ اگر فیلد canonical در فهرست critical باشد (join keys + mentor_id + فیلدهای ظرفیت مانند `capacity_limit`/`allocations_new`/`remaining_capacity` بسته به کانال)، شدت باید P0 باشد و `can_continue=false` شود. در غیر این صورت P1/P2 و قابل ادامه است.
 
 ---
 

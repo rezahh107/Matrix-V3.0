@@ -12,6 +12,7 @@ class SchoolHeaderResolver:
             alias_registry=HEADER_ALIASES_V3,
             required={"school": required_fields},
             critical_required={"school": required_fields},
+            critical_fields={"school": set(required_fields)},
         )
 
     def resolve(self, df: pd.DataFrame) -> HeaderResolution:
