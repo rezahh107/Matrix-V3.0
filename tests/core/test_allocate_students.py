@@ -8,14 +8,17 @@ from app.core.allocate_students import (
     _collect_join_key_map,
     _detect_pool_mismatch,
     _filter_candidates_by_join_map,
+    _materialize_effective_center_in_join_map,
     _merge_join_mismatches,
     allocate_batch,
     allocate_student,
 )
 from app.core.common.filters import apply_join_filters
 from app.core.common.join_keys import normalize_join_key_name
-from app.core.policy_loader import load_policy
+from app.core.common.join_resolver import JoinKeyResolver
+from app.core.common.unknown_data_channel import UnknownDataChannel
 from app.core.debug_pool_alignment import analyze_pool_alignment_for_student
+from app.core.policy_loader import load_policy
 
 
 def test_filter_candidates_respects_finance_variants() -> None:
@@ -106,6 +109,13 @@ def test_collect_join_key_map_materializes_manager_center_when_zero() -> None:
     }
 
     join_map, missing = _collect_join_key_map(student, policy)
+    resolver = JoinKeyResolver(policy, unknown_channel=UnknownDataChannel(strict=False))
+    effective_center = resolver.resolve_center(student, student_join_map=join_map)
+    _materialize_effective_center_in_join_map(
+        join_map,
+        policy=policy,
+        effective_center=effective_center,
+    )
 
     assert not missing
     assert join_map[normalize_join_key_name(policy.stage_column("center"))] == 1
