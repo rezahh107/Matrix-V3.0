@@ -12,7 +12,7 @@ from dataclasses import dataclass
 
 import pandas as pd
 
-from app.core.common.columns import canonicalize_headers
+from app.core.common.columns import canonicalize_headers, to_numeric_1d
 from app.core.common.isin_guard import isin_mask
 from app.core.common.types import CANONICAL_JOIN_KEYS
 from app.core.policy_loader import MentorPoolGovernanceConfig, MentorStatus
@@ -60,7 +60,7 @@ def _distribution_counts(frame: pd.DataFrame) -> dict[str, dict[int, int]]:
     for column in ("group_code", "gender", "graduation_status"):
         if column not in frame.columns:
             continue
-        series = pd.to_numeric(frame[column], errors="coerce").dropna().astype(int)
+        series = to_numeric_1d(frame[column], errors="coerce").dropna().astype(int)
         counts = series.value_counts().sort_index()
         distributions[column] = {int(key): int(value) for key, value in counts.items()}
     return distributions
@@ -69,7 +69,7 @@ def _distribution_counts(frame: pd.DataFrame) -> dict[str, dict[int, int]]:
 def _unique_mentor_ids(frame: pd.DataFrame) -> int | None:
     if "mentor_id" not in frame.columns:
         return None
-    series = pd.to_numeric(frame["mentor_id"], errors="coerce").dropna().astype(int)
+    series = to_numeric_1d(frame["mentor_id"], errors="coerce").dropna().astype(int)
     return int(series.nunique())
 
 
@@ -231,7 +231,7 @@ def filter_active_mentors(
 
     capacity_mask = pd.Series(True, index=canonical.index)
     if "remaining_capacity" in canonical.columns:
-        capacity_numeric = pd.to_numeric(canonical["remaining_capacity"], errors="coerce")
+        capacity_numeric = to_numeric_1d(canonical["remaining_capacity"], errors="coerce")
         capacity_mask = capacity_numeric > 0
 
     filtered_mask = active_mask & capacity_mask
@@ -371,9 +371,7 @@ def apply_mentor_pool_governance(
     status_canonical = canonical.loc[active_mask].copy()
     capacity_mask = pd.Series(True, index=status_canonical.index)
     if "remaining_capacity" in status_canonical.columns:
-        capacity_numeric = pd.to_numeric(
-            status_canonical["remaining_capacity"], errors="coerce"
-        )
+        capacity_numeric = to_numeric_1d(status_canonical["remaining_capacity"], errors="coerce")
         capacity_mask = capacity_numeric > 0
 
     filtered_mask = active_mask.copy()

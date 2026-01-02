@@ -8,6 +8,7 @@ from typing import Final
 import pandas as pd
 from pandas.api import types as pd_types
 
+from app.core.common.columns import to_numeric_1d
 from app.core.common.errors import ContractIssue, ContractViolationError
 from app.core.common.index_contract import assert_index_preserved, assert_no_new_labels
 from app.core.common.isin_guard import isin_mask
@@ -152,15 +153,15 @@ def _validate_capacity_contract(
             )
         )
         return
-    allocations_new = pd.to_numeric(pool_internal["allocations_new"], errors="coerce")
-    remaining_capacity = pd.to_numeric(pool_internal["remaining_capacity"], errors="coerce")
+    allocations_new = to_numeric_1d(pool_internal["allocations_new"], errors="coerce")
+    remaining_capacity = to_numeric_1d(pool_internal["remaining_capacity"], errors="coerce")
     assigned_baseline = (
-        pd.to_numeric(pool_internal["assigned_baseline"], errors="coerce")
+        to_numeric_1d(pool_internal["assigned_baseline"], errors="coerce")
         if "assigned_baseline" in pool_internal.columns
         else pd.Series([0] * len(pool_internal), index=pool_internal.index, dtype="int64")
     )
     capacity_limit = (
-        pd.to_numeric(pool_internal["capacity_limit"], errors="coerce")
+        to_numeric_1d(pool_internal["capacity_limit"], errors="coerce")
         if "capacity_limit" in pool_internal.columns
         else remaining_capacity.add(allocations_new, fill_value=0).add(
             assigned_baseline, fill_value=0
