@@ -20,13 +20,13 @@ from app.core.common.trace import JOIN_STAGE_SOURCE_KEYS
 from app.core.common.types import CANONICAL_TRACE_ORDER
 from app.core.pipeline import enrich_student_contacts
 from app.core.policy_loader import PolicyConfig
+from app.infra.common.header_pipeline_v3 import HeaderPipelineV3
 from app.infra.excel.common import (
     attach_contact_columns,
     enforce_text_columns,
     identify_code_headers,
 )
 from app.infra.io_utils import write_xlsx_atomic
-from app.infra.common.header_pipeline_v3 import HeaderPipelineV3
 from app.infra.mentors.pipeline_v3 import build_global_prefilter_trace_entry
 from app.infra.reference_mentors_repository import _POOL_QA_PAYLOAD_ATTR
 
@@ -41,6 +41,8 @@ __all__ = [
 
 
 DEFAULT_SABT_PROFILE_PATH = Path("docs/Report (4).xlsx")
+_HEKMAT_REGISTRATION_STATUS = 3
+_EMPTY_LANDLINE_PLACEHOLDER = "00000000000"
 _PROFILE_SHEET_NAME = "Sheet1"
 _HEADER_COLUMN = "عنوان ستون ها ورودی"
 _VALUE_COLUMN = "مقدار برای مپ کردن از اکسل ورودی"
@@ -350,9 +352,11 @@ def build_sabt_export_frame(
         for header in landline_headers:
             landline_series = ensure_series(export_data[header]).astype("string")
             empty_mask = landline_series.astype("string").str.strip().eq("") | landline_series.isna()
-            needs_fill = (registration_status == 3) & empty_mask
+            needs_fill = (registration_status == _HEKMAT_REGISTRATION_STATUS) & empty_mask
             if needs_fill.any():
-                landline_series = landline_series.mask(needs_fill, "00000000000")
+                landline_series = landline_series.mask(
+                    needs_fill, _EMPTY_LANDLINE_PLACEHOLDER
+                )
             export_data[header] = landline_series
 
     student_id_series = ensure_series(student_ids).astype("string").reset_index(drop=True)

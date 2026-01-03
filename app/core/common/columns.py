@@ -254,7 +254,6 @@ HEADER_ALIASES_V3: Mapping[str, Mapping[str, str]] = {
         "__source_index__": "__source_index__",
         "student_id": "student_id",
         "کدرشته": "کدرشته",
-        "کد رشته": "کدرشته",
         "group_code": "group_code",
         "کد رشته": "group_code",
         "گروه آزمایشی نهایی": "group_code",
