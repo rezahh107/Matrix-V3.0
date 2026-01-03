@@ -3251,7 +3251,7 @@ def _allocate_and_write(
             args, "export_profile_path", str(_DEFAULT_ALLOC_PROFILE_PATH)
         ) or str(_DEFAULT_ALLOC_PROFILE_PATH)
         students_for_export = students_spine.copy()
-        if export_profile_choice == "sabt" and args.sabt_output:
+        if export_profile_choice == "sabt":
             sabt_profile = load_sabt_export_profile(Path(export_profile_path))
             sabt_allocations_df = build_sabt_export_frame(
                 allocations_df,
@@ -3495,12 +3495,10 @@ def _allocate_and_write(
         # --- پایان پاک‌سازی ---
 
         progress(90, "writing outputs")
+        sheets["allocations"] = allocations_df
         if sabt_allocations_df is not None:
-            sheets["allocations"] = allocations_df
             sheets["allocations_sabt"] = sabt_allocations_df
             header_overrides["allocations_sabt"] = None
-        else:
-            sheets["allocations"] = allocations_df
         sheets["updated_pool"] = updated_pool_df
         sheets["logs"] = logs_df
         if resolved_settings.enable_trace_export:
