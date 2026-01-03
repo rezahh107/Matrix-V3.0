@@ -37,7 +37,15 @@ def test_allocations_sabt_phone_columns_roundtrip(tmp_path: Path) -> None:
 
     headers, rows, types = _read_sheet(output_path)
 
-    col_index = {name: idx for idx, name in enumerate(headers)}
+    col_index: dict[str, int] = {}
+    for idx, name in enumerate(headers):
+        col_index.setdefault(name, idx)
+        if isinstance(name, str) and " | " in name:
+            left, right = name.split(" | ", 1)
+            col_index.setdefault(left, idx)
+            col_index.setdefault(right, idx)
+
+    assert "تلفن منزل" in col_index
     expected_first_row = {
         "تلفن همراه داوطلب": "09300798195",
         "تلفن همراه پدر": "09906421042",
