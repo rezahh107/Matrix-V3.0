@@ -2764,6 +2764,37 @@ def _run_pool_alignment_preflight(
     preflight_df = pd.DataFrame(reports)
     if preflight_df.empty:
         return preflight_df
+    if os.environ.get("ALLOC_DEBUG"):
+        first = preflight_df.iloc[0]
+        stage_counts = first.get("stage_counts")
+        if isinstance(stage_counts, dict):
+            ordered_counts = [
+                ("initial", int(first.get("candidate_count_initial", 0) or 0)),
+                ("type", int(stage_counts.get("type", 0) or 0)),
+                ("group", int(stage_counts.get("group", 0) or 0)),
+                (
+                    "gender",
+                    int(stage_counts.get("gender", 0) or 0),
+                ),
+                (
+                    "graduation_status",
+                    int(stage_counts.get("graduation_status", 0) or 0),
+                ),
+                ("center", int(stage_counts.get("center", 0) or 0)),
+                ("finance", int(stage_counts.get("finance", 0) or 0)),
+                ("school", int(stage_counts.get("school", 0) or 0)),
+                (
+                    "capacity_gate",
+                    int(stage_counts.get("capacity_gate", 0) or 0),
+                ),
+                ("final", int(first.get("candidate_count_final", 0) or 0)),
+            ]
+            student_id = first.get("student_id") or "<missing>"
+            print(
+                "[ALLOC_DEBUG] preflight_stage_counts ",
+                f"student={student_id} "
+                + " ".join(f"{name}={count}" for name, count in ordered_counts),
+            )
     if "student_id" in preflight_df.columns:
         normalized_ids = _normalize_student_id(preflight_df["student_id"])
         missing_mask = _student_id_missing_mask(normalized_ids)

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import argparse
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pandas as pd
@@ -109,3 +112,54 @@ def test_matrix_allocation_parity(tmp_path: Path) -> None:
 
     unallocated = allocation_result.trace_extras.unallocated_summary
     assert unallocated is None or unallocated.empty
+
+
+def test_cli_matrix_allocation(tmp_path: Path) -> None:
+    output_path = tmp_path / "cli_allocation.xlsx"
+
+    cmd = [
+        sys.executable,
+        "-m",
+        "app.infra.cli_legacy",
+        "allocate",
+        "--students",
+        str(ROOT / "students.xlsx"),
+        "--pool",
+        str(ROOT / "0918.xlsx"),
+        "--pool-type",
+        "matrix",
+        "--pool-sheet",
+        "matrix",
+        "--policy",
+        "config/policy.json",
+        "--academic-year",
+        "1404",
+        "--counter-duplicate-strategy",
+        "assign-new",
+        "--output",
+        str(output_path),
+    ]
+    env = os.environ.copy()
+    env.setdefault("PYTHONUTF8", "1")
+
+    result = subprocess.run(
+        cmd,
+        check=False,
+        capture_output=True,
+        text=True,
+        env=env,
+        cwd=ROOT,
+    )
+
+    if result.returncode != 0:
+        raise AssertionError(
+            "CLI allocation failed",
+            result.returncode,
+            result.stdout,
+            result.stderr,
+        )
+
+    assert output_path.exists()
+    assert output_path.stat().st_size > 0
+    combined_output = (result.stdout or "") + (result.stderr or "")
+    assert "QA_RULE_POOL_COVERAGE_01" not in combined_output
