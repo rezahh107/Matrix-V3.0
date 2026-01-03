@@ -1,0 +1,12 @@
+description,rule_id,status,violations_count
+کنترل ظرفیت و نسبت اشغال منتورها,QA_RULE_ALLOC_01,PASS,0
+,QA_RULE_GOV_01,PASS,0
+,QA_RULE_HISTORY_CHANNEL_01,PASS,0
+سلامت ستون‌های join ماتریس,QA_RULE_JOIN_01,PASS,0
+,QA_RULE_MENTOR_TYPE_01,PASS,0
+ردیف تکراری روی کلید ترکیبی mentor_id و کلیدهای اتصال,QA_RULE_POOL_JOIN_01,PASS,0
+تفکیک منتورهای آزاد و مقید به مدرسه,QA_RULE_SCHOOL_01,PASS,0
+,QA_RULE_STATUS_DOMAIN_01,PASS,0
+تطابق شمار دانش‌آموز در ورودی/خروجی‌ها,QA_RULE_STU_01,PASS,0
+شمار دانش‌آموز به ازای هر منتور مطابق Inspactor/Allocation,QA_RULE_STU_02,PASS,0
+,QA_RULE_STU_BINDING_01,PASS,0

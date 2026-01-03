@@ -1,0 +1,2 @@
+invalid_count,invalid_ratio,message,passed,rule_id,total
+0,0,per-student allocation vs pool join-key equality,True,QA_RULE_ALLOC_JOIN_02,798

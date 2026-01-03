@@ -191,12 +191,15 @@ def test_cli_matrix_allocation(tmp_path: Path) -> None:
     ]
     env = os.environ.copy()
     env.setdefault("PYTHONUTF8", "1")
+    env.setdefault("PYTHONIOENCODING", "utf-8")
 
     result = subprocess.run(
         cmd,
         check=False,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         env=env,
         cwd=ROOT,
     )
