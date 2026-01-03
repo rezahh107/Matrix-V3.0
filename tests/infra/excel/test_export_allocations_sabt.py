@@ -290,6 +290,48 @@ def test_build_sabt_export_frame_preserves_registration_status_over_finance() ->
     assert export_df["وضعیت ثبت نام"].tolist() == [0, 1, 3]
 
 
+def test_build_sabt_export_frame_handles_policy_empty_sentinel() -> None:
+    allocations_df = pd.DataFrame(
+        {
+            "student_id": [1],
+            "mentor_id": ["M-1"],
+            "mentor_alias_code": ["A-1"],
+            "__source_index__": [0],
+        }
+    )
+    students_df = pd.DataFrame(
+        {
+            "student_id": [1],
+            "__source_index__": [0],
+            "نام": ["آراد"],
+        }
+    )
+    profile = [
+        AllocationExportColumn(
+            key="student_id",
+            header="کد ثبت نام",
+            source_kind="allocation",
+            source_field="student_id",
+            literal_value=None,
+            order=1,
+        ),
+        AllocationExportColumn(
+            key="empty_field",
+            header="ستون خالی",
+            source_kind="student",
+            source_field="خالی",
+            literal_value=None,
+            order=2,
+        ),
+    ]
+
+    export_df = build_sabt_export_frame(allocations_df, students_df, profile)
+
+    assert list(export_df.columns) == ["student_id", "کد ثبت نام", "ستون خالی"]
+    assert export_df["ستون خالی"].isna().all()
+    assert "خالی" not in export_df.attrs.get("missing_student_columns", [])
+
+
 def test_export_sabt_excel_headers_and_types(tmp_path: Path) -> None:
     allocations_df = pd.DataFrame(
         {

@@ -508,6 +508,9 @@ def _build_students_spine(
             "student_id باید یکتا باشد؛ نمونهٔ تکراری: " f"{sample}."
         )
 
+    if "__source_index__" not in students_en.columns:
+        students_en["__source_index__"] = pd.RangeIndex(len(students_en))
+
     return canonicalize_headers(students_en, header_mode=header_mode)
 
 
@@ -586,12 +589,20 @@ def _build_allocations_view(
     spine_en = canonicalize_headers(success_spine, header_mode="en").copy()
     spine_en["student_id"] = _normalize_student_id(spine_en["student_id"])
 
-    merged = spine_en[["student_id"]].merge(
+    merge_columns = ["student_id"]
+    include_spine_source_index = "__source_index__" not in alloc_en.columns and "__source_index__" in spine_en.columns
+    if include_spine_source_index:
+        merge_columns.append("__source_index__")
+
+    merged = spine_en[merge_columns].merge(
         alloc_en,
         on="student_id",
         how="left",
         validate="one_to_one",
     )
+
+    if "__source_index__" not in merged.columns and include_spine_source_index:
+        merged["__source_index__"] = spine_en["__source_index__"].reindex(merged.index)
 
     if merged["student_id"].isna().any():
         raise AllocationConsistencyError("allocations_df missing student_id values after alignment.")
@@ -3240,7 +3251,7 @@ def _allocate_and_write(
             args, "export_profile_path", str(_DEFAULT_ALLOC_PROFILE_PATH)
         ) or str(_DEFAULT_ALLOC_PROFILE_PATH)
         students_for_export = students_spine.copy()
-        if export_profile_choice == "sabt":
+        if export_profile_choice == "sabt" and args.sabt_output:
             sabt_profile = load_sabt_export_profile(Path(export_profile_path))
             sabt_allocations_df = build_sabt_export_frame(
                 allocations_df,
@@ -3248,6 +3259,8 @@ def _allocate_and_write(
                 profile=sabt_profile,
                 summary_df=trace_extras.summary_df if trace_extras else None,
             )
+
+        allocations_df = allocations_df.drop(columns=["__source_index__"], errors="ignore")
 
         # --- پاک‌سازی جامع خروجی قبل از نوشتن ---
         # اطمینان از معتبر بودن همه دیتافریم‌ها

@@ -43,6 +43,7 @@ __all__ = [
 DEFAULT_SABT_PROFILE_PATH = Path("docs/Report (4).xlsx")
 _HEKMAT_REGISTRATION_STATUS = 3
 _EMPTY_LANDLINE_PLACEHOLDER = "00000000000"
+_POLICY_EMPTY_SENTINEL_FA = "خالی"
 _PROFILE_SHEET_NAME = "Sheet1"
 _HEADER_COLUMN = "عنوان ستون ها ورودی"
 _VALUE_COLUMN = "مقدار برای مپ کردن از اکسل ورودی"
@@ -256,12 +257,20 @@ def build_sabt_export_frame(
         for column in profile:
             if column.source_kind == "allocation":
                 requested_field = column.source_field or column.header
+                if isinstance(requested_field, str) and requested_field.strip() == _POLICY_EMPTY_SENTINEL_FA:
+                    series = pd.Series(pd.NA, index=index, dtype="object")
+                    export_data[column.header] = series
+                    continue
                 canonical = pipeline.resolve_field(requested_field, "allocation")
                 if canonical is None or canonical not in alloc_resolved.columns:
                     missing_columns.add(requested_field)
                 series = pd.Series(pd.NA, index=index, dtype="object")
             elif column.source_kind == "student":
                 requested_field = column.source_field or column.header
+                if isinstance(requested_field, str) and requested_field.strip() == _POLICY_EMPTY_SENTINEL_FA:
+                    series = pd.Series(pd.NA, index=index, dtype="object")
+                    export_data[column.header] = series
+                    continue
                 canonical = pipeline.resolve_field(requested_field, "student")
                 if canonical is None or canonical not in students_resolved.columns:
                     missing_columns.add(requested_field)
@@ -343,6 +352,10 @@ def build_sabt_export_frame(
     for column in profile:
         if column.source_kind == "allocation":
             requested_field = column.source_field or column.header
+            if isinstance(requested_field, str) and requested_field.strip() == _POLICY_EMPTY_SENTINEL_FA:
+                series = pd.Series(pd.NA, index=alloc_resolved.index, dtype="object")
+                export_data[column.header] = series
+                continue
             canonical = pipeline.resolve_field(requested_field, "allocation")
             if canonical is None:
                 available = ", ".join(sorted(alloc_resolved.columns)[:5])
@@ -357,6 +370,10 @@ def build_sabt_export_frame(
                 series = ensure_series(alloc_resolved[canonical]).reindex(alloc_resolved.index)
         elif column.source_kind == "student":
             requested_field = column.source_field or column.header
+            if isinstance(requested_field, str) and requested_field.strip() == _POLICY_EMPTY_SENTINEL_FA:
+                series = pd.Series(pd.NA, index=alloc_resolved.index, dtype="object")
+                export_data[column.header] = series
+                continue
             canonical = pipeline.resolve_field(requested_field, "student")
             if canonical is None or canonical not in students_resolved.columns:
                 available = ", ".join(sorted(students_resolved.columns)[:5])

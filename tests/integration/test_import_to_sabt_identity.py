@@ -48,10 +48,10 @@ def test_allocations_sabt_and_reasons_preserve_identity() -> None:
     allocations, _, logs, trace = result
     summary_df = result.trace_extras.summary_df
     source_index_map = {
-        row["student_id"]: row["__source_index__"]
+        str(row["student_id"]): row["__source_index__"]
         for row in students[["student_id", "__source_index__"]].to_dict("records")
     }
-    allocations["__source_index__"] = allocations["student_id"].map(source_index_map)
+    allocations["__source_index__"] = allocations["student_id"].astype(str).map(source_index_map)
 
     profile = [
         AllocationExportColumn(
