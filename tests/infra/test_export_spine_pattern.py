@@ -19,6 +19,7 @@ def test_allocations_sabt_is_key_based_and_matches_logs_success() -> None:
             "student_id": ["S-1", "S-2", "S-3"],
             "کد ثبت نام0": [101, 102, 103],
             "نام": ["الف", "ب", "ج"],
+            "__source_index__": [0, 1, 2],
         }
     )
     logs = pd.DataFrame(
@@ -32,6 +33,7 @@ def test_allocations_sabt_is_key_based_and_matches_logs_success() -> None:
         {
             "student_id": ["S-3", "S-1", "S-2"],
             "mentor_id": [13, 11, 12],
+            "__source_index__": [2, 0, 1],
         }
     )
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 import re
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -13,13 +13,14 @@ import pandas as pd
 
 from app.core.allocation.engine import enrich_summary_with_history
 from app.core.allocation.history_metrics import METRIC_COLUMNS, compute_history_metrics
-from app.core.common.columns import CANON_EN_TO_FA, canonicalize_headers, ensure_series
+from app.core.common.columns import ensure_series
 from app.core.common.isin_guard import isin_mask
 from app.core.common.normalization import normalize_fa
 from app.core.common.trace import JOIN_STAGE_SOURCE_KEYS
 from app.core.common.types import CANONICAL_TRACE_ORDER
 from app.core.pipeline import enrich_student_contacts
 from app.core.policy_loader import PolicyConfig
+from app.infra.common.header_pipeline_v3 import HeaderPipelineV3
 from app.infra.excel.common import (
     attach_contact_columns,
     enforce_text_columns,
@@ -40,6 +41,9 @@ __all__ = [
 
 
 DEFAULT_SABT_PROFILE_PATH = Path("docs/Report (4).xlsx")
+_HEKMAT_REGISTRATION_STATUS = 3
+_EMPTY_LANDLINE_PLACEHOLDER = "00000000000"
+_POLICY_EMPTY_SENTINEL_FA = "خالی"
 _PROFILE_SHEET_NAME = "Sheet1"
 _HEADER_COLUMN = "عنوان ستون ها ورودی"
 _VALUE_COLUMN = "مقدار برای مپ کردن از اکسل ورودی"
@@ -53,8 +57,12 @@ _ALLOCATION_HEADER_MAP = {
     normalize_fa("کد ثبت نام0"): "student_id",
     normalize_fa("کپی کد جایگزین 39"): "mentor_alias_code",
 }
-_SPLIT_PATTERN = re.compile(r"[|،,/]+")
 _ASCII_KEY_PATTERN = re.compile(r"[^0-9a-z]+")
+
+
+def _resolve_headers(df: pd.DataFrame, source: str) -> pd.DataFrame:
+    pipeline = HeaderPipelineV3()
+    return pipeline.resolve(df, source=source).resolved_df
 
 
 def _clean_text(value: object) -> str:
@@ -68,23 +76,6 @@ def _slugify(value: str) -> str:
     normalized = normalize_fa(value)
     slug = re.sub(r"[^0-9a-zA-Z]+", "_", normalized).strip("_")
     return slug or "column"
-
-
-def _normalize_lookup_key(value: str) -> str:
-    normalized = normalize_fa(value)
-    normalized = "".join(ch for ch in normalized.lower() if not ch.isspace())
-    if normalized:
-        return normalized
-    ascii_fallback = _ASCII_KEY_PATTERN.sub("", str(value).strip().lower())
-    return ascii_fallback
-
-
-def _iter_mapping_candidates(value: str) -> Iterable[str]:
-    if not value:
-        return []
-    parts = [_clean_text(value)]
-    parts.extend(token.strip() for token in _SPLIT_PATTERN.split(value) if token.strip())
-    return parts
 
 
 @dataclass(frozen=True)
@@ -193,74 +184,24 @@ def load_sabt_export_profile(
     return records
 
 
-def _resolve_student_column(
-    column: AllocationExportColumn,
-    lookup: dict[str, str],
-) -> str | None:
-    candidates = list(_iter_mapping_candidates(column.source_field or ""))
-    if column.header not in candidates:
-        candidates.append(column.header)
-    for candidate in candidates:
-        key = _normalize_lookup_key(candidate)
-        if key in lookup:
-            return lookup[key]
-    return None
-
-
-def _register_lookup_key(lookup: dict[str, str], label: str, column: str) -> None:
-    key = _normalize_lookup_key(label)
-    if key:
-        lookup.setdefault(key, column)
-
-
-def _build_students_lookup(df: pd.DataFrame) -> dict[str, str]:
-    lookup: dict[str, str] = {}
-    for column in df.columns:
-        label = str(column).strip()
-        if not label:
-            continue
-        _register_lookup_key(lookup, label, column)
-        persian_label = CANON_EN_TO_FA.get(label)
-        if persian_label:
-            _register_lookup_key(lookup, persian_label, column)
-    return lookup
-
-
-def _resolve_fallback_student_column(
-    column: AllocationExportColumn, students: pd.DataFrame
-) -> str | None:
-    """یافتن ستون جایگزین برای مواردی مانند «وضعیت تحصیلی» زمانی که مپ اولیه پیدا نشد."""
-
-    normalized_candidates = {
-        _normalize_lookup_key(token) for token in _iter_mapping_candidates(column.header)
-    }
-    normalized_candidates.add(_normalize_lookup_key(column.source_field or column.header))
-    for candidate in normalized_candidates:
-        for col in students.columns:
-            label = str(col)
-            if _normalize_lookup_key(label) == candidate:
-                return label
-    if "student_educational_status" in students.columns:
-        return "student_educational_status"
-    return None
-
-
 def _enrich_students_with_summary(
-    students_en: pd.DataFrame, summary_df: pd.DataFrame | None
+    students: pd.DataFrame,
+    summary_df: pd.DataFrame | None,
+    *,
+    pipeline: HeaderPipelineV3,
 ) -> pd.DataFrame:
     """ادغام فیلدهای هویتی از ``summary_df`` روی دیتافریم دانش‌آموزان."""
 
-    if summary_df is None or summary_df.empty or "student_id" not in summary_df.columns:
-        return students_en
-    summary_en = canonicalize_headers(summary_df, header_mode="en")
-    if "student_id" not in summary_en.columns:
-        return students_en
-    summary_en = summary_en.drop_duplicates("student_id", keep="first").copy()
-    summary_indexed = summary_en.set_index("student_id", drop=False)
-    students_indexed = students_en.set_index("student_id", drop=False)
+    if summary_df is None or summary_df.empty:
+        return students
+    summary_resolved = pipeline.resolve(summary_df, source="student").resolved_df
+    if "student_id" not in summary_resolved.columns:
+        return students
+    summary_resolved = summary_resolved.drop_duplicates("student_id", keep="first").copy()
+    summary_indexed = summary_resolved.set_index("student_id", drop=False)
+    students_indexed = students.set_index("student_id", drop=False)
 
     for column in (
-        "student_educational_status",
         "student_registration_status",
         "student_national_code",
         "student_first_name",
@@ -293,62 +234,180 @@ def build_sabt_export_frame(
     if not profile:
         raise ValueError("Sabt export profile is empty")
 
-    alloc_en = canonicalize_headers(allocation_df, header_mode="en").copy()
-    students_contacts = enrich_student_contacts(students_df)
-    students_en = canonicalize_headers(students_df, header_mode="en").copy()
-    students_en = attach_contact_columns(students_en, students_contacts)
-    if "student_id" in students_en.columns:
-        students_en = _enrich_students_with_summary(students_en, summary_df)
+    pipeline = HeaderPipelineV3()
 
-    if "student_id" not in alloc_en.columns:
-        raise KeyError("allocation_df must include 'student_id' column")
-    if "student_id" not in students_en.columns:
-        raise KeyError("students_df must include 'student_id' column")
-
-    sort_columns = [column for column in ("student_id", "mentor_id") if column in alloc_en.columns]
-    if sort_columns:
-        alloc_en = alloc_en.sort_values(sort_columns, kind="mergesort")
-    alloc_en = alloc_en.reset_index(drop=True)
-
-    alloc_en["student_id"] = ensure_series(alloc_en["student_id"]).astype("string")
-    students_en["student_id"] = ensure_series(students_en["student_id"]).astype("string")
-    student_ids = ensure_series(alloc_en["student_id"]).copy()
-    students_unique = students_en.drop_duplicates("student_id", keep="first")
-    students_indexed = students_unique.set_index("student_id", drop=False)
-    student_details = alloc_en[["student_id"]].merge(
-        students_unique,
-        on="student_id",
-        how="left",
-        validate="many_to_one",
+    alloc_resolved = pipeline.resolve(allocation_df, source="allocation").require_can_continue(
+        path="allocation_df", reason_fa="هدرهای تخصیص برای Sabt نامعتبر است"
     )
-    lookup = _build_students_lookup(students_indexed)
+    students_contacts = enrich_student_contacts(students_df)
+    students_with_contacts = attach_contact_columns(students_df.copy(), students_contacts)
+    students_resolved = pipeline.resolve(
+        students_with_contacts, source="student"
+    ).require_can_continue(path="students_df", reason_fa="هدرهای دانش‌آموز برای Sabt نامعتبر است")
+    if "student_id" in students_resolved.columns:
+        students_resolved = _enrich_students_with_summary(
+            students_resolved, summary_df, pipeline=pipeline
+        )
+
+    if alloc_resolved.empty:
+        index = alloc_resolved.index
+        export_data: dict[str, pd.Series] = {}
+        missing_columns: set[str] = set()
+
+        for column in profile:
+            if column.source_kind == "allocation":
+                requested_field = column.source_field or column.header
+                if isinstance(requested_field, str) and requested_field.strip() == _POLICY_EMPTY_SENTINEL_FA:
+                    series = pd.Series(pd.NA, index=index, dtype="object")
+                    export_data[column.header] = series
+                    continue
+                canonical = pipeline.resolve_field(requested_field, "allocation")
+                if canonical is None or canonical not in alloc_resolved.columns:
+                    missing_columns.add(requested_field)
+                series = pd.Series(pd.NA, index=index, dtype="object")
+            elif column.source_kind == "student":
+                requested_field = column.source_field or column.header
+                if isinstance(requested_field, str) and requested_field.strip() == _POLICY_EMPTY_SENTINEL_FA:
+                    series = pd.Series(pd.NA, index=index, dtype="object")
+                    export_data[column.header] = series
+                    continue
+                canonical = pipeline.resolve_field(requested_field, "student")
+                if canonical is None or canonical not in students_resolved.columns:
+                    missing_columns.add(requested_field)
+                series = pd.Series(pd.NA, index=index, dtype="object")
+            else:
+                literal = column.literal_value
+                series = pd.Series([literal] * len(index), index=index)
+            export_data[column.header] = series
+
+        export_df = pd.DataFrame(export_data, index=index)
+        if "student_id" in export_df.columns:
+            export_df["student_id"] = pd.Series(dtype="string", index=index)
+        else:
+            export_df.insert(0, "student_id", pd.Series(dtype="string", index=index))
+        code_headers = identify_code_headers(profile)
+        export_df = enforce_text_columns(export_df, headers=code_headers)
+        export_df.attrs["missing_student_columns"] = sorted(missing_columns)
+        return export_df
+
+    if "student_id" not in alloc_resolved.columns:
+        raise KeyError("allocation_df must include 'student_id' column")
+    if "student_id" not in students_resolved.columns:
+        raise KeyError("students_df must include 'student_id' column")
+    if "__source_index__" not in alloc_resolved.columns:
+        raise KeyError("allocation_df must include '__source_index__' column")
+    if "__source_index__" not in students_resolved.columns:
+        raise KeyError("students_df must include '__source_index__' column")
+
+    alloc_source_index = ensure_series(alloc_resolved["__source_index__"])
+    students_source_index = ensure_series(students_resolved["__source_index__"])
+    if alloc_source_index.isna().any():
+        raise ValueError("allocation_df has null __source_index__ values")
+    if students_source_index.isna().any():
+        raise ValueError("students_df has null __source_index__ values")
+    if alloc_source_index.duplicated().any():
+        raise ValueError("allocation_df __source_index__ values must be unique")
+    if students_source_index.duplicated().any():
+        raise ValueError("students_df __source_index__ values must be unique")
+
+    sort_columns = [column for column in ("student_id", "mentor_id") if column in alloc_resolved.columns]
+    if sort_columns:
+        alloc_resolved = alloc_resolved.sort_values(sort_columns, kind="mergesort")
+    alloc_resolved = alloc_resolved.reset_index(drop=True)
+
+    overlapping_columns = [
+        col
+        for col in students_resolved.columns
+        if col in alloc_resolved.columns and col != "__source_index__"
+    ]
+    students_for_merge = students_resolved.drop(columns=overlapping_columns)
+
+    merged = pd.merge(
+        alloc_resolved,
+        students_for_merge,
+        on="__source_index__",
+        how="left",
+        validate="one_to_one",
+        indicator=True,
+    )
+    unmatched = merged.loc[merged["_merge"] != "both", ["student_id", "__source_index__"]]
+    if not unmatched.empty:
+        sample = unmatched.head(5).to_dict("records")
+        raise ValueError(
+            "Unmatched student rows after lineage join on __source_index__; sample="
+            f"{sample}"
+        )
+    merged = merged.drop(columns=["_merge"])
+
+    merged = merged.reset_index(drop=True)
+    alloc_resolved = merged
+    students_resolved = merged
+    student_ids = ensure_series(alloc_resolved["student_id"]).copy()
 
     export_data: dict[str, pd.Series] = {}
     missing_columns: set[str] = set()
 
+    landline_headers: list[str] = []
+
     for column in profile:
         if column.source_kind == "allocation":
-            if not column.source_field or column.source_field not in alloc_en.columns:
-                missing_columns.add(column.source_field or column.header)
-                series = pd.Series(pd.NA, index=alloc_en.index, dtype="object")
+            requested_field = column.source_field or column.header
+            if isinstance(requested_field, str) and requested_field.strip() == _POLICY_EMPTY_SENTINEL_FA:
+                series = pd.Series(pd.NA, index=alloc_resolved.index, dtype="object")
+                export_data[column.header] = series
+                continue
+            canonical = pipeline.resolve_field(requested_field, "allocation")
+            if canonical is None:
+                available = ", ".join(sorted(alloc_resolved.columns)[:5])
+                raise KeyError(
+                    "Allocation column not found for Sabt export; "
+                    f"requested={requested_field!r}, available=[{available}]"
+                )
+            if canonical not in alloc_resolved.columns:
+                missing_columns.add(requested_field)
+                series = pd.Series(pd.NA, index=alloc_resolved.index, dtype="object")
             else:
-                series = ensure_series(alloc_en[column.source_field]).reindex(alloc_en.index)
+                series = ensure_series(alloc_resolved[canonical]).reindex(alloc_resolved.index)
         elif column.source_kind == "student":
-            resolved = _resolve_student_column(column, lookup)
-            if resolved is None or resolved not in students_indexed.columns:
-                fallback_column = _resolve_fallback_student_column(column, students_en)
-                if fallback_column and fallback_column in students_indexed.columns:
-                    resolved = fallback_column
-            if resolved is None or resolved not in students_indexed.columns:
-                missing_columns.add(column.source_field or column.header)
-                series = pd.Series(pd.NA, index=alloc_en.index, dtype="object")
-            else:
-                series = ensure_series(student_details[resolved]).copy()
-                series.index = alloc_en.index
+            requested_field = column.source_field or column.header
+            if isinstance(requested_field, str) and requested_field.strip() == _POLICY_EMPTY_SENTINEL_FA:
+                series = pd.Series(pd.NA, index=alloc_resolved.index, dtype="object")
+                export_data[column.header] = series
+                continue
+            canonical = pipeline.resolve_field(requested_field, "student")
+            if canonical is None or canonical not in students_resolved.columns:
+                available = ", ".join(sorted(students_resolved.columns)[:5])
+                raise KeyError(
+                    "Student column not found for Sabt export; "
+                    f"requested={requested_field!r}, available=[{available}]"
+                )
+            series = ensure_series(students_resolved[canonical]).copy()
+            series.index = alloc_resolved.index
+            if canonical == "student_landline":
+                landline_headers.append(column.header)
         else:
             literal = column.literal_value
-            series = pd.Series([literal] * len(alloc_en), index=alloc_en.index)
+            series = pd.Series([literal] * len(alloc_resolved), index=alloc_resolved.index)
         export_data[column.header] = series
+
+    if landline_headers:
+        if "student_registration_status" not in students_resolved.columns:
+            raise KeyError(
+                "student_registration_status is required when exporting student_landline"
+            )
+        registration_status = ensure_series(
+            students_resolved["student_registration_status"]
+        ).astype("Int64")
+        registration_status.index = alloc_resolved.index
+        for header in landline_headers:
+            landline_series = ensure_series(export_data[header]).astype("string")
+            empty_mask = landline_series.astype("string").str.strip().eq("") | landline_series.isna()
+            needs_fill = (registration_status == _HEKMAT_REGISTRATION_STATUS) & empty_mask
+            if needs_fill.any():
+                landline_series = landline_series.mask(
+                    needs_fill, _EMPTY_LANDLINE_PLACEHOLDER
+                )
+            export_data[header] = landline_series
 
     student_id_series = ensure_series(student_ids).astype("string").reset_index(drop=True)
     export_df = pd.DataFrame(export_data)
@@ -485,7 +544,7 @@ def _build_eligibility_trace_sheet(
     if logs_df is None or logs_df.empty:
         return pd.DataFrame(columns=columns)
 
-    logs_en = canonicalize_headers(logs_df, header_mode="en").copy()
+    logs_en = _resolve_headers(logs_df, source="report")
     if "student_id" not in logs_en.columns or "eligibility_trace" not in logs_en.columns:
         return pd.DataFrame(columns=columns)
 
@@ -618,7 +677,7 @@ def _build_trace_ladder_sheet(
             trace_ladder[key] = value
         return trace_ladder
 
-    logs_en = canonicalize_headers(logs_df, header_mode="en").copy()
+    logs_en = _resolve_headers(logs_df, source="report")
     if "student_id" not in logs_en.columns or "eligibility_trace" not in logs_en.columns:
         for column in bucket_columns:
             if column not in trace_ladder.columns:
@@ -700,7 +759,7 @@ def _build_bucket_trace_sheet(logs_df: pd.DataFrame | None) -> pd.DataFrame:
     ]
     if logs_df is None or logs_df.empty:
         return pd.DataFrame(columns=columns)
-    logs_en = canonicalize_headers(logs_df, header_mode="en").copy()
+    logs_en = _resolve_headers(logs_df, source="report")
     if "student_id" not in logs_en.columns or "eligibility_trace" not in logs_en.columns:
         return pd.DataFrame(columns=columns)
     records: list[dict[str, object]] = []

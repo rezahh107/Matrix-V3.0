@@ -13,6 +13,7 @@ def test_allocations_sabt_and_reasons_preserve_identity() -> None:
         [
             {
                 "student_id": 101,
+                "__source_index__": 0,
                 policy.stage_column("type"): 27,
                 policy.stage_column("group"): 27,
                 policy.stage_column("gender"): 0,
@@ -46,6 +47,11 @@ def test_allocations_sabt_and_reasons_preserve_identity() -> None:
     result = allocate_batch(students, pool, policy=policy)
     allocations, _, logs, trace = result
     summary_df = result.trace_extras.summary_df
+    source_index_map = {
+        str(row["student_id"]): row["__source_index__"]
+        for row in students[["student_id", "__source_index__"]].to_dict("records")
+    }
+    allocations["__source_index__"] = allocations["student_id"].astype(str).map(source_index_map)
 
     profile = [
         AllocationExportColumn(

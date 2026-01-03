@@ -167,10 +167,13 @@ def test_allocate_cli_passes_history_info_into_qa(
         ids = pd.Series(["s-1"] * len(students_df))
         students_with_ids = students_df.copy()
         students_with_ids["student_id"] = ids
+        students_with_ids["__source_index__"] = pd.RangeIndex(len(students_df))
         return ids, {}, students_with_ids
 
     def fake_allocate_batch(*_: object, **__: object) -> AllocationBatchResult:
-        allocations = pd.DataFrame({"student_id": ["s-1"], "mentor_id": ["m-1"]})
+        allocations = pd.DataFrame(
+            {"student_id": ["s-1"], "mentor_id": ["m-1"], "__source_index__": [0]}
+        )
         updated_pool = pd.DataFrame({"mentor_id": ["m-1"]})
         logs = pd.DataFrame({"student_id": ["s-1"]})
         trace = pd.DataFrame({"student_id": ["s-1"]})
@@ -229,6 +232,14 @@ def test_allocate_cli_passes_history_info_into_qa(
     monkeypatch.setattr(cli.cli_legacy, "build_join_key_audit_sheet", fake_audit_sheet)
     monkeypatch.setattr(cli, "build_join_key_summary_sheet", fake_audit_sheet)
     monkeypatch.setattr(cli.cli_legacy, "build_join_key_summary_sheet", fake_audit_sheet)
+    monkeypatch.setattr(
+        cli, "build_sabt_export_frame", lambda *args, **kwargs: pd.DataFrame({"student_id": ["s-1"]})
+    )
+    monkeypatch.setattr(
+        cli.cli_legacy,
+        "build_sabt_export_frame",
+        lambda *args, **kwargs: pd.DataFrame({"student_id": ["s-1"]}),
+    )
     monkeypatch.setattr(cli, "run_all_invariants", fake_run_all_invariants)
     monkeypatch.setattr(cli.cli_legacy, "run_all_invariants", fake_run_all_invariants)
 

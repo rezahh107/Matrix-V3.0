@@ -15,25 +15,28 @@ from app.infra.excel.import_to_sabt import build_sheet2_frame
 def test_registration_status_shared_between_sheet2_and_allocations_sabt() -> None:
     allocations_df = pd.DataFrame(
         [
-            {"student_id": "STD-1", "mentor_id": "EMP-1"},
-            {"student_id": "STD-2", "mentor_id": "EMP-2"},
-            {"student_id": "STD-3", "mentor_id": "EMP-3"},
+            {"student_id": "STD-1", "mentor_id": "EMP-1", "__source_index__": 0},
+            {"student_id": "STD-2", "mentor_id": "EMP-2", "__source_index__": 1},
+            {"student_id": "STD-3", "mentor_id": "EMP-3", "__source_index__": 2},
         ]
     )
     students_df = pd.DataFrame(
         [
             {
                 "student_id": "STD-1",
+                "__source_index__": 0,
                 "student_registration_status": 0,
                 "student_finance": 3,
             },
             {
                 "student_id": "STD-2",
+                "__source_index__": 1,
                 "student_registration_status": 1,
                 "student_finance": 0,
             },
             {
                 "student_id": "STD-3",
+                "__source_index__": 2,
                 "student_registration_status": 3,
                 "student_finance": 0,
             },

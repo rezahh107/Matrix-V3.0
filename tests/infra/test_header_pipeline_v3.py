@@ -159,7 +159,7 @@ def test_header_pipeline_handles_inspactor_unknown_and_capacity_ambiguity() -> N
 
 
 def test_header_pipeline_maps_student_required_headers() -> None:
-    required = ["کدرشته", "گروه آزمایشی", "جنسیت", "کد مدرسه"]
+    required = ["group_code", "گروه آزمایشی", "جنسیت", "کد مدرسه"]
     pipeline = HeaderPipelineV3(
         alias_registry=HEADER_ALIASES_V3,
         required={"student": required},
