@@ -248,6 +248,39 @@ def build_sabt_export_frame(
             students_resolved, summary_df, pipeline=pipeline
         )
 
+    if alloc_resolved.empty:
+        index = alloc_resolved.index
+        export_data: dict[str, pd.Series] = {}
+        missing_columns: set[str] = set()
+
+        for column in profile:
+            if column.source_kind == "allocation":
+                requested_field = column.source_field or column.header
+                canonical = pipeline.resolve_field(requested_field, "allocation")
+                if canonical is None or canonical not in alloc_resolved.columns:
+                    missing_columns.add(requested_field)
+                series = pd.Series(pd.NA, index=index, dtype="object")
+            elif column.source_kind == "student":
+                requested_field = column.source_field or column.header
+                canonical = pipeline.resolve_field(requested_field, "student")
+                if canonical is None or canonical not in students_resolved.columns:
+                    missing_columns.add(requested_field)
+                series = pd.Series(pd.NA, index=index, dtype="object")
+            else:
+                literal = column.literal_value
+                series = pd.Series([literal] * len(index), index=index)
+            export_data[column.header] = series
+
+        export_df = pd.DataFrame(export_data, index=index)
+        if "student_id" in export_df.columns:
+            export_df["student_id"] = pd.Series(dtype="string", index=index)
+        else:
+            export_df.insert(0, "student_id", pd.Series(dtype="string", index=index))
+        code_headers = identify_code_headers(profile)
+        export_df = enforce_text_columns(export_df, headers=code_headers)
+        export_df.attrs["missing_student_columns"] = sorted(missing_columns)
+        return export_df
+
     if "student_id" not in alloc_resolved.columns:
         raise KeyError("allocation_df must include 'student_id' column")
     if "student_id" not in students_resolved.columns:
