@@ -180,10 +180,19 @@ def _stringify_cell(value: object) -> str:
     if value is None:
         return ""
     try:
-        if pd.isna(value):
-            return ""
+        na_result = pd.isna(value)
     except Exception:
-        pass
+        na_result = False
+    else:
+        if isinstance(na_result, bool):
+            if na_result:
+                return ""
+        elif hasattr(na_result, "all"):
+            try:
+                if bool(na_result.all()):
+                    return ""
+            except Exception:
+                pass
     if isinstance(value, bytes):
         try:
             return value.decode("utf-8")

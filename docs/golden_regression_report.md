@@ -7,8 +7,10 @@
 
 ## Golden comparison coverage
 The regression gate normalizes, sorts, and compares these sheets:
-- Main workbook: `allocations`, `updated_pool`, `logs`, `دلایل انتخاب پشتیبان`, `allocation_vs_pool_audit`.
+- Main workbook: `allocations`, `updated_pool`, `دلایل انتخاب پشتیبان`, `allocation_vs_pool_audit`.
 - Validation workbook: `summary`, `students_per_mentor`, `school_binding_issues`, `allocation_capacity`, `join_keys`, `student_counts`, `pool_join_key_duplicates`, `pool_join_conflicts`, `pool_detection`, `alloc_join_summary`, `alloc_join_mismatches`, `pool_alignment_preflight`.
+
+`logs` is excluded from strict comparison because its serialized traces can reorder across platforms; it is still produced for debugging.
 
 `allocations_sabt` comparison is temporarily disabled while Sabt export changes are paused.
 

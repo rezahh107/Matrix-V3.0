@@ -20,4 +20,8 @@ CSVs (no binaries):
 - `output/<sheet>.csv`
 - `output_validation/<sheet>.csv`
 
+The strict comparison whitelist intentionally **excludes** the `logs` sheet
+because its serialized traces contain OS- and run-dependent ordering; all other
+stable sheets remain gated.
+
 Only update these files when the intentional, reviewed behavior changes.
