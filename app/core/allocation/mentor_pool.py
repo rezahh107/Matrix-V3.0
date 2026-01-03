@@ -14,7 +14,6 @@ import pandas as pd
 
 from app.core.common.columns import canonicalize_headers, to_numeric_1d
 from app.core.common.isin_guard import isin_mask
-from app.core.common.types import CANONICAL_JOIN_KEYS
 from app.core.policy_loader import MentorPoolGovernanceConfig, MentorStatus
 
 __all__ = [
@@ -249,6 +248,7 @@ def apply_mentor_pool_governance(
     *,
     overrides: Mapping[int | str | float, bool] | None = None,
     enable_trace: bool = False,
+    deduplicate_profiles: bool = True,
 ) -> pd.DataFrame:
     """اعمال حاکمیت استخر منتورها بر اساس Policy و override نوبتی.
 
@@ -323,13 +323,35 @@ def apply_mentor_pool_governance(
         )
         trace_entries.append(entry)
 
-    subset_columns = ["mentor_id"] + [
-        key for key in CANONICAL_JOIN_KEYS if key in canonical.columns
-    ]
-    duplicate_mask = canonical.duplicated(subset=subset_columns, keep=False)
+    join_key_candidates = list(
+        dict.fromkeys(
+            col
+            for col in canonical.columns
+            if col
+            in {
+                "group_code",
+                "gender",
+                "gender_code",
+                "graduation_status",
+                "graduation_status_code",
+                "center",
+                "center_code",
+                "finance",
+                "finance_code",
+                "school_code",
+            }
+        )
+    )
+    subset_columns = ["mentor_id", *join_key_candidates]
+    canonical_subset = canonical[subset_columns].astype("string")
+    duplicate_mask = (
+        canonical_subset.duplicated(subset=subset_columns, keep=False)
+        if deduplicate_profiles
+        else pd.Series(False, index=canonical.index)
+    )
     duplicates_removed = 0
     if duplicate_mask.any():
-        keep_mask = ~canonical.duplicated(subset=subset_columns, keep="first")
+        keep_mask = ~canonical_subset.duplicated(subset=subset_columns, keep="first")
         duplicates_removed = int(total_rows - keep_mask.sum())
         before = canonical.copy()
         result = result.loc[keep_mask].copy()

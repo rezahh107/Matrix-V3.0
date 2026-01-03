@@ -61,6 +61,11 @@ def validate_allocation_join_keys_with_wildcard(
             if col in audit.columns and col in constraint_lookup.columns
         ]
         if merge_keys:
+            constraint_lookup = (
+                constraint_lookup.groupby(merge_keys, as_index=False)[
+                    constraint_column
+                ].max()
+            )
             audit = audit.merge(
                 constraint_lookup,
                 on=merge_keys,
@@ -141,14 +146,36 @@ def validate_allocation_join_keys_with_wildcard(
 
     mismatch_columns = [name for name in audit.columns if name.startswith("match_")]
     if mismatch_columns:
-        audit["any_mismatch"] = ~audit[mismatch_columns].all(axis=1)
+        row_match = audit[mismatch_columns].all(axis=1)
+        if "student_id" in audit.columns:
+            grouped_match = row_match.groupby(audit["student_id"]).transform("any")
+            invalid_count_series = audit[["student_id"]].copy()
+            invalid_count_series["any_mismatch"] = ~grouped_match
+            invalid_count_series = invalid_count_series.drop_duplicates("student_id")["any_mismatch"]
+            total = int(audit["student_id"].nunique())
+        else:
+            grouped_match = row_match
+            invalid_count_series = ~grouped_match
+            total = int(len(audit))
+
+        audit["any_mismatch"] = ~grouped_match
         audit["mismatch_summary"] = audit[mismatch_columns].apply(
             lambda row: ", ".join(col.replace("match_", "") for col, ok in row.items() if not ok),
             axis=1,
         )
+        audit["mismatch_summary"] = audit["mismatch_summary"].where(
+            audit["any_mismatch"], other=""
+        )
+        invalid_count = int(invalid_count_series.sum()) if not audit.empty else 0
+    else:
+        audit["any_mismatch"] = False
+        audit["mismatch_summary"] = ""
+        invalid_count = 0
+        total = base_result.total
+
     return JoinKeyAuditResult(
         audit_frame=audit,
-        invalid_count=int(audit["any_mismatch"].sum()) if "any_mismatch" in audit.columns else 0,
-        total=base_result.total,
+        invalid_count=invalid_count,
+        total=total,
         duplicate_columns=base_result.duplicate_columns,
     )

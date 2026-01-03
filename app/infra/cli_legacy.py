@@ -183,6 +183,49 @@ _DEFAULT_LOCAL_DB_PATH = Path("smart_alloc.db")
 logger = logging.getLogger(__name__)
 
 
+def _sha256_file(path: Path, *, chunk_size: int = 1024 * 1024) -> str:
+    hasher = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(chunk_size), b""):
+            hasher.update(chunk)
+    return hasher.hexdigest()
+
+
+def _debug_fingerprint_file(label: str, path: Path, *, include_sheets: bool = False) -> None:
+    if not os.environ.get("ALLOC_DEBUG"):
+        return
+    try:
+        stat = path.stat()
+    except FileNotFoundError:
+        print(f"[ALLOC_DEBUG] {label} path={path.resolve()} missing")
+        return
+
+    mtime = datetime.fromtimestamp(stat.st_mtime, tz=UTC).isoformat()
+    sha256 = _sha256_file(path)
+    print(
+        f"[ALLOC_DEBUG] {label} path={path.resolve()} size={stat.st_size} "
+        f"mtime={mtime} sha256={sha256}"
+    )
+
+    if include_sheets:
+        try:
+            with pd.ExcelFile(path) as workbook:
+                print(f"[ALLOC_DEBUG] {label} sheets={workbook.sheet_names}")
+        except Exception as exc:  # pragma: no cover - defensive logging only
+            print(f"[ALLOC_DEBUG] {label} sheet_inspect_error={exc}")
+
+
+def _debug_input_fingerprints(args: argparse.Namespace) -> None:
+    if not os.environ.get("ALLOC_DEBUG"):
+        return
+    students_path_text = getattr(args, "students", None)
+    pool_path_text = getattr(args, "pool", None)
+    if students_path_text:
+        _debug_fingerprint_file("students", Path(students_path_text))
+    if pool_path_text:
+        _debug_fingerprint_file("pool", Path(pool_path_text), include_sheets=True)
+
+
 def build_matrix_v3(
     insp_df: pd.DataFrame,
     schools_df: pd.DataFrame,
@@ -1300,7 +1343,9 @@ def _resolve_mentor_pool_frame(
                 pool_type = pool_type_arg or "inspactor"
                 raw_df = _load_inspactor_raw()
 
-        pool_source_value = pool_source if pool_source != "auto" else pool_type
+        pool_source_value = (
+            "matrix" if matrix_only else (pool_source if pool_source != "auto" else pool_type)
+        )
         if db:
             df = import_mentor_pool_from_dataframe(
                 raw_df,
@@ -1331,9 +1376,9 @@ def _resolve_mentor_pool_frame(
                 ) from exc
         detection = detection or df.attrs.get("pool_detection")
         pool_source_value = (
-            pool_source
-            if pool_source != "auto"
-            else getattr(detection, "pool_type", pool_type)
+            "matrix"
+            if matrix_only
+            else (pool_source if pool_source != "auto" else getattr(detection, "pool_type", pool_type))
         )
         if detection is not None:
             df.attrs["pool_detection"] = detection
@@ -1455,6 +1500,7 @@ def _apply_mentor_pool_overrides(
         config,
         overrides=cast(Mapping[int | str | float, bool], overrides),
         enable_trace=resolved_settings.enable_pool_governance_trace,
+        deduplicate_profiles=True,
     )
 
 
@@ -2754,6 +2800,17 @@ def _prepare_allocation_frames(
     return students_clean, pool_clean
 
 
+def _normalize_pool_attrs(
+    pool_df: pd.DataFrame, *, pool_source: str, detection: object | None
+) -> pd.DataFrame:
+    normalized = pool_df.copy(deep=False)
+    normalized.attrs.clear()
+    normalized.attrs["pool_source"] = pool_source
+    if detection is not None:
+        normalized.attrs["pool_detection"] = detection
+    return normalized
+
+
 def _run_pool_alignment_preflight(
     students_df: pd.DataFrame, pool_df: pd.DataFrame, *, policy: PolicyConfig
 ) -> pd.DataFrame:
@@ -2962,10 +3019,10 @@ def _run_preflight_unknowns(
         )
         return 3
 
-    pool_source_arg = "matrix"
     detection = pool_df.attrs.get("pool_detection")
-    pool_source = getattr(detection, "pool_type", None) or pool_df.attrs.get(
-        "pool_source", pool_source_arg
+    pool_source = "matrix"
+    pool_df = _normalize_pool_attrs(
+        pool_df, pool_source=pool_source, detection=detection
     )
     students_base, pool_base = _prepare_allocation_frames(
         students_df,
@@ -3545,6 +3602,7 @@ def _run_allocate(args: argparse.Namespace, policy: PolicyConfig, progress: Prog
     user_settings: UserSettings | None = getattr(args, "_user_settings", None)
 
     progress(0, "loading inputs")
+    _debug_input_fingerprints(args)
     students_df, student_inputs, _ = _resolve_students_frame(args, policy, db=db)
     pool_df, pool_inputs, _ = _resolve_mentor_pool_frame(
         args,
@@ -3556,13 +3614,14 @@ def _run_allocate(args: argparse.Namespace, policy: PolicyConfig, progress: Prog
     )
     detection = pool_df.attrs.get("pool_detection")
     detection_payload = asdict(detection) if detection is not None else None
-    pool_source = getattr(detection, "pool_type", None) or pool_df.attrs.get(
-        "pool_source", "matrix"
+    pool_source = "matrix"
+    pool_df = _normalize_pool_attrs(
+        pool_df, pool_source=pool_source, detection=detection
     )
-    if pool_df.attrs:
-        pool_df = pool_df.copy(deep=False)
-        pool_df.attrs.clear()
-        pool_df.attrs["pool_source"] = pool_source
+    if os.environ.get("ALLOC_DEBUG"):
+        print(
+            f"[ALLOC_DEBUG] students rows={students_df.shape[0]} pool rows (matrix)={pool_df.shape[0]}"
+        )
 
     students_base, pool_base = _prepare_allocation_frames(
         students_df,
@@ -3617,9 +3676,9 @@ def _run_rule_engine(args: argparse.Namespace, policy: PolicyConfig, progress: P
     pool_df = _load_matrix_candidate_pool(matrix_path, policy)
     detection = pool_df.attrs.get("pool_detection")
     detection_payload = asdict(detection) if detection is not None else None
-    if pool_df.attrs:
-        pool_df = pool_df.copy(deep=False)
-        pool_df.attrs.clear()
+    pool_df = _normalize_pool_attrs(
+        pool_df, pool_source="matrix", detection=detection
+    )
 
     students_base, pool_base = _prepare_allocation_frames(
         students_df,

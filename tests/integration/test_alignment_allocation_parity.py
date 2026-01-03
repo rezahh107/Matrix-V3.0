@@ -109,3 +109,55 @@ def test_matrix_allocation_parity(tmp_path: Path) -> None:
 
     unallocated = allocation_result.trace_extras.unallocated_summary
     assert unallocated is None or unallocated.empty
+
+
+def test_allocation_preflight_matrix_pool_source() -> None:
+    policy = load_policy()
+    args = argparse.Namespace(
+        students=str(ROOT / "students.xlsx"),
+        pool=str(ROOT / "0918.xlsx"),
+        pool_type="matrix",
+        pool_sheet="matrix",
+        _ui_overrides={},
+        _ui_mode=False,
+        _user_settings=None,
+    )
+
+    students_df, _, _ = cli._resolve_students_frame(args, policy, db=None)
+    pool_df, _, _ = cli._resolve_mentor_pool_frame(
+        args,
+        policy,
+        db=None,
+        pool_arg="pool",
+        pool_source="matrix",
+        matrix_only=True,
+    )
+
+    detection = pool_df.attrs.get("pool_detection")
+    assert detection is not None
+    assert getattr(detection, "pool_type", None) == "matrix"
+
+    pool_df = cli._normalize_pool_attrs(
+        pool_df, pool_source="matrix", detection=detection
+    )
+
+    students_base, pool_base = cli._prepare_allocation_frames(
+        students_df,
+        pool_df,
+        policy=policy,
+        sanitize_pool=True,
+        pool_source="matrix",
+    )
+    pool_base = cli._apply_mentor_pool_overrides(pool_base, policy, args)
+
+    preflight_df = cli._run_pool_alignment_preflight(
+        students_base, pool_base, policy=policy
+    )
+
+    assert int(preflight_df["candidate_count_initial"].eq(0).sum()) == 0
+    assert int(preflight_df["candidate_count_final"].eq(0).sum()) == 0
+    assert int(preflight_df["join_key_mismatches"].apply(bool).sum()) == 0
+
+    assert pool_base.attrs.get("pool_source") == "matrix"
+    detection_after = pool_base.attrs.get("pool_detection")
+    assert detection_after is None or getattr(detection_after, "pool_type", None) == "matrix"
