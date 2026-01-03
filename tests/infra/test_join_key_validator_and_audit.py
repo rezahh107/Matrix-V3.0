@@ -89,6 +89,57 @@ def test_validate_allocation_join_keys_flags_mismatch():
     assert result.duplicate_columns == {key: 0 for key in policy.join_keys}
 
 
+def test_validate_allocation_join_keys_counts_per_allocation_not_profiles() -> None:
+    policy = load_policy()
+    students = pd.DataFrame(
+        [
+            {
+                "student_id": "S-1",
+                "کدرشته": 2,
+                "گروه آزمایشی": 2,
+                "جنسیت": 0,
+                "دانش آموز فارغ": 0,
+                "مرکز گلستان صدرا": 10,
+                "مالی حکمت بنیاد": 1,
+                "کد مدرسه": 101,
+            }
+        ]
+    )
+    pool = pd.DataFrame(
+        [
+            {
+                "mentor_id": "M-1",
+                "remaining_capacity": 1,
+                "کدرشته": 2,
+                "جنسیت": 1,
+                "دانش آموز فارغ": 1,
+                "مرکز گلستان صدرا": 11,
+                "مالی حکمت بنیاد": 0,
+                "کد مدرسه": 999,
+            },
+            {
+                "mentor_id": "M-1",
+                "remaining_capacity": 1,
+                "کدرشته": 3,
+                "جنسیت": 1,
+                "دانش آموز فارغ": 1,
+                "مرکز گلستان صدرا": 12,
+                "مالی حکمت بنیاد": 0,
+                "کد مدرسه": 998,
+            },
+        ]
+    )
+    allocations = pd.DataFrame([{"student_id": "S-1", "mentor_id": "M-1"}])
+
+    result = validate_allocation_join_keys(allocations, students, pool, policy=policy)
+
+    assert result.total == 2
+    assert result.invalid_count == 1
+    audit = result.audit_frame
+    assert audit["student_id"].nunique() == 1
+    assert audit["any_mismatch"].all()
+
+
 def test_validate_allocation_join_keys_does_not_require_alias_when_mentor_id_present() -> None:
     policy, students, pool, allocations = _sample_frames()
     # Ensure no real join-key mismatch exists.

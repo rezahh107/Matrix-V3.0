@@ -196,7 +196,7 @@ def validate_allocation_join_keys(
             how="left",
             suffixes=("", "_mentor"),
             indicator="merge_mentor_id",
-            validate="many_to_one",
+            validate="many_to_many",
         )
 
         if (
@@ -218,7 +218,7 @@ def validate_allocation_join_keys(
                     how="left",
                     suffixes=("", "_mentor_fill"),
                     indicator="merge_mentor_alias",
-                    validate="many_to_one",
+                    validate="many_to_many",
                 )
                 rename_map = {
                     col: f"{col}_mentor_fill" for col in mentor_keys if col in alias_lookup.columns
@@ -264,7 +264,7 @@ def validate_allocation_join_keys(
             how="left",
             suffixes=("", "_mentor"),
             indicator="merge_mentor_alias",
-            validate="many_to_one",
+            validate="many_to_many",
         )
         merged["mentor_lookup_mode"] = merged["merge_mentor_alias"].map(
             {"both": "mentor_alias", "left_only": "missing"}
@@ -286,8 +286,6 @@ def validate_allocation_join_keys(
             match_flags[f"match_{column}"] = pd.Series([False] * len(merged), index=merged.index)
 
     audit = merged.copy()
-    if "__audit_row_id" in audit.columns:
-        audit = audit.drop(columns=["__audit_row_id"])
     fill_cols = [col for col in audit.columns if col.endswith("_mentor_fill")]
     if fill_cols:
         audit = audit.drop(columns=fill_cols)
@@ -295,14 +293,30 @@ def validate_allocation_join_keys(
         audit[name] = series
     mismatch_columns = [name for name in audit.columns if name.startswith("match_")]
     if mismatch_columns:
-        audit["any_mismatch"] = ~pd.concat(match_flags.values(), axis=1).all(axis=1)
-        audit["mismatch_summary"] = audit[mismatch_columns].apply(
+        mismatch_df = pd.DataFrame(match_flags)
+        base_match = mismatch_df.all(axis=1)
+        if "__audit_row_id" in audit.columns:
+            grouped_match = base_match.groupby(audit["__audit_row_id"]).transform("any")
+            audit["any_mismatch"] = ~grouped_match
+            invalid_count_series = audit[["__audit_row_id", "any_mismatch"]].drop_duplicates(
+                "__audit_row_id"
+            )["any_mismatch"]
+        else:
+            audit["any_mismatch"] = ~base_match
+            invalid_count_series = audit["any_mismatch"]
+        audit["mismatch_summary"] = mismatch_df.apply(
             lambda row: ", ".join(col.replace("match_", "") for col, ok in row.items() if not ok),
             axis=1,
+        )
+        audit["mismatch_summary"] = audit["mismatch_summary"].where(
+            audit["any_mismatch"], other="",
         )
     else:
         audit["any_mismatch"] = False
         audit["mismatch_summary"] = ""
+        invalid_count_series = audit["any_mismatch"]
+    if "__audit_row_id" in audit.columns:
+        audit = audit.drop(columns=["__audit_row_id"])
 
     combined_duplicates: dict[str, int] = {
         key: student_duplicates.get(key, 0) + mentor_duplicates.get(key, 0)
@@ -313,7 +327,7 @@ def validate_allocation_join_keys(
     audit["duplicate_join_key_columns"] = duplicate_total
     audit["duplicate_join_key_keys"] = ", ".join(duplicate_keys)
 
-    invalid_count = int(audit["any_mismatch"].sum()) if not audit.empty else 0
+    invalid_count = int(invalid_count_series.sum()) if not audit.empty else 0
     return JoinKeyAuditResult(
         audit,
         invalid_count,
