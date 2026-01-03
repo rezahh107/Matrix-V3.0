@@ -55,11 +55,14 @@ def canonical_allocation_outputs(tmp_path_factory: pytest.TempPathFactory) -> tu
 
     env = os.environ.copy()
     env.setdefault("PYTHONUTF8", "1")
+    env.setdefault("PYTHONIOENCODING", "utf-8")
     result = subprocess.run(
         cmd,
         check=False,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         env=env,
         cwd=ROOT,
     )
@@ -71,11 +74,8 @@ def canonical_allocation_outputs(tmp_path_factory: pytest.TempPathFactory) -> tu
             result.stderr,
         )
 
-    # The CLI writes the QA validation workbook next to the main output using a
-    # deterministic suffix.
+    validation_path = output_path.with_name(f"{output_path.stem}_validation.xlsx")
     if not validation_path.exists():
-        generated = output_path.with_name(f"{output_path.stem}_validation.xlsx")
-        if generated.exists():
-            validation_path = generated
+        raise AssertionError(f"Expected validation workbook missing: {validation_path}")
 
     return output_path, validation_path

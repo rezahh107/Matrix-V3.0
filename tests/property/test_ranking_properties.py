@@ -6,7 +6,7 @@ import pandas as pd
 import pytest
 
 try:
-    from hypothesis import given, settings
+    from hypothesis import HealthCheck, given, settings
     from hypothesis import strategies as st  # type: ignore
 except ModuleNotFoundError:  # pragma: no cover - hypothesis optional
     pytest.skip("hypothesis not available", allow_module_level=True)
@@ -14,7 +14,7 @@ except ModuleNotFoundError:  # pragma: no cover - hypothesis optional
 from app.core.common.ranking import apply_ranking_policy, natural_key
 
 
-@settings(max_examples=50)
+@settings(max_examples=50, suppress_health_check=[HealthCheck.too_slow])
 @given(st.lists(st.text(min_size=1), min_size=3, max_size=6))
 def test_natural_key_monotonic(ids: list[str]) -> None:
     sorted_ids = sorted(ids, key=natural_key)
