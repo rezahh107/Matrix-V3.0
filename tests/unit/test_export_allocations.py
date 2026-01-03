@@ -11,11 +11,14 @@ from app.infra.excel.export_allocations import (
 
 
 def test_educational_status_fallback_mapping() -> None:
-    allocations = pd.DataFrame({"student_id": [1], "mentor_id": ["EMP-1"]})
+    allocations = pd.DataFrame(
+        {"student_id": [1], "mentor_id": ["EMP-1"], "__source_index__": [0]}
+    )
     students = pd.DataFrame(
         {
             "student_id": [1],
             "student_educational_status": ["درحال تحصیل"],
+            "__source_index__": [0],
         }
     )
     profile = [
@@ -23,7 +26,7 @@ def test_educational_status_fallback_mapping() -> None:
             key="educational_status",
             header="وضعیت تحصیلی",
             source_kind="student",
-            source_field=None,
+            source_field="student_educational_status",
             literal_value=None,
             order=1,
         )

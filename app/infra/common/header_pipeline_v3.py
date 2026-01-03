@@ -75,6 +75,12 @@ class HeaderPipelineV3:
             conflict_tolerant_aliases or {}
         )
 
+    def resolve_field(self, label: str, source: str) -> str | None:
+        """Resolve a header label to its canonical field for the given source."""
+
+        normalized = _normalize_header(label)
+        return self._alias_registry.get(source, {}).get(normalized)
+
     def resolve(self, df: pd.DataFrame, source: str) -> HeaderResolution:
         normalized_aliases = self._alias_registry.get(source, {})
         issues: list[HeaderIssue] = []

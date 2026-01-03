@@ -15,14 +15,15 @@ from app.infra.excel.import_to_sabt import build_sheet2_frame
 def test_allocation_exports_share_phone_policy() -> None:
     allocations_df = pd.DataFrame(
         [
-            {"student_id": "STD-1", "mentor_id": "EMP-1"},
-            {"student_id": "STD-2", "mentor_id": "EMP-2"},
+            {"student_id": "STD-1", "mentor_id": "EMP-1", "__source_index__": 0},
+            {"student_id": "STD-2", "mentor_id": "EMP-2", "__source_index__": 1},
         ]
     )
     students_df = pd.DataFrame(
         [
             {
                 "student_id": "STD-1",
+                "__source_index__": 0,
                 "student_mobile": "9357174851",
                 "contact1_mobile": "۰۹۱۲۳۴۵۶۷۸۰",
                 "contact2_mobile": "09123456780",
@@ -32,6 +33,7 @@ def test_allocation_exports_share_phone_policy() -> None:
             },
             {
                 "student_id": "STD-2",
+                "__source_index__": 1,
                 "student_mobile": "9123456789",
                 "contact1_mobile": "",
                 "contact2_mobile": "۰۹۳۵۱۱۱۲۲۳۳",

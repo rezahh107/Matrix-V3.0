@@ -22,6 +22,7 @@ _PROFILE_PATH = Path("docs/Report (4).xlsx")
 _SNAPSHOT_PATH = Path("tests/infra/excel/data/sabt_expected.csv")
 _NUMERIC_FIELDS = {"معدل", "معدل نیم سال"}
 _DATE_FIELDS = {"تاریخ تولد", "تاریخ ثبت نام", "تاریخ اولین آزمون"}
+_STUDENT_IDS = [5003, 5001, 5002, 5005, 5004]
 
 
 @pytest.fixture(scope="module")
@@ -33,11 +34,13 @@ def sabt_profile() -> list[AllocationExportColumn]:
 
 @pytest.fixture(scope="module")
 def sample_allocations_df() -> pd.DataFrame:
+    source_index = {sid: idx for idx, sid in enumerate(_STUDENT_IDS)}
     return pd.DataFrame(
         {
-            "student_id": [5003, 5001, 5002, 5005, 5004],
+            "student_id": _STUDENT_IDS,
             "mentor_id": [801, 800, 802, 804, 803],
             "mentor_alias_code": [1903, 1901, 1902, 1905, 1904],
+            "__source_index__": [source_index[sid] for sid in _STUDENT_IDS],
         }
     )
 
@@ -48,8 +51,10 @@ def sample_students_df(sabt_profile: list[AllocationExportColumn]) -> pd.DataFra
 
 
 def _build_sample_students_frame(profile: list[AllocationExportColumn]) -> pd.DataFrame:
-    student_ids = [5003, 5001, 5002, 5005, 5004]
-    data: dict[str, list] = {"student_id": student_ids}
+    data: dict[str, list] = {
+        "student_id": _STUDENT_IDS,
+        "__source_index__": list(range(len(_STUDENT_IDS))),
+    }
     for column in profile:
         if column.source_kind != "student":
             continue
@@ -58,12 +63,12 @@ def _build_sample_students_frame(profile: list[AllocationExportColumn]) -> pd.Da
             continue
         if field in _DATE_FIELDS:
             start = pd.Timestamp("2024-01-01")
-            data[field] = [start + pd.Timedelta(days=idx) for idx in range(len(student_ids))]
+            data[field] = [start + pd.Timedelta(days=idx) for idx in range(len(_STUDENT_IDS))]
         elif field in _NUMERIC_FIELDS:
             base_value = 18.0 if field == "معدل" else 17.0
-            data[field] = [base_value + idx for idx in range(len(student_ids))]
+            data[field] = [base_value + idx for idx in range(len(_STUDENT_IDS))]
         else:
-            data[field] = [f"{field}-{idx + 1}" for idx in range(len(student_ids))]
+            data[field] = [f"{field}-{idx + 1}" for idx in range(len(_STUDENT_IDS))]
     return pd.DataFrame(data)
 
 
@@ -125,11 +130,13 @@ def test_build_sabt_export_frame_sources_allocation_and_student_correctly() -> N
             "student_id": [2, 1],
             "mentor_id": ["M-2", "M-1"],
             "mentor_alias_code": ["A2", "A1"],
+            "__source_index__": [1, 0],
         }
     )
     students_df = pd.DataFrame(
         {
             "student_id": [1, 2],
+            "__source_index__": [0, 1],
             "کدملی": ["001", "002"],
             "نام": ["الف", "ب"],
             "معدل": [18.5, 19.0],
@@ -192,11 +199,13 @@ def test_build_sabt_export_frame_matches_profile_against_english_headers() -> No
             "student_id": [101],
             "mentor_id": ["M-1"],
             "mentor_alias_code": ["A-1"],
+            "__source_index__": [0],
         }
     )
     students_df = pd.DataFrame(
         {
             "student_id": [101],
+            "__source_index__": [0],
             "group_code": ["3001"],
             "gender": ["1"],
         }
@@ -246,11 +255,13 @@ def test_build_sabt_export_frame_preserves_registration_status_over_finance() ->
             "student_id": [1, 2, 3],
             "mentor_id": ["M-1", "M-2", "M-3"],
             "mentor_alias_code": ["A-1", "A-2", "A-3"],
+            "__source_index__": [0, 1, 2],
         }
     )
     students_df = pd.DataFrame(
         {
             "student_id": [1, 2, 3],
+            "__source_index__": [0, 1, 2],
             "student_registration_status": [0, 1, 3],
             "student_finance": [3, 0, 0],
         }
@@ -268,7 +279,7 @@ def test_build_sabt_export_frame_preserves_registration_status_over_finance() ->
             key="student_registration_status",
             header="وضعیت ثبت نام",
             source_kind="student",
-            source_field="وضعیت ثبت نام",
+            source_field="student_registration_status",
             literal_value=None,
             order=2,
         ),
@@ -285,11 +296,13 @@ def test_export_sabt_excel_headers_and_types(tmp_path: Path) -> None:
             "student_id": [10],
             "mentor_id": [111],
             "mentor_alias_code": [700],
+            "__source_index__": [0],
         }
     )
     students_df = pd.DataFrame(
         {
             "student_id": [10],
+            "__source_index__": [0],
             "نام": ["آراد"],
             "معدل": [19.25],
         }
