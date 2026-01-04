@@ -16,10 +16,7 @@ import pandas as pd
 from app.core.common.columns import canonicalize_headers, ensure_series
 from app.core.common.isin_guard import isin_mask
 from app.core.common.normalization import normalize_fa
-from app.core.common.phone_rules import (
-    normalize_landline_series,
-    normalize_mobile,
-)
+from app.core.common.phone_rules import normalize_mobile
 from app.core.pipeline import (
     REGISTRATION_STATUS_CANDIDATES,
     debug_registration_distribution,
@@ -1091,9 +1088,6 @@ def build_sheet2_frame(
         if landline_source is not None:
             aligned_landline = ensure_series(landline_source).reindex(df_alloc.index)
             sheet[landline_column] = aligned_landline.astype("string").fillna("")
-        sheet[landline_column] = normalize_landline_series(
-            sheet[landline_column], allow_special_zero=True
-        ).fillna("")
 
     sheet = sheet.astype({column: "string" for column in sheet.columns})
     sheet.attrs["exporter_config"] = exporter_cfg

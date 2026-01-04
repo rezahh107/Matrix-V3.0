@@ -122,7 +122,7 @@ class MentorPipelineV3:
         self,
         path: Path,
         *,
-        pool_type: pool_loader.PoolType = "inspactor",
+        pool_type: pool_loader.PoolType = "matrix",
         pool_sheet: str | None = None,
     ) -> MentorPipelineResult:
         raw_df, _ = pool_loader.load_pool_with_detection(

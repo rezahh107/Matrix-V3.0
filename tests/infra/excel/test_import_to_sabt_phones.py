@@ -124,7 +124,7 @@ def test_phone_rules_in_sheet2_output() -> None:
     assert sheet.loc[0, "تلفن رابط 2"] == ""
     assert sheet.loc[0, "تلفن ثابت"] == "3512345678"
 
-    assert sheet.loc[1, "تلفن ثابت"] == ""
+    assert sheet.loc[1, "تلفن ثابت"] == "6123456789"
 
     assert sheet.loc[2, "تلفن همراه"] == "09123456789"
     assert sheet.loc[2, "تلفن رابط 1"] == "09351112233"
@@ -133,7 +133,7 @@ def test_phone_rules_in_sheet2_output() -> None:
     assert sheet.loc[2, "کد رهگیری حکمت"] == "1111111111111111"
 
     assert sheet.loc[3, "تلفن همراه"] == ""
-    assert sheet.loc[3, "تلفن ثابت"] == "00000000000"
+    assert sheet.loc[3, "تلفن ثابت"] == "2123456789"
     assert sheet.loc[3, "کد رهگیری حکمت"] == "1111111111111111"
 
     assert sheet["کد رهگیری حکمت"].dtype == "string"
