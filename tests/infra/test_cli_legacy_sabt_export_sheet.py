@@ -8,8 +8,8 @@ from app.infra.cli_legacy import (
     _attach_sabt_sheet_if_selected,
     _build_sabt_allocations_if_needed,
 )
-from app.infra.io_utils import write_xlsx_atomic
 from app.infra.excel import export_allocations as sabt_exports
+from app.infra.io_utils import write_xlsx_atomic
 
 
 def test_allocations_sabt_sheet_included_without_sabt_output(tmp_path: Path) -> None:
