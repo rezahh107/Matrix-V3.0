@@ -20,6 +20,7 @@ from app.core.common.trace import JOIN_STAGE_SOURCE_KEYS
 from app.core.common.types import CANONICAL_TRACE_ORDER
 from app.core.pipeline import enrich_student_contacts
 from app.core.policy_loader import PolicyConfig
+from app.core.qa.invariants import QaRuleResult, QaViolation
 from app.infra.common.header_pipeline_v3 import HeaderPipelineV3
 from app.infra.excel.common import (
     attach_contact_columns,
@@ -37,7 +38,12 @@ __all__ = [
     "collect_trace_debug_sheets",
     "export_sabt_excel",
     "DEFAULT_SABT_PROFILE_PATH",
+    "ProfileMappingIssue",
+    "build_profile_mapping_rule_result",
 ]
+
+
+SABT_PROFILE_RULE_ID = "QA_RULE_SABT_PROFILE_01"
 
 
 DEFAULT_SABT_PROFILE_PATH = Path("docs/Report (4).xlsx")
@@ -58,6 +64,17 @@ _ALLOCATION_HEADER_MAP = {
     normalize_fa("کپی کد جایگزین 39"): "mentor_alias_code",
 }
 _ASCII_KEY_PATTERN = re.compile(r"[^0-9a-z]+")
+
+
+@dataclass(frozen=True)
+class ProfileMappingIssue:
+    """Structured issue for unresolved SABT export profile mappings."""
+
+    output_column_name: str
+    referenced_source_field: str
+    dataset_frame_expected: Literal["students", "allocations"]
+    profile_path: str | Path | None = None
+    mapping_hint: str | None = None
 
 
 def _resolve_headers(df: pd.DataFrame, source: str) -> pd.DataFrame:
@@ -101,6 +118,8 @@ class AllocationExportColumn:
     literal_value: str | int | float | None
     order: int
     mapping_hint: str | None = None
+    profile_path: Path | None = None
+    profile_row: int | None = None
 
 
 def load_sabt_export_profile(
@@ -124,7 +143,7 @@ def load_sabt_export_profile(
     numeric_count = int(numeric_orders.notna().sum())
     records: list[AllocationExportColumn] = []
 
-    for row in df.itertuples(index=False, name=None):
+    for row_number, row in enumerate(df.itertuples(index=False, name=None), start=2):
         header = _clean_text(row[idx_header])
         value_map = _clean_text(row[idx_value])
         source = _clean_text(row[idx_source])
@@ -169,6 +188,8 @@ def load_sabt_export_profile(
                 literal_value=literal_value,
                 order=order,
                 mapping_hint=value_map or header,
+                profile_path=str(profile_path),
+                profile_row=row_number,
             )
         )
 
@@ -224,6 +245,7 @@ def build_sabt_export_frame(
     profile: Sequence[AllocationExportColumn],
     *,
     summary_df: pd.DataFrame | None = None,
+    profile_path: Path | None = None,
 ) -> pd.DataFrame:
     """ساخت دیتافریم Sabt با join روی student_id و مرتب‌سازی پایدار.
 
@@ -235,6 +257,25 @@ def build_sabt_export_frame(
         raise ValueError("Sabt export profile is empty")
 
     pipeline = HeaderPipelineV3()
+
+    profile_issues: list[ProfileMappingIssue] = []
+    profile_path_str = str(profile_path) if profile_path else None
+
+    def _record_issue(
+        *,
+        column: AllocationExportColumn,
+        requested_field: str,
+        dataset: Literal["students", "allocations"],
+    ) -> None:
+        profile_issues.append(
+            ProfileMappingIssue(
+                output_column_name=column.header,
+                referenced_source_field=requested_field,
+                dataset_frame_expected=dataset,
+                profile_path=profile_path_str,
+                mapping_hint=column.mapping_hint,
+            )
+        )
 
     alloc_resolved = pipeline.resolve(allocation_df, source="allocation").require_can_continue(
         path="allocation_df", reason_fa="هدرهای تخصیص برای Sabt نامعتبر است"
@@ -262,7 +303,14 @@ def build_sabt_export_frame(
                     export_data[column.header] = series
                     continue
                 canonical = pipeline.resolve_field(requested_field, "allocation")
-                if canonical is None or canonical not in alloc_resolved.columns:
+                if canonical is None:
+                    missing_columns.add(requested_field)
+                    _record_issue(
+                        column=column,
+                        requested_field=requested_field,
+                        dataset="allocations",
+                    )
+                elif canonical not in alloc_resolved.columns:
                     missing_columns.add(requested_field)
                 series = pd.Series(pd.NA, index=index, dtype="object")
             elif column.source_kind == "student":
@@ -272,7 +320,14 @@ def build_sabt_export_frame(
                     export_data[column.header] = series
                     continue
                 canonical = pipeline.resolve_field(requested_field, "student")
-                if canonical is None or canonical not in students_resolved.columns:
+                if canonical is None:
+                    missing_columns.add(requested_field)
+                    _record_issue(
+                        column=column,
+                        requested_field=requested_field,
+                        dataset="students",
+                    )
+                elif canonical not in students_resolved.columns:
                     missing_columns.add(requested_field)
                 series = pd.Series(pd.NA, index=index, dtype="object")
             else:
@@ -288,6 +343,7 @@ def build_sabt_export_frame(
         code_headers = identify_code_headers(profile)
         export_df = enforce_text_columns(export_df, headers=code_headers)
         export_df.attrs["missing_student_columns"] = sorted(missing_columns)
+        export_df.attrs["profile_mapping_issues"] = profile_issues
         return export_df
 
     if "student_id" not in alloc_resolved.columns:
@@ -358,12 +414,14 @@ def build_sabt_export_frame(
                 continue
             canonical = pipeline.resolve_field(requested_field, "allocation")
             if canonical is None:
-                available = ", ".join(sorted(alloc_resolved.columns)[:5])
-                raise KeyError(
-                    "Allocation column not found for Sabt export; "
-                    f"requested={requested_field!r}, available=[{available}]"
+                missing_columns.add(requested_field)
+                _record_issue(
+                    column=column,
+                    requested_field=requested_field,
+                    dataset="allocations",
                 )
-            if canonical not in alloc_resolved.columns:
+                series = pd.Series(pd.NA, index=alloc_resolved.index, dtype="object")
+            elif canonical not in alloc_resolved.columns:
                 missing_columns.add(requested_field)
                 series = pd.Series(pd.NA, index=alloc_resolved.index, dtype="object")
             else:
@@ -375,16 +433,22 @@ def build_sabt_export_frame(
                 export_data[column.header] = series
                 continue
             canonical = pipeline.resolve_field(requested_field, "student")
-            if canonical is None or canonical not in students_resolved.columns:
-                available = ", ".join(sorted(students_resolved.columns)[:5])
-                raise KeyError(
-                    "Student column not found for Sabt export; "
-                    f"requested={requested_field!r}, available=[{available}]"
+            if canonical is None:
+                missing_columns.add(requested_field)
+                _record_issue(
+                    column=column,
+                    requested_field=requested_field,
+                    dataset="students",
                 )
-            series = ensure_series(students_resolved[canonical]).copy()
-            series.index = alloc_resolved.index
-            if canonical == "student_landline":
-                landline_headers.append(column.header)
+                series = pd.Series(pd.NA, index=alloc_resolved.index, dtype="object")
+            elif canonical not in students_resolved.columns:
+                missing_columns.add(requested_field)
+                series = pd.Series(pd.NA, index=alloc_resolved.index, dtype="object")
+            else:
+                series = ensure_series(students_resolved[canonical]).copy()
+                series.index = alloc_resolved.index
+                if canonical == "student_landline":
+                    landline_headers.append(column.header)
         else:
             literal = column.literal_value
             series = pd.Series([literal] * len(alloc_resolved), index=alloc_resolved.index)
@@ -418,7 +482,44 @@ def build_sabt_export_frame(
     code_headers = identify_code_headers(profile)
     export_df = enforce_text_columns(export_df, headers=code_headers)
     export_df.attrs["missing_student_columns"] = sorted(missing_columns)
+    export_df.attrs["profile_mapping_issues"] = profile_issues
     return export_df
+
+
+def build_profile_mapping_rule_result(
+    issues: Sequence[ProfileMappingIssue],
+) -> QaRuleResult | None:
+    """Convert SABT profile mapping issues into a QA rule result."""
+
+    if not issues:
+        return None
+
+    violations = []
+    for issue in issues:
+        message = (
+            "SABT export profile references an unknown source field: "
+            f"output={issue.output_column_name!r} source={issue.referenced_source_field!r}"
+        )
+        details: dict[str, object] = {
+            "output_column_name": issue.output_column_name,
+            "referenced_source_field": issue.referenced_source_field,
+            "dataset_frame_expected": issue.dataset_frame_expected,
+            "suggested_next_action": "fix profile mapping to exact canonical field name",
+        }
+        if issue.profile_path:
+            details["profile_path"] = issue.profile_path
+        if issue.mapping_hint:
+            details["mapping_hint"] = issue.mapping_hint
+        violations.append(
+            QaViolation(
+                rule_id=SABT_PROFILE_RULE_ID,
+                level="error",
+                message=message,
+                details=details,
+            )
+        )
+
+    return QaRuleResult(rule_id=SABT_PROFILE_RULE_ID, passed=True, violations=violations)
 
 
 def _empty_history_metrics_df() -> pd.DataFrame:
@@ -1028,8 +1129,15 @@ def export_sabt_excel(
 ) -> Path:
     """نوشتن خروجی Sabt در فایل Excel مستقل با ساختار پایدار."""
 
-    profile = load_sabt_export_profile(profile_path or DEFAULT_SABT_PROFILE_PATH)
-    export_df = build_sabt_export_frame(allocation_df, students_df, profile, summary_df=summary_df)
+    resolved_profile_path = profile_path or DEFAULT_SABT_PROFILE_PATH
+    profile = load_sabt_export_profile(resolved_profile_path)
+    export_df = build_sabt_export_frame(
+        allocation_df,
+        students_df,
+        profile,
+        summary_df=summary_df,
+        profile_path=resolved_profile_path,
+    )
     sheets: dict[str, pd.DataFrame] = {sheet_name: export_df}
     if extra_sheets:
         sheets.update(extra_sheets)
@@ -1041,3 +1149,4 @@ def export_sabt_excel(
         sheet_prepare_modes={sheet_name: "raw"},
     )
     return output_path
+

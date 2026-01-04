@@ -77,7 +77,6 @@ from app.core.policy_loader import MentorStatus, PolicyConfig, load_policy
 from app.core.qa.invariants import QaReport, run_all_invariants
 from app.infra import history_store, pool_loader
 from app.infra.audit_allocations import audit_allocations, summarize_report
-from app.infra.common.header_pipeline_v3 import HeaderPipelineV3
 from app.infra.config_flags import (
     UserSettings,
     coerce_user_settings,
@@ -94,6 +93,7 @@ from app.infra.errors import (
 )
 from app.infra.excel.export_allocations import (
     DEFAULT_SABT_PROFILE_PATH,
+    build_profile_mapping_rule_result,
     build_sabt_export_frame,
     collect_trace_debug_sheets,
     load_sabt_export_profile,
@@ -2160,26 +2160,15 @@ def _build_sabt_allocations_if_needed(
     if export_profile_choice != "sabt":
         return None
 
-    sabt_profile = load_sabt_export_profile(Path(export_profile_path))
-    pipeline = HeaderPipelineV3()
-    students_prepared = students_df.copy()
-
-    for column in sabt_profile:
-        if column.source_kind != "student":
-            continue
-        requested_field = column.source_field or column.header
-        canonical = pipeline.resolve_field(requested_field, "student")
-        if canonical is not None and canonical not in students_prepared.columns:
-            filler = ["" for _ in range(len(students_prepared))]
-            students_prepared[canonical] = pd.Series(
-                filler, index=students_prepared.index, dtype="string"
-            )
+    sabt_profile_path = Path(export_profile_path)
+    sabt_profile = load_sabt_export_profile(sabt_profile_path)
 
     return build_sabt_export_frame(
         allocations_df,
-        students_prepared,
+        students_df.copy(),
         profile=sabt_profile,
         summary_df=summary_df,
+        profile_path=sabt_profile_path,
     )
 
 
@@ -3393,6 +3382,12 @@ def _allocate_and_write(
             else None,
             enable_pool_coverage_rules=resolved_settings.enable_qa_pool_coverage_rules,
         )
+        if export_profile_choice == "sabt" and isinstance(sabt_allocations_df, pd.DataFrame):
+            profile_rule = build_profile_mapping_rule_result(
+                sabt_allocations_df.attrs.get("profile_mapping_issues", [])
+            )
+            if profile_rule is not None:
+                qa_report.results.append(profile_rule)
         qa_meta = _build_qa_meta(
             run_uuid=run_uuid,
             command_name=command_name,

@@ -10,6 +10,7 @@ from pathlib import Path
 import pandas as pd
 
 from app.core.qa.invariants import QaReport
+from app.infra.excel.export_allocations import SABT_PROFILE_RULE_ID
 from app.infra.io_utils import write_xlsx_atomic
 
 __all__ = ["QaValidationContext", "export_qa_validation"]
@@ -23,6 +24,7 @@ _RULE_DESCRIPTIONS: dict[str, str] = {
     "QA_RULE_POOL_JOIN_01": "ردیف تکراری روی کلید ترکیبی mentor_id و کلیدهای اتصال",
     "QA_RULE_POOL_COVERAGE_01": "پوشش استخر منتور برای کلیدهای join دانش‌آموز",
     "QA_RULE_POOL_DIVERSITY_01": "تنوع مقادیر کلیدی در استخر منتور",
+    SABT_PROFILE_RULE_ID: "پروفایل خروجی Sabt شامل مپینگ نامعتبر ستون",
 }
 
 
