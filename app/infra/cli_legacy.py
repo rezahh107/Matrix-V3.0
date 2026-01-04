@@ -77,6 +77,7 @@ from app.core.policy_loader import MentorStatus, PolicyConfig, load_policy
 from app.core.qa.invariants import QaReport, run_all_invariants
 from app.infra import history_store, pool_loader
 from app.infra.audit_allocations import audit_allocations, summarize_report
+from app.infra.common.header_pipeline_v3 import HeaderPipelineV3
 from app.infra.config_flags import (
     UserSettings,
     coerce_user_settings,
@@ -2146,6 +2147,62 @@ def _maybe_export_import_to_sabt(
         )
 
 
+def _build_sabt_allocations_if_needed(
+    *,
+    allocations_df: pd.DataFrame,
+    students_df: pd.DataFrame,
+    export_profile_choice: str,
+    export_profile_path: str,
+    summary_df: pd.DataFrame | None,
+) -> pd.DataFrame | None:
+    """Construct the SABT allocations frame when the SABT profile is selected."""
+
+    if export_profile_choice != "sabt":
+        return None
+
+    sabt_profile = load_sabt_export_profile(Path(export_profile_path))
+    pipeline = HeaderPipelineV3()
+    students_prepared = students_df.copy()
+
+    for column in sabt_profile:
+        if column.source_kind != "student":
+            continue
+        requested_field = column.source_field or column.header
+        canonical = pipeline.resolve_field(requested_field, "student")
+        if canonical is not None and canonical not in students_prepared.columns:
+            filler = ["" for _ in range(len(students_prepared))]
+            students_prepared[canonical] = pd.Series(
+                filler, index=students_prepared.index, dtype="string"
+            )
+
+    return build_sabt_export_frame(
+        allocations_df,
+        students_prepared,
+        profile=sabt_profile,
+        summary_df=summary_df,
+    )
+
+
+def _attach_sabt_sheet_if_selected(
+    *,
+    sheets: dict[str, pd.DataFrame],
+    header_overrides: dict[str, HeaderMode | None],
+    export_profile_choice: str,
+    sabt_allocations_df: pd.DataFrame | None,
+) -> None:
+    """Attach SABT sheet deterministically when the SABT profile is active."""
+
+    if export_profile_choice != "sabt":
+        return
+    if sabt_allocations_df is None:
+        raise ValueError(
+            "SABT export profile selected but sabt_allocations_df is missing"
+        )
+
+    sheets["allocations_sabt"] = sabt_allocations_df
+    header_overrides["allocations_sabt"] = None
+
+
 def _compose_duplicate_display_name(row: pd.Series) -> str:
     """تولید نام قابل‌خواندن برای گزارش ردیف تکراری."""
 
@@ -3251,14 +3308,13 @@ def _allocate_and_write(
             args, "export_profile_path", str(_DEFAULT_ALLOC_PROFILE_PATH)
         ) or str(_DEFAULT_ALLOC_PROFILE_PATH)
         students_for_export = students_spine.copy()
-        if export_profile_choice == "sabt" and args.sabt_output:
-            sabt_profile = load_sabt_export_profile(Path(export_profile_path))
-            sabt_allocations_df = build_sabt_export_frame(
-                allocations_df,
-                students_for_export,
-                profile=sabt_profile,
-                summary_df=trace_extras.summary_df if trace_extras else None,
-            )
+        sabt_allocations_df = _build_sabt_allocations_if_needed(
+            allocations_df=allocations_df,
+            students_df=students_for_export,
+            export_profile_choice=export_profile_choice,
+            export_profile_path=export_profile_path,
+            summary_df=trace_extras.summary_df if trace_extras else None,
+        )
 
         allocations_df = allocations_df.drop(columns=["__source_index__"], errors="ignore")
 
@@ -3316,8 +3372,14 @@ def _allocate_and_write(
         join_key_audit_sheet = build_join_key_audit_sheet(join_key_audit.audit_frame, policy=policy)
         join_key_summary_sheet = build_join_key_summary_sheet(join_key_audit.audit_frame)
 
-        if sabt_allocations_df is not None:
-            sabt_allocations_df = _ensure_valid_dataframe(sabt_allocations_df, "allocations_sabt")
+        if export_profile_choice == "sabt":
+            if sabt_allocations_df is None:
+                raise ValueError(
+                    "SABT export profile selected but sabt_allocations_df was not built"
+                )
+            sabt_allocations_df = _ensure_valid_dataframe(
+                sabt_allocations_df, "allocations_sabt"
+            )
 
         qa_report = run_all_invariants(
             policy=policy,
@@ -3495,12 +3557,13 @@ def _allocate_and_write(
         # --- پایان پاک‌سازی ---
 
         progress(90, "writing outputs")
-        if sabt_allocations_df is not None:
-            sheets["allocations"] = allocations_df
-            sheets["allocations_sabt"] = sabt_allocations_df
-            header_overrides["allocations_sabt"] = None
-        else:
-            sheets["allocations"] = allocations_df
+        sheets["allocations"] = allocations_df
+        _attach_sabt_sheet_if_selected(
+            sheets=sheets,
+            header_overrides=header_overrides,
+            export_profile_choice=export_profile_choice,
+            sabt_allocations_df=sabt_allocations_df,
+        )
         sheets["updated_pool"] = updated_pool_df
         sheets["logs"] = logs_df
         if resolved_settings.enable_trace_export:
