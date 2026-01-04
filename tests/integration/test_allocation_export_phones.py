@@ -155,7 +155,7 @@ def test_allocation_exports_share_phone_policy() -> None:
     assert sabt["تلفن رابط 1"].tolist() == expected_guardian
     assert sabt["تلفن رابط 2"].fillna("").tolist() == ["", ""]
 
-    expected_landline = ["3512345678", "00000000000"]
+    expected_landline = ["3512345678", "7123456"]
     assert sheet["تلفن ثابت"].tolist() == expected_landline
     assert sabt["تلفن ثابت"].tolist() == expected_landline
 

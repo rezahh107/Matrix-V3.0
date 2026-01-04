@@ -5,11 +5,10 @@ from typing import Any
 
 import pandas as pd
 
-from app.core.common.columns import CANON_EN_TO_FA
+from app.core.common.columns import CANON_EN_TO_FA, ensure_series
 from app.core.common.phone_rules import (
     apply_hekmat_contact_policy,
     fix_guardian_phone_columns,
-    normalize_landline_series,
     normalize_mobile_series,
 )
 
@@ -246,7 +245,8 @@ def enrich_student_contacts(df: pd.DataFrame) -> pd.DataFrame:
 
     - تمام ستون‌های موبایل (دانش‌آموز و رابط‌ها) نرمال می‌شوند و ستون‌های استاندارد
       ``student_mobile``، ``contact1_mobile`` و ``contact2_mobile`` همیشه پر هستند.
-    - تلفن ثابت در ``student_landline`` فقط مقادیر معتبر (شروع با 3 یا 5) را نگه می‌دارد.
+    - تلفن ثابت در ``student_landline`` بدون پالایش حذف‌کننده به‌صورت متنی عبور داده
+      می‌شود تا مقادیر ورودی (همراه با صفر پیشتاز) حفظ شوند.
     - ستون‌های وضعیت ثبت‌نام و «کد رهگیری حکمت» در صورت نبود ساخته می‌شوند و سپس قانون
       :func:`apply_hekmat_contact_policy` روی دیتافریم اعمال می‌شود تا fallback تلفن ثابت و
       کد رهگیری ثابت برای ردیف‌های حکمت تنظیم شود.
@@ -277,10 +277,10 @@ def enrich_student_contacts(df: pd.DataFrame) -> pd.DataFrame:
 
     landline_column = _first_existing(result, _LANDLINE_CANDIDATES, "student_landline")
     _ensure_column(result, landline_column)
-    landline_normalized = normalize_landline_series(result[landline_column])
-    result[landline_column] = landline_normalized
+    landline_passthrough = ensure_series(result[landline_column]).astype("string")
+    result[landline_column] = landline_passthrough
     if landline_column != "student_landline":
-        result["student_landline"] = landline_normalized
+        result["student_landline"] = landline_passthrough
 
     status_column, status_numeric = _select_registration_status(result)
     canonical_status_column = "student_registration_status"
