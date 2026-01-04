@@ -74,6 +74,7 @@ class ProfileMappingIssue:
     referenced_source_field: str
     dataset_frame_expected: Literal["students", "allocations"]
     profile_path: str | Path | None = None
+    profile_row: int | None = None
     mapping_hint: str | None = None
 
 
