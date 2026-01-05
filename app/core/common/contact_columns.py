@@ -31,6 +31,10 @@ __all__ = [
 _HEADER_CLEANUP_RE: Final[re.Pattern[str]] = re.compile(r"[_\-|\u200c]")
 
 
+def _normalize_header_for_detection(label: object) -> str:
+    return " ".join(_HEADER_CLEANUP_RE.sub(" ", str(label)).casefold().split())
+
+
 TRACKING_CODE_COLUMN_NAMES: Final[frozenset[str]] = frozenset(
     {
         "student_hekmat_tracking_code",
@@ -104,27 +108,27 @@ MOBILE_COLUMN_KEYWORDS: Final[tuple[str, ...]] = (
 )
 
 _NORMALIZED_MOBILE_HEADERS: Final[frozenset[str]] = frozenset(
-    " ".join(_HEADER_CLEANUP_RE.sub(" ", name).casefold().split())
-    for name in MOBILE_COLUMN_NAMES
+    _normalize_header_for_detection(name) for name in MOBILE_COLUMN_NAMES
 )
 
 _NORMALIZED_LANDLINE_HEADERS: Final[frozenset[str]] = frozenset(
-    " ".join(_HEADER_CLEANUP_RE.sub(" ", name).casefold().split())
-    for name in LANDLINE_COLUMN_NAMES
+    _normalize_header_for_detection(name) for name in LANDLINE_COLUMN_NAMES
 )
+
+assert _NORMALIZED_MOBILE_HEADERS.isdisjoint(_NORMALIZED_LANDLINE_HEADERS)
 
 
 def is_mobile_header(label: object) -> bool:
     """تشخیص ستون موبایل بر اساس نام‌های صریح تعریف‌شده."""
 
-    normalized = " ".join(_HEADER_CLEANUP_RE.sub(" ", str(label)).casefold().split())
+    normalized = _normalize_header_for_detection(label)
     return normalized in _NORMALIZED_MOBILE_HEADERS
 
 
 def is_landline_header(label: object) -> bool:
     """تشخیص ستون تلفن ثابت بر اساس لیست ثابت هدرها."""
 
-    normalized = " ".join(_HEADER_CLEANUP_RE.sub(" ", str(label)).casefold().split())
+    normalized = _normalize_header_for_detection(label)
     return normalized in _NORMALIZED_LANDLINE_HEADERS
 
 
