@@ -13,7 +13,7 @@ import os
 import re
 import tempfile
 import warnings
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from os import PathLike
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, cast
@@ -24,7 +24,9 @@ from app.core.build_matrix import REQUIRED_INSPACTOR_COLUMNS
 from app.core.common.columns import CANON_EN_TO_FA, canonicalize_headers, ensure_series
 from app.core.common.contact_columns import (
     TEXT_SENSITIVE_COLUMN_NAMES,
+    is_landline_header,
     is_mobile_header,
+    normalize_landline_series_for_export,
     normalize_mobile_series_for_export,
 )
 from app.core.inspactor_schema_helper import missing_inspactor_columns
@@ -214,15 +216,40 @@ def write_json_report(path: Path, payload: Mapping[str, object]) -> Path:
     return path
 
 
-def _normalize_mobile_columns(df: pd.DataFrame) -> None:
-    """اعمال قالب متنی و صفر پیشتاز روی ستون‌های موبایل شناسایی‌شده."""
+def _normalize_contact_columns(
+    df: pd.DataFrame,
+    *,
+    header_check_fn: Callable[[object], bool],
+    normalize_fn: Callable[[pd.Series], pd.Series],
+) -> None:
+    """Normalize contact columns using the provided detector and normalizer."""
 
     if df.empty:
         return
-    target_columns = [column for column in df.columns if is_mobile_header(column)]
+    target_columns = [column for column in df.columns if header_check_fn(column)]
     for column in target_columns:
         series = ensure_series(df[column])
-        df[column] = normalize_mobile_series_for_export(series)
+        df[column] = normalize_fn(series)
+
+
+def _normalize_mobile_columns(df: pd.DataFrame) -> None:
+    """اعمال قالب متنی و صفر پیشتاز روی ستون‌های موبایل شناسایی‌شده."""
+
+    _normalize_contact_columns(
+        df,
+        header_check_fn=is_mobile_header,
+        normalize_fn=normalize_mobile_series_for_export,
+    )
+
+
+def _normalize_landline_columns(df: pd.DataFrame) -> None:
+    """نرمال‌سازی ستون‌های تلفن ثابت با حفظ مقدار ویژهٔ حکمت."""
+
+    _normalize_contact_columns(
+        df,
+        header_check_fn=is_landline_header,
+        normalize_fn=normalize_landline_series_for_export,
+    )
 
 
 def _stringify_text_sensitive_columns(df: pd.DataFrame) -> None:
@@ -267,6 +294,7 @@ def _prepare_dataframe_for_excel(df: pd.DataFrame) -> pd.DataFrame:
     frame.columns = _make_unique_columns(list(map(str, frame.columns)))
 
     converted = frame.copy()
+    _normalize_landline_columns(converted)
     _normalize_mobile_columns(converted)
     _stringify_text_sensitive_columns(converted)
     for column, dtype in converted.dtypes.items():

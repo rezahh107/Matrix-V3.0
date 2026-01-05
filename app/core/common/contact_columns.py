@@ -1,4 +1,4 @@
-"""SSOT ستون‌های تماس و نرمال‌سازی امن موبایل برای خروجی اکسل.
+"""SSOT ستون‌های تماس و نرمال‌سازی امن موبایل و تلفن ثابت برای خروجی اکسل.
 
 این ماژول تنها منبع نام ستون‌های موبایل/تلفن است تا همهٔ مصرف‌کننده‌ها
 از یک مجموعه‌ی واحد استفاده کنند. علاوه‌بر آن، تابعی برای تبدیل ورودی‌های
@@ -13,19 +13,26 @@ from typing import Final
 
 import pandas as pd
 
-from app.core.common.phone_rules import normalize_mobile
+from app.core.common.phone_rules import normalize_landline, normalize_mobile
 
 __all__ = [
     "MOBILE_COLUMN_NAMES",
+    "LANDLINE_COLUMN_NAMES",
     "MOBILE_COLUMN_KEYWORDS",
     "TEXT_SENSITIVE_COLUMN_NAMES",
     "TRACKING_CODE_COLUMN_NAMES",
     "is_mobile_header",
+    "is_landline_header",
     "normalize_mobile_series_for_export",
+    "normalize_landline_series_for_export",
 ]
 
 
 _HEADER_CLEANUP_RE: Final[re.Pattern[str]] = re.compile(r"[_\-|\u200c]")
+
+
+def _normalize_header_for_detection(label: object) -> str:
+    return " ".join(_HEADER_CLEANUP_RE.sub(" ", str(label)).casefold().split())
 
 
 TRACKING_CODE_COLUMN_NAMES: Final[frozenset[str]] = frozenset(
@@ -59,11 +66,6 @@ MOBILE_COLUMN_NAMES: Final[frozenset[str]] = frozenset(
         "parent_mobile_2",
         "تلفن همراه پدر",
         "تلفن همراه مادر",
-        "تلفن منزل",
-        "student_landline",
-        "landline",
-        "student_phone",
-        "student_home_phone",
         "تلفن همراه",
         "تلفن همراه | student_mobile",
         "تلفن همراه داوطلب",
@@ -71,17 +73,29 @@ MOBILE_COLUMN_NAMES: Final[frozenset[str]] = frozenset(
         "موبایل دانش‌آموز",
         "موبایل رابط 1",
         "موبایل رابط 2",
-        "تلفن رابط 1",
         "تلفن رابط 1 | contact1_mobile",
-        "تلفن رابط 2",
         "تلفن رابط 2 | contact2_mobile",
+    }
+)
+
+LANDLINE_COLUMN_NAMES: Final[frozenset[str]] = frozenset(
+    {
+        "student_landline",
+        "student_home_phone",
+        "student_phone",
+        "landline",
+        "تلفن منزل",
         "تلفن ثابت",
         "تلفن",
     }
 )
 
+assert MOBILE_COLUMN_NAMES.isdisjoint(
+    LANDLINE_COLUMN_NAMES
+), "Mobile and landline column registries must not overlap"
+
 TEXT_SENSITIVE_COLUMN_NAMES: Final[frozenset[str]] = (
-    MOBILE_COLUMN_NAMES | TRACKING_CODE_COLUMN_NAMES
+    MOBILE_COLUMN_NAMES | LANDLINE_COLUMN_NAMES | TRACKING_CODE_COLUMN_NAMES
 )
 
 MOBILE_COLUMN_KEYWORDS: Final[tuple[str, ...]] = (
@@ -93,17 +107,29 @@ MOBILE_COLUMN_KEYWORDS: Final[tuple[str, ...]] = (
     "شماره همراه",
 )
 
+_NORMALIZED_MOBILE_HEADERS: Final[frozenset[str]] = frozenset(
+    _normalize_header_for_detection(name) for name in MOBILE_COLUMN_NAMES
+)
+
+_NORMALIZED_LANDLINE_HEADERS: Final[frozenset[str]] = frozenset(
+    _normalize_header_for_detection(name) for name in LANDLINE_COLUMN_NAMES
+)
+
+assert _NORMALIZED_MOBILE_HEADERS.isdisjoint(_NORMALIZED_LANDLINE_HEADERS)
+
 
 def is_mobile_header(label: object) -> bool:
-    """تشخیص ستون موبایل بر اساس نام صریح یا کلیدواژه‌های رایج."""
+    """تشخیص ستون موبایل بر اساس نام‌های صریح تعریف‌شده."""
 
-    label_text = str(label)
-    if label_text in MOBILE_COLUMN_NAMES:
-        return True
+    normalized = _normalize_header_for_detection(label)
+    return normalized in _NORMALIZED_MOBILE_HEADERS
 
-    normalized = " ".join(_HEADER_CLEANUP_RE.sub(" ", label_text).casefold().split())
 
-    return any(keyword in normalized for keyword in MOBILE_COLUMN_KEYWORDS)
+def is_landline_header(label: object) -> bool:
+    """تشخیص ستون تلفن ثابت بر اساس لیست ثابت هدرها."""
+
+    normalized = _normalize_header_for_detection(label)
+    return normalized in _NORMALIZED_LANDLINE_HEADERS
 
 
 def normalize_mobile_series_for_export(series: pd.Series) -> pd.Series:
@@ -120,4 +146,13 @@ def normalize_mobile_series_for_export(series: pd.Series) -> pd.Series:
 
     normalized = series.astype("object").map(normalize_mobile)
     # normalize_mobile already returns 11-digit strings when valid; no extra padding needed.
+    return pd.Series(normalized, index=series.index, dtype="string")
+
+
+def normalize_landline_series_for_export(series: pd.Series) -> pd.Series:
+    """نرمال‌سازی ستون تلفن ثابت برای خروجی اکسل بدون قاعده 09."""
+
+    normalized = series.astype("object").map(
+        lambda value: normalize_landline(value, allow_special_zero=True)
+    )
     return pd.Series(normalized, index=series.index, dtype="string")
