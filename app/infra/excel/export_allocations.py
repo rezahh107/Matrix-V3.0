@@ -58,6 +58,8 @@ _SOURCE_COLUMN = "مقدار از کجا آورده شود"
 _SOURCE_ALLOCATION = "خروجی برنامه بعد از تخصیص"
 _SOURCE_STUDENT = "کپی کردن از اکسل ورودی"
 _SOURCE_REMOVE = "حذف از اکسل خروجی"
+_SABT_SCHOOL_CITY_HEADER = "شهر مدرسه"
+_SABT_SCHOOL_CITY_CODE = 4001
 _ALLOCATION_HEADER_MAP = {
     normalize_fa("پیدا کردن ردیف پشتیبان از فیلد 141"): "mentor_id",
     normalize_fa("کد ثبت نام0"): "student_id",
@@ -271,6 +273,14 @@ def _enrich_students_with_summary(
     return students_indexed.reset_index(drop=True)
 
 
+def _move_student_id_to_end_for_sabt_sheet(df: pd.DataFrame) -> pd.DataFrame:
+    if "student_id" not in df.columns:
+        return df
+    columns = [column for column in df.columns if column != "student_id"]
+    columns.append("student_id")
+    return df.loc[:, columns]
+
+
 def build_sabt_export_frame(
     allocation_df: pd.DataFrame,
     students_df: pd.DataFrame,
@@ -328,6 +338,11 @@ def build_sabt_export_frame(
         missing_columns: set[str] = set()
 
         for column in profile:
+            if column.header == _SABT_SCHOOL_CITY_HEADER:
+                export_data[column.header] = pd.Series(
+                    _SABT_SCHOOL_CITY_CODE, index=index, dtype="Int64"
+                )
+                continue
             if column.source_kind == "allocation":
                 requested_field = column.source_field or column.header
                 if isinstance(requested_field, str) and requested_field.strip() == _POLICY_EMPTY_SENTINEL_FA:
@@ -438,6 +453,11 @@ def build_sabt_export_frame(
     landline_headers: list[str] = []
 
     for column in profile:
+        if column.header == _SABT_SCHOOL_CITY_HEADER:
+            export_data[column.header] = pd.Series(
+                _SABT_SCHOOL_CITY_CODE, index=alloc_resolved.index, dtype="Int64"
+            )
+            continue
         if column.source_kind == "allocation":
             requested_field = column.source_field or column.header
             if isinstance(requested_field, str) and requested_field.strip() == _POLICY_EMPTY_SENTINEL_FA:
@@ -505,10 +525,10 @@ def build_sabt_export_frame(
                 )
             export_data[header] = landline_series
 
-    student_id_series = ensure_series(student_ids).astype("string").reset_index(drop=True)
+    student_id_series = ensure_series(student_ids).astype("string")
     export_df = pd.DataFrame(export_data)
     if "student_id" in export_df.columns:
-        export_df["student_id"] = student_id_series
+        export_df.loc[:, "student_id"] = student_id_series
     else:
         export_df.insert(0, "student_id", student_id_series)
     code_headers = identify_code_headers(profile)
@@ -1181,4 +1201,3 @@ def export_sabt_excel(
         sheet_prepare_modes={sheet_name: "raw"},
     )
     return output_path
-
