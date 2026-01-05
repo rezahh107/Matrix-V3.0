@@ -12,8 +12,9 @@ from pandas import testing as pd_testing
 from pandas.api import types as pd_types
 
 import app.infra.excel.export_allocations as export_allocations
-from app.core.common.columns import CANON_EN_TO_FA
+from app.core.common.columns import CANON_EN_TO_FA, HeaderMode
 from app.core.pipeline import enrich_student_contacts
+from app.infra.cli_legacy import _attach_sabt_sheet_if_selected
 from app.infra.common.header_pipeline_v3 import HeaderPipelineV3
 from app.infra.excel.common import enforce_text_columns, identify_code_headers
 from app.infra.excel.export_allocations import (
@@ -23,7 +24,7 @@ from app.infra.excel.export_allocations import (
     load_sabt_export_profile,
 )
 from app.infra.excel.import_to_sabt import build_sheet2_frame
-from app.infra.io_utils import _prepare_dataframe_for_excel
+from app.infra.io_utils import _prepare_dataframe_for_excel, write_xlsx_atomic
 
 _PROFILE_PATH = Path("docs/Report (4).xlsx")
 _SNAPSHOT_PATH = Path("tests/infra/excel/data/sabt_expected.csv")
@@ -271,7 +272,14 @@ def test_build_sabt_export_frame_sources_allocation_and_student_correctly() -> N
         ),
     ]
     export_df = build_sabt_export_frame(allocations_df, students_df, profile)
-    assert list(export_df.columns) == ["student_id", "پشتیبان", "کد ثبت نام", "کدملی", "نام", "معدل"]
+    assert list(export_df.columns) == [
+        "student_id",
+        "پشتیبان",
+        "کد ثبت نام",
+        "کدملی",
+        "نام",
+        "معدل",
+    ]
     assert export_df.iloc[0]["student_id"] == "1"
     assert export_df.iloc[0]["کد ثبت نام"] == "1"
     assert export_df.iloc[1]["کدملی"] == "002"
@@ -515,6 +523,74 @@ def test_sabt_export_golden_snapshot(
         expected_with_id,
         check_dtype=False,
     )
+
+
+def test_sabt_export_sets_school_city_constant() -> None:
+    allocations_df = pd.DataFrame(
+        {
+            "student_id": [1, 2],
+            "mentor_id": ["M-1", "M-2"],
+            "__source_index__": [0, 1],
+        }
+    )
+    students_df = pd.DataFrame(
+        {
+            "student_id": [1, 2],
+            "__source_index__": [0, 1],
+        }
+    )
+    profile = [
+        AllocationExportColumn(
+            key="school_city",
+            header="شهر مدرسه",
+            source_kind="student",
+            source_field="شهر مدرسه",
+            literal_value=None,
+            order=1,
+        ),
+        AllocationExportColumn(
+            key="student_id",
+            header="کد ثبت نام",
+            source_kind="allocation",
+            source_field="student_id",
+            literal_value=None,
+            order=2,
+        ),
+    ]
+
+    export_df = build_sabt_export_frame(allocations_df, students_df, profile)
+
+    assert export_df["شهر مدرسه"].tolist() == [4001, 4001]
+
+
+def test_allocations_sabt_moves_student_id_to_end_on_write(tmp_path: Path) -> None:
+    sabt_allocations_df = pd.DataFrame(
+        {
+            "student_id": ["1", "2"],
+            "نام": ["آراد", "بهرام"],
+            "کد ثبت نام": ["A1", "A2"],
+        }
+    )
+    sheets: dict[str, pd.DataFrame] = {}
+    header_overrides: dict[str, HeaderMode | None] = {}
+    _attach_sabt_sheet_if_selected(
+        sheets=sheets,
+        header_overrides=header_overrides,
+        export_profile_choice="sabt",
+        sabt_allocations_df=sabt_allocations_df,
+    )
+    output_path = tmp_path / "allocations_sabt.xlsx"
+    write_xlsx_atomic(
+        sheets,
+        output_path,
+        header_mode=None,
+        sheet_header_modes=header_overrides,
+        sheet_prepare_modes={"allocations_sabt": "raw"},
+    )
+    workbook = load_workbook(output_path)
+    sheet = workbook["allocations_sabt"]
+    headers = [cell.value for cell in sheet[1]]
+    assert headers == ["نام", "کد ثبت نام", "student_id"]
 
 
 def test_hekmat_tracking_policy_applied_by_registration_status() -> None:

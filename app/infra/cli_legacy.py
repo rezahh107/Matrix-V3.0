@@ -93,6 +93,7 @@ from app.infra.errors import (
 )
 from app.infra.excel.export_allocations import (
     DEFAULT_SABT_PROFILE_PATH,
+    _move_student_id_to_end_for_sabt_sheet,
     build_profile_mapping_rule_result,
     build_sabt_export_frame,
     collect_trace_debug_sheets,
@@ -2188,7 +2189,9 @@ def _attach_sabt_sheet_if_selected(
             "SABT export profile selected but sabt_allocations_df is missing"
         )
 
-    sheets["allocations_sabt"] = sabt_allocations_df
+    sheets["allocations_sabt"] = _move_student_id_to_end_for_sabt_sheet(
+        sabt_allocations_df
+    )
     header_overrides["allocations_sabt"] = None
 
 
