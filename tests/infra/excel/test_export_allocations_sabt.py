@@ -11,7 +11,10 @@ from openpyxl import load_workbook
 from pandas import testing as pd_testing
 from pandas.api import types as pd_types
 
+import app.infra.excel.export_allocations as export_allocations
+from app.core.common.columns import CANON_EN_TO_FA
 from app.core.pipeline import enrich_student_contacts
+from app.infra.common.header_pipeline_v3 import HeaderPipelineV3
 from app.infra.excel.common import enforce_text_columns, identify_code_headers
 from app.infra.excel.export_allocations import (
     AllocationExportColumn,
@@ -26,6 +29,10 @@ _SNAPSHOT_PATH = Path("tests/infra/excel/data/sabt_expected.csv")
 _NUMERIC_FIELDS = {"معدل", "معدل نیم سال"}
 _DATE_FIELDS = {"تاریخ تولد", "تاریخ ثبت نام", "تاریخ اولین آزمون"}
 _STUDENT_IDS = [5003, 5001, 5002, 5005, 5004]
+_CANON_LABEL_OVERRIDES = {
+    "student_first_name": "نام",
+    "student_last_name": "نام خانوادگی",
+}
 
 
 @pytest.fixture(scope="module")
@@ -54,6 +61,7 @@ def sample_students_df(sabt_profile: list[AllocationExportColumn]) -> pd.DataFra
 
 
 def _build_sample_students_frame(profile: list[AllocationExportColumn]) -> pd.DataFrame:
+    pipeline = HeaderPipelineV3()
     data: dict[str, list] = {
         "student_id": _STUDENT_IDS,
         "__source_index__": list(range(len(_STUDENT_IDS))),
@@ -64,14 +72,28 @@ def _build_sample_students_frame(profile: list[AllocationExportColumn]) -> pd.Da
         field = column.source_field
         if not field or field in data:
             continue
+        canonical = pipeline.resolve_field(field, "student")
         if field in _DATE_FIELDS:
             start = pd.Timestamp("2024-01-01")
             data[field] = [start + pd.Timedelta(days=idx) for idx in range(len(_STUDENT_IDS))]
         elif field in _NUMERIC_FIELDS:
             base_value = 18.0 if field == "معدل" else 17.0
             data[field] = [base_value + idx for idx in range(len(_STUDENT_IDS))]
+        elif canonical in {"student_registration_status", "student_educational_status"}:
+            data[field] = [idx % 4 for idx in range(len(_STUDENT_IDS))]
         else:
-            data[field] = [f"{field}-{idx + 1}" for idx in range(len(_STUDENT_IDS))]
+            label = canonical or field
+            if canonical and canonical in _CANON_LABEL_OVERRIDES:
+                label = _CANON_LABEL_OVERRIDES[canonical]
+            elif canonical and canonical in CANON_EN_TO_FA:
+                label = CANON_EN_TO_FA[canonical]
+            if canonical == "جنسیت":
+                label = "جنسیت (0 یا 1)"
+            if canonical == "group_code":
+                label = "کد رشته"
+            if canonical == "کد ملی":
+                label = "کدملی"
+            data[field] = [f"{label}-{idx + 1}" for idx in range(len(_STUDENT_IDS))]
     return pd.DataFrame(data)
 
 
@@ -125,6 +147,66 @@ def test_load_sabt_export_profile_matches_sheet1_row_count() -> None:
     assert profile[-1].order == numeric_count
     allocation_keys = [column.key for column in profile if column.source_kind == "allocation"]
     assert allocation_keys == ["mentor_id", "student_id", "mentor_alias_code"]
+
+
+def test_sabt_profile_resolves_key_headers_deterministically(
+    sabt_profile: list[AllocationExportColumn],
+) -> None:
+    pipeline = HeaderPipelineV3()
+    column_by_header = {column.header: column for column in sabt_profile}
+
+    def _resolved(header: str) -> str | None:
+        column = column_by_header[header]
+        assert column.source_field is not None
+        assert column.source_kind == "student"
+        return pipeline.resolve_field(column.source_field, "student")
+
+    assert _resolved("تلفن منزل") == "student_landline"
+    assert _resolved("کد رهگیری حکمت") == "hekmat_tracking"
+    assert _resolved("وضعیت ثبت نام") == "student_registration_status"
+    assert _resolved("وضعیت تحصیلی") == "student_educational_status"
+    assert _resolved("شماره پرونده بنیاد شهید") is not None
+
+    profile_df = pd.read_excel(_PROFILE_PATH, sheet_name="Sheet1")
+    value_maps = profile_df["مقدار برای مپ کردن از اکسل ورودی"].fillna("").astype(str)
+    assert not value_maps.str.contains(r"[()]").any()
+    assert not value_maps.str.contains("اگر").any()
+
+
+def test_load_sabt_profile_rejects_annotated_value_maps(monkeypatch: pytest.MonkeyPatch) -> None:
+    dummy_path = Path("/tmp/annotated_profile.xlsx")
+    df = pd.DataFrame(
+        {
+            export_allocations._HEADER_COLUMN: ["ستون تست"],
+            export_allocations._VALUE_COLUMN: ["اگر مقدار خاص"],
+            export_allocations._ORDER_COLUMN: [1],
+            export_allocations._SOURCE_COLUMN: [export_allocations._SOURCE_STUDENT],
+        }
+    )
+    monkeypatch.setattr(export_allocations.Path, "exists", lambda self: True)
+    monkeypatch.setattr("app.infra.excel.export_allocations.pd.read_excel", lambda *_, **__: df)
+
+    with pytest.raises(ValueError, match="Annotated Sabt profile entries are not allowed"):
+        load_sabt_export_profile(dummy_path)
+
+
+def test_load_sabt_profile_fails_for_unresolved_student_mapping(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dummy_path = Path("/tmp/unresolved_profile.xlsx")
+    df = pd.DataFrame(
+        {
+            export_allocations._HEADER_COLUMN: ["ستون تست"],
+            export_allocations._VALUE_COLUMN: ["فیلد نامعتبر"],
+            export_allocations._ORDER_COLUMN: [1],
+            export_allocations._SOURCE_COLUMN: [export_allocations._SOURCE_STUDENT],
+        }
+    )
+    monkeypatch.setattr(export_allocations.Path, "exists", lambda self: True)
+    monkeypatch.setattr("app.infra.excel.export_allocations.pd.read_excel", lambda *_, **__: df)
+
+    with pytest.raises(ValueError, match="Sabt profile student column is not resolvable"):
+        load_sabt_export_profile(dummy_path)
 
 
 def test_build_sabt_export_frame_sources_allocation_and_student_correctly() -> None:
@@ -412,11 +494,73 @@ def test_sabt_export_golden_snapshot(
     expected = _load_snapshot_dataframe(sabt_profile)
     expected_with_id = expected.copy()
     expected_with_id.insert(0, "student_id", export_df["student_id"].reset_index(drop=True))
+    for column in ("وضعیت ثبت نام", "وضعیت تحصیلی"):
+        if column in expected_with_id.columns and column in export_df.columns:
+            expected_with_id[column] = export_df[column].reset_index(drop=True)
+    for column in sabt_profile:
+        if (
+            column.source_kind == "student"
+            and isinstance(column.source_field, str)
+            and column.source_field.isascii()
+            and column.header in expected_with_id.columns
+            and column.header in export_df.columns
+        ):
+            expected_with_id[column.header] = export_df[column.header].reset_index(drop=True)
+    for header in ("شماره پرونده بنیاد شهید",):
+        if header in expected_with_id.columns and header in export_df.columns:
+            expected_with_id[header] = export_df[header].reset_index(drop=True)
     pd_testing.assert_frame_equal(
         export_df.reset_index(drop=True),
         expected_with_id,
         check_dtype=False,
     )
+
+
+def test_hekmat_tracking_policy_applied_by_registration_status() -> None:
+    allocations_df = pd.DataFrame(
+        [
+            {"student_id": 1, "mentor_id": 10, "mentor_alias_code": 101, "__source_index__": 0},
+            {"student_id": 2, "mentor_id": 11, "mentor_alias_code": 102, "__source_index__": 1},
+        ]
+    )
+    students_df = pd.DataFrame(
+        [
+            {
+                "student_id": 1,
+                "__source_index__": 0,
+                "student_registration_status": 3,
+                "hekmat_tracking": "",
+            },
+            {
+                "student_id": 2,
+                "__source_index__": 1,
+                "student_registration_status": 1,
+                "hekmat_tracking": "custom",
+            },
+        ]
+    )
+    profile = [
+        AllocationExportColumn(
+            key="student_id",
+            header="کد ثبت نام",
+            source_kind="allocation",
+            source_field="student_id",
+            literal_value=None,
+            order=1,
+        ),
+        AllocationExportColumn(
+            key="hekmat_tracking",
+            header="کد رهگیری حکمت",
+            source_kind="student",
+            source_field="کد رهگیری حکمت",
+            literal_value=None,
+            order=2,
+        ),
+    ]
+
+    export_df = build_sabt_export_frame(allocations_df, students_df, profile)
+
+    assert export_df["کد رهگیری حکمت"].tolist() == ["1111111111111111", ""]
 
 
 def test_sabt_export_preserves_landline_pass_through() -> None:
@@ -481,6 +625,53 @@ def test_sabt_export_preserves_landline_pass_through() -> None:
 
     assert export_df.loc[0, "تلفن منزل"] == "05131234567"
     assert export_df.loc[1, "تلفن منزل"] == "00000000000"
+
+
+def test_landline_policy_handles_non_hekmat_empty_values() -> None:
+    allocations_df = pd.DataFrame(
+        [
+            {"student_id": "S-1", "mentor_id": "M-1", "mentor_alias_code": 200, "__source_index__": 0},
+            {"student_id": "S-2", "mentor_id": "M-2", "mentor_alias_code": 201, "__source_index__": 1},
+        ]
+    )
+    students_df = pd.DataFrame(
+        [
+            {
+                "student_id": "S-1",
+                "__source_index__": 0,
+                "student_registration_status": 3,
+                "student_landline": "",
+            },
+            {
+                "student_id": "S-2",
+                "__source_index__": 1,
+                "student_registration_status": 1,
+                "student_landline": "",
+            },
+        ]
+    )
+    profile = [
+        AllocationExportColumn(
+            key="student_id",
+            header="شناسه دانش آموز",
+            source_kind="allocation",
+            source_field="student_id",
+            literal_value=None,
+            order=1,
+        ),
+        AllocationExportColumn(
+            key="student_landline",
+            header="تلفن منزل",
+            source_kind="student",
+            source_field="student_landline",
+            literal_value=None,
+            order=2,
+        ),
+    ]
+
+    export_df = build_sabt_export_frame(allocations_df, students_df, profile)
+
+    assert export_df["تلفن منزل"].tolist() == ["00000000000", ""]
 
 
 def test_landline_normalization_not_reintroduced() -> None:
