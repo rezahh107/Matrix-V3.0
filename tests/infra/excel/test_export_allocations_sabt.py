@@ -23,6 +23,7 @@ from app.infra.excel.export_allocations import (
     load_sabt_export_profile,
 )
 from app.infra.excel.import_to_sabt import build_sheet2_frame
+from app.infra.io_utils import _prepare_dataframe_for_excel
 
 _PROFILE_PATH = Path("docs/Report (4).xlsx")
 _SNAPSHOT_PATH = Path("tests/infra/excel/data/sabt_expected.csv")
@@ -680,3 +681,25 @@ def test_landline_normalization_not_reintroduced() -> None:
 
     assert "normalize_landline_series" not in source_enrich
     assert "normalize_landline_series" not in source_sheet2
+
+
+def test_prepare_dataframe_preserves_landline_and_mobile_rules() -> None:
+    raw = pd.DataFrame(
+        {
+            "تلفن منزل": ["36499154", "00000000000"],
+            "تلفن همراه": ["09123456789", "051234"],
+        }
+    )
+
+    prepared = _prepare_dataframe_for_excel(raw)
+
+    pd_testing.assert_series_equal(
+        prepared["تلفن منزل"],
+        pd.Series(["36499154", "00000000000"], dtype="string"),
+        check_names=False,
+    )
+    pd_testing.assert_series_equal(
+        prepared["تلفن همراه"],
+        pd.Series(["09123456789", ""], dtype="string"),
+        check_names=False,
+    )

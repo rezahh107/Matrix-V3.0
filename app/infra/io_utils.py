@@ -24,7 +24,9 @@ from app.core.build_matrix import REQUIRED_INSPACTOR_COLUMNS
 from app.core.common.columns import CANON_EN_TO_FA, canonicalize_headers, ensure_series
 from app.core.common.contact_columns import (
     TEXT_SENSITIVE_COLUMN_NAMES,
+    is_landline_header,
     is_mobile_header,
+    normalize_landline_series_for_export,
     normalize_mobile_series_for_export,
 )
 from app.core.inspactor_schema_helper import missing_inspactor_columns
@@ -225,6 +227,17 @@ def _normalize_mobile_columns(df: pd.DataFrame) -> None:
         df[column] = normalize_mobile_series_for_export(series)
 
 
+def _normalize_landline_columns(df: pd.DataFrame) -> None:
+    """نرمال‌سازی ستون‌های تلفن ثابت با حفظ مقدار ویژهٔ حکمت."""
+
+    if df.empty:
+        return
+    target_columns = [column for column in df.columns if is_landline_header(column)]
+    for column in target_columns:
+        series = ensure_series(df[column])
+        df[column] = normalize_landline_series_for_export(series)
+
+
 def _stringify_text_sensitive_columns(df: pd.DataFrame) -> None:
     """تنظیم dtype ستون‌های حساس به متن برای جلوگیری از نمایش علمی."""
 
@@ -267,6 +280,7 @@ def _prepare_dataframe_for_excel(df: pd.DataFrame) -> pd.DataFrame:
     frame.columns = _make_unique_columns(list(map(str, frame.columns)))
 
     converted = frame.copy()
+    _normalize_landline_columns(converted)
     _normalize_mobile_columns(converted)
     _stringify_text_sensitive_columns(converted)
     for column, dtype in converted.dtypes.items():
