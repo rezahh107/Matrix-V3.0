@@ -64,6 +64,7 @@ _ALLOCATION_HEADER_MAP = {
     normalize_fa("کپی کد جایگزین 39"): "mentor_alias_code",
 }
 _ASCII_KEY_PATTERN = re.compile(r"[^0-9a-z]+")
+_ANNOTATION_PATTERN = re.compile(r"[()]")
 
 
 @dataclass(frozen=True)
@@ -94,6 +95,28 @@ def _slugify(value: str) -> str:
     normalized = normalize_fa(value)
     slug = re.sub(r"[^0-9a-zA-Z]+", "_", normalized).strip("_")
     return slug or "column"
+
+
+def _has_legacy_annotation(value: str) -> bool:
+    normalized = normalize_fa(value)
+    return bool(_ANNOTATION_PATTERN.search(normalized) or "اگر" in normalized)
+
+
+def _validate_profile_entries(
+    records: Sequence[AllocationExportColumn], *, pipeline: HeaderPipelineV3
+) -> None:
+    for column in records:
+        if column.source_kind != "student":
+            continue
+        requested_field = column.source_field or column.header
+        if isinstance(requested_field, str) and requested_field.strip() == _POLICY_EMPTY_SENTINEL_FA:
+            continue
+        canonical = pipeline.resolve_field(requested_field, "student")
+        if canonical is None:
+            raise ValueError(
+                "Sabt profile student column is not resolvable: "
+                f"header={column.header!r} requested={requested_field!r}"
+            )
 
 
 @dataclass(frozen=True)
@@ -132,6 +155,7 @@ def load_sabt_export_profile(
     if not profile_path.exists():
         raise FileNotFoundError(f"Sabt profile not found: {profile_path}")
 
+    pipeline = HeaderPipelineV3()
     df = pd.read_excel(profile_path, sheet_name=_PROFILE_SHEET_NAME)
     try:
         idx_header = df.columns.get_loc(_HEADER_COLUMN)
@@ -154,6 +178,11 @@ def load_sabt_export_profile(
             continue
         if source == _SOURCE_REMOVE:
             continue
+        if _has_legacy_annotation(value_map):
+            raise ValueError(
+                "Annotated Sabt profile entries are not allowed: "
+                f"header={header!r} value_map={value_map!r} row={row_number}"
+            )
         try:
             order_value = float(order_raw)
         except (TypeError, ValueError):
@@ -202,6 +231,8 @@ def load_sabt_export_profile(
     order_values = [column.order for column in records]
     if len(order_values) != len(set(order_values)):
         raise ValueError("Sabt profile contains duplicate order values")
+
+    _validate_profile_entries(records, pipeline=pipeline)
 
     return records
 
