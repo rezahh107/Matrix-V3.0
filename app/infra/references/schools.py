@@ -13,6 +13,7 @@ from app.infra.io_utils import ALT_CODE_COLUMN, read_crosswalk_workbook, read_ex
 from app.infra.local_database import LocalDatabase
 from app.infra.reference_repository import SQLiteReferenceRepository
 from app.infra.schools.header_resolver import SchoolHeaderResolver
+from app.infra.schools.normalization import normalize_gender_tokens
 from app.infra.schools.school_repository import SchoolRepository
 from app.infra.sqlite_types import coerce_int_columns, coerce_int_series
 
@@ -23,11 +24,7 @@ def _coerce_school_code(series: pd.Series, *, fill_value: int | None = None) -> 
     return coerce_int_series(series, fill_value=fill_value)
 
 
-_SCHOOL_COMPAT_DEFAULTS: dict[str, object] = {
-    "مرکز گلستان صدرا": 0,
-    "جنسیت": 0,
-    "نام مدرسه": "",
-}
+_SCHOOL_COMPAT_DEFAULTS: dict[str, object] = {}
 
 
 _CENTER_HEADER_BASE = normalize_fa("مرکز")
@@ -114,7 +111,7 @@ def _normalize_schools_frame(
             )
             resolution.require_can_continue(
                 path=str(path) if path is not None else "SchoolReport",
-                reason_fa="ستون‌های الزامی مدارس در فایل موجود نیست.",
+                reason_fa="ستون‌های الزامی مدارس (کد مدرسه، نام مدرسه) در فایل موجود نیست.",
             )
         canonical = resolution.resolved_df.copy()
         compat_notes: list[dict[str, object]] = []
@@ -151,7 +148,7 @@ def _normalize_schools_frame(
             )
         canonical = resolution.require_can_continue(
             path=str(path) if path is not None else "SchoolReport",
-            reason_fa="ستون‌های الزامی مدارس در فایل موجود نیست.",
+            reason_fa="ستون‌های الزامی مدارس (کد مدرسه، نام مدرسه) در فایل موجود نیست.",
         )
     if compat_warnings:
         canonical.attrs = dict(canonical.attrs or {})
@@ -160,6 +157,10 @@ def _normalize_schools_frame(
     if code_col in canonical.columns:
         canonical = canonical.copy()
         canonical[code_col] = _coerce_school_code(canonical[code_col])
+    if "جنسیت" in canonical.columns:
+        canonical = canonical.copy()
+        canonical["جنسیت"] = normalize_gender_tokens(canonical["جنسیت"])
+    canonical = coerce_int_columns(canonical, ["کد مدرسه", "مرکز گلستان صدرا", "جنسیت"])
     return canonical
 
 
@@ -167,7 +168,7 @@ def _schools_repository(db: LocalDatabase) -> SQLiteReferenceRepository:
     return SQLiteReferenceRepository(
         db=db,
         table_name="schools",
-        int_columns=("کد مدرسه",),
+        int_columns=("کد مدرسه", "مرکز گلستان صدرا", "جنسیت"),
         unique_columns=("کد مدرسه",),
     )
 

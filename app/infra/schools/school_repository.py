@@ -10,6 +10,7 @@ from app.infra.io_utils import read_excel_first_sheet
 from app.infra.local_database import LocalDatabase
 from app.infra.reference_repository import SQLiteReferenceRepository
 from app.infra.schools.header_resolver import SchoolHeaderResolver
+from app.infra.schools.normalization import normalize_gender_tokens
 from app.infra.sqlite_types import coerce_int_columns
 
 __all__ = ["SchoolRepository"]
@@ -21,8 +22,6 @@ class SchoolRepository:
     REQUIRED_COLUMNS: tuple[str, ...] = (
         "کد مدرسه",
         "نام مدرسه",
-        "مرکز گلستان صدرا",
-        "جنسیت",
     )
 
     def __init__(self, db: LocalDatabase) -> None:
@@ -44,8 +43,11 @@ class SchoolRepository:
         resolution = self._header_resolver.resolve(df)
         normalized = resolution.require_can_continue(
             path=str(path),
-            reason_fa="ستون‌های الزامی مدارس در فایل موجود نیست.",
+            reason_fa="ستون‌های الزامی مدارس (کد مدرسه، نام مدرسه) در فایل موجود نیست.",
         )
+        if "جنسیت" in normalized.columns:
+            normalized = normalized.copy()
+            normalized["جنسیت"] = normalize_gender_tokens(normalized["جنسیت"])
         normalized = coerce_int_columns(
             normalized, ["کد مدرسه", "مرکز گلستان صدرا", "جنسیت"]
         )

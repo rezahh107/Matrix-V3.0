@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from collections.abc import Sequence
 
 import pandas as pd
@@ -15,6 +16,37 @@ JOIN_KEYS_6: list[str] = [
     "مالی حکمت بنیاد",
     "کد مدرسه",
 ]
+
+
+def _chained_assignment_warning() -> type[Warning] | None:
+    try:
+        from pandas.errors import ChainedAssignmentError
+
+        return ChainedAssignmentError
+    except ImportError:
+        return None
+    except AttributeError:
+        return None
+
+
+def _legacy_settingwithcopy_warning() -> type[Warning] | None:
+    try:
+        from pandas.errors import SettingWithCopyWarning
+
+        return SettingWithCopyWarning
+    except ImportError:
+        return None
+    except AttributeError:
+        return None
+
+
+def pytest_configure() -> None:
+    """Enforce chained-assignment warnings as errors across pandas versions."""
+
+    warning_cls = _chained_assignment_warning() or _legacy_settingwithcopy_warning()
+    if warning_cls is None:
+        return
+    warnings.filterwarnings("error", category=warning_cls)
 
 
 def make_empty_pool_with_join_keys(join_keys: Sequence[str] = JOIN_KEYS_6) -> pd.DataFrame:
