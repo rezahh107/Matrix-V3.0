@@ -450,7 +450,22 @@ def read_excel_first_sheet(path: Path | str | PathLike[str]) -> pd.DataFrame:
         with pd.ExcelFile(source) as workbook:
             if not workbook.sheet_names:
                 raise ValueError(f"هیچ شیتی در فایل {source} یافت نشد.")
-            return workbook.parse(workbook.sheet_names[0], dtype={ALT_CODE_COLUMN: str})
+            df = workbook.parse(workbook.sheet_names[0], dtype={ALT_CODE_COLUMN: object})
+            if ALT_CODE_COLUMN in df.columns:
+                series = df[ALT_CODE_COLUMN]
+                normalized = series.map(
+                    lambda value: value
+                    if pd.isna(value)
+                    else str(int(value))
+                    if isinstance(value, (int, float)) and float(value).is_integer()
+                    else str(value)
+                )
+                if not normalized.equals(series):
+                    df = df.copy()
+                    df[ALT_CODE_COLUMN] = normalized.astype(object)
+                else:
+                    df[ALT_CODE_COLUMN] = series.astype(object)
+            return df
     except FileNotFoundError as exc:
         raise FileNotFoundError(f"فایل یافت نشد: {source}") from exc
     except Exception as exc:  # pragma: no cover - سناریوهای پیش‌بینی‌نشده
