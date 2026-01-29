@@ -1520,16 +1520,33 @@ def _apply_mentor_pool_overrides(
 def _detect_reader(path: Path) -> Callable[[Path], pd.DataFrame]:
     """انتخاب تابع خواندن مناسب؛ برای Excel شیت 'matrix' را ترجیح بده."""
     suffix = path.suffix.lower()
-    dtype_map = {ALT_CODE_COLUMN: str}
+    dtype_map = {ALT_CODE_COLUMN: object}
+
+    def _coerce_alt_code(df: pd.DataFrame) -> pd.DataFrame:
+        if ALT_CODE_COLUMN not in df.columns:
+            return df
+        series = df[ALT_CODE_COLUMN]
+        normalized = series.map(lambda value: "" if pd.isna(value) else str(value))
+        if normalized.equals(series):
+            return df
+        coerced = df.copy()
+        coerced[ALT_CODE_COLUMN] = normalized.astype(object)
+        return coerced
     if suffix in {".xlsx", ".xls", ".xlsm"}:
 
         def _read_xlsx(p: Path) -> pd.DataFrame:
             with pd.ExcelFile(p) as xls:
                 sheet = "matrix" if "matrix" in xls.sheet_names else xls.sheet_names[0]
-                return xls.parse(sheet, dtype=dtype_map)
+                parsed = xls.parse(sheet, dtype=dtype_map)
+                return _coerce_alt_code(parsed)
 
         return _read_xlsx
-    return lambda p: pd.read_csv(p, dtype=dtype_map)
+
+    def _read_csv(p: Path) -> pd.DataFrame:
+        parsed = pd.read_csv(p, dtype=dtype_map)
+        return _coerce_alt_code(parsed)
+
+    return _read_csv
 
 
 # --- توابع کمکی برای پارامترهای خط فرمان ---

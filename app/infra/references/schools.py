@@ -9,19 +9,13 @@ import pandas as pd
 
 from app.core.common.normalization import normalize_fa
 from app.infra.common.header_pipeline_v3 import HeaderIssue
+from app.infra.common.school_report_normalization import normalize_school_report_frame
 from app.infra.io_utils import ALT_CODE_COLUMN, read_crosswalk_workbook, read_excel_first_sheet
 from app.infra.local_database import LocalDatabase
 from app.infra.reference_repository import SQLiteReferenceRepository
 from app.infra.schools.header_resolver import SchoolHeaderResolver
-from app.infra.schools.normalization import normalize_gender_tokens
 from app.infra.schools.school_repository import SchoolRepository
-from app.infra.sqlite_types import coerce_int_columns, coerce_int_series
-
-
-def _coerce_school_code(series: pd.Series, *, fill_value: int | None = None) -> pd.Series:
-    """تبدیل ستون کد مدرسه به نوع Int64 با مقدار پیش‌فرض مشخص."""
-
-    return coerce_int_series(series, fill_value=fill_value)
+from app.infra.sqlite_types import coerce_int_columns
 
 
 _SCHOOL_COMPAT_DEFAULTS: dict[str, object] = {}
@@ -153,15 +147,7 @@ def _normalize_schools_frame(
     if compat_warnings:
         canonical.attrs = dict(canonical.attrs or {})
         canonical.attrs["compat_warnings"] = compat_warnings
-    code_col = "کد مدرسه"
-    if code_col in canonical.columns:
-        canonical = canonical.copy()
-        canonical[code_col] = _coerce_school_code(canonical[code_col])
-    if "جنسیت" in canonical.columns:
-        canonical = canonical.copy()
-        canonical["جنسیت"] = normalize_gender_tokens(canonical["جنسیت"])
-    canonical = coerce_int_columns(canonical, ["کد مدرسه", "مرکز گلستان صدرا", "جنسیت"])
-    return canonical
+    return normalize_school_report_frame(canonical)
 
 
 def _schools_repository(db: LocalDatabase) -> SQLiteReferenceRepository:

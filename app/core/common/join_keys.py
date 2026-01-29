@@ -502,9 +502,7 @@ def validate_and_canonicalize_join_keys(
                 )
             valid_mask.loc[error_mask] = False
 
-        coerced_mask = coerced.notna()
-        if coerced_mask.any():
-            canonical_df.loc[coerced_mask, column] = coerced[coerced_mask]
+        canonical_df[column] = coerced
 
     canonical_df = canonical_df.loc[valid_mask].reset_index(drop=True)
     for column in join_key_columns:
