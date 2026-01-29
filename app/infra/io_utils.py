@@ -18,6 +18,7 @@ from os import PathLike
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, cast
 
+import numpy as np
 import pandas as pd
 
 from app.core.build_matrix import REQUIRED_INSPACTOR_COLUMNS
@@ -188,10 +189,15 @@ def _coalesce_duplicate_columns(df: pd.DataFrame) -> pd.DataFrame:
         if isinstance(subset, pd.Series):
             result[label] = subset
         else:
-            with pd.option_context("future.no_silent_downcasting", True):
-                filled = subset.bfill(axis=1)
-            filled = filled.infer_objects(copy=False)
-            result[label] = filled.iloc[:, 0]
+            block = subset.to_numpy(dtype=object)
+            null_mask = pd.isna(block)
+            has_any = (~null_mask).any(axis=1)
+            first_idx = (~null_mask).argmax(axis=1)
+            out = np.empty(len(subset), dtype=object)
+            out[:] = None
+            if has_any.any():
+                out[has_any] = block[has_any, first_idx[has_any]]
+            result[label] = pd.Series(out, index=subset.index, dtype=object)
     return result
 
 
