@@ -17,7 +17,6 @@ from app.infra.schools.header_resolver import SchoolHeaderResolver
 from app.infra.schools.school_repository import SchoolRepository
 from app.infra.sqlite_types import coerce_int_columns
 
-
 _SCHOOL_COMPAT_DEFAULTS: dict[str, object] = {}
 
 
