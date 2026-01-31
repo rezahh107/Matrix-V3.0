@@ -2659,6 +2659,25 @@ def build_matrix(
     matrix.attrs["qa_debug_breadcrumbs"] = [
         breadcrumb.to_payload() for breadcrumb in qa_breadcrumbs
     ]
+    text_dtype = pd.StringDtype(storage="python", na_value=np.nan)
+    text_columns = (
+        "پشتیبان",
+        "کد کارمندی پشتیبان",
+        "مدیر",
+        "نام رشته",
+        "عادی مدرسه",
+        "نام مدرسه",
+        "جنسیت2",
+        "دانش آموز فارغ2",
+        "مرکز گلستان صدرا3",
+    )
+    for column in text_columns:
+        if column in matrix.columns:
+            matrix[column] = pd.Series(
+                ensure_series(matrix[column]),
+                index=matrix.index,
+                dtype=text_dtype,
+            )
 
     return (
         matrix,
