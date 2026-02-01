@@ -120,6 +120,44 @@ def test_header_alias_resolved_and_forwarded() -> None:
     assert "mentor_id" in result.build_result.pool.columns
 
 
+def test_header_resolver_numeric_join_key_ambiguity_resolved() -> None:
+    payload = _make_simple_df().copy()
+    payload["کد مدرسه"] = [101.0, 102.0]
+    payload["school_code"] = ["101", "102"]
+    registry = FieldRegistry(policy.config)
+    resolver = HeaderResolver(registry)
+
+    result = resolver.resolve(payload)
+
+    assert result.can_continue
+    issues = [
+        issue
+        for issue in result.issues
+        if issue.message == "AMBIGUOUS_HEADER" and issue.canonical_field == "کد مدرسه"
+    ]
+    assert issues
+    assert all(issue.severity != "P0" for issue in issues)
+
+
+def test_header_resolver_numeric_join_key_ambiguity_conflict_is_p0() -> None:
+    payload = _make_simple_df().copy()
+    payload["کد مدرسه"] = [101, 102]
+    payload["school_code"] = ["999", "102"]
+    registry = FieldRegistry(policy.config)
+    resolver = HeaderResolver(registry)
+
+    result = resolver.resolve(payload)
+
+    assert not result.can_continue
+    issues = [
+        issue
+        for issue in result.issues
+        if issue.message == "AMBIGUOUS_HEADER" and issue.canonical_field == "کد مدرسه"
+    ]
+    assert issues
+    assert any(issue.severity == "P0" for issue in issues)
+
+
 def test_ensure_mentor_id_coalesces_aliases() -> None:
     registry = FieldRegistry(policy.config)
     resolver = HeaderResolver(registry)
