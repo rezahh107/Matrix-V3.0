@@ -10,6 +10,7 @@ from app.core.build_matrix import (
     COL_GROUP_INCLUDED,
     BuildConfig,
     _prepare_base_rows,
+    canonicalize_school_constraint_tokens,
     build_matrix,
     build_school_maps,
     generate_row_variants,
@@ -38,6 +39,9 @@ def _create_sample_inputs() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
             "مالی حکمت بنیاد": [0, 0],
             "مرکز گلستان صدرا": [0, 0],
         }
+    )
+    insp_df = canonicalize_school_constraint_tokens(
+        insp_df, school_columns=["نام مدرسه 1"]
     )
 
     schools_df = pd.DataFrame(
