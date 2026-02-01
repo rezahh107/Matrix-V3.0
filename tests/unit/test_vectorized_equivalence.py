@@ -10,9 +10,9 @@ from app.core.build_matrix import (
     COL_GROUP_INCLUDED,
     BuildConfig,
     _prepare_base_rows,
-    canonicalize_school_constraint_tokens,
     build_matrix,
     build_school_maps,
+    canonicalize_school_constraint_tokens,
     generate_row_variants,
     prepare_crosswalk_mappings,
 )
