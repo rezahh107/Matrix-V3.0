@@ -1337,6 +1337,39 @@ def generate_row_variants(
     return rows
 
 
+def canonicalize_school_constraint_tokens(
+    df: pd.DataFrame, *, school_columns: Iterable[str]
+) -> pd.DataFrame:
+    """Normalize school constraint tokens to accept numeric sentinels (e.g., 0)."""
+
+    columns = [col for col in school_columns if col in df.columns]
+    if not columns:
+        return df
+    result = df.copy()
+    for column in columns:
+        series = ensure_series(result[column]).astype(object)
+        normalized = series.map(_normalize_school_constraint_token)
+        result[column] = normalized.astype(object)
+    return result
+
+
+def _normalize_school_constraint_token(value: object) -> object:
+    if value is None or (isinstance(value, float) and np.isnan(value)):
+        return value
+    if isinstance(value, str):
+        stripped = value.strip()
+        if stripped in {"", "0"}:
+            return ""
+        return stripped
+    if isinstance(value, (int, float)):
+        if float(value).is_integer():
+            if int(value) == 0:
+                return ""
+            return str(int(value))
+        return str(value)
+    return str(value).strip()
+
+
 # =============================================================================
 # VECTORIZED MATRIX ASSEMBLY HELPERS
 # =============================================================================
@@ -1984,7 +2017,14 @@ def build_matrix(
 
     if precanonicalized_inspactor:
         insp_df = insp_df.copy()
-    else:
+    school_name_columns = [
+        column for column in insp_df.columns if str(column).strip().startswith("نام مدرسه")
+    ]
+    if school_name_columns:
+        insp_df = canonicalize_school_constraint_tokens(
+            insp_df, school_columns=school_name_columns
+        )
+    if not precanonicalized_inspactor:
         raw_school_name_columns = [
             column for column in insp_df.columns if str(column).strip().startswith("نام مدرسه")
         ]
@@ -2659,6 +2699,25 @@ def build_matrix(
     matrix.attrs["qa_debug_breadcrumbs"] = [
         breadcrumb.to_payload() for breadcrumb in qa_breadcrumbs
     ]
+    text_dtype = pd.StringDtype(storage="python", na_value=np.nan)
+    text_columns = (
+        "پشتیبان",
+        "کد کارمندی پشتیبان",
+        "مدیر",
+        "نام رشته",
+        "عادی مدرسه",
+        "نام مدرسه",
+        "جنسیت2",
+        "دانش آموز فارغ2",
+        "مرکز گلستان صدرا3",
+    )
+    for column in text_columns:
+        if column in matrix.columns:
+            matrix[column] = pd.Series(
+                ensure_series(matrix[column]),
+                index=matrix.index,
+                dtype=text_dtype,
+            )
 
     return (
         matrix,

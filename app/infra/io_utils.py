@@ -18,6 +18,7 @@ from os import PathLike
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, cast
 
+import numpy as np
 import pandas as pd
 
 from app.core.build_matrix import REQUIRED_INSPACTOR_COLUMNS
@@ -73,6 +74,25 @@ ALT_CODE_COLUMN = "کد جایگزین"
 _INVALID_SHEET_CHARS = re.compile(r"[\\/*?:\[\]]")
 _STRING_EXPORT_KEYS: Sequence[str] = ("alias", "mentor_id", "postal_code")
 _INT_EXPORT_KEYS: Sequence[str] = ("group_code", "school_code")
+
+
+def _preserve_alt_code_as_text(df: pd.DataFrame) -> pd.DataFrame:
+    if ALT_CODE_COLUMN not in df.columns:
+        return df
+    series = df[ALT_CODE_COLUMN]
+    normalized = series.where(
+        series.isna(),
+        series.map(
+            lambda value: str(int(value))
+            if isinstance(value, (int, float)) and float(value).is_integer()
+            else str(value)
+        ),
+    )
+    if normalized.equals(series) and series.dtype == object:
+        return df
+    updated = df.copy()
+    updated[ALT_CODE_COLUMN] = normalized.astype(object)
+    return updated
 
 
 def _safe_sheet_name(name: str, taken: set[str]) -> str:
@@ -169,10 +189,15 @@ def _coalesce_duplicate_columns(df: pd.DataFrame) -> pd.DataFrame:
         if isinstance(subset, pd.Series):
             result[label] = subset
         else:
-            with pd.option_context("future.no_silent_downcasting", True):
-                filled = subset.bfill(axis=1)
-            filled = filled.infer_objects(copy=False)
-            result[label] = filled.iloc[:, 0]
+            block = subset.to_numpy(dtype=object)
+            null_mask = pd.isna(block)
+            has_any = (~null_mask).any(axis=1)
+            first_idx = (~null_mask).argmax(axis=1)
+            out = np.empty(len(subset), dtype=object)
+            out[:] = None
+            if has_any.any():
+                out[has_any] = block[has_any, first_idx[has_any]]
+            result[label] = pd.Series(out, index=subset.index, dtype=object)
     return result
 
 
@@ -450,7 +475,8 @@ def read_excel_first_sheet(path: Path | str | PathLike[str]) -> pd.DataFrame:
         with pd.ExcelFile(source) as workbook:
             if not workbook.sheet_names:
                 raise ValueError(f"هیچ شیتی در فایل {source} یافت نشد.")
-            return workbook.parse(workbook.sheet_names[0], dtype={ALT_CODE_COLUMN: str})
+            df = workbook.parse(workbook.sheet_names[0], dtype={ALT_CODE_COLUMN: object})
+            return _preserve_alt_code_as_text(df)
     except FileNotFoundError as exc:
         raise FileNotFoundError(f"فایل یافت نشد: {source}") from exc
     except Exception as exc:  # pragma: no cover - سناریوهای پیش‌بینی‌نشده
@@ -540,12 +566,10 @@ def read_inspactor_workbook(path: Path | str | PathLike[str]) -> pd.DataFrame:
                 )
 
             canonical = canonicalize_headers(
-                workbook.parse(best_sheet), header_mode="fa"
+                workbook.parse(best_sheet, dtype={ALT_CODE_COLUMN: object}),
+                header_mode="fa",
             )
-            if ALT_CODE_COLUMN in canonical.columns:
-                canonical = canonical.copy()
-                canonical[ALT_CODE_COLUMN] = canonical[ALT_CODE_COLUMN].astype(str)
-            return canonical
+            return _preserve_alt_code_as_text(canonical)
     except FileNotFoundError as exc:
         raise FileNotFoundError(f"فایل یافت نشد: {source}") from exc
     except Exception as exc:  # pragma: no cover - سناریوهای پیش‌بینی‌نشده
@@ -563,11 +587,15 @@ def read_crosswalk_workbook(
         with pd.ExcelFile(source) as workbook:
             if sheet_groups not in workbook.sheet_names:
                 raise ValueError(f"شیت «{sheet_groups}» در Crosswalk یافت نشد")
-            dtype_map = {ALT_CODE_COLUMN: str}
-            groups_df = workbook.parse(sheet_groups, dtype=dtype_map)
+            dtype_map = {ALT_CODE_COLUMN: object}
+            groups_df = _preserve_alt_code_as_text(
+                workbook.parse(sheet_groups, dtype=dtype_map)
+            )
             synonyms_df = None
             if "Synonyms" in workbook.sheet_names:
-                synonyms_df = workbook.parse("Synonyms", dtype=dtype_map)
+                synonyms_df = _preserve_alt_code_as_text(
+                    workbook.parse("Synonyms", dtype=dtype_map)
+                )
             return groups_df, synonyms_df
     except FileNotFoundError as exc:
         raise FileNotFoundError(f"فایل Crosswalk یافت نشد: {source}") from exc

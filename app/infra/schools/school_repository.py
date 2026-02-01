@@ -5,12 +5,12 @@ from pathlib import Path
 
 import pandas as pd
 
+from app.infra.common.school_report_normalization import normalize_school_report_frame
 from app.infra.db.reference_tables import ReferenceTableStatus, status_from_meta
 from app.infra.io_utils import read_excel_first_sheet
 from app.infra.local_database import LocalDatabase
 from app.infra.reference_repository import SQLiteReferenceRepository
 from app.infra.schools.header_resolver import SchoolHeaderResolver
-from app.infra.sqlite_types import coerce_int_columns
 
 __all__ = ["SchoolRepository"]
 
@@ -21,8 +21,6 @@ class SchoolRepository:
     REQUIRED_COLUMNS: tuple[str, ...] = (
         "کد مدرسه",
         "نام مدرسه",
-        "مرکز گلستان صدرا",
-        "جنسیت",
     )
 
     def __init__(self, db: LocalDatabase) -> None:
@@ -44,11 +42,9 @@ class SchoolRepository:
         resolution = self._header_resolver.resolve(df)
         normalized = resolution.require_can_continue(
             path=str(path),
-            reason_fa="ستون‌های الزامی مدارس در فایل موجود نیست.",
+            reason_fa="ستون‌های الزامی مدارس (کد مدرسه، نام مدرسه) در فایل موجود نیست.",
         )
-        normalized = coerce_int_columns(
-            normalized, ["کد مدرسه", "مرکز گلستان صدرا", "جنسیت"]
-        )
+        normalized = normalize_school_report_frame(normalized)
         if "فعال" not in normalized.columns:
             normalized = normalized.copy()
             normalized["فعال"] = pd.Series([1] * len(normalized), dtype="Int64")

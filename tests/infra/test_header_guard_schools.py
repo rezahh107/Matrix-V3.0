@@ -13,7 +13,6 @@ def test_header_guard_blocks_missing_school_columns(tmp_path: Path) -> None:
     df = pd.DataFrame(
         {
             "کد مدرسه": [1],
-            "نام مدرسه": ["A"],
             # Required column intentionally removed
             "مرکز گلستان صدرا": [10],
         }
@@ -24,4 +23,4 @@ def test_header_guard_blocks_missing_school_columns(tmp_path: Path) -> None:
     with pytest.raises(DatabasePreparationError) as excinfo:
         import_school_report_from_excel(path, db)
 
-    assert "جنسیت" in (excinfo.value.hint or "")
+    assert "نام مدرسه" in (excinfo.value.hint or "")
