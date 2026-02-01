@@ -8,6 +8,7 @@ import pandas as pd
 
 from app.core.common.columns import HEADER_ALIASES_V3, normalize_fa
 from app.infra.errors import DatabasePreparationError
+from app.infra.sqlite_types import coerce_int_series
 
 
 def _normalize_header(text: str) -> str:
@@ -60,6 +61,7 @@ class HeaderPipelineV3:
         critical_required: Mapping[str, Iterable[str]] | None = None,
         critical_fields: Mapping[str, Iterable[str]] | None = None,
         conflict_tolerant_aliases: Mapping[str, Mapping[str, Iterable[str]]] | None = None,
+        coerce_int_conflict_fields: Mapping[str, Iterable[str]] | None = None,
     ) -> None:
         self._alias_registry = self._normalize_registry(
             alias_registry or self._default_alias_registry()
@@ -74,6 +76,10 @@ class HeaderPipelineV3:
         self._conflict_tolerant_aliases = self._normalize_conflict_tolerant_aliases(
             conflict_tolerant_aliases or {}
         )
+        self._coerce_int_conflict_fields = {
+            key: {value for value in values}
+            for key, values in (coerce_int_conflict_fields or {}).items()
+        }
 
     def resolve_field(self, label: str, source: str) -> str | None:
         """Resolve a header label to its canonical field for the given source."""
@@ -87,6 +93,7 @@ class HeaderPipelineV3:
         collisions: dict[str, list[str]] = defaultdict(list)
         critical_fields = self._critical_fields.get(source, set())
         tolerant_aliases = self._conflict_tolerant_aliases.get(source, {})
+        int_conflict_fields = self._coerce_int_conflict_fields.get(source, set())
 
         for column in df.columns:
             normalized = _normalize_header(str(column))
@@ -116,7 +123,11 @@ class HeaderPipelineV3:
         conflict_counts: dict[str, int] = {}
         for canonical, headers in mapped_columns.items():
             if len(headers) > 1:
-                merged_series, conflict_count = self._coalesce_columns(merged, headers)
+                merged_series, conflict_count = self._coalesce_columns(
+                    merged,
+                    headers,
+                    coerce_int=canonical in int_conflict_fields,
+                )
                 coalesced[canonical] = merged_series
                 conflict_counts[canonical] = conflict_count
 
@@ -196,7 +207,7 @@ class HeaderPipelineV3:
 
     @staticmethod
     def _coalesce_columns(
-        df: pd.DataFrame, columns: Sequence[str]
+        df: pd.DataFrame, columns: Sequence[str], *, coerce_int: bool = False
     ) -> tuple[pd.Series, int]:
         candidates: list[pd.Series] = []
         for column in columns:
@@ -210,7 +221,11 @@ class HeaderPipelineV3:
                 candidates.append(candidate)
 
         if not candidates:
-            return pd.Series(index=df.index, dtype="object"), 0
+            dtype = "Int64" if coerce_int else "object"
+            return pd.Series(index=df.index, dtype=dtype), 0
+
+        if coerce_int:
+            candidates = [coerce_int_series(candidate) for candidate in candidates]
 
         merged = candidates[0].reindex(df.index)
         conflict_count = 0
