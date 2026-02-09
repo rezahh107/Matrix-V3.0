@@ -244,3 +244,25 @@ def test_header_pipeline_resolve_existing_field_uses_student_equivalent_aliases(
 
     assert resolved_gender == "gender"
     assert resolved_status == "دانش آموز فارغ"
+
+
+def test_header_pipeline_resolve_existing_field_prefers_canonical_when_present() -> None:
+    pipeline = HeaderPipelineV3(alias_registry=HEADER_ALIASES_V3)
+    available = ["student_id", "جنسیت", "gender"]
+
+    resolved_gender = pipeline.resolve_existing_field(
+        "جنسیت", "student", available_columns=available
+    )
+
+    assert resolved_gender == "جنسیت"
+
+
+def test_header_pipeline_resolve_existing_field_returns_canonical_when_unavailable() -> None:
+    pipeline = HeaderPipelineV3(alias_registry=HEADER_ALIASES_V3)
+    available = ["student_id"]
+
+    resolved_status = pipeline.resolve_existing_field(
+        "student_educational_status", "student", available_columns=available
+    )
+
+    assert resolved_status == "student_educational_status"

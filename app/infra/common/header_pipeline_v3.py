@@ -329,27 +329,34 @@ class HeaderPipelineV3:
         return normalized
 
     @staticmethod
-    def _normalize_equivalent_fields(
+    def _normalize_nested_alias_sets(
         aliases: Mapping[str, Mapping[str, Iterable[str]]],
+        *,
+        normalize_values: bool,
     ) -> dict[str, dict[str, set[str]]]:
         normalized: dict[str, dict[str, set[str]]] = {}
         for source, mappings in aliases.items():
             normalized[source] = {
-                canonical: {alias for alias in values} for canonical, values in mappings.items()
+                canonical: {
+                    _normalize_header(value) if normalize_values else value for value in values
+                }
+                for canonical, values in mappings.items()
             }
         return normalized
 
-    @staticmethod
-    def _normalize_conflict_tolerant_aliases(
+    @classmethod
+    def _normalize_equivalent_fields(
+        cls,
         aliases: Mapping[str, Mapping[str, Iterable[str]]],
     ) -> dict[str, dict[str, set[str]]]:
-        normalized: dict[str, dict[str, set[str]]] = {}
-        for source, mappings in aliases.items():
-            normalized[source] = {
-                canonical: {_normalize_header(header) for header in headers}
-                for canonical, headers in mappings.items()
-            }
-        return normalized
+        return cls._normalize_nested_alias_sets(aliases, normalize_values=False)
+
+    @classmethod
+    def _normalize_conflict_tolerant_aliases(
+        cls,
+        aliases: Mapping[str, Mapping[str, Iterable[str]]],
+    ) -> dict[str, dict[str, set[str]]]:
+        return cls._normalize_nested_alias_sets(aliases, normalize_values=True)
 
     @staticmethod
     def _is_conflict_tolerant(
