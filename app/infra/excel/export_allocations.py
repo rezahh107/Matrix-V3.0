@@ -400,6 +400,10 @@ def build_sabt_export_frame(
 
     alloc_ids_before_merge = ensure_series(alloc_resolved["student_id"]).astype("string").copy()
     student_ids = ensure_series(students_resolved["student_id"]).astype("string")
+    alloc_resolved = alloc_resolved.copy()
+    students_resolved = students_resolved.copy()
+    alloc_resolved = alloc_resolved.astype({"student_id": "string"})
+    students_resolved = students_resolved.astype({"student_id": "string"})
     if alloc_ids_before_merge.isna().any() or alloc_ids_before_merge.str.strip().eq("").any():
         raise ValueError("allocation_df has null/empty student_id values")
     if student_ids.isna().any() or student_ids.str.strip().eq("").any():
