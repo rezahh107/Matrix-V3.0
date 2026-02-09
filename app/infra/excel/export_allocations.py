@@ -71,8 +71,10 @@ _ANNOTATION_PATTERN = re.compile(r"[()]")
 
 
 def _normalize_code_hint(value: str) -> str:
-    normalized = normalize_fa(value).strip().lower()
-    return re.sub(r"[^0-9a-z؀-ۿ]+", "", normalized)
+    normalized_fa = normalize_fa(value)
+    normalized = normalized_fa if normalized_fa else str(value)
+    compact = normalized.strip().lower()
+    return re.sub(r"[^0-9a-z؀-ۿ]+", "", compact)
 
 
 _NATIONAL_CODE_HEADER_HINTS = frozenset(
@@ -123,13 +125,11 @@ def _has_legacy_annotation(value: str) -> bool:
 
 def _is_national_code_column(column: AllocationExportColumn) -> bool:
     candidates = (column.header, column.source_field)
-    for candidate in candidates:
-        if not isinstance(candidate, str):
-            continue
-        normalized = _normalize_code_hint(candidate)
-        if normalized in _NATIONAL_CODE_HEADER_HINTS:
-            return True
-    return False
+    return any(
+        _normalize_code_hint(candidate) in _NATIONAL_CODE_HEADER_HINTS
+        for candidate in candidates
+        if isinstance(candidate, str)
+    )
 
 
 def _normalize_export_series(
@@ -139,8 +139,7 @@ def _normalize_export_series(
 ) -> pd.Series:
     if not _is_national_code_column(column):
         return series
-    normalized = ensure_series(series).map(canonical_national_code)
-    return pd.Series(normalized, index=series.index, dtype="string")
+    return ensure_series(series).map(canonical_national_code).astype("string")
 
 
 def _validate_profile_entries(
