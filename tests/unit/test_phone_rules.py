@@ -28,6 +28,14 @@ def test_normalize_mobile_accepts_valid() -> None:
     assert normalize_mobile("۰۹۱۲۳۴۵۶۷۸۹") == "09123456789"
 
 
+def test_normalize_digits_trims_excel_decimal_artifact() -> None:
+    assert normalize_digits("36499154.0") == "36499154"
+
+
+def test_normalize_landline_trims_excel_decimal_artifact() -> None:
+    assert normalize_landline("36499154.0") == "36499154"
+
+
 def test_normalize_mobile_rejects_invalid_lengths_or_prefix() -> None:
     assert normalize_mobile("001234567890") is None
     assert normalize_mobile("08123456789") is None
