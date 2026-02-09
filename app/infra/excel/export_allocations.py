@@ -423,6 +423,8 @@ def build_sabt_export_frame(
         if isinstance(requested_field, str) and requested_field.strip() == _POLICY_EMPTY_SENTINEL_FA:
             continue
         canonical = pipeline.resolve_field(requested_field, "student")
+        if canonical == "student_id":
+            continue
         if canonical is not None and canonical in students_resolved.columns:
             requested_student_columns.append(canonical)
 
