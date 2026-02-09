@@ -15,6 +15,7 @@ from app.core.allocation.engine import enrich_summary_with_history
 from app.core.allocation.history_metrics import METRIC_COLUMNS, compute_history_metrics
 from app.core.common.columns import ensure_series
 from app.core.common.isin_guard import isin_mask
+from app.core.common.national_id import canonical_national_code
 from app.core.common.normalization import normalize_fa
 from app.core.common.trace import JOIN_STAGE_SOURCE_KEYS
 from app.core.common.types import CANONICAL_TRACE_ORDER
@@ -69,6 +70,22 @@ _ASCII_KEY_PATTERN = re.compile(r"[^0-9a-z]+")
 _ANNOTATION_PATTERN = re.compile(r"[()]")
 
 
+def _normalize_code_hint(value: str) -> str:
+    normalized = normalize_fa(value).strip().lower()
+    return re.sub(r"[^0-9a-z؀-ۿ]+", "", normalized)
+
+
+_NATIONAL_CODE_HEADER_HINTS = frozenset(
+    {
+        _normalize_code_hint("کد ملی"),
+        _normalize_code_hint("کدملی"),
+        _normalize_code_hint("student_national_code"),
+        _normalize_code_hint("national_id"),
+        _normalize_code_hint("student_national_id"),
+    }
+)
+
+
 @dataclass(frozen=True)
 class ProfileMappingIssue:
     """Structured issue for unresolved SABT export profile mappings."""
@@ -102,6 +119,28 @@ def _slugify(value: str) -> str:
 def _has_legacy_annotation(value: str) -> bool:
     normalized = normalize_fa(value)
     return bool(_ANNOTATION_PATTERN.search(normalized) or "اگر" in normalized)
+
+
+def _is_national_code_column(column: AllocationExportColumn) -> bool:
+    candidates = (column.header, column.source_field)
+    for candidate in candidates:
+        if not isinstance(candidate, str):
+            continue
+        normalized = _normalize_code_hint(candidate)
+        if normalized in _NATIONAL_CODE_HEADER_HINTS:
+            return True
+    return False
+
+
+def _normalize_export_series(
+    series: pd.Series,
+    *,
+    column: AllocationExportColumn,
+) -> pd.Series:
+    if not _is_national_code_column(column):
+        return series
+    normalized = ensure_series(series).map(canonical_national_code)
+    return pd.Series(normalized, index=series.index, dtype="string")
 
 
 def _validate_profile_entries(
@@ -539,6 +578,7 @@ def build_sabt_export_frame(
                 series = pd.Series(pd.NA, index=alloc_resolved.index, dtype="object")
             else:
                 series = ensure_series(alloc_resolved[canonical]).reindex(alloc_resolved.index)
+                series = _normalize_export_series(series, column=column)
         elif column.source_kind == "student":
             requested_field = column.source_field or column.header
             if (
@@ -565,6 +605,7 @@ def build_sabt_export_frame(
             else:
                 series = ensure_series(students_resolved[canonical]).copy()
                 series.index = alloc_resolved.index
+                series = _normalize_export_series(series, column=column)
                 if canonical == "student_landline":
                     landline_headers.append(column.header)
         else:
