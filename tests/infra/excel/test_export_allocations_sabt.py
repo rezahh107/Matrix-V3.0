@@ -343,6 +343,48 @@ def test_build_sabt_export_frame_matches_profile_against_english_headers() -> No
     assert export_df.loc[0, "جنسیت"] == "1"
 
 
+def test_build_sabt_export_frame_merges_student_fields_by_student_id() -> None:
+    allocations_df = pd.DataFrame(
+        {
+            "student_id": ["S-2", "S-1"],
+            "mentor_id": [22, 11],
+        }
+    )
+    students_df = pd.DataFrame(
+        {
+            "student_id": ["S-1", "S-2"],
+            "جنسیت": [1, 2],
+            "وضعیت تحصیلی": [0, 1],
+        }
+    )
+    profile = [
+        AllocationExportColumn(
+            key="gender",
+            header="جنسیت",
+            source_kind="student",
+            source_field="جنسیت",
+            literal_value=None,
+            order=1,
+        ),
+        AllocationExportColumn(
+            key="grad",
+            header="وضعیت تحصیلی",
+            source_kind="student",
+            source_field="وضعیت تحصیلی",
+            literal_value=None,
+            order=2,
+        ),
+    ]
+
+    export_df = build_sabt_export_frame(allocations_df, students_df, profile)
+
+    assert export_df["student_id"].tolist() == ["S-1", "S-2"]
+    assert export_df["جنسیت"].tolist() == [1, 2]
+    assert export_df["وضعیت تحصیلی"].tolist() == [0, 1]
+    assert export_df["جنسیت"].notna().all()
+    assert export_df["وضعیت تحصیلی"].notna().all()
+
+
 def test_build_sabt_export_frame_preserves_registration_status_over_finance() -> None:
     allocations_df = pd.DataFrame(
         {
