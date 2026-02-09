@@ -12,6 +12,7 @@ from app.infra.excel.import_to_sabt import (
     GF_FIELD_TO_COL,
     _apply_normalizers,
     _normalize_mobile_ir,
+    _clean_invalid_birth_dates,
     apply_alias_rule,
     build_errors_frame,
     build_sheet2_frame,
@@ -169,20 +170,24 @@ class TestSheet2Generation:
         if avg:
             assert len(str(float(avg)).split(".")[-1]) <= 2
 
-    def test_invalid_shamsi_birth_dates_removed(
+    def test_invalid_shamsi_birth_dates_cleaned(
         self, sample_allocation_df: pd.DataFrame, exporter_config: dict
     ) -> None:
         allocations = sample_allocation_df.copy()
         allocations["student_birth_date"] = ["1402/01/15", "1398/61/10", "1401/12/30"]
 
+        cleaned_allocations, cleaned_cells = _clean_invalid_birth_dates(allocations)
         sheet2 = build_sheet2_frame(allocations, exporter_config)
 
-        assert len(sheet2) == 1
+        assert len(sheet2) == 3
+        assert cleaned_cells == 2
+        assert pd.isna(cleaned_allocations.loc[1, "student_birth_date"])
+        assert pd.isna(cleaned_allocations.loc[2, "student_birth_date"])
         debug_log = sheet2.attrs.get("registration_status_debug", [])
         birth_filter_entry = next(
             entry for entry in debug_log if entry.get("label") == "sheet2_birth_date_filter"
         )
-        assert birth_filter_entry["dropped_rows"] == 2
+        assert birth_filter_entry["cleaned_cells"] == 2
 
     def test_empty_birth_date_is_kept(
         self, sample_allocation_df: pd.DataFrame, exporter_config: dict
