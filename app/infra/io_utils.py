@@ -540,7 +540,7 @@ def read_inspactor_workbook(path: Path | str | PathLike[str]) -> pd.DataFrame:
                         best_sheet = sheet_name
                         best_missing = list(missing)
                     elif len(missing) == len(best_missing):
-                        prev_row = row_counts.get(best_sheet or "", None)
+                        prev_row = row_counts.get(best_sheet or "")
                         prev_priority = -prev_row if prev_row is not None else float("inf")
                         curr_priority = -row_count if row_count is not None else float("inf")
                         if curr_priority < prev_priority or (

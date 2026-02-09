@@ -13,11 +13,11 @@ import re
 import warnings
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from enum import Enum
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal, cast
 
+from app.core.common.enum_compat import StrEnum
 from app.core.policy.config import AllocationChannelConfig
 from app.core.policy.loader import compute_schema_hash, validate_policy_columns
 
@@ -329,7 +329,7 @@ class MentorSchoolBindingPolicy:
         return text in self.empty_tokens
 
 
-class MentorStatus(str, Enum):
+class MentorStatus(StrEnum):
     """وضعیت پشتیبان برای حاکمیت استخر."""
 
     ACTIVE = "active"

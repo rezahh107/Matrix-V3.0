@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import enum
 from collections.abc import Iterable
 from typing import SupportsInt, cast
 
@@ -13,12 +12,13 @@ from app.core.common.domain import (
     StudentBindingKind,
     classify_student_binding,
 )
+from app.core.common.enum_compat import StrEnum
 from app.core.common.isin_guard import isin_mask, require_isin_values
 from app.core.policy.config import AllocationChannelConfig
 from app.core.policy_loader import PolicyConfig
 
 
-class AllocationChannel(str, enum.Enum):
+class AllocationChannel(StrEnum):
     """کانال‌های استاندارد تخصیص دانش‌آموز."""
 
     SCHOOL = "SCHOOL"

@@ -24,7 +24,6 @@ from collections.abc import Iterable, Mapping, Sequence
 from contextlib import suppress
 from dataclasses import dataclass
 from datetime import datetime
-from enum import Enum
 from pathlib import Path
 from typing import cast
 
@@ -32,6 +31,7 @@ import pandas as pd
 from pandas.api.types import is_integer_dtype
 
 from app.core.common.domain import EDUCATIONAL_STRUCTURE, EducationalRecord
+from app.core.common.enum_compat import StrEnum
 from app.infra.errors import (
     DatabaseCorruptError,
     DatabaseOperationError,
@@ -69,7 +69,7 @@ _GRADE_WORD_BY_NUMBER: dict[int, str] = {value: key for key, value in _PERSIAN_G
 logger = logging.getLogger(__name__)
 
 
-class DatabaseHealthStatus(str, Enum):
+class DatabaseHealthStatus(StrEnum):
     """وضعیت کلی پایگاه داده برای نمایش در UI."""
 
     OK = "ok"

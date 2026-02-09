@@ -397,50 +397,85 @@ def build_sabt_export_frame(
         raise KeyError("allocation_df must include 'student_id' column")
     if "student_id" not in students_resolved.columns:
         raise KeyError("students_df must include 'student_id' column")
-    if "__source_index__" not in alloc_resolved.columns:
-        raise KeyError("allocation_df must include '__source_index__' column")
-    if "__source_index__" not in students_resolved.columns:
-        raise KeyError("students_df must include '__source_index__' column")
 
-    alloc_source_index = ensure_series(alloc_resolved["__source_index__"])
-    students_source_index = ensure_series(students_resolved["__source_index__"])
-    if alloc_source_index.isna().any():
-        raise ValueError("allocation_df has null __source_index__ values")
-    if students_source_index.isna().any():
-        raise ValueError("students_df has null __source_index__ values")
-    if alloc_source_index.duplicated().any():
-        raise ValueError("allocation_df __source_index__ values must be unique")
-    if students_source_index.duplicated().any():
-        raise ValueError("students_df __source_index__ values must be unique")
+    alloc_ids_before_merge = ensure_series(alloc_resolved["student_id"]).astype("string").copy()
+    student_ids = ensure_series(students_resolved["student_id"]).astype("string")
+    alloc_resolved = alloc_resolved.copy()
+    students_resolved = students_resolved.copy()
+    alloc_resolved = alloc_resolved.astype({"student_id": "string"})
+    students_resolved = students_resolved.astype({"student_id": "string"})
+    if alloc_ids_before_merge.isna().any() or alloc_ids_before_merge.str.strip().eq("").any():
+        raise ValueError("allocation_df has null/empty student_id values")
+    if student_ids.isna().any() or student_ids.str.strip().eq("").any():
+        raise ValueError("students_df has null/empty student_id values")
+    if alloc_ids_before_merge.duplicated().any():
+        raise ValueError("allocation_df student_id values must be unique")
+    if student_ids.duplicated().any():
+        raise ValueError("students_df student_id values must be unique")
 
     sort_columns = [column for column in ("student_id", "mentor_id") if column in alloc_resolved.columns]
     if sort_columns:
         alloc_resolved = alloc_resolved.sort_values(sort_columns, kind="mergesort")
     alloc_resolved = alloc_resolved.reset_index(drop=True)
+    expected_alloc_ids_after_sort = ensure_series(alloc_resolved["student_id"]).astype("string")
 
-    overlapping_columns = [
-        col
-        for col in students_resolved.columns
-        if col in alloc_resolved.columns and col != "__source_index__"
+    requested_student_columns: list[str] = []
+    for column in profile:
+        if column.source_kind != "student":
+            continue
+        requested_field = column.source_field or column.header
+        if isinstance(requested_field, str) and requested_field.strip() == _POLICY_EMPTY_SENTINEL_FA:
+            continue
+        canonical = pipeline.resolve_field(requested_field, "student")
+        if canonical == "student_id":
+            continue
+        if canonical is not None and canonical in students_resolved.columns:
+            requested_student_columns.append(canonical)
+
+    if (
+        "student_landline" in requested_student_columns
+        and "student_registration_status" in students_resolved.columns
+        and "student_registration_status" not in requested_student_columns
+    ):
+        requested_student_columns.append("student_registration_status")
+
+    students_merge_columns = ["student_id", *list(dict.fromkeys(requested_student_columns))]
+    overlapping_profile_columns = [
+        column for column in students_merge_columns if column in alloc_resolved.columns and column != "student_id"
     ]
-    students_for_merge = students_resolved.drop(columns=overlapping_columns)
+    if overlapping_profile_columns:
+        alloc_resolved = alloc_resolved.drop(columns=overlapping_profile_columns)
+
+    students_for_merge = (
+        students_resolved.loc[:, [column for column in students_merge_columns if column in students_resolved.columns]]
+        .drop_duplicates(subset=["student_id"], keep="first")
+        .copy()
+    )
+    students_for_merge = students_for_merge.sort_values("student_id", kind="mergesort").reset_index(drop=True)
+    if students_for_merge["student_id"].duplicated().any():
+        raise ValueError("students_for_merge student_id values must be unique")
 
     merged = pd.merge(
         alloc_resolved,
         students_for_merge,
-        on="__source_index__",
+        on="student_id",
         how="left",
         validate="one_to_one",
         indicator=True,
     )
-    unmatched = merged.loc[merged["_merge"] != "both", ["student_id", "__source_index__"]]
+    unmatched = merged.loc[merged["_merge"] != "both", ["student_id"]]
     if not unmatched.empty:
         sample = unmatched.head(5).to_dict("records")
         raise ValueError(
-            "Unmatched student rows after lineage join on __source_index__; sample="
+            "Unmatched student rows after key-based join on student_id; sample="
             f"{sample}"
         )
     merged = merged.drop(columns=["_merge"])
+    merged_ids = ensure_series(merged["student_id"]).astype("string").reset_index(drop=True)
+    if not merged_ids.equals(expected_alloc_ids_after_sort.reset_index(drop=True)):
+        raise ValueError(
+            "Critical export invariant violation: student_id changed during key-based join."
+        )
 
     merged = merged.reset_index(drop=True)
     alloc_resolved = merged

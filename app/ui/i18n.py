@@ -6,12 +6,12 @@
 
 from __future__ import annotations
 
-from enum import Enum
+from app.core.common.enum_compat import StrEnum
 
 __all__ = ["Language"]
 
 
-class Language(str, Enum):
+class Language(StrEnum):
     """زبان رابط کاربری به‌صورت enum خوانا."""
 
     EN = "en"
