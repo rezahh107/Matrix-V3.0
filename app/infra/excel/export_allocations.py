@@ -426,6 +426,13 @@ def build_sabt_export_frame(
         if canonical is not None and canonical in students_resolved.columns:
             requested_student_columns.append(canonical)
 
+    if (
+        "student_landline" in requested_student_columns
+        and "student_registration_status" in students_resolved.columns
+        and "student_registration_status" not in requested_student_columns
+    ):
+        requested_student_columns.append("student_registration_status")
+
     students_merge_columns = ["student_id", *list(dict.fromkeys(requested_student_columns))]
     overlapping_profile_columns = [
         column for column in students_merge_columns if column in alloc_resolved.columns and column != "student_id"
