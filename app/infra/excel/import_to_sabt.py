@@ -77,6 +77,7 @@ GF_FIELD_TO_COL: Mapping[str, Sequence[str]] = {
 _DIGIT_TRANSLATION = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
 _HEADER_SPACE_PATTERN = re.compile(r"[\s\u200c\u200f]+")
 _HEADER_PUNCT_PATTERN = re.compile(r"[\-/]+")
+_JALALI_DATE_PATTERN = re.compile(r"^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$")
 
 REGISTRATION_STATUS_LABELS: Final[dict[int, str]] = {
     0: "عادی",
@@ -855,6 +856,71 @@ def _normalize_date_format(fmt: str | None) -> str:
     return normalized
 
 
+def _is_jalali_leap_year(year: int) -> bool:
+    """بررسی سال کبیسهٔ جلالی با الگوریتم سیکل ۲۸۲۰ ساله."""
+
+    cycle_year = ((year - 474) % 2820) + 474
+    return ((cycle_year + 38) * 682) % 2816 < 682
+
+
+def _is_valid_jalali_birth_date(raw_value: Any) -> bool:
+    """اعتبارسنجی تاریخ تولد شمسی.
+
+    مقادیر خالی معتبر در نظر گرفته می‌شوند تا تنها رکوردهای دارای تاریخ
+    صراحتاً نامعتبر حذف شوند.
+    """
+
+    if pd.isna(raw_value):
+        return True
+
+    value = str(raw_value).strip().translate(_DIGIT_TRANSLATION)
+    if not value:
+        return True
+
+    match = _JALALI_DATE_PATTERN.match(value)
+    if match is None:
+        return False
+
+    year = int(match.group(1))
+    month = int(match.group(2))
+    day = int(match.group(3))
+
+    if month < 1 or month > 12:
+        return False
+
+    if month <= 6:
+        max_day = 31
+    elif month <= 11:
+        max_day = 30
+    else:
+        max_day = 30 if _is_jalali_leap_year(year) else 29
+
+    return 1 <= day <= max_day
+
+
+def _drop_invalid_birth_dates(df_alloc: pd.DataFrame) -> tuple[pd.DataFrame, int]:
+    """حذف رکوردهای دارای تاریخ تولد شمسی نامعتبر از ورودی Sheet2.
+
+    خروجی شامل دیتافریم پالایش‌شده و تعداد ردیف‌های حذف‌شده است تا در
+    observability فرایند خروجی قابل‌استفاده باشد.
+    """
+
+    birth_columns = ("student_birth_date", "تاریخ تولد")
+    birth_column = next((column for column in birth_columns if column in df_alloc.columns), None)
+    if birth_column is None:
+        return df_alloc, 0
+
+    birth_series = ensure_series(df_alloc[birth_column])
+    valid_mask = birth_series.map(_is_valid_jalali_birth_date)
+    valid_mask = valid_mask.fillna(False)
+    if bool(valid_mask.all()):
+        return df_alloc, 0
+
+    filtered_df = df_alloc.loc[valid_mask].copy()
+    dropped_count = int((~valid_mask).sum())
+    return filtered_df, dropped_count
+
+
 def _series_from_source(
     df: pd.DataFrame,
     source_cfg: Mapping[str, Any],
@@ -985,6 +1051,15 @@ def build_sheet2_frame(
     if today is None:
         today = datetime.today()
     debug_log: list[dict[str, Any]] = []
+
+    df_alloc, dropped_birth_dates = _drop_invalid_birth_dates(df_alloc)
+    if dropped_birth_dates > 0:
+        debug_log.append(
+            {
+                "label": "sheet2_birth_date_filter",
+                "dropped_rows": dropped_birth_dates,
+            }
+        )
 
     existing_debug = df_alloc.attrs.get("registration_status_debug")
     if isinstance(existing_debug, list):
