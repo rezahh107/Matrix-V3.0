@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+import re
+
 import pandas as pd
 
 from app.core.common.domain import FinanceCode
 from app.core.common.normalization import extract_ascii_digits
+
+_DECIMAL_ARTIFACT_TRANSLATION = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩٫", "01234567890123456789.")
+_DECIMAL_ARTIFACT_PATTERN = re.compile(r"^\s*([0-9]+)\.([0-9]+)\s*$")
 
 MOBILE_REQUIRED_PREFIX = "09"
 MOBILE_REQUIRED_LENGTH = 11
@@ -37,6 +42,15 @@ def normalize_digits(value: object | None) -> str | None:
     - تمامی نویزها (فاصله، خط تیره و …) حذف می‌شوند.
     - اگر خروجی خالی باشد ``None`` بازگردانده می‌شود.
     """
+
+    if isinstance(value, str):
+        normalized_text = value.translate(_DECIMAL_ARTIFACT_TRANSLATION)
+        decimal_match = _DECIMAL_ARTIFACT_PATTERN.fullmatch(normalized_text)
+        if decimal_match is not None:
+            integer_part, fraction_part = decimal_match.groups()
+            if set(fraction_part) <= {"0"}:
+                normalized_integer = integer_part.lstrip("0")
+                return normalized_integer or "0"
 
     digits = extract_ascii_digits(value)
     return digits or None
