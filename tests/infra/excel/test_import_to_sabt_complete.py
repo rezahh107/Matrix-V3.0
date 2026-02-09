@@ -11,6 +11,7 @@ import pytest
 from app.infra.excel.import_to_sabt import (
     GF_FIELD_TO_COL,
     _apply_normalizers,
+    _clean_invalid_birth_dates,
     _normalize_mobile_ir,
     apply_alias_rule,
     build_errors_frame,
@@ -198,6 +199,20 @@ class TestSheet2Generation:
         sheet2 = build_sheet2_frame(allocations, exporter_config)
 
         assert len(sheet2) == 3
+
+    def test_invalid_birth_date_cleans_date_of_birth_alias_only(
+        self, sample_allocation_df: pd.DataFrame, exporter_config: dict
+    ) -> None:
+        allocations = sample_allocation_df.copy()
+        allocations["date_of_birth"] = ["1402/01/15", "1398/61/10", "1401/12/30"]
+
+        cleaned, cleaned_cells = _clean_invalid_birth_dates(allocations)
+
+        assert len(cleaned) == 3
+        assert cleaned_cells == 2
+        assert cleaned.loc[0, "date_of_birth"] == "1402/01/15"
+        assert pd.isna(cleaned.loc[1, "date_of_birth"])
+        assert pd.isna(cleaned.loc[2, "date_of_birth"])
 
 
 class TestHekmatConditionalLogic:
