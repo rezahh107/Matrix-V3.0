@@ -905,7 +905,7 @@ def _clean_invalid_birth_dates(df_alloc: pd.DataFrame) -> tuple[pd.DataFrame, in
     می‌شود تا سایر ستون‌های همان ردیف دست‌نخورده بمانند.
     """
 
-    birth_columns = ("student_birth_date", "تاریخ تولد")
+    birth_columns = ("student_birth_date", "date_of_birth", "تاریخ تولد")
     birth_column = next((column for column in birth_columns if column in df_alloc.columns), None)
     if birth_column is None:
         return df_alloc, 0
