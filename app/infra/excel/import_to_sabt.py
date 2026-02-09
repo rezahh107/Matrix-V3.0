@@ -898,11 +898,11 @@ def _is_valid_jalali_birth_date(raw_value: Any) -> bool:
     return 1 <= day <= max_day
 
 
-def _drop_invalid_birth_dates(df_alloc: pd.DataFrame) -> tuple[pd.DataFrame, int]:
-    """حذف رکوردهای دارای تاریخ تولد شمسی نامعتبر از ورودی Sheet2.
+def _clean_invalid_birth_dates(df_alloc: pd.DataFrame) -> tuple[pd.DataFrame, int]:
+    """پاک‌سازی مقدار تاریخ تولد شمسی نامعتبر بدون حذف ردیف.
 
-    خروجی شامل دیتافریم پالایش‌شده و تعداد ردیف‌های حذف‌شده است تا در
-    observability فرایند خروجی قابل‌استفاده باشد.
+    در صورت نامعتبر بودن تاریخ تولد، فقط همان سلول با ``pd.NaT`` جایگزین
+    می‌شود تا سایر ستون‌های همان ردیف دست‌نخورده بمانند.
     """
 
     birth_columns = ("student_birth_date", "تاریخ تولد")
@@ -916,9 +916,11 @@ def _drop_invalid_birth_dates(df_alloc: pd.DataFrame) -> tuple[pd.DataFrame, int
     if bool(valid_mask.all()):
         return df_alloc, 0
 
-    filtered_df = df_alloc.loc[valid_mask].copy()
-    dropped_count = int((~valid_mask).sum())
-    return filtered_df, dropped_count
+    cleaned_df = df_alloc.copy()
+    invalid_mask = ~valid_mask
+    cleaned_df.loc[invalid_mask, birth_column] = pd.NaT
+    invalid_count = int(invalid_mask.sum())
+    return cleaned_df, invalid_count
 
 
 def _series_from_source(
@@ -1052,12 +1054,12 @@ def build_sheet2_frame(
         today = datetime.today()
     debug_log: list[dict[str, Any]] = []
 
-    df_alloc, dropped_birth_dates = _drop_invalid_birth_dates(df_alloc)
-    if dropped_birth_dates > 0:
+    df_alloc, cleaned_birth_dates = _clean_invalid_birth_dates(df_alloc)
+    if cleaned_birth_dates > 0:
         debug_log.append(
             {
                 "label": "sheet2_birth_date_filter",
-                "dropped_rows": dropped_birth_dates,
+                "cleaned_cells": cleaned_birth_dates,
             }
         )
 

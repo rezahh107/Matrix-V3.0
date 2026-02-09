@@ -169,7 +169,7 @@ class TestSheet2Generation:
         if avg:
             assert len(str(float(avg)).split(".")[-1]) <= 2
 
-    def test_invalid_shamsi_birth_dates_removed(
+    def test_invalid_shamsi_birth_dates_cleaned(
         self, sample_allocation_df: pd.DataFrame, exporter_config: dict
     ) -> None:
         allocations = sample_allocation_df.copy()
@@ -177,12 +177,17 @@ class TestSheet2Generation:
 
         sheet2 = build_sheet2_frame(allocations, exporter_config)
 
-        assert len(sheet2) == 1
+        birth_column = next((column for column in sheet2.columns if "تولد" in str(column)), None)
+
+        assert len(sheet2) == 3
+        assert birth_column is not None
+        assert sheet2.loc[1, birth_column] == ""
+        assert sheet2.loc[2, birth_column] == ""
         debug_log = sheet2.attrs.get("registration_status_debug", [])
         birth_filter_entry = next(
             entry for entry in debug_log if entry.get("label") == "sheet2_birth_date_filter"
         )
-        assert birth_filter_entry["dropped_rows"] == 2
+        assert birth_filter_entry["cleaned_cells"] == 2
 
     def test_empty_birth_date_is_kept(
         self, sample_allocation_df: pd.DataFrame, exporter_config: dict
