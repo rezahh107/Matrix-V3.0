@@ -77,3 +77,35 @@ def test_sabt_export_maps_educational_status_from_graduation_status_column() -> 
 
     assert result.loc[0, "وضعیت تحصیلی"] == 1
     assert result.attrs["missing_student_columns"] == []
+
+
+def test_sabt_export_maps_educational_status_from_persian_alias_with_graduation_status() -> None:
+    allocation_df = pd.DataFrame(
+        {
+            "student_id": ["S-2"],
+            "mentor_id": [202],
+            "mentor_alias_code": ["A-2"],
+        }
+    )
+    students_df = pd.DataFrame(
+        {
+            "student_id": ["S-2"],
+            "graduation_status": [0],
+        }
+    )
+
+    profile = [
+        AllocationExportColumn(
+            key="educational_status",
+            header="وضعیت تحصیلی",
+            source_kind="student",
+            source_field="دانش آموز فارغ",
+            literal_value=None,
+            order=1,
+        ),
+    ]
+
+    result = build_sabt_export_frame(allocation_df, students_df, profile)
+
+    assert result.loc[0, "وضعیت تحصیلی"] == 0
+    assert result.attrs["missing_student_columns"] == []
