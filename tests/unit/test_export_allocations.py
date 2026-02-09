@@ -11,9 +11,7 @@ from app.infra.excel.export_allocations import (
 
 
 def test_educational_status_fallback_mapping() -> None:
-    allocations = pd.DataFrame(
-        {"student_id": [1], "mentor_id": ["EMP-1"], "__source_index__": [0]}
-    )
+    allocations = pd.DataFrame({"student_id": [1], "mentor_id": ["EMP-1"], "__source_index__": [0]})
     students = pd.DataFrame(
         {
             "student_id": [1],
@@ -68,3 +66,78 @@ def test_empty_allocation_frame_exports_schema_only() -> None:
 
     assert export_df.empty
     assert list(export_df.columns) == ["student_id", "تلفن منزل"]
+
+
+def test_national_code_short_values_are_not_zero_padded() -> None:
+    allocations = pd.DataFrame({"student_id": [1], "mentor_id": ["EMP-1"], "__source_index__": [0]})
+    students = pd.DataFrame(
+        {
+            "student_id": [1],
+            "کدملی": ["002"],
+            "__source_index__": [0],
+        }
+    )
+    profile = [
+        AllocationExportColumn(
+            key="national_id",
+            header="کدملی",
+            source_kind="student",
+            source_field="کدملی",
+            literal_value=None,
+            order=1,
+        )
+    ]
+
+    export_df = build_sabt_export_frame(allocations, students, profile)
+
+    assert export_df.loc[0, "کدملی"] == "002"
+
+
+def test_national_code_numeric_values_are_normalized_to_ten_digits() -> None:
+    allocations = pd.DataFrame({"student_id": [1], "mentor_id": ["EMP-1"], "__source_index__": [0]})
+    students = pd.DataFrame(
+        {
+            "student_id": [1],
+            "کدملی": [250188279],
+            "__source_index__": [0],
+        }
+    )
+    profile = [
+        AllocationExportColumn(
+            key="national_id",
+            header="کدملی",
+            source_kind="student",
+            source_field="کدملی",
+            literal_value=None,
+            order=1,
+        )
+    ]
+
+    export_df = build_sabt_export_frame(allocations, students, profile)
+
+    assert export_df.loc[0, "کدملی"] == "0250188279"
+
+
+def test_national_code_textual_tokens_are_preserved() -> None:
+    allocations = pd.DataFrame({"student_id": [1], "mentor_id": ["EMP-1"], "__source_index__": [0]})
+    students = pd.DataFrame(
+        {
+            "student_id": [1],
+            "کدملی": ["کدملی-2"],
+            "__source_index__": [0],
+        }
+    )
+    profile = [
+        AllocationExportColumn(
+            key="national_id",
+            header="کدملی",
+            source_kind="student",
+            source_field="کدملی",
+            literal_value=None,
+            order=1,
+        )
+    ]
+
+    export_df = build_sabt_export_frame(allocations, students, profile)
+
+    assert export_df.loc[0, "کدملی"] == "کدملی-2"
