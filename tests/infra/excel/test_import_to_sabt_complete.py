@@ -169,6 +169,31 @@ class TestSheet2Generation:
         if avg:
             assert len(str(float(avg)).split(".")[-1]) <= 2
 
+    def test_invalid_shamsi_birth_dates_removed(
+        self, sample_allocation_df: pd.DataFrame, exporter_config: dict
+    ) -> None:
+        allocations = sample_allocation_df.copy()
+        allocations["student_birth_date"] = ["1402/01/15", "1398/61/10", "1401/12/30"]
+
+        sheet2 = build_sheet2_frame(allocations, exporter_config)
+
+        assert len(sheet2) == 1
+        debug_log = sheet2.attrs.get("registration_status_debug", [])
+        birth_filter_entry = next(
+            entry for entry in debug_log if entry.get("label") == "sheet2_birth_date_filter"
+        )
+        assert birth_filter_entry["dropped_rows"] == 2
+
+    def test_empty_birth_date_is_kept(
+        self, sample_allocation_df: pd.DataFrame, exporter_config: dict
+    ) -> None:
+        allocations = sample_allocation_df.copy()
+        allocations["student_birth_date"] = ["", pd.NA, "1402/07/01"]
+
+        sheet2 = build_sheet2_frame(allocations, exporter_config)
+
+        assert len(sheet2) == 3
+
 
 class TestHekmatConditionalLogic:
     def test_hekmat_fields_only_for_status_3(
