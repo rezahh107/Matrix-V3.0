@@ -132,6 +132,28 @@ def _is_national_code_column(column: AllocationExportColumn) -> bool:
     )
 
 
+def _normalize_national_code_value(value: object) -> str | None:
+    if value is None:
+        return None
+    try:
+        if pd.isna(value):
+            return None
+    except TypeError:
+        pass
+
+    if isinstance(value, str):
+        cleaned = value.strip()
+        if not cleaned:
+            return None
+        digits_only = "".join(ch for ch in cleaned if ch.isdigit())
+        if not digits_only:
+            return cleaned
+        if len(digits_only) < 8:
+            return digits_only
+
+    return canonical_national_code(value)
+
+
 def _normalize_export_series(
     series: pd.Series,
     *,
@@ -139,7 +161,7 @@ def _normalize_export_series(
 ) -> pd.Series:
     if not _is_national_code_column(column):
         return series
-    return ensure_series(series).map(canonical_national_code).astype("string")
+    return ensure_series(series).map(_normalize_national_code_value).astype("string")
 
 
 def _validate_profile_entries(
