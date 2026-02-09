@@ -48,7 +48,7 @@ def normalize_digits(value: object | None) -> str | None:
         decimal_match = _DECIMAL_ARTIFACT_PATTERN.fullmatch(normalized_text)
         if decimal_match is not None:
             integer_part, fraction_part = decimal_match.groups()
-            if set(fraction_part) <= {"0"}:
+            if int(fraction_part) == 0:
                 normalized_integer = integer_part.lstrip("0")
                 return normalized_integer or "0"
 
