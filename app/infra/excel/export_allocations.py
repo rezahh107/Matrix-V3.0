@@ -413,6 +413,7 @@ def build_sabt_export_frame(
     if sort_columns:
         alloc_resolved = alloc_resolved.sort_values(sort_columns, kind="mergesort")
     alloc_resolved = alloc_resolved.reset_index(drop=True)
+    expected_alloc_ids_after_sort = ensure_series(alloc_resolved["student_id"]).astype("string")
 
     requested_student_columns: list[str] = []
     for column in profile:
@@ -437,6 +438,9 @@ def build_sabt_export_frame(
         .drop_duplicates(subset=["student_id"], keep="first")
         .copy()
     )
+    students_for_merge = students_for_merge.sort_values("student_id", kind="mergesort").reset_index(drop=True)
+    if students_for_merge["student_id"].duplicated().any():
+        raise ValueError("students_for_merge student_id values must be unique")
 
     merged = pd.merge(
         alloc_resolved,
@@ -454,8 +458,8 @@ def build_sabt_export_frame(
             f"{sample}"
         )
     merged = merged.drop(columns=["_merge"])
-    merged_ids = ensure_series(merged["student_id"]).astype("string")
-    if not merged_ids.equals(alloc_ids_before_merge.reset_index(drop=True)):
+    merged_ids = ensure_series(merged["student_id"]).astype("string").reset_index(drop=True)
+    if not merged_ids.equals(expected_alloc_ids_after_sort.reset_index(drop=True)):
         raise ValueError(
             "Critical export invariant violation: student_id changed during key-based join."
         )
