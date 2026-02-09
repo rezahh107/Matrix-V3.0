@@ -145,6 +145,9 @@ def _normalize_national_code_value(value: object) -> str | None:
         cleaned = value.strip()
         if not cleaned:
             return None
+        digit_like = all(ch.isdigit() or ch in {" ", "-", "_", ".", "/", "٫"} for ch in cleaned)
+        if not digit_like:
+            return cleaned
         digits_only = "".join(ch for ch in cleaned if ch.isdigit())
         if not digits_only:
             return cleaned
