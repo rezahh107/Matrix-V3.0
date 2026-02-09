@@ -79,7 +79,9 @@ def test_header_pipeline_outputs_consistent_mentor_id_across_column_orders() -> 
     }
 
     df_first = pd.DataFrame(base_data)
-    df_second = pd.DataFrame({key: base_data[key] for key in ["employee_id", "mentor_id", "گروه آزمایشی"]})
+    df_second = pd.DataFrame(
+        {key: base_data[key] for key in ["employee_id", "mentor_id", "گروه آزمایشی"]}
+    )
 
     result_first = pipeline.resolve(df_first, source="mentor")
     result_second = pipeline.resolve(df_second, source="mentor")
@@ -227,3 +229,18 @@ def test_header_pipeline_conflicting_critical_duplicates_block() -> None:
     assert not result.can_continue
     assert ambiguous
     assert ambiguous[0].severity == "P0"
+
+
+def test_header_pipeline_resolve_existing_field_uses_student_equivalent_aliases() -> None:
+    pipeline = HeaderPipelineV3(alias_registry=HEADER_ALIASES_V3)
+    available = ["student_id", "gender", "دانش آموز فارغ"]
+
+    resolved_gender = pipeline.resolve_existing_field(
+        "جنسیت", "student", available_columns=available
+    )
+    resolved_status = pipeline.resolve_existing_field(
+        "student_educational_status", "student", available_columns=available
+    )
+
+    assert resolved_gender == "gender"
+    assert resolved_status == "دانش آموز فارغ"
