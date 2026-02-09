@@ -14,7 +14,8 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from enum import StrEnum
+
+from app.core.common.enum_compat import StrEnum
 
 __all__ = ["ReasonCode", "LocalizedReason", "build_reason", "reason_message"]
 

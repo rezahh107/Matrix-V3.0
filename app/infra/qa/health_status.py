@@ -7,12 +7,12 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from enum import Enum
 
+from app.core.common.enum_compat import StrEnum
 from app.core.qa.invariants import QaReport
 
 
-class RuntimeHealthState(str, Enum):
+class RuntimeHealthState(StrEnum):
     """Finite health states for a QA run."""
 
     OK = "OK"

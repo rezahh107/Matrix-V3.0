@@ -5,8 +5,9 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from enum import Enum
 from pathlib import Path
+
+from app.core.common.enum_compat import StrEnum
 
 from ..app_preferences import AppPreferences
 from ..texts import UiTranslator
@@ -21,7 +22,7 @@ __all__ = [
 ]
 
 
-class FileStatusLevel(str, Enum):
+class FileStatusLevel(StrEnum):
     """سطح وضعیت فایل برای تعیین رنگ و پیام."""
 
     READY = "ready"

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import enum
 from collections.abc import Iterable
 
 import pandas as pd
 
 from app.core.common.columns import CANON_EN_TO_FA
+from app.core.common.enum_compat import StrEnum
 from app.core.common.isin_guard import isin_mask
 from app.core.common.national_id import canonical_national_code
 
@@ -41,7 +41,7 @@ HISTORY_SNAPSHOT_COLUMNS: tuple[str, ...] = (
 )
 
 
-class HistoryStatus(str, enum.Enum):
+class HistoryStatus(StrEnum):
     """برچسب‌های وضعیت تطبیق سوابق تاریخی دانش‌آموز."""
 
     ALREADY_ALLOCATED = "already_allocated"

@@ -29,7 +29,6 @@ from __future__ import annotations
 import numbers
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from enum import Enum
 from typing import Any, cast
 
 import pandas as pd
@@ -37,6 +36,7 @@ import pandas as pd
 from ..policy_loader import PolicyConfig, load_policy
 from .columns import normalize_bool_like, to_int64
 from .eligibility import build_stage_pass_flags
+from .enum_compat import StrEnum
 from .filters import filter_school_by_value, resolve_student_school_code
 from .join_resolver import resolve_join_key_sources
 from .rules import Rule, RuleContext, apply_rule, default_stage_rule_map
@@ -128,7 +128,7 @@ def attach_join_source_extras(
         extras[source_key] = join_key_sources[source_key]
 
 
-class FinalStatus(str, Enum):
+class FinalStatus(StrEnum):
     """وضعیت نهایی تخصیص با مجموعهٔ کوچک و مشخص."""
 
     ALLOCATED = "ALLOCATED"
