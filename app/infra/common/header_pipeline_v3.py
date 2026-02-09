@@ -14,7 +14,11 @@ _STUDENT_EXPORT_EQUIVALENT_FIELDS: dict[str, tuple[str, ...]] = {
     "جنسیت": ("gender",),
     "gender": ("جنسیت",),
     "دانش آموز فارغ": ("student_educational_status",),
-    "student_educational_status": ("دانش آموز فارغ",),
+    # CLI export spine uses english canonical headers when header_mode_internal="en".
+    # Keep Sabt profile compatibility by treating graduation_status as equivalent
+    # to legacy student_educational_status aliases.
+    "student_educational_status": ("دانش آموز فارغ", "graduation_status"),
+    "graduation_status": ("دانش آموز فارغ", "student_educational_status"),
 }
 
 
