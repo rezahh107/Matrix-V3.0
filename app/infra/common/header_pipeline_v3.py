@@ -10,6 +10,13 @@ from app.core.common.columns import HEADER_ALIASES_V3, normalize_fa
 from app.infra.errors import DatabasePreparationError
 from app.infra.sqlite_types import coerce_int_series
 
+_STUDENT_EXPORT_EQUIVALENT_FIELDS: dict[str, tuple[str, ...]] = {
+    "جنسیت": ("gender",),
+    "gender": ("جنسیت",),
+    "دانش آموز فارغ": ("student_educational_status",),
+    "student_educational_status": ("دانش آموز فارغ",),
+}
+
 
 def _normalize_header(text: str) -> str:
     normalized = normalize_fa(text) or str(text)
@@ -80,12 +87,37 @@ class HeaderPipelineV3:
             key: {value for value in values}
             for key, values in (coerce_int_conflict_fields or {}).items()
         }
+        self._equivalent_fields = self._normalize_equivalent_fields(
+            {"student": _STUDENT_EXPORT_EQUIVALENT_FIELDS}
+        )
 
     def resolve_field(self, label: str, source: str) -> str | None:
         """Resolve a header label to its canonical field for the given source."""
 
         normalized = _normalize_header(label)
         return self._alias_registry.get(source, {}).get(normalized)
+
+    def resolve_existing_field(
+        self,
+        label: str,
+        source: str,
+        *,
+        available_columns: Sequence[str],
+    ) -> str | None:
+        """Resolve a field label and return a compatible column present in a frame."""
+
+        canonical = self.resolve_field(label, source)
+        if canonical is None:
+            return None
+        available = set(available_columns)
+        if canonical in available:
+            return canonical
+
+        equivalents = self._equivalent_fields.get(source, {}).get(canonical, set())
+        for candidate in equivalents:
+            if candidate in available:
+                return candidate
+        return canonical
 
     def resolve(self, df: pd.DataFrame, source: str) -> HeaderResolution:
         normalized_aliases = self._alias_registry.get(source, {})
@@ -266,9 +298,7 @@ class HeaderPipelineV3:
         remaining["mentor_id"] = merged
         return remaining
 
-    def _ordered_mentor_alias_columns(
-        self, df: pd.DataFrame, source: str
-    ) -> list[str]:
+    def _ordered_mentor_alias_columns(self, df: pd.DataFrame, source: str) -> list[str]:
         alias_priority = self._mentor_alias_priority(source)
         normalized_columns: dict[str, list[str]] = defaultdict(list)
 
@@ -284,9 +314,7 @@ class HeaderPipelineV3:
     def _mentor_alias_priority(self, source: str) -> list[str]:
         alias_map = self._alias_registry.get(source, {})
         canonical_normalized = _normalize_header("mentor_id")
-        raw_aliases = [
-            alias for alias, canonical in alias_map.items() if canonical == "mentor_id"
-        ]
+        raw_aliases = [alias for alias, canonical in alias_map.items() if canonical == "mentor_id"]
         unique_aliases = list(dict.fromkeys(raw_aliases))
         return [
             canonical_normalized,
@@ -301,16 +329,34 @@ class HeaderPipelineV3:
         return normalized
 
     @staticmethod
-    def _normalize_conflict_tolerant_aliases(
-        aliases: Mapping[str, Mapping[str, Iterable[str]]]
+    def _normalize_nested_alias_sets(
+        aliases: Mapping[str, Mapping[str, Iterable[str]]],
+        *,
+        normalize_values: bool,
     ) -> dict[str, dict[str, set[str]]]:
         normalized: dict[str, dict[str, set[str]]] = {}
         for source, mappings in aliases.items():
             normalized[source] = {
-                canonical: {_normalize_header(header) for header in headers}
-                for canonical, headers in mappings.items()
+                canonical: {
+                    _normalize_header(value) if normalize_values else value for value in values
+                }
+                for canonical, values in mappings.items()
             }
         return normalized
+
+    @classmethod
+    def _normalize_equivalent_fields(
+        cls,
+        aliases: Mapping[str, Mapping[str, Iterable[str]]],
+    ) -> dict[str, dict[str, set[str]]]:
+        return cls._normalize_nested_alias_sets(aliases, normalize_values=False)
+
+    @classmethod
+    def _normalize_conflict_tolerant_aliases(
+        cls,
+        aliases: Mapping[str, Mapping[str, Iterable[str]]],
+    ) -> dict[str, dict[str, set[str]]]:
+        return cls._normalize_nested_alias_sets(aliases, normalize_values=True)
 
     @staticmethod
     def _is_conflict_tolerant(

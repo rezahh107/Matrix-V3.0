@@ -111,7 +111,10 @@ def _validate_profile_entries(
         if column.source_kind != "student":
             continue
         requested_field = column.source_field or column.header
-        if isinstance(requested_field, str) and requested_field.strip() == _POLICY_EMPTY_SENTINEL_FA:
+        if (
+            isinstance(requested_field, str)
+            and requested_field.strip() == _POLICY_EMPTY_SENTINEL_FA
+        ):
             continue
         canonical = pipeline.resolve_field(requested_field, "student")
         if canonical is None:
@@ -345,7 +348,10 @@ def build_sabt_export_frame(
                 continue
             if column.source_kind == "allocation":
                 requested_field = column.source_field or column.header
-                if isinstance(requested_field, str) and requested_field.strip() == _POLICY_EMPTY_SENTINEL_FA:
+                if (
+                    isinstance(requested_field, str)
+                    and requested_field.strip() == _POLICY_EMPTY_SENTINEL_FA
+                ):
                     series = pd.Series(pd.NA, index=index, dtype="object")
                     export_data[column.header] = series
                     continue
@@ -362,11 +368,16 @@ def build_sabt_export_frame(
                 series = pd.Series(pd.NA, index=index, dtype="object")
             elif column.source_kind == "student":
                 requested_field = column.source_field or column.header
-                if isinstance(requested_field, str) and requested_field.strip() == _POLICY_EMPTY_SENTINEL_FA:
+                if (
+                    isinstance(requested_field, str)
+                    and requested_field.strip() == _POLICY_EMPTY_SENTINEL_FA
+                ):
                     series = pd.Series(pd.NA, index=index, dtype="object")
                     export_data[column.header] = series
                     continue
-                canonical = pipeline.resolve_field(requested_field, "student")
+                canonical = pipeline.resolve_existing_field(
+                    requested_field, "student", available_columns=students_resolved.columns
+                )
                 if canonical is None:
                     missing_columns.add(requested_field)
                     _record_issue(
@@ -413,7 +424,9 @@ def build_sabt_export_frame(
     if student_ids.duplicated().any():
         raise ValueError("students_df student_id values must be unique")
 
-    sort_columns = [column for column in ("student_id", "mentor_id") if column in alloc_resolved.columns]
+    sort_columns = [
+        column for column in ("student_id", "mentor_id") if column in alloc_resolved.columns
+    ]
     if sort_columns:
         alloc_resolved = alloc_resolved.sort_values(sort_columns, kind="mergesort")
     alloc_resolved = alloc_resolved.reset_index(drop=True)
@@ -424,9 +437,14 @@ def build_sabt_export_frame(
         if column.source_kind != "student":
             continue
         requested_field = column.source_field or column.header
-        if isinstance(requested_field, str) and requested_field.strip() == _POLICY_EMPTY_SENTINEL_FA:
+        if (
+            isinstance(requested_field, str)
+            and requested_field.strip() == _POLICY_EMPTY_SENTINEL_FA
+        ):
             continue
-        canonical = pipeline.resolve_field(requested_field, "student")
+        canonical = pipeline.resolve_existing_field(
+            requested_field, "student", available_columns=students_resolved.columns
+        )
         if canonical == "student_id":
             continue
         if canonical is not None and canonical in students_resolved.columns:
@@ -441,17 +459,23 @@ def build_sabt_export_frame(
 
     students_merge_columns = ["student_id", *list(dict.fromkeys(requested_student_columns))]
     overlapping_profile_columns = [
-        column for column in students_merge_columns if column in alloc_resolved.columns and column != "student_id"
+        column
+        for column in students_merge_columns
+        if column in alloc_resolved.columns and column != "student_id"
     ]
     if overlapping_profile_columns:
         alloc_resolved = alloc_resolved.drop(columns=overlapping_profile_columns)
 
     students_for_merge = (
-        students_resolved.loc[:, [column for column in students_merge_columns if column in students_resolved.columns]]
+        students_resolved.loc[
+            :, [column for column in students_merge_columns if column in students_resolved.columns]
+        ]
         .drop_duplicates(subset=["student_id"], keep="first")
         .copy()
     )
-    students_for_merge = students_for_merge.sort_values("student_id", kind="mergesort").reset_index(drop=True)
+    students_for_merge = students_for_merge.sort_values("student_id", kind="mergesort").reset_index(
+        drop=True
+    )
     if students_for_merge["student_id"].duplicated().any():
         raise ValueError("students_for_merge student_id values must be unique")
 
@@ -467,8 +491,7 @@ def build_sabt_export_frame(
     if not unmatched.empty:
         sample = unmatched.head(5).to_dict("records")
         raise ValueError(
-            "Unmatched student rows after key-based join on student_id; sample="
-            f"{sample}"
+            "Unmatched student rows after key-based join on student_id; sample=" f"{sample}"
         )
     merged = merged.drop(columns=["_merge"])
     merged_ids = ensure_series(merged["student_id"]).astype("string").reset_index(drop=True)
@@ -495,7 +518,10 @@ def build_sabt_export_frame(
             continue
         if column.source_kind == "allocation":
             requested_field = column.source_field or column.header
-            if isinstance(requested_field, str) and requested_field.strip() == _POLICY_EMPTY_SENTINEL_FA:
+            if (
+                isinstance(requested_field, str)
+                and requested_field.strip() == _POLICY_EMPTY_SENTINEL_FA
+            ):
                 series = pd.Series(pd.NA, index=alloc_resolved.index, dtype="object")
                 export_data[column.header] = series
                 continue
@@ -515,11 +541,16 @@ def build_sabt_export_frame(
                 series = ensure_series(alloc_resolved[canonical]).reindex(alloc_resolved.index)
         elif column.source_kind == "student":
             requested_field = column.source_field or column.header
-            if isinstance(requested_field, str) and requested_field.strip() == _POLICY_EMPTY_SENTINEL_FA:
+            if (
+                isinstance(requested_field, str)
+                and requested_field.strip() == _POLICY_EMPTY_SENTINEL_FA
+            ):
                 series = pd.Series(pd.NA, index=alloc_resolved.index, dtype="object")
                 export_data[column.header] = series
                 continue
-            canonical = pipeline.resolve_field(requested_field, "student")
+            canonical = pipeline.resolve_existing_field(
+                requested_field, "student", available_columns=students_resolved.columns
+            )
             if canonical is None:
                 missing_columns.add(requested_field)
                 _record_issue(
@@ -552,12 +583,12 @@ def build_sabt_export_frame(
         registration_status.index = alloc_resolved.index
         for header in landline_headers:
             landline_series = ensure_series(export_data[header]).astype("string")
-            empty_mask = landline_series.astype("string").str.strip().eq("") | landline_series.isna()
+            empty_mask = (
+                landline_series.astype("string").str.strip().eq("") | landline_series.isna()
+            )
             needs_fill = (registration_status == _HEKMAT_REGISTRATION_STATUS) & empty_mask
             if needs_fill.any():
-                landline_series = landline_series.mask(
-                    needs_fill, _EMPTY_LANDLINE_PLACEHOLDER
-                )
+                landline_series = landline_series.mask(needs_fill, _EMPTY_LANDLINE_PLACEHOLDER)
             export_data[header] = landline_series
 
     student_id_series = ensure_series(student_ids).astype("string")
@@ -679,9 +710,7 @@ def _build_join_key_provenance_summary(
                     name="inferred_sources",
                 ).sum()
             )
-            defaulted = int(
-                isin_mask(series, _DEFAULTED_SOURCES, name="defaulted_sources").sum()
-            )
+            defaulted = int(isin_mask(series, _DEFAULTED_SOURCES, name="defaulted_sources").sum())
         rows.append(
             {
                 "join_key_stage": stage,
@@ -1025,9 +1054,7 @@ def _build_pool_condense_trace_sheet(pool_df: pd.DataFrame | None) -> pd.DataFra
     all_profiles = payload.get("all_profiles")
     all_df = pd.DataFrame(all_profiles) if isinstance(all_profiles, list) else pd.DataFrame()
     profile_rows_before = int(all_df.shape[0])
-    unique_before = (
-        int(all_df["mentor_id"].nunique()) if "mentor_id" in all_df.columns else 0
-    )
+    unique_before = int(all_df["mentor_id"].nunique()) if "mentor_id" in all_df.columns else 0
     profile_rows_after = int(pool_df.shape[0])
     unique_after = int(pool_df["mentor_id"].nunique()) if "mentor_id" in pool_df.columns else 0
     stats = {
