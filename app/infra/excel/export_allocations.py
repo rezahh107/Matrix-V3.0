@@ -13,7 +13,7 @@ import pandas as pd
 
 from app.core.allocation.engine import enrich_summary_with_history
 from app.core.allocation.history_metrics import METRIC_COLUMNS, compute_history_metrics
-from app.core.common.columns import CANON_EN_TO_FA, ensure_series
+from app.core.common.columns import ensure_series
 from app.core.common.isin_guard import isin_mask
 from app.core.common.national_id import canonical_national_code
 from app.core.common.normalization import normalize_fa
@@ -79,7 +79,6 @@ def _normalize_code_hint(value: str) -> str:
 
 _NATIONAL_CODE_HEADER_HINTS = frozenset(
     {
-        _normalize_code_hint(CANON_EN_TO_FA.get("national_id", "")),
         _normalize_code_hint("کدملی"),
         _normalize_code_hint("student_national_code"),
         _normalize_code_hint("national_id"),
