@@ -12,7 +12,6 @@ from app.infra.excel.import_to_sabt import (
     GF_FIELD_TO_COL,
     _apply_normalizers,
     _normalize_mobile_ir,
-    _clean_invalid_birth_dates,
     apply_alias_rule,
     build_errors_frame,
     build_sheet2_frame,
@@ -176,13 +175,14 @@ class TestSheet2Generation:
         allocations = sample_allocation_df.copy()
         allocations["student_birth_date"] = ["1402/01/15", "1398/61/10", "1401/12/30"]
 
-        cleaned_allocations, cleaned_cells = _clean_invalid_birth_dates(allocations)
         sheet2 = build_sheet2_frame(allocations, exporter_config)
 
+        birth_column = next((column for column in sheet2.columns if "تولد" in str(column)), None)
+
         assert len(sheet2) == 3
-        assert cleaned_cells == 2
-        assert pd.isna(cleaned_allocations.loc[1, "student_birth_date"])
-        assert pd.isna(cleaned_allocations.loc[2, "student_birth_date"])
+        assert birth_column is not None
+        assert sheet2.loc[1, birth_column] == ""
+        assert sheet2.loc[2, birth_column] == ""
         debug_log = sheet2.attrs.get("registration_status_debug", [])
         birth_filter_entry = next(
             entry for entry in debug_log if entry.get("label") == "sheet2_birth_date_filter"
