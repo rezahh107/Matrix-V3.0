@@ -698,7 +698,7 @@ def norm_gender(x: Any, strict: bool = False) -> Gender:
             نباشد.
     """
 
-    raw = str(x or "").strip().lower()
+    raw = "" if x is None else str(x).strip().lower()
     if raw in _GENDER_MALE_EN:
         return Gender.MALE
     if raw in _GENDER_FEMALE_EN:
@@ -712,7 +712,7 @@ def norm_gender(x: Any, strict: bool = False) -> Gender:
         if any(f" {token} " in normalized_padded for token in _GENDER_FEMALE_FA_NORMALIZED):
             return Gender.FEMALE
 
-    numeric = parse_int_safe(raw or normalized)
+    numeric = parse_int_safe(raw)
     if numeric == int(Gender.MALE):
         return Gender.MALE
     if numeric == int(Gender.FEMALE):
