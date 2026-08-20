@@ -15,7 +15,7 @@ from typing import Any, Literal, TypedDict, TypeGuard, final
 from app.core.policy_loader import PolicyConfig, load_policy
 
 from .errors import DataMissingError, InvalidCenterMappingError, InvalidGenderValueError
-from .normalization import normalize_fa, to_numlike_str
+from .normalization import normalize_fa, parse_int_safe, to_numlike_str
 
 # ---------------------------------------------------------------------------
 # Type Aliases
@@ -296,7 +296,7 @@ class Gender(IntEnum):
     """Gender codes."""
 
     MALE = 1
-    FEMALE = 2
+    FEMALE = 0
 
 
 @final
@@ -350,7 +350,7 @@ _STATUS_STUDENT_FA = frozenset({"دانش آموز", "دانشجو", "دانش �
 
 # Gender normalization constants
 _GENDER_MALE_EN = frozenset({"1", "male", "m", "boy", "♂"})
-_GENDER_FEMALE_EN = frozenset({"2", "female", "f", "girl", "♀"})
+_GENDER_FEMALE_EN = frozenset({"0", "female", "f", "girl", "♀"})
 _GENDER_MALE_FA = frozenset({"پسر", "مذکر"})
 _GENDER_FEMALE_FA = frozenset({"دختر", "مونث"})
 _GENDER_MALE_FA_NORMALIZED = frozenset(normalize_fa(tok) for tok in _GENDER_MALE_FA)
@@ -712,7 +712,9 @@ def norm_gender(x: Any, strict: bool = False) -> Gender:
         if any(f" {token} " in normalized_padded for token in _GENDER_FEMALE_FA_NORMALIZED):
             return Gender.FEMALE
 
-    numeric = _num_to_int_safe(raw or normalized)
+    numeric = parse_int_safe(raw or normalized)
+    if numeric == int(Gender.MALE):
+        return Gender.MALE
     if numeric == int(Gender.FEMALE):
         return Gender.FEMALE
 
