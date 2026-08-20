@@ -21,24 +21,74 @@ def test_gender_contract_matches_loaded_policy() -> None:
         ("دختر", Gender.FEMALE),
         ("1", Gender.MALE),
         ("0", Gender.FEMALE),
+        ("1.0", Gender.MALE),
+        ("0.0", Gender.FEMALE),
         (1, Gender.MALE),
         (0, Gender.FEMALE),
         (1.0, Gender.MALE),
         (0.0, Gender.FEMALE),
         ("۱", Gender.MALE),
         ("۰", Gender.FEMALE),
+        ("١", Gender.MALE),
+        ("٠", Gender.FEMALE),
+        ("۱.۰", Gender.MALE),
+        ("۰.۰", Gender.FEMALE),
+        ("١٫٠", Gender.MALE),
+        ("٠٫٠", Gender.FEMALE),
     ],
 )
 def test_norm_gender_accepts_canonical_representations(value: object, expected: Gender) -> None:
     assert norm_gender(value, strict=True) == expected
 
 
-@pytest.mark.parametrize("value", [None, "", "??", False, 2, "2", 2.0])
+@pytest.mark.parametrize(
+    "value",
+    [
+        None,
+        "",
+        "??",
+        False,
+        2,
+        "2",
+        2.0,
+        "abc0",
+        "abc1",
+        "x0y",
+        "x1y",
+        "0abc",
+        "1abc",
+        "0.0x",
+        "1.0x",
+        "0..0",
+        "1..0",
+    ],
+)
 def test_norm_gender_non_strict_invalid_values_default_to_male(value: object) -> None:
     assert norm_gender(value, strict=False) == Gender.MALE
 
 
-@pytest.mark.parametrize("value", [None, "", "??", False, 2, "2", 2.0])
+@pytest.mark.parametrize(
+    "value",
+    [
+        None,
+        "",
+        "??",
+        False,
+        2,
+        "2",
+        2.0,
+        "abc0",
+        "abc1",
+        "x0y",
+        "x1y",
+        "0abc",
+        "1abc",
+        "0.0x",
+        "1.0x",
+        "0..0",
+        "1..0",
+    ],
+)
 def test_norm_gender_strict_rejects_invalid_values(value: object) -> None:
     with pytest.raises(InvalidGenderValueError) as exc:
         norm_gender(value, strict=True)
