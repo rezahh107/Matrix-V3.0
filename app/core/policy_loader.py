@@ -1605,6 +1605,8 @@ def _to_gender_codes(payload: RawGenderConfig) -> GenderCodes:
 
     male_code = _parse(male_payload)
     female_code = _parse(female_payload)
+    if male_code.value != 1 or female_code.value != 0:
+        raise ValueError("Policy gender_codes must define male.value=1 and female.value=0")
     return GenderCodes(male=male_code, female=female_code)
 
 

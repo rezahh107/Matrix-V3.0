@@ -19,15 +19,31 @@ def test_canonicalize_join_key_value_maps_farsi_gender_tokens() -> None:
     assert female_code == policy.gender_codes.female.value
 
 
-@pytest.mark.parametrize("value", [1, "1"])
-def test_canonicalize_join_key_value_accepts_numeric_gender(value: object) -> None:
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (1, 1),
+        ("1", 1),
+        (0, 0),
+        ("0", 0),
+    ],
+)
+def test_canonicalize_join_key_value_accepts_numeric_gender(
+    value: object, expected: int
+) -> None:
     policy = load_policy()
     gender_column = policy.stage_column("gender")
 
-    assert (
+    assert canonicalize_join_key_value(gender_column, value, policy=policy) == expected
+
+
+@pytest.mark.parametrize("value", [2, "2"])
+def test_canonicalize_join_key_value_rejects_obsolete_gender_code(value: object) -> None:
+    policy = load_policy()
+    gender_column = policy.stage_column("gender")
+
+    with pytest.raises(JoinKeyCanonicalizationError):
         canonicalize_join_key_value(gender_column, value, policy=policy)
-        == policy.gender_codes.male.value
-    )
 
 
 def test_canonicalize_join_key_value_rejects_unknown_gender_token() -> None:

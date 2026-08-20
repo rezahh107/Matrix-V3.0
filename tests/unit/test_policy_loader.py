@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import warnings
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -89,6 +90,27 @@ def test_missing_keys() -> None:
     payload = _valid_payload()
     payload.pop("ranking_rules")
     with pytest.raises(ValueError, match="Policy keys missing"):
+        parse_policy_dict(payload)
+
+
+def test_gender_contract_accepts_canonical_values() -> None:
+    policy = parse_policy_dict(_valid_payload())
+
+    assert policy.gender_codes.male.value == 1
+    assert policy.gender_codes.female.value == 0
+
+
+@pytest.mark.parametrize(("male_value", "female_value"), [(1, 2), (0, 1)])
+def test_gender_contract_rejects_drift(male_value: int, female_value: int) -> None:
+    payload = _valid_payload()
+    gender_codes = cast(dict[str, dict[str, object]], payload["gender_codes"])
+    gender_codes["male"]["value"] = male_value
+    gender_codes["female"]["value"] = female_value
+
+    with pytest.raises(
+        ValueError,
+        match=r"gender_codes must define male\.value=1 and female\.value=0",
+    ):
         parse_policy_dict(payload)
 
 
