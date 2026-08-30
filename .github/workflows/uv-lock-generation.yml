@@ -1,0 +1,23 @@
+name: UV lock generation evidence
+
+on:
+  pull_request:
+
+jobs:
+  lock:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.11'
+      - name: Generate universal project lock with pinned uv
+        run: |
+          python -m pip install uv==0.12.7
+          uv --version
+          uv lock
+          echo '--- UV TREE DIRECT/ALL GROUPS ---'
+          uv tree --all-groups --depth 1
+          echo '--- UV LOCK BEGIN ---'
+          cat uv.lock
+          echo '--- UV LOCK END ---'
