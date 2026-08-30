@@ -1,0 +1,47 @@
+name: UV migration staging materialization
+
+on:
+  push:
+    branches:
+      - modernize/uv-migration-staging
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout staging branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: modernize/uv-migration-staging
+          fetch-depth: 0
+      - name: Set up Python 3.11
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.11'
+      - name: Materialize authorized migration tree with uv 0.12.7
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install uv==0.12.7
+          uv --version
+          python .github/uv_migration_stage.py
+          uv lock
+          uv sync --locked
+          uv run --locked ruff check .
+          test -d .venv
+          git check-ignore .venv/pyvenv.cfg
+          rm .github/uv_migration_stage.py
+          rm .github/workflows/uv-migration-staging.yml
+          git status --short
+      - name: Commit materialized staging tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "staging: materialize uv migration tree"
+          git push origin HEAD:modernize/uv-migration-staging
