@@ -1,0 +1,41 @@
+name: Prompt 7 final exact-state verification
+
+on:
+  push:
+    branches:
+      - modernize/uv-migration-verify
+
+jobs:
+  verify:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.7"
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+            .python-version
+      - name: Set up project Python
+        run: uv python install
+      - name: Verify lock synchronization
+        run: uv lock --check
+      - name: Create fresh locked environment and verify ignores
+        shell: pwsh
+        run: |
+          Remove-Item -Recurse -Force .venv, smart_student_allocation.egg-info, build, dist, transient.egg-info -ErrorAction SilentlyContinue
+          uv sync --locked
+          if (-not (Test-Path .venv)) { throw ".venv was not created" }
+          git check-ignore .venv/pyvenv.cfg
+          New-Item -ItemType Directory transient.egg-info | Out-Null
+          New-Item -ItemType File transient.egg-info/marker | Out-Null
+          git check-ignore transient.egg-info/marker
+          Remove-Item -Recurse -Force transient.egg-info
+      - name: Import health
+        run: uv run --locked python -c "import app; import app.main"
+      - name: Packaging group synchronization
+        run: uv sync --locked --group packaging
