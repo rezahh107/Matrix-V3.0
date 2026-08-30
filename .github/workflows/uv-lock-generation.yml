@@ -16,8 +16,10 @@ jobs:
           python -m pip install uv==0.12.7
           uv --version
           uv lock
-          echo '--- UV TREE DIRECT/ALL GROUPS ---'
           uv tree --all-groups --depth 1
-          echo '--- UV LOCK BEGIN ---'
-          cat uv.lock
-          echo '--- UV LOCK END ---'
+      - name: Upload generated lock
+        uses: actions/upload-artifact@v4
+        with:
+          name: uv-lock
+          path: uv.lock
+          if-no-files-found: error
