@@ -5,12 +5,17 @@ on:
     branches:
       - modernize/uv-no-pytestqt-evidence
 
+permissions:
+  contents: write
+
 jobs:
   verify:
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: modernize/uv-no-pytestqt-evidence
       - name: Set up uv
         uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
@@ -26,9 +31,15 @@ jobs:
           Remove-Item -Recurse -Force .venv, smart_student_allocation.egg-info -ErrorAction SilentlyContinue
           uv sync --locked
           uv run --locked pytest tests/ui --maxfail=1 -q
-      - name: Upload corrected lock
-        uses: actions/upload-artifact@v4
-        with:
-          name: corrected-uv-lock
-          path: uv.lock
-          if-no-files-found: error
+      - name: Commit uv-generated lock to evidence branch
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add uv.lock
+          if git diff --cached --quiet; then
+            echo "uv.lock already synchronized"
+          else
+            git commit -m "ci(evidence): persist corrected uv lock"
+            git push origin HEAD:modernize/uv-no-pytestqt-evidence
+          fi
