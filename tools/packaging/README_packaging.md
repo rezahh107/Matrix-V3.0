@@ -6,25 +6,22 @@
 
 1. Windows 10/11 x64
 2. Python 3.11 (همان نسخه‌ای که برای توسعه استفاده شده است)
-3. نصب وابستگی‌ها:
+3. نصب `uv` و همگام‌سازی محیط پروژه با گروه بسته‌بندی:
    ```powershell
-   py -3.11 -m venv .venv
-   .\.venv\Scripts\Activate.ps1
-   pip install -U pip
-   pip install -r requirements.txt
-   pip install pyinstaller
+   uv sync --locked --group packaging
    ```
+   `uv` محیط `.venv` پروژه را مدیریت می‌کند و PyInstaller را از گروه `packaging` در `pyproject.toml` و نسخهٔ قفل‌شدهٔ `uv.lock` نصب می‌کند.
 
 ## اجرای ساخت
 
 1. اطمینان حاصل کنید که مخزن در حالت تمیز است و دستور زیر را از ریشهٔ مخزن اجرا کنید:
    ```powershell
-   pyinstaller tools/packaging/matrix2_gui.spec
+   uv run --locked --group packaging pyinstaller tools/packaging/matrix2_gui.spec
    ```
 2. PyInstaller ساخت نسخهٔ **one-dir** را انجام می‌دهد. خروجی در پوشهٔ `dist/Matrix2-GUI/` قرار می‌گیرد و شامل فایل `Matrix2-GUI.exe` است.
 3. برای تست محلی، می‌توانید قبل از بسته‌بندی از اسکریپت توسعه استفاده کنید:
    ```powershell
-   python run_gui.py
+   uv run --locked python run_gui.py
    ```
 
 ## محتوای خروجی

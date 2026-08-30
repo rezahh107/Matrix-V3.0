@@ -141,7 +141,7 @@ def test_load_main_window_reports_missing_dependency(monkeypatch, main_module):
     message = str(exc.value)
     assert "وابستگی‌های رابط کاربری" in message
     assert "PySide6" in message
-    assert "pip install -r requirements.txt" in message
+    assert "uv sync --locked" in message
     assert "No module named PySide6" in message
     assert exc.value.__cause__ is original_error
 
@@ -163,7 +163,7 @@ def test_load_main_window_reports_generic_import_error_without_name(monkeypatch,
 
     message = str(exc.value)
     assert "وابستگی‌های رابط کاربری" in message
-    assert "pip install -r requirements.txt" in message
+    assert "uv sync --locked" in message
     assert "کتابخانهٔ مفقود" not in message
     assert "libGL error: something something" in message
     assert exc.value.__cause__ is original_error
