@@ -1,2 +1,22 @@
+# Virtual environments and local package metadata
 .venv/
 *.egg-info/
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+
+# Test, lint, type-check, and property-test caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.hypothesis/
+
+# Coverage artifacts
+.coverage
+.coverage.*
+htmlcov/
+
+# Build and distribution artifacts
+build/
+dist/
