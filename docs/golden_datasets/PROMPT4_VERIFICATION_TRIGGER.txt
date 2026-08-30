@@ -1,0 +1,1 @@
+Prompt 4 verification trigger only. This inert file exists solely on cleanup/prompt4-golden-verify to exercise the existing Golden Regression pull-request workflow against the Prompt 4 cleanup code state. It is not a golden baseline, canonical input, or final Prompt 4 artifact.
