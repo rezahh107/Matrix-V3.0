@@ -1,0 +1,33 @@
+name: UV pre-migration dependency evidence
+
+on:
+  pull_request:
+
+jobs:
+  pip-reference:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.11'
+      - name: Build disposable pip reference environment
+        shell: pwsh
+        run: |
+          python --version
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e .
+          @'
+          from importlib.metadata import version
+          direct = [
+              'PySide6', 'pandas', 'openpyxl', 'numpy', 'PyYAML', 'pandera',
+              'ruff', 'black', 'hypothesis', 'pytest', 'pytest-timeout'
+          ]
+          for name in direct:
+              print(f'DIRECT {name}=={version(name)}')
+          '@ | python -
+          echo '--- PIP FREEZE ---'
+          python -m pip freeze
+          echo '--- PIP CHECK ---'
+          python -m pip check
