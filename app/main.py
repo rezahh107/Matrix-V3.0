@@ -472,7 +472,7 @@ def _format_dependency_import_error(import_error: ImportError) -> str:
     lines = ["خطا در وابستگی‌های رابط کاربری."]
     if missing_name:
         lines.append(f"کتابخانهٔ مفقود: {missing_name}")
-    lines.append("برای نصب وابستگی‌ها: pip install -r requirements.txt")
+    lines.append("برای نصب وابستگی‌ها: uv sync --locked")
     details = str(import_error).strip()
     if details:
         lines.append(f"جزئیات فنی: {details}")

@@ -58,7 +58,9 @@
    - باید فایل‌ها و پوشه‌هایی مانند این‌ها را ببینید:
      - پوشه `app`
      - پوشه `config`
-     - فایل `requirements.txt`
+     - فایل `pyproject.toml`
+     - فایل `uv.lock`
+     - فایل `.python-version`
      - فایل `README.md`
 
 ---
@@ -77,39 +79,22 @@
 
 ### نصب برنامه:
 
-در پنجره PowerShell، دستورات زیر را **به ترتیب** تایپ کنید و بعد از هر دستور Enter بزنید:
+در پنجره PowerShell، ابتدا مطمئن شوید `uv` نصب است. اگر نصب نیست، از نصب‌کنندهٔ رسمی uv استفاده کنید:
 
-1. **ساخت محیط مجازی:**
-   ```powershell
-   python -m venv .venv
-   ```
-   - منتظر بمانید تا پوشه `.venv` ساخته شود (حدود 30 ثانیه)
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/0.12.7/install.ps1 | iex"
+```
 
-2. **فعال‌سازی محیط مجازی:**
-   ```powershell
-   .\.venv\Scripts\Activate.ps1
-   ```
-   - اگر خطای "running scripts is disabled" دریافت کردید:
-     - این دستور را اجرا کنید:
-       ```powershell
-       Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
-       ```
-     - وقتی سوال پرسید، حرف `Y` را تایپ و Enter بزنید
-     - دوباره دستور فعال‌سازی را اجرا کنید
+سپس PowerShell را یک‌بار ببندید و دوباره در پوشهٔ پروژه باز کنید و اجرا کنید:
 
-   - بعد از فعال‌سازی، در ابتدای خط باید `(.venv)` نمایش داده شود
+```powershell
+uv --version
+uv sync --locked
+```
 
-3. **به‌روزرسانی pip:**
-   ```powershell
-   python -m pip install --upgrade pip
-   ```
-
-4. **نصب کتابخانه‌های مورد نیاز:**
-   ```powershell
-   pip install -r requirements.txt
-   ```
-   - این مرحله ممکن است 2-5 دقیقه طول بکشد
-   - منتظر بمانید تا پیغام "Successfully installed..." نمایش داده شود
+- `uv` نسخهٔ Python ترجیحی پروژه را از `.python-version` می‌خواند.
+- محیط مجازی `.venv` به‌صورت خودکار توسط uv ساخته و مدیریت می‌شود؛ فعال‌سازی دستی لازم نیست.
+- `uv sync --locked` فقط از `pyproject.toml` و `uv.lock` استفاده می‌کند و lockfile را بازنویسی نمی‌کند.
 
 ---
 
@@ -141,18 +126,12 @@
 
 1. اگر پنجره PowerShell را بسته‌اید، دوباره آن را باز کنید (مطابق **مرحله 3**)
 
-2. محیط مجازی را فعال کنید:
+2. **اجرای برنامه:**
    ```powershell
-   .\.venv\Scripts\Activate.ps1
-   ```
-   - باید `(.venv)` در ابتدای خط ظاهر شود
-
-3. **اجرای برنامه:**
-   ```powershell
-   python -m app.main
+   uv run --locked python -m app.main
    ```
 
-4. یک پنجره گرافیکی با عنوان "سامانه تخصیص دانشجو-منتور" باز می‌شود
+3. یک پنجره گرافیکی با عنوان "سامانه تخصیص دانشجو-منتور" باز می‌شود
 
 ### استفاده از رابط کاربری:
 
@@ -181,7 +160,7 @@
 1. در پنجره PowerShell (با محیط مجازی فعال)، دستور زیر را **در یک خط** تایپ کنید:
 
 ```powershell
-python -m app.infra.cli build-matrix --inspactor "C:\path\to\Inspactor.xlsx" --schools "C:\path\to\Schools.xlsx" --crosswalk "C:\path\to\Crosswalk.xlsx" --output "C:\output\matrix.xlsx"
+uv run --locked python -m app.infra.cli build-matrix --inspactor "C:\path\to\Inspactor.xlsx" --schools "C:\path\to\Schools.xlsx" --crosswalk "C:\path\to\Crosswalk.xlsx" --output "C:\output\matrix.xlsx"
 ```
 
 **⚠️ نکته مهم:** مسیرها را با مسیر واقعی فایل‌های خودتان جایگزین کنید
@@ -207,7 +186,7 @@ python -m app.infra.cli build-matrix --inspactor "C:\path\to\Inspactor.xlsx" --s
 1. در پنجره PowerShell، دستور زیر را اجرا کنید:
 
 ```powershell
-python -m app.infra.cli allocate --students "C:\path\to\students.xlsx" --pool "C:\path\to\mentor_pool.xlsx" --output "C:\output\allocations.xlsx"
+uv run --locked python -m app.infra.cli allocate --students "C:\path\to\students.xlsx" --pool "C:\path\to\mentor_pool.xlsx" --output "C:\output\allocations.xlsx"
 ```
 
 2. مسیرها را با فایل‌های واقعی جایگزین کنید
@@ -230,20 +209,19 @@ python -m app.infra.cli allocate --students "C:\path\to\students.xlsx" --pool "C
 - Python را مجدداً نصب کنید و حتماً گزینه "Add to PATH" را تیک بزنید
 - کامپیوتر را Restart کنید
 
-### مشکل 2: خطا در فعال‌سازی محیط مجازی
+### مشکل 2: خطا در آماده‌سازی محیط پروژه
 **راه حل:**
-- دستور زیر را اجرا کنید:
+- مطمئن شوید `uv --version` بدون خطا اجرا می‌شود.
+- سپس همگام‌سازی قفل‌شده را دوباره اجرا کنید:
   ```powershell
-  Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+  uv sync --locked
   ```
-- سپس `Y` را تایپ و Enter بزنید
 
 ### مشکل 3: "ModuleNotFoundError: PySide6"
 **راه حل:**
-- محیط مجازی را فعال کنید
-- دستور نصب کتابخانه‌ها را دوباره اجرا کنید:
+- از ریشهٔ مخزن همگام‌سازی قفل‌شده را دوباره اجرا کنید:
   ```powershell
-  pip install -r requirements.txt
+  uv sync --locked
   ```
 
 ### مشکل 4: خطای خواندن فایل Excel

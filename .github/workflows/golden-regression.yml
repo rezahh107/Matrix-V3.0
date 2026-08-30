@@ -13,10 +13,12 @@ on:
       - ci/golden_datasets/**
       - docs/golden_datasets/**
       - config/policy.json
+      - pyproject.toml
+      - uv.lock
+      - .python-version
 
 env:
   QT_QPA_PLATFORM: offscreen
-  PIP_DISABLE_PIP_VERSION_CHECK: 1
 
 jobs:
   mentor-pipeline-golden:
@@ -24,26 +26,39 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
-          cache: pip
-          cache-dependency-path: |
-            requirements.txt
-            pyproject.toml
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
 
-      - name: Install dependencies
+      - name: Verify exact checkout identity
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install -e .
+          actual_sha="$(git rev-parse HEAD)"
+          printf 'Expected SHA: %s\n' "$EXPECTED_SHA"
+          printf 'Actual SHA:   %s\n' "$actual_sha"
+          test "$actual_sha" = "$EXPECTED_SHA"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.7"
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+            .python-version
+
+      - name: Set up Python
+        run: uv python install
+
+      - name: Sync locked environment
+        run: uv sync --locked
 
       - name: Phase01 lock_current_behavior (fail-fast on missing inputs)
-        run: python scripts/run_golden_regression_phase01.py
+        run: uv run --locked python scripts/run_golden_regression_phase01.py
 
       - name: Phase06 golden regression (v3 cutover, GOLDEN_DIFF_AUDITOR enforced)
         env:
           GOLDEN_DIFF_AUDITOR_DECISION: BASELINE_OK
-        run: python scripts/run_golden_regression_phase02.py --config ci/configs/golden_regression.yml
+        run: uv run --locked python scripts/run_golden_regression_phase02.py --config ci/configs/golden_regression.yml

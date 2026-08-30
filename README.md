@@ -4,13 +4,14 @@
 
 ## اجرا
 ```bash
-pip install -r requirements.txt
-python -m app.main
+uv sync --locked
+uv run --locked python -m app.main
 ```
 
 ## ساخت فایل اجرایی (PyInstaller)
 ```bash
-pyinstaller --onefile --windowed --name تخصیص_دانشجو_منتور \
+uv sync --locked --group packaging
+uv run --locked --group packaging pyinstaller --onefile --windowed --name تخصیص_دانشجو_منتور \
   --collect-all PySide6 --hidden-import openpyxl --hidden-import pandas.io.formats.excel \
   app/main.py
 ```
@@ -30,7 +31,7 @@ pyinstaller --onefile --windowed --name تخصیص_دانشجو_منتور \
 
 ## تست‌های سیاست‌محور
 
-- `pytest -q` سناریوهای ترجیح «کدرشته» بر نام گروه و مصرف ستون ظرفیت از Policy را پوشش می‌دهد.
+- `uv run --locked pytest -q` سناریوهای ترجیح «کدرشته» بر نام گروه و مصرف ستون ظرفیت از Policy را پوشش می‌دهد.
 - تغییر JSON (مثلاً تغییر نام ستون ظرفیت) باید بدون تغییر کد باعث تغییر رفتار تخصیص شود.
 
 ## 🏢 مدیریت مراکز
@@ -87,13 +88,13 @@ center_management:
 
 ```bash
 # تنظیم مدیران برای مراکز مختلف
-python -m app.cli allocate \
+uv run --locked python -m app.cli allocate \
   --center-manager 1="شهدخت کشاورز" \
   --center-manager 2="آیناز هوشمند" \
   --center-priority 1,2,0
 
 # فعال‌سازی validation سخت‌گیرانه
-python -m app.cli allocate \
+uv run --locked python -m app.cli allocate \
   --center-manager 1="مدیر گلستان" \
   --strict-manager-validation
 ```
