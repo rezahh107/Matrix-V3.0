@@ -82,7 +82,6 @@ module = [
     "app.infra.health",
     "app.infra.excel.reasons_exporter",
     "app.infra.excel.export_allocations",
-    "app.infra.students.student_import_pipeline",
     "app.infra.cli",
     "app.infra.cli_legacy",
     "app.infra.golden.regression_runner",
