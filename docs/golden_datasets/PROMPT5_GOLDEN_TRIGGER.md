@@ -1,0 +1,1 @@
+Prompt 5 verification-only trigger. This file is inert documentation and is not a golden input, expected output, baseline, config, runtime source, or canonical operational input. It exists only to activate the existing path-filtered Golden Regression workflow and will not remain on the final Prompt 5 branch.
