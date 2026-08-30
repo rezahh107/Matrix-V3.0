@@ -7,9 +7,7 @@
   },
   "lineage": {
     "prompt2": {
-      "branch": "cleanup/adjudication-manifest",
       "commit": "7ef738b53174c9b04fed8b3890ebe7f623439939",
-      "historical_status": "ADJUDICATION_COMPLETE_WITH_OPEN_ITEMS",
       "historical_counts": {
         "KEEP": 12,
         "CONFIRMED_DEAD": 6,
@@ -19,7 +17,6 @@
       }
     },
     "prompt3": {
-      "branch": "cleanup/low-risk-artifacts",
       "commit": "a26b33dd0887090c75e1e07ebcbb4a3e586cfc14",
       "removed": [
         "CSAP_CENTER_ZERO_INFER_CANON_fix.patch",
@@ -29,139 +26,185 @@
         "HARDEN-join-key-audit-normalize-student_id.patch",
         "INC-EXPORT-ID-DESYNC-2025-12-26_REL.patch"
       ],
+      "verification": "PASS_NO_DRIFT"
+    },
+    "prompt4": {
+      "commit": "8132f9dbde5cebc46a1b6a072ab69f275c23f609",
+      "tree": "6551fa00f07cef5f4c4795f1736c8778e2624415",
+      "status": "CLEANUP_PASS_COMPLETE",
+      "resolved_candidate": {
+        "candidate_id": "CAND-021",
+        "path": "app/infra/students/student_import_pipeline.py",
+        "classification": "CONFIRMED_DEAD",
+        "cleanup": [
+          "delete app/infra/students/student_import_pipeline.py",
+          "remove its dedicated mypy override entry"
+        ]
+      },
       "verification": {
         "ruff": "PASS",
-        "core_infra_integration": "1220 passed, 4 skipped, 0 failed",
-        "pre_merge_guards": "335 passed, 0 failed",
-        "golden_regression": "PASS_NO_DRIFT"
+        "core_infra_integration": "1219 passed, 4 skipped, 0 failed",
+        "pre_merge": "335 passed, 0 failed",
+        "golden": "PASS_NO_DRIFT",
+        "ui": "77 passed, 3 skipped, 0 failed"
       }
     }
   },
-  "owner_decisions": {
+  "closed_owner_decisions": {
     "debug_array_error.py": "KEEP",
     "debug_pool_alignment.py": "KEEP"
   },
-  "prompt4": {
-    "overall_status": "CLEANUP_PASS_COMPLETE",
-    "branch": "cleanup/dead-superseded-pass",
-    "classification_decisions": [
+  "protected_keep": [
+    "app/infra/students/pipeline_v3.py",
+    "app/infra/students/student_pipeline_v3.py",
+    "app/infra/cli_legacy.py",
+    "app/infra/cli/__init__.py",
+    "app/core/allocate.py",
+    "app/main.py",
+    "run_gui.py",
+    "app/infra/local_database.py",
+    "golden regression runners/workflow and canonical workbooks"
+  ],
+  "prompt5": {
+    "status": "VERIFICATION_PENDING",
+    "branch": "cleanup/final-bounded-discovery",
+    "discovery_policy": "One bounded pass over previously unadjudicated high-value surfaces only; prior 21-candidate findings were not reopened without new material evidence.",
+    "discovery_scope": [
+      "root/scripts developer utilities",
+      "tools packaging and CI tooling",
+      "version/legacy-named production modules surfaced by bounded search",
+      "Golden diagnostics",
+      "performance tooling",
+      "package/public exposure",
+      "documentation-defined operational commands"
+    ],
+    "candidates": [
       {
-        "candidate_id": "CAND-021",
-        "path": "app/infra/students/student_import_pipeline.py",
-        "symbol_or_scope": "run_student_pipeline_from_excel / run_student_pipeline_from_dataframe",
-        "previous_classification": "NEEDS_INVESTIGATION",
-        "prompt4_classification": "CONFIRMED_DEAD",
-        "confidence": "HIGH",
-        "reference_evidence": [
-          "Exact-symbol repository searches found both wrapper functions only at their definitions.",
-          "Exact module-name search found only the module and its dedicated mypy override entry.",
-          "No package-level re-export or documented public import path exists."
+        "candidate_id": "CAND-022",
+        "path": "tools/packaging/matrix2_gui.spec",
+        "scope": "PyInstaller GUI packaging surface with tools/packaging/README_packaging.md",
+        "classification": "KEEP",
+        "why_new": "Packaging tooling was not represented as a material candidate in the previous manifest.",
+        "confirmed_facts": [
+          "README_packaging.md explicitly instructs pyinstaller tools/packaging/matrix2_gui.spec.",
+          "The guide documents the produced Matrix2-GUI.exe and runtime config layout."
         ],
-        "runtime_reachability": "No current runtime entry point reaches the wrapper; current student import paths instantiate app.infra.students.pipeline_v3.StudentPipelineV3 directly.",
-        "dynamic_config_reachability": "No importlib/getattr string target, config selector, subprocess command, serialization name, persistence path, CI command, or documentation workflow targets the wrapper or its exported functions.",
-        "compatibility_role": "No supported compatibility role found. The separate app/infra/students/student_pipeline_v3.py explicitly declares itself a Compatibility shim and is directly tested; this evidence is absent for student_import_pipeline.py.",
-        "replacement": {
-          "path": "app/infra/students/pipeline_v3.py",
-          "symbols": [
-            "StudentPipelineV3.run_from_excel",
-            "StudentPipelineV3.run"
-          ],
-          "status": "Canonical active implementation fully covers the wrapper behavior."
-        },
-        "git_history": "The wrapper was added on 2025-12-09 and has no subsequent path history; no migration, deprecation, or compatibility-maintenance history was found.",
-        "tests_ci_evidence": "No test imports or calls the wrapper. Canonical StudentPipelineV3 paths remain tested and exercised by runtime/CI.",
-        "release_docs_evidence": "Repository has no GitHub releases establishing a public API contract; README documents GUI/CLI application execution rather than these wrapper functions.",
-        "cleanup_performed": [
-          "delete app/infra/students/student_import_pipeline.py"
+        "runtime_reachability": "Human-invoked packaging workflow rather than application runtime.",
+        "compatibility_or_operational_role": "Documented developer delivery capability.",
+        "inference": "Historical Matrix2 naming does not imply deadness.",
+        "residual_uncertainty": null,
+        "cleanup": []
+      },
+      {
+        "candidate_id": "CAND-023",
+        "path": "scripts/compare_excel_structure.py",
+        "scope": "standalone workbook structure comparison command",
+        "classification": "DEFERRED_UNRESOLVED",
+        "why_new": "Standalone script was not represented in the previous manifest.",
+        "confirmed_facts": [
+          "Bounded repository search found no caller or documentation reference beyond the script itself.",
+          "The file exposes an explicit __main__ command interface and operational exit status.",
+          "setuptools packages only app and app.*; scripts are not package exports."
         ],
-        "transitive_cleanup": [
-          "remove app.infra.students.student_import_pipeline from the pyproject.toml mypy override"
+        "runtime_reachability": "No application, CLI, GUI, config, CI, or subprocess reference found.",
+        "git_history": "Path history exists in November 2025.",
+        "residual_uncertainty": "Evidence cannot distinguish a retired one-off helper from an intentionally retained ad-hoc developer command.",
+        "cleanup": []
+      },
+      {
+        "candidate_id": "CAND-024",
+        "path": "scripts/csap_evidence_pack.py",
+        "scope": "hard-coded Git provenance and SHA-256 evidence generator",
+        "classification": "DEFERRED_UNRESOLVED",
+        "why_new": "Evidence helper was not represented in the previous manifest.",
+        "confirmed_facts": [
+          "The script prints Git provenance and hashes a fixed CSAP-related file set.",
+          "No documentation, CI, application, config, or repository caller was found by bounded exact-name/content search.",
+          "The script remains directly executable via __main__ and is outside the packaged app namespace."
         ],
-        "residual_uncertainty": "An unknown external script could theoretically import the path, but no release, docs, compatibility marker, history, or repository contract supports treating that theoretical consumer as a maintained responsibility."
+        "git_history": "Changed during December 2025 hardening/evidence work, including join-bucketing/eligibility evidence and unknowns preflight/UI gating commits.",
+        "residual_uncertainty": "It resembles phase-specific evidence tooling, but no explicit retirement record disproves continuing manual evidence-pack use.",
+        "cleanup": []
+      },
+      {
+        "candidate_id": "CAND-025",
+        "path": "app/infra/matrix/build_matrix_v1_0_2.py",
+        "scope": "version-named production matrix module",
+        "classification": "KEEP",
+        "why_new": "Surfaced by final version-name scan.",
+        "confirmed_facts": [
+          "tests/infra/test_build_matrix_v1_0_2.py directly covers the module.",
+          "Current LAW/Technical SSoT documentation references the module."
+        ],
+        "runtime_reachability": "Retained implementation has direct test and documentation contract evidence.",
+        "residual_uncertainty": null,
+        "cleanup": []
+      },
+      {
+        "candidate_id": "CAND-026",
+        "path": "scripts/ci_debug_phase01_mentor_pool_diff.py; scripts/ci_summarize_mentor_join_key_issues.py",
+        "scope": "Golden snapshot diagnostic helpers",
+        "classification": "KEEP",
+        "why_new": "Standalone Golden diagnostics were not separately adjudicated before Prompt 5.",
+        "confirmed_facts": [
+          "docs/CI_Golden_Regression.md explicitly instructs maintainers to execute both commands during gated snapshot diagnosis/refresh."
+        ],
+        "runtime_reachability": "Human-invoked Golden maintenance workflow.",
+        "residual_uncertainty": null,
+        "cleanup": []
+      },
+      {
+        "candidate_id": "CAND-027",
+        "path": "scripts/performance/run_perf_suite.py",
+        "scope": "standalone performance verification tooling",
+        "classification": "KEEP",
+        "why_new": "Performance tooling was not a prior material cleanup candidate.",
+        "confirmed_facts": [
+          "Repository performance checklist/risk documentation references run_perf_suite.py."
+        ],
+        "runtime_reachability": "Developer-facing performance workflow.",
+        "residual_uncertainty": null,
+        "cleanup": []
       }
     ],
-    "dead_code_removed": [
-      "app/infra/students/student_import_pipeline.py"
-    ],
+    "counts": {
+      "NEW_CANDIDATES": 6,
+      "KEEP": 4,
+      "CONFIRMED_DEAD": 0,
+      "SUPERSEDED": 0,
+      "OWNER_DECISION_REQUIRED": 0,
+      "DEFERRED_UNRESOLVED": 2
+    },
+    "dead_code_removed": [],
     "superseded_code_removed": [],
-    "transitive_cleanup": [
-      "pyproject.toml: remove the dedicated mypy override entry for app.infra.students.student_import_pipeline"
-    ],
-    "tests_removed": [],
-    "protected_keep": [
-      "debug_array_error.py",
-      "debug_pool_alignment.py",
-      "app/infra/students/pipeline_v3.py",
-      "app/infra/students/student_pipeline_v3.py",
-      "app/infra/cli_legacy.py",
-      "app/infra/cli/__init__.py",
-      "app/core/allocate.py",
-      "app/main.py",
-      "run_gui.py",
-      "app/infra/local_database.py"
-    ],
-    "deferred_unresolved": [],
+    "transitive_cleanup": [],
     "owner_decisions_required": [],
+    "deferred_unresolved": [
+      "CAND-023 scripts/compare_excel_structure.py",
+      "CAND-024 scripts/csap_evidence_pack.py"
+    ],
     "deferred_non_cleanup_findings": [
       "Pandas deprecation warnings remain out of scope.",
-      "GitHub Actions Node-runtime deprecation warnings remain out of scope.",
-      "No bug fix, dependency modernization, uv migration, Qt/pandas modernization, CI modernization, or architecture refactor was performed."
+      "GitHub Actions runtime deprecation warnings remain out of scope.",
+      "No bug fix, refactor, dependency/uv migration, CI modernization, Qt/Pandas modernization, typing sweep, or performance optimization was performed."
     ],
     "verification": {
-      "ruff": {
-        "status": "PASS",
-        "result": "All checks passed!"
-      },
-      "core_infra_integration": {
-        "status": "PASS",
-        "result": "1219 passed, 4 skipped, 0 failed",
-        "reference": "1220 passed, 4 skipped, 0 failed",
-        "count_delta_explanation": "tests/unit/test_repo_hygiene.py parametrizes one case per app/**/*.py file. Exactly one app Python module was intentionally removed, so exactly one hygiene parameter case disappeared. No test file was removed or weakened."
-      },
-      "pre_merge_guards": {
-        "status": "PASS",
-        "result": "335 passed, 0 failed"
-      },
-      "law_ssot_drift_guard": {
-        "status": "PASS"
-      },
-      "golden_regression": {
-        "status": "PASS_NO_DRIFT",
-        "phase01": "PASSED (no drift detected)",
-        "phase02": "success; golden regression completed successfully",
-        "auditor_decision": "BASELINE_OK",
-        "execution_note": "Executed on a verification-only branch with the exact Prompt 4 application/config code state plus one inert docs/golden_datasets trigger file required solely to activate the existing path-filtered PR workflow. The trigger is not part of the final Prompt 4 branch."
-      },
-      "ui": {
-        "status": "PASS",
-        "result": "77 passed, 3 skipped, 0 failed",
-        "semantic_comparison": "No cleanup-caused UI regression; matches Prompt 3 GitHub behavior profile. Prompt 1 QSignalSpy failures remain environment-specific observations."
-      },
-      "runtime_startup": {
-        "status": "NOT_RUN_ENVIRONMENT_LIMITATION",
-        "reason": "Available connector actions do not expose an interactive GUI startup command and the local execution environment lacks the repository PySide6 runtime."
-      }
+      "status": "PENDING"
     },
-    "final_scope": {
-      "production_removals": [
-        "app/infra/students/student_import_pipeline.py"
-      ],
-      "config_cleanup": [
-        "pyproject.toml: one dedicated mypy override entry removed"
-      ],
-      "manifest_updates": [
+    "proposed_final_scope": {
+      "manifest_updates_only": [
         "docs/cleanup/CLEANUP_ADJUDICATION_MANIFEST.md",
         "docs/cleanup/cleanup_adjudication_manifest.json"
       ],
-      "production_behavior_modified": false,
+      "production_modified": false,
+      "config_modified": false,
       "tests_modified": false,
       "ci_modified": false,
       "dependencies_modified": false,
-      "golden_baseline_modified": false,
-      "golden_dataset_modified": false,
+      "golden_modified": false,
       "matrix2_modified": false,
       "main_modified": false,
-      "prompt5_started": false
+      "prompt6_started": false
     }
   }
 }
