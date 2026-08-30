@@ -61,14 +61,14 @@ golden set; adjust `base_dir` and filenames to match your committed goldens.
 - فقط از داده‌های سانیت‌شدهٔ زیر `docs/golden_datasets/**` (یا `ci/golden_datasets/**`) استفاده کنید؛ سناریوهای دیگر نباید به دادهٔ حساس تکیه کنند.
 
 ## Run locally
-- Install dependencies (`pip install -r requirements.txt && pip install -e .`).
+- Synchronize the locked project environment (`uv sync --locked`).
 - Dry run (validate YAML + file presence only):
   ```bash
-  PYTHONPATH=. python scripts/run_golden_regression.py --config ci/configs/golden_regression.yml --dry-run
+  uv run --locked python scripts/run_golden_regression.py --config ci/configs/golden_regression.yml --dry-run
   ```
 - Full run (executes CLI commands):
   ```bash
-  python scripts/run_golden_regression.py --config ci/configs/golden_regression.yml
+  uv run --locked python scripts/run_golden_regression.py --config ci/configs/golden_regression.yml
   ```
 - Exit codes: non-zero when the config is missing/malformed, when required files
   are absent, or when any CLI command fails.
@@ -82,7 +82,7 @@ LAW/Technical SSoT.
 1) Generate diagnostics
    - Run:
      ```bash
-     PYTHONPATH=. python scripts/ci_debug_phase01_mentor_pool_diff.py
+     uv run --locked python scripts/ci_debug_phase01_mentor_pool_diff.py
      ```
    - This writes:
      - `ci/artifacts/phase01_mentor_pool_current.csv` (current canonical pool)
@@ -122,7 +122,7 @@ classified as **BUG_FIX** (or **MIXED** if explicitly justified).
    - Run the phase02 mentor scenario to build the canonical pool via the v3
      pipeline:
      ```bash
-     PYTHONPATH=. python scripts/run_golden_regression_phase02.py \
+     uv run --locked python scripts/run_golden_regression_phase02.py \
        --config ci/configs/golden_regression.yml --mode v3
      ```
      or run the mentor scenario directly via `app.infra.golden.regression_runner`
@@ -152,7 +152,7 @@ classified as **BUG_FIX** (or **MIXED** if explicitly justified).
   `pathlib.Path`.
 - Example invocation from a workflow step:
   ```bash
-  python scripts/run_golden_regression.py --config ci/configs/golden_regression.yml --dry-run
+  uv run --locked python scripts/run_golden_regression.py --config ci/configs/golden_regression.yml --dry-run
   ```
   - Add real golden Excel files under your chosen `base_dir` (for example,
     `docs/golden_datasets/phase01_lock_current_behavior/`) and update the YAML
