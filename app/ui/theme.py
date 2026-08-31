@@ -1,14 +1,14 @@
 """مدیریت تم سبک با توکن‌های مرکزی برای UI PySide6.
 
-این ماژول یک تم روشن و مینیمال را برای رابط انگلیسی‌محور تعریف می‌کند،
-رنگ‌ها، تایپوگرافی و فواصل را در یک نقطه متمرکز می‌سازد و توابع کمکی
-برای اعمال فونت، سایهٔ کارت و انیمیشن سبک Hover دکمه‌ها فراهم می‌کند.
+این ماژول تم روشن/تیره، پالت Qt و QSS مرکزی را از یک مجموعه توکن واحد
+تولید می‌کند. هدف، یکپارچگی بصری بدون تغییر رفتار ویجت‌ها یا جریان برنامه است.
 """
 
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 
 from PySide6.QtCore import QEasingCurve, QEvent, QObject, QPropertyAnimation, Qt
 from PySide6.QtGui import QColor, QPalette
@@ -33,6 +33,7 @@ __all__ = [
     "apply_card_shadow",
     "setup_button_hover_animation",
     "build_theme",
+    "build_stylesheet",
     "apply_theme_mode",
 ]
 
@@ -46,41 +47,29 @@ LOGGER = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class ThemeColors:
-    """تعریف توکن‌های رنگی اصلی تم.
+    """تعریف توکن‌های رنگی اصلی تم."""
 
-    مثال:
-        >>> colors = ThemeColors()
-        >>> colors.primary
-        '#2563eb'
-    """
-
-    background: str = "#f5f5f7"
+    background: str = "#f3f5f7"
     card: str = "#ffffff"
-    text: str = "#111827"
-    text_muted: str = "#6b7280"
+    text: str = "#172033"
+    text_muted: str = "#667085"
     primary: str = "#2563eb"
-    success: str = "#16a34a"
-    warning: str = "#f59e0b"
-    error: str = "#dc2626"
-    log_background: str = "#f6f7fb"
-    log_foreground: str = "#1f2937"
-    log_border: str = "#d5d9e3"
+    success: str = "#15803d"
+    warning: str = "#b7791f"
+    error: str = "#c2413a"
+    log_background: str = "#f7f9fc"
+    log_foreground: str = "#253047"
+    log_border: str = "#d7dde6"
     log_success: str = "#15803d"
-    log_warning: str = "#b45309"
-    log_error: str = "#b91c1c"
-    border: str = "#d1d5db"
-    surface_alt: str = "#f3f4f6"
+    log_warning: str = "#a15c07"
+    log_error: str = "#b42318"
+    border: str = "#cfd6df"
+    surface_alt: str = "#edf1f5"
 
 
 @dataclass(frozen=True)
 class ThemeTypography:
-    """تعریف مقیاس تایپوگرافی انگلیسی با fallback فارسی.
-
-    مثال:
-        >>> typo = ThemeTypography()
-        >>> typo.font_fa_stack.split(',')[0]
-        'Vazirmatn'
-    """
+    """تعریف مقیاس تایپوگرافی انگلیسی با fallback فارسی."""
 
     font_fa_stack: str = "Vazirmatn, Vazir, IRANSansX, Tahoma, sans-serif"
     font_en_stack: str = "Segoe UI, system-ui, sans-serif"
@@ -91,13 +80,7 @@ class ThemeTypography:
 
 @dataclass(frozen=True)
 class Theme:
-    """بستهٔ توکن‌های تم شامل رنگ، تایپوگرافی و فاصله.
-
-    مثال:
-        >>> theme = Theme()
-        >>> theme.spacing_sm
-        8
-    """
+    """بستهٔ توکن‌های تم شامل رنگ، تایپوگرافی و فاصله."""
 
     colors: ThemeColors = ThemeColors()
     typography: ThemeTypography = ThemeTypography()
@@ -131,7 +114,7 @@ class Theme:
     def accent_soft(self) -> QColor:
         base = QColor(self.colors.primary)
         soft = QColor(base)
-        soft.setAlphaF(0.1)
+        soft.setAlphaF(0.12)
         return soft
 
     # Backward-friendly names for legacy call sites
@@ -207,7 +190,7 @@ def apply_global_font(app: QApplication) -> None:
 
 
 def apply_palette(app: QApplication, theme: Theme) -> None:
-    """تنظیم پالت روشن هماهنگ با توکن‌های تم."""
+    """تنظیم پالت هماهنگ با توکن‌های تم."""
 
     palette = _create_palette_from_theme(theme)
     app.setPalette(palette)
@@ -227,23 +210,77 @@ def _create_palette_from_theme(theme: Theme) -> QPalette:
     palette.setColor(QPalette.ColorRole.ButtonText, theme.text_primary)
     palette.setColor(QPalette.ColorRole.WindowText, theme.text_primary)
     palette.setColor(QPalette.ColorRole.Highlight, theme.accent)
-    palette.setColor(QPalette.ColorRole.HighlightedText, theme.text_primary)
+    highlighted_text = QColor("#ffffff")
+    if relative_luminance(theme.accent) > 0.55:
+        highlighted_text = QColor("#111827")
+    palette.setColor(QPalette.ColorRole.HighlightedText, highlighted_text)
     palette.setColor(QPalette.ColorRole.Link, theme.accent)
     palette.setColor(QPalette.ColorRole.BrightText, theme.error)
+
+    disabled = QPalette.ColorGroup.Disabled
+    palette.setColor(disabled, QPalette.ColorRole.Text, theme.text_muted)
+    palette.setColor(disabled, QPalette.ColorRole.ButtonText, theme.text_muted)
+    palette.setColor(disabled, QPalette.ColorRole.WindowText, theme.text_muted)
+    palette.setColor(disabled, QPalette.ColorRole.Button, theme.surface_alt)
+    palette.setColor(disabled, QPalette.ColorRole.Base, theme.surface_alt)
     return palette
 
 
-def apply_theme(app: QApplication, theme: Theme | str | None = None) -> Theme:
-    """اعمال تم روشن/تیره صرفاً با QPalette و سبک Fusion.
+def _qss_rgba(color: QColor) -> str:
+    return f"rgba({color.red()}, {color.green()}, {color.blue()}, {color.alpha()})"
 
-    این تابع استایل شیت سراسری را پاک کرده و بر اساس حالت درخواستی
-    پالت مناسب را روی برنامه اعمال می‌کند. ورودی می‌تواند نمونهٔ ``Theme``
-    یا نام تم (``"light"``/``"dark"``) باشد و امضای عمومی تابع حفظ شده است.
-    """
+
+def _stylesheet_token_mapping(theme: Theme) -> dict[str, str]:
+    """تبدیل توکن‌های Theme به مقادیر قابل‌استفاده در QSS."""
+
+    return {
+        "background": theme.colors.background,
+        "card": theme.colors.card,
+        "surface_alt": theme.colors.surface_alt,
+        "text": theme.colors.text,
+        "text_muted": theme.colors.text_muted,
+        "primary": theme.colors.primary,
+        "primary_soft": _qss_rgba(theme.accent_soft),
+        "success": theme.colors.success,
+        "warning": theme.colors.warning,
+        "error": theme.colors.error,
+        "log_background": theme.colors.log_background,
+        "log_foreground": theme.colors.log_foreground,
+        "log_border": theme.colors.log_border,
+        "border": theme.colors.border,
+        "title_size": str(theme.typography.title_size),
+        "card_title_size": str(theme.typography.card_title_size),
+        "body_size": str(theme.typography.body_size),
+        "spacing_xs": str(theme.spacing_xs),
+        "spacing_sm": str(theme.spacing_sm),
+        "spacing_md": str(theme.spacing_md),
+        "spacing_lg": str(theme.spacing_lg),
+        "radius_sm": str(theme.radius_sm),
+        "radius_md": str(theme.radius_md),
+        "radius_lg": str(theme.radius_lg),
+    }
+
+
+def build_stylesheet(theme: Theme) -> str:
+    """رندر امن QSS مرکزی بدون تداخل braceهای CSS با قالب‌بندی پایتون."""
+
+    qss_path = Path(__file__).with_name("styles.qss")
+    try:
+        rendered = qss_path.read_text(encoding="utf-8")
+    except OSError:
+        LOGGER.exception("Unable to load UI stylesheet: %s", qss_path)
+        return ""
+
+    for token, value in _stylesheet_token_mapping(theme).items():
+        rendered = rendered.replace("{" + token + "}", value)
+    return rendered
+
+
+def apply_theme(app: QApplication, theme: Theme | str | None = None) -> Theme:
+    """اعمال تم روشن/تیره با Fusion، QPalette و QSS مرکزی."""
 
     app.setStyle("Fusion")
     apply_global_font(app)
-    app.setStyleSheet("")
 
     if isinstance(theme, Theme):
         resolved_theme = theme
@@ -252,9 +289,8 @@ def apply_theme(app: QApplication, theme: Theme | str | None = None) -> Theme:
     else:
         resolved_theme = build_theme("light")
 
-    palette = _create_palette_from_theme(resolved_theme)
-
-    app.setPalette(palette)
+    app.setPalette(_create_palette_from_theme(resolved_theme))
+    app.setStyleSheet(build_stylesheet(resolved_theme))
     return resolved_theme
 
 
@@ -269,19 +305,15 @@ def apply_layout_direction(app: QApplication, language: Language | str) -> None:
 
 
 def apply_card_shadow(widget: QWidget) -> None:
-    """افزودن سایهٔ نرم به کارت‌ها با Qt.
-
-    پارامترها:
-        widget: ویجتی که باید سایه بگیرد.
-    """
+    """افزودن سایهٔ نرم به کارت‌ها با Qt."""
 
     shadow = SafeDropShadowEffect(
         f"card_shadow[{widget.objectName() or widget.__class__.__name__}]",
         widget,
     )
-    shadow.setBlurRadius(24)
-    shadow.setOffset(0, 10)
-    shadow.setColor(QColor(0, 0, 0, 35))
+    shadow.setBlurRadius(20)
+    shadow.setOffset(0, 6)
+    shadow.setColor(QColor(0, 0, 0, 28))
     widget.setGraphicsEffect(shadow)
     LOGGER.debug(
         "card_shadow installed | widget=%s effect=%s blur=%s offset=%s",
@@ -318,11 +350,7 @@ class _HoverAnimationFilter(QObject):
 
 
 def setup_button_hover_animation(button: QPushButton) -> None:
-    """نصب انیمیشن Hover سبک برای دکمه‌ها.
-
-    پارامترها:
-        button: دکمه هدف.
-    """
+    """نصب انیمیشن Hover سبک برای دکمه‌ها."""
 
     filter_ = _HoverAnimationFilter(button, button)
     button.installEventFilter(filter_)
@@ -335,22 +363,22 @@ def build_theme(mode: str | None = None) -> Theme:
     normalized = "dark" if (mode or "").lower() == "dark" else "light"
     if normalized == "dark":
         colors = ThemeColors(
-            background="#202020",
-            card="#2a2a2a",
-            text="#f2f2f2",
-            text_muted="#c4c4c4",
-            primary="#0078d7",
-            success="#16a34a",
-            warning="#f59e0b",
-            error="#dc2626",
-            log_background="#171717",
-            log_foreground="#e5e7eb",
-            log_border="#0f172a",
-            log_success="#22c55e",
-            log_warning="#f59e0b",
-            log_error="#f87171",
-            border="#3a3a3a",
-            surface_alt="#353535",
+            background="#111418",
+            card="#181c22",
+            text="#e6edf3",
+            text_muted="#9aa4b2",
+            primary="#2f6fed",
+            success="#3fb950",
+            warning="#d29922",
+            error="#f47067",
+            log_background="#0d1117",
+            log_foreground="#d8dee9",
+            log_border="#2b333d",
+            log_success="#3fb950",
+            log_warning="#d29922",
+            log_error="#f47067",
+            border="#303842",
+            surface_alt="#20262d",
         )
     else:
         colors = ThemeColors()
