@@ -200,6 +200,7 @@ def test_student_resolution_rejects_missing_authoritative_db() -> None:
 
 def test_cli_matrix_allocation(tmp_path: Path) -> None:
     output_path = tmp_path / "cli_allocation.xlsx"
+    db = _prepare_student_reference_db(tmp_path)
 
     cmd = [
         sys.executable,
@@ -220,6 +221,8 @@ def test_cli_matrix_allocation(tmp_path: Path) -> None:
         "1404",
         "--counter-duplicate-strategy",
         "assign-new",
+        "--local-db",
+        str(db.path),
         "--output",
         str(output_path),
     ]
