@@ -1699,6 +1699,36 @@ def test_cli_capacity_column_default_from_policy(tmp_path: Path) -> None:
     students_path = tmp_path / "students.xlsx"
     pool_path = tmp_path / "pool.xlsx"
     output_path = tmp_path / "out.xlsx"
+    db_path = tmp_path / "authority.sqlite"
+
+    from app.infra.groupcode.groupcode_repository import GroupCodeRepository
+    from app.infra.local_database import LocalDatabase
+    from app.infra.schools.school_repository import SchoolRepository
+
+    db = LocalDatabase(db_path)
+    schools_ref = tmp_path / "schools-ref.xlsx"
+    pd.DataFrame(
+        {
+            "کد مدرسه": [100],
+            "نام مدرسه": ["Synthetic School"],
+            "مرکز گلستان صدرا": [1],
+            "جنسیت": [1],
+            "فعال": [1],
+        }
+    ).to_excel(schools_ref, index=False)
+    SchoolRepository(db).import_from_excel(schools_ref)
+
+    groupcodes_ref = tmp_path / "groupcodes-ref.xlsx"
+    pd.DataFrame(
+        {
+            "group_code": [27],
+            "level": ["متوسطه دوم"],
+            "grade": [12],
+            "track": ["تجربی"],
+            "is_active": [1],
+        }
+    ).to_excel(groupcodes_ref, index=False)
+    GroupCodeRepository(db).import_from_excel(groupcodes_ref)
 
     pd.DataFrame(
         [
@@ -1755,6 +1785,8 @@ def test_cli_capacity_column_default_from_policy(tmp_path: Path) -> None:
             "1404",
             "--policy",
             str(policy_path),
+            "--local-db",
+            str(db_path),
         ]
     )
 
