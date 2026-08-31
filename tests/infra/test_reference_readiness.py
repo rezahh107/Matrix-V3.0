@@ -3,9 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from app.core.common.domain import EDUCATIONAL_STRUCTURE
 from app.infra.db.reference_readiness import compute_reference_readiness
+from app.infra.errors import DatabasePreparationError
 from app.infra.groupcode.groupcode_repository import GroupCodeRepository
 from app.infra.local_database import LocalDatabase
 from app.infra.schools.school_repository import SchoolRepository
@@ -83,10 +85,15 @@ def test_readiness_true_with_seeded_groupcodes_and_imported_schools(tmp_path: Pa
     assert readiness.groupcodes.row_count == len(EDUCATIONAL_STRUCTURE)
 
 
-def test_groupcodes_reseeded_after_empty_import(tmp_path: Path) -> None:
+def test_empty_groupcode_import_rejected_and_previous_reference_preserved(tmp_path: Path) -> None:
     db = LocalDatabase(tmp_path / "local.sqlite")
     school_repo = SchoolRepository(db)
     groupcode_repo = GroupCodeRepository(db)
+
+    db.initialize()
+    before = groupcode_repo.status()
+    assert before.row_count == len(EDUCATIONAL_STRUCTURE)
+    assert before.version_tag == "builtin:ssot"
 
     empty_groupcodes = pd.DataFrame(
         {
@@ -99,12 +106,17 @@ def test_groupcodes_reseeded_after_empty_import(tmp_path: Path) -> None:
     empty_path = tmp_path / "empty_groupcodes.xlsx"
     _write_excel(empty_groupcodes, empty_path)
 
-    groupcode_repo.import_from_excel(empty_path)
+    with pytest.raises(DatabasePreparationError, match="خالی"):
+        groupcode_repo.import_from_excel(empty_path)
 
     readiness = compute_reference_readiness(school_repo=school_repo, groupcode_repo=groupcode_repo)
+    after = groupcode_repo.status()
 
     assert readiness.groupcodes_ready is True
     assert readiness.groupcodes.row_count == len(EDUCATIONAL_STRUCTURE)
+    assert after.row_count == before.row_count
+    assert after.version_tag == before.version_tag
+    assert after.source_filename == before.source_filename
 
 
 def test_groupcodes_seeded_with_meta_on_initialize(tmp_path: Path) -> None:
