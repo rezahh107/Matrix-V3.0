@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from app.core.allocate_students import allocate_batch
 from app.core.canonical_frames import canonicalize_pool_frame, canonicalize_students_frame
@@ -14,10 +15,33 @@ from app.core.debug_pool_alignment import analyze_pool_alignment_batch
 from app.core.policy_loader import load_policy
 from app.core.qa.invariants import check_POOL_COVERAGE_01
 from app.infra import cli_legacy as cli
+from app.infra.errors import DatabasePreparationError
+from app.infra.groupcode.groupcode_repository import GroupCodeRepository
 from app.infra.io_utils import read_excel_first_sheet
+from app.infra.local_database import LocalDatabase
 from app.infra.pool_loader import load_pool
+from app.infra.schools.school_repository import SchoolRepository
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def _prepare_student_reference_db(tmp_path: Path) -> LocalDatabase:
+    db = LocalDatabase(tmp_path / "alignment-references.sqlite")
+    db.initialize()
+    schools_path = tmp_path / "alignment-schools.xlsx"
+    pd.DataFrame(
+        {
+            "کد مدرسه": [1],
+            "نام مدرسه": ["Synthetic Alignment School"],
+            "مرکز گلستان صدرا": [0],
+            "جنسیت": [1],
+            "فعال": [1],
+        }
+    ).to_excel(schools_path, index=False)
+    SchoolRepository(db).import_from_excel(schools_path)
+    assert SchoolRepository(db).status().row_count > 0
+    assert GroupCodeRepository(db).status().row_count > 0
+    return db
 
 
 def _load_canonical_frames():
@@ -114,8 +138,9 @@ def test_matrix_allocation_parity(tmp_path: Path) -> None:
     assert unallocated is None or unallocated.empty
 
 
-def test_allocation_preflight_matrix_pool_source() -> None:
+def test_allocation_preflight_matrix_pool_source(tmp_path: Path) -> None:
     policy = load_policy()
+    db = _prepare_student_reference_db(tmp_path)
     args = argparse.Namespace(
         students=str(ROOT / "students.xlsx"),
         pool=str(ROOT / "0918.xlsx"),
@@ -126,7 +151,7 @@ def test_allocation_preflight_matrix_pool_source() -> None:
         _user_settings=None,
     )
 
-    students_df, _, _ = cli._resolve_students_frame(args, policy, db=None)
+    students_df, _, _ = cli._resolve_students_frame(args, policy, db=db)
     pool_df, _, _ = cli._resolve_mentor_pool_frame(
         args,
         policy,
@@ -164,6 +189,15 @@ def test_allocation_preflight_matrix_pool_source() -> None:
     assert pool_base.attrs.get("pool_source") == "matrix"
     detection_after = pool_base.attrs.get("pool_detection")
     assert detection_after is None or getattr(detection_after, "pool_type", None) == "matrix"
+
+
+def test_student_resolution_rejects_missing_authoritative_db() -> None:
+    policy = load_policy()
+    args = argparse.Namespace(students=str(ROOT / "students.xlsx"))
+    with pytest.raises(DatabasePreparationError):
+        cli._resolve_students_frame(args, policy, db=None)
+
+
 def test_cli_matrix_allocation(tmp_path: Path) -> None:
     output_path = tmp_path / "cli_allocation.xlsx"
 

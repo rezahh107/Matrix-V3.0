@@ -50,11 +50,11 @@ def _invalid_groupcodes() -> pd.DataFrame:
     )
 
 
-def _schools() -> pd.DataFrame:
+def _schools(name: str = "Synthetic School") -> pd.DataFrame:
     return pd.DataFrame(
         {
             "کد مدرسه": [101],
-            "نام مدرسه": ["Synthetic School"],
+            "نام مدرسه": [name],
             "مرکز گلستان صدرا": [0],
             "جنسیت": [1],
             "فعال": [1],
@@ -125,9 +125,7 @@ def _matrix_group_values(matrix_path: Path) -> set[int]:
     return set(pd.to_numeric(matrix[group_column], errors="coerce").dropna().astype(int))
 
 
-def _build_matrix(
-    *, tmp_path: Path, db_path: Path, school_path: Path, group_code: int
-) -> Path:
+def _build_matrix(*, tmp_path: Path, db_path: Path, group_code: int) -> Path:
     inspactor_path = _write_excel(
         _inspactor(group_code), tmp_path / f"inspactor-{group_code}.xlsx"
     )
@@ -137,8 +135,6 @@ def _build_matrix(
             "build-matrix",
             "--inspactor",
             str(inspactor_path),
-            "--schools",
-            str(school_path),
             "--output",
             str(matrix_path),
             "--policy",
@@ -156,7 +152,7 @@ def _build_matrix(
 
 
 def test_p0_01_explicit_groupcode_import_reaches_real_build(tmp_path: Path) -> None:
-    db_path, school_path, _ = _prepare_reference_db(tmp_path, group_code=24)
+    db_path, _, _ = _prepare_reference_db(tmp_path, group_code=24)
     group_b = _write_excel(_groupcodes(25), tmp_path / "groupcodes-B.xlsx")
 
     rc = cli_legacy.main(
@@ -182,7 +178,6 @@ def test_p0_01_explicit_groupcode_import_reaches_real_build(tmp_path: Path) -> N
     matrix_path = _build_matrix(
         tmp_path=tmp_path,
         db_path=db_path,
-        school_path=school_path,
         group_code=25,
     )
     values = _matrix_group_values(matrix_path)
@@ -211,11 +206,10 @@ def test_p0_02_real_student_ingress_tracks_current_db_groupcodes(tmp_path: Path)
 
 
 def test_p0_03_groupcode_change_blocks_now_ineligible_real_allocation(tmp_path: Path) -> None:
-    db_path, school_path, _ = _prepare_reference_db(tmp_path, group_code=24)
+    db_path, _, _ = _prepare_reference_db(tmp_path, group_code=24)
     matrix_path = _build_matrix(
         tmp_path=tmp_path,
         db_path=db_path,
-        school_path=school_path,
         group_code=24,
     )
     students_path = _write_excel(_student(24), tmp_path / "students.xlsx")
@@ -302,6 +296,31 @@ def test_p0_04_deprecated_build_crosswalk_fails_without_mutating_db(tmp_path: Pa
     assert meta.source_filename == group_a.name
 
 
+def test_deprecated_build_schools_fails_without_mutating_db(tmp_path: Path) -> None:
+    db_path, school_a, _ = _prepare_reference_db(tmp_path, group_code=24)
+    school_b = _write_excel(_schools("Replacement School"), tmp_path / "schools-B.xlsx")
+    output = tmp_path / "must-not-build-schools.xlsx"
+
+    rc = cli_legacy.main(
+        [
+            "build-matrix",
+            "--schools",
+            str(school_b),
+            "--output",
+            str(output),
+            "--local-db",
+            str(db_path),
+        ]
+    )
+    assert rc == 2
+    assert not output.exists()
+
+    repo = SchoolRepository(LocalDatabase(db_path))
+    stored = repo.load_canonical_frame()
+    assert stored["نام مدرسه"].tolist() == ["Synthetic School"]
+    assert repo.status().source_filename == school_a.name
+
+
 def test_p0_05_stale_student_cache_is_revalidated_against_current_db(tmp_path: Path) -> None:
     db_path, _, _ = _prepare_reference_db(tmp_path, group_code=24)
     students_path = _write_excel(_student(24), tmp_path / "students.xlsx")
@@ -321,7 +340,7 @@ def test_p0_05_stale_student_cache_is_revalidated_against_current_db(tmp_path: P
 
 
 def test_p0_06_gui_backend_and_direct_cli_share_groupcode_db(tmp_path: Path) -> None:
-    db_path, school_path, _ = _prepare_reference_db(tmp_path, group_code=25)
+    db_path, _, _ = _prepare_reference_db(tmp_path, group_code=25)
     inspactor_path = _write_excel(_inspactor(25), tmp_path / "inspactor-parity.xlsx")
     gui_output = tmp_path / "matrix-gui-backend.xlsx"
     cli_output = tmp_path / "matrix-direct-cli.xlsx"
@@ -330,8 +349,6 @@ def test_p0_06_gui_backend_and_direct_cli_share_groupcode_db(tmp_path: Path) -> 
         "build-matrix",
         "--inspactor",
         str(inspactor_path),
-        "--schools",
-        str(school_path),
         "--policy",
         str(POLICY_PATH),
         "--min-coverage",

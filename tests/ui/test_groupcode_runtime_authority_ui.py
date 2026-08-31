@@ -43,12 +43,38 @@ def _window(tmp_path: Path) -> MainWindow:
     return window
 
 
-def test_build_crosswalk_control_is_not_selectable_runtime_input(
+def test_build_reference_controls_are_not_selectable_runtime_inputs(
     tmp_path: Path, qapp: QApplication
 ) -> None:
     window = _window(tmp_path)
+    assert not window._picker_schools.isEnabled()
     assert not window._picker_crosswalk.isEnabled()
+    assert "database" in window._picker_schools.toolTip().lower() or "پایگاه" in window._picker_schools.toolTip()
     assert "database" in window._picker_crosswalk.toolTip().lower() or "پایگاه" in window._picker_crosswalk.toolTip()
+    window.close()
+    qapp.processEvents()
+
+
+def test_build_argv_contains_no_runtime_reference_files(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, qapp: QApplication
+) -> None:
+    window = _window(tmp_path)
+    inspactor = tmp_path / "inspactor.xlsx"
+    inspactor.touch()
+    window._picker_inspactor.setText(str(inspactor))
+    window._picker_output_matrix.setText(str(tmp_path / "matrix.xlsx"))
+    window._picker_schools.setText(str(tmp_path / "ignored-schools.xlsx"))
+    window._picker_crosswalk.setText(str(tmp_path / "ignored-groupcodes.xlsx"))
+    launches: list[list[str]] = []
+
+    def _capture(argv: list[str], *_args: object, **_kwargs: object) -> None:
+        launches.append(list(argv))
+
+    monkeypatch.setattr(window, "_launch_cli", _capture)
+    window._start_build()
+    assert launches
+    assert "--schools" not in launches[0]
+    assert "--crosswalk" not in launches[0]
     window.close()
     qapp.processEvents()
 

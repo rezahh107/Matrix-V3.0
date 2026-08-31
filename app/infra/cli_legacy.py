@@ -8,7 +8,7 @@
     >>> from app.infra import cli
     >>> cli.main(["import-groupcodes", "--crosswalk", "cross.xlsx"])  # doctest: +SKIP
     0
-    >>> cli.main(["build-matrix", "--inspactor", "insp.xlsx", "--schools", "sch.xlsx",
+    >>> cli.main(["build-matrix", "--inspactor", "insp.xlsx",
     ...           "--output", "out.xlsx", "--policy", "config/policy.json"])  # doctest: +SKIP
 """
 
@@ -1203,7 +1203,7 @@ def _resolve_reference_frames(
     dict[str, str],
     dict[str, float],
 ]:
-    """بارگذاری دیتافریم مدارس و Crosswalk از SQLite یا Excel."""
+    """بارگذاری مراجع عملیاتی School/GroupCode فقط از SQLite."""
 
     _prepare_local_db(db, progress)
     schools_df: pd.DataFrame | None = None
@@ -1211,12 +1211,6 @@ def _resolve_reference_frames(
     crosswalk_synonyms_df: pd.DataFrame | None = None
     inputs: dict[str, str] = {}
     inputs_mtime: dict[str, float] = {}
-
-    if getattr(args, "schools", None):
-        schools_path = Path(args.schools)
-        schools_df = import_school_report_from_excel(schools_path, db)
-        inputs["schools"] = str(schools_path)
-        inputs_mtime["schools"] = schools_path.stat().st_mtime
 
     groupcode_repo = GroupCodeRepository(db)
     try:
@@ -1233,8 +1227,8 @@ def _resolve_reference_frames(
             raise ReferenceDataMissingError(
                 table=exc.table,
                 message=(
-                    f"جدول {exc.table} در پایگاه داده یافت نشد؛ «build-matrix» را با "
-                    "گزینه‌های --schools اجرا کنید یا ابتدا «import-schools» را برای پر کردن کش SQLite اجرا نمایید."
+                    f"جدول {exc.table} در پایگاه داده یافت نشد؛ ابتدا مرجع مدارس را با "
+                    "«import-schools» یا تب Database به‌روزرسانی کنید و سپس build-matrix را بدون --schools اجرا نمایید."
                 ),
             ) from exc
         schools_df = schools_db
@@ -3971,7 +3965,10 @@ def _build_parser() -> argparse.ArgumentParser:
     build_cmd.add_argument(
         "--schools",
         required=False,
-        help="(اختیاری) مسیر SchoolReport برای بروزرسانی مرجع مدارس در SQLite",
+        help=(
+            "DEPRECATED: SchoolReport دیگر ورودی build-matrix نیست؛ "
+            "ابتدا import-schools یا تب Database را برای به‌روزرسانی مرجع اجرا کنید."
+        ),
     )
     build_cmd.add_argument(
         "--crosswalk",
@@ -4417,6 +4414,15 @@ def main(
 
     try:
         if args.command == "build-matrix":
+            if getattr(args, "schools", None):
+                raise DatabasePreparationError(
+                    path=str(args.schools),
+                    reason="--schools در build-matrix دیگر یک ورودی runtime نیست.",
+                    hint=(
+                        "ابتدا مرجع مدارس را با import-schools یا تب Database به‌روزرسانی کنید؛ "
+                        "سپس build-matrix را بدون --schools اجرا کنید."
+                    ),
+                )
             if getattr(args, "crosswalk", None):
                 raise DatabasePreparationError(
                     path=str(args.crosswalk),
