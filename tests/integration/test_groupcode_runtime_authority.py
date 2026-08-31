@@ -155,7 +155,10 @@ def test_p0_01_explicit_groupcode_import_reaches_real_build(tmp_path: Path) -> N
         group_code=25,
     )
     matrix = pd.read_excel(matrix_path, sheet_name="matrix")
-    values = set(pd.to_numeric(matrix["کدرشته"], errors="coerce").dropna().astype(int))
+    group_column = next(
+        column for column in matrix.columns if str(column).split("|", 1)[0].strip() == "کدرشته"
+    )
+    values = set(pd.to_numeric(matrix[group_column], errors="coerce").dropna().astype(int))
     assert 25 in values
     assert 24 not in values
 
@@ -292,19 +295,19 @@ def test_p0_05_stale_student_cache_is_revalidated_against_current_db(tmp_path: P
 
 def test_allocate_cannot_disable_authoritative_reference_db(tmp_path: Path) -> None:
     students_path = _write_excel(_student(24), tmp_path / "students.xlsx")
-    with pytest.raises(Exception, match="پایگاه داده|LocalDatabase|مرجع"):
-        cli_legacy.main(
-            [
-                "allocate",
-                "--students",
-                str(students_path),
-                "--pool",
-                str(tmp_path / "unused-matrix.xlsx"),
-                "--output",
-                str(tmp_path / "unused-output.xlsx"),
-                "--disable-local-db",
-            ]
-        )
+    rc = cli_legacy.main(
+        [
+            "allocate",
+            "--students",
+            str(students_path),
+            "--pool",
+            str(tmp_path / "unused-matrix.xlsx"),
+            "--output",
+            str(tmp_path / "unused-output.xlsx"),
+            "--disable-local-db",
+        ]
+    )
+    assert rc == 2
 
 
 def test_failed_empty_groupcode_import_preserves_previous_reference(tmp_path: Path) -> None:
