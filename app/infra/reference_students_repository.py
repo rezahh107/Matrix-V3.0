@@ -90,7 +90,7 @@ def load_students_from_cache(*, db: LocalDatabase, policy: PolicyConfig) -> pd.D
     result = pipeline.run(cached)
     if result.validation.join_keys.issues:
         raise JoinKeyValidationError(result.validation.join_keys)
-    return result.canonical_df
+    return _coerce_int_columns(result.canonical_df, policy.join_keys)
 
 
 __all__ = [
