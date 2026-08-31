@@ -9,6 +9,10 @@ config_dir = project_root / "config"
 if config_dir.exists():
     dist_datas.append((str(config_dir), "config"))
 
+styles_qss = project_root / "app" / "ui" / "styles.qss"
+if styles_qss.exists():
+    dist_datas.append((str(styles_qss), "app/ui"))
+
 block_cipher = None
 
 a = Analysis(

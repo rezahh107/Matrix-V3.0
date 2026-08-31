@@ -1,176 +1,413 @@
-/* تم روشن مینیمال بدون ویژگی‌های غیرپشتیبانی شده */
+/* Matrix visual polish: token-driven, presentation-only Qt Style Sheet. */
 QWidget {
-    background-color: {background};
     color: {text};
     font-size: {body_size}pt;
 }
 
-QMainWindow, QDialog {
+QMainWindow,
+QDialog {
     background-color: {background};
 }
 
-QToolBar#mainToolbar {
-    background: {card};
-    border: 1px solid {border};
+QToolTip {
+    background-color: {card};
+    color: {text};
+    border: 1px solid {surface_alt};
     border-radius: {radius_md}px;
+    padding: {spacing_xs}px {spacing_sm}px;
+}
+
+QMenuBar {
+    background-color: {card};
+    border-bottom: 1px solid {surface_alt};
+}
+
+QMenuBar::item {
+    background: transparent;
+    border-radius: {radius_sm}px;
+    padding: {spacing_xs}px {spacing_sm}px;
+}
+
+QMenuBar::item:selected,
+QMenu::item:selected {
+    background-color: {surface_alt};
+}
+
+QMenu {
+    background-color: {card};
+    border: 1px solid {surface_alt};
+    border-radius: {radius_md}px;
+    padding: {spacing_xs}px;
+}
+
+QMenu::item {
+    border-radius: {radius_sm}px;
+    padding: {spacing_sm}px {spacing_md}px;
+}
+
+QToolBar#mainToolbar {
+    background-color: {card};
+    border: 1px solid {surface_alt};
+    border-radius: {radius_lg}px;
     padding: {spacing_sm}px;
     spacing: {spacing_sm}px;
 }
 
 QToolBar#mainToolbar QToolButton {
-    background: transparent;
+    background-color: transparent;
     border: 1px solid transparent;
-    border-radius: 999px;
-    padding: {spacing_xs}px {spacing_md}px;
+    border-radius: {radius_md}px;
+    padding: 0 {spacing_md}px;
+    min-height: 30px;
     color: {text};
     font-weight: 600;
 }
 
 QToolBar#mainToolbar QToolButton:hover {
-    background: {primary_soft};
-    border-color: {primary};
-    color: {primary};
+    background-color: {primary_soft};
+    border-color: transparent;
 }
 
 QToolBar#mainToolbar QToolButton:pressed {
-    background: {primary};
-    color: #ffffff;
+    background-color: {surface_alt};
+}
+
+QToolBar#mainToolbar QToolButton:focus {
+    border-color: {primary};
 }
 
 QGroupBox {
-    border: 1px solid {border};
-    border-radius: {radius_md}px;
-    margin-top: {spacing_sm}px;
-    background: {card};
+    background-color: {card};
+    border: 1px solid {surface_alt};
+    border-radius: {radius_lg}px;
+    margin-top: {spacing_lg}px;
     padding: {spacing_md}px;
 }
 
 QGroupBox::title {
     subcontrol-origin: margin;
-    left: {spacing_sm}px;
-    padding: 0 {spacing_sm}px {spacing_xs}px {spacing_sm}px;
+    padding: 0 {spacing_sm}px;
     color: {text};
     font-weight: 700;
     font-size: {card_title_size}pt;
 }
 
-QPushButton, QToolButton, QComboBox {
-    border-radius: 999px;
-    padding: {spacing_xs}px {spacing_md}px;
+QPushButton,
+QToolButton {
+    background-color: {card};
+    color: {text};
+    border: 1px solid {border};
+    border-radius: {radius_md}px;
+    padding: 0 {spacing_md}px;
+    min-height: 30px;
     font-weight: 600;
-    min-height: 32px;
 }
 
-QPushButton[variant="primary"], QToolButton[variant="primary"] {
-    background: {primary};
+QPushButton:hover,
+QToolButton:hover {
+    background-color: {surface_alt};
+    border-color: {primary};
+}
+
+QPushButton:pressed,
+QToolButton:pressed {
+    background-color: {primary_soft};
+    border-color: {primary};
+}
+
+QPushButton:focus,
+QToolButton:focus {
+    border-color: {primary};
+}
+
+QPushButton#btnBuildMatrix,
+QPushButton#btnAllocate,
+QPushButton#btnRuleEngine,
+QPushButton[variant="primary"],
+QToolButton[variant="primary"] {
+    background-color: {primary};
     color: #ffffff;
-    border: 1px solid {primary};
+    border-color: {primary};
+    border-radius: {radius_md}px;
+    min-width: 128px;
+    min-height: 32px;
+    padding: 0 {spacing_lg}px;
+    font-weight: 700;
 }
 
-QPushButton[variant="secondary"], QToolButton[variant="secondary"], QPushButton#secondaryButton, QToolButton#secondaryButton {
-    background: {card};
+QPushButton#btnBuildMatrix:hover,
+QPushButton#btnAllocate:hover,
+QPushButton#btnRuleEngine:hover,
+QPushButton[variant="primary"]:hover,
+QToolButton[variant="primary"]:hover {
+    background-color: {primary};
+    border-color: {text_muted};
+}
+
+QPushButton#btnBuildMatrix:pressed,
+QPushButton#btnAllocate:pressed,
+QPushButton#btnRuleEngine:pressed,
+QPushButton[variant="primary"]:pressed,
+QToolButton[variant="primary"]:pressed {
+    background-color: {primary_soft};
     color: {text};
-    border: 1px solid {border};
+    border-color: {primary};
 }
 
-QPushButton[variant="secondary"]:hover, QToolButton[variant="secondary"]:hover, QPushButton#secondaryButton:hover, QToolButton#secondaryButton:hover {
-    background: {surface_alt};
+QPushButton#btnBuildMatrix:focus,
+QPushButton#btnAllocate:focus,
+QPushButton#btnRuleEngine:focus,
+QPushButton[variant="primary"]:focus,
+QToolButton[variant="primary"]:focus {
+    border-color: {text};
 }
 
-QPushButton:disabled, QToolButton:disabled, QComboBox:disabled {
-    background: {surface_alt};
+QPushButton[variant="secondary"],
+QToolButton[variant="secondary"],
+QPushButton#secondaryButton,
+QToolButton#secondaryButton {
+    background-color: {surface_alt};
+    color: {text};
+    border-color: {surface_alt};
+}
+
+QPushButton#secondaryButton {
+    min-width: 92px;
+    padding: 0 {spacing_md}px;
+}
+
+QPushButton:disabled,
+QToolButton:disabled,
+QPushButton#btnBuildMatrix:disabled,
+QPushButton#btnAllocate:disabled,
+QPushButton#btnRuleEngine:disabled,
+QPushButton#secondaryButton:disabled,
+QPushButton[variant="primary"]:disabled,
+QToolButton[variant="primary"]:disabled,
+QPushButton[variant="secondary"]:disabled,
+QToolButton[variant="secondary"]:disabled {
+    background-color: {surface_alt};
     color: {text_muted};
-    border-color: {border};
+    border-color: {surface_alt};
 }
 
-QComboBox {
-    border: 1px solid {border};
-    background: {card};
+QLineEdit,
+QTextEdit,
+QPlainTextEdit,
+QComboBox,
+QSpinBox,
+QDoubleSpinBox {
+    background-color: {card};
     color: {text};
-    padding: {spacing_xs}px {spacing_md}px;
-}
-
-QComboBox QAbstractItemView {
-    background: {card};
+    border: 1px solid {border};
+    border-radius: {radius_md}px;
     selection-background-color: {primary_soft};
     selection-color: {text};
 }
 
-QLineEdit, QTextEdit, QPlainTextEdit {
-    border: 1px solid {border};
-    border-radius: {radius_sm}px;
-    padding: {spacing_xs}px {spacing_md}px;
-    background: {card};
+QLineEdit,
+QComboBox,
+QSpinBox,
+QDoubleSpinBox {
+    min-height: 30px;
+    padding: 0 {spacing_sm}px;
 }
 
-QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus {
-    border: 2px solid {primary};
-    background: {surface_alt};
+QTextEdit,
+QPlainTextEdit {
+    padding: {spacing_sm}px;
 }
 
-QFrame#dashboardCard, QFrame#heroCard, QFrame#actionsCard {
-    background: {card};
-    border: 1px solid {border};
+QLineEdit:hover,
+QTextEdit:hover,
+QPlainTextEdit:hover,
+QComboBox:hover,
+QSpinBox:hover,
+QDoubleSpinBox:hover {
+    border-color: {primary};
+}
+
+QLineEdit:focus,
+QTextEdit:focus,
+QPlainTextEdit:focus,
+QComboBox:focus,
+QSpinBox:focus,
+QDoubleSpinBox:focus {
+    border-color: {primary};
+    background-color: {card};
+}
+
+QLineEdit:disabled,
+QTextEdit:disabled,
+QPlainTextEdit:disabled,
+QComboBox:disabled,
+QSpinBox:disabled,
+QDoubleSpinBox:disabled {
+    background-color: {surface_alt};
+    color: {text_muted};
+    border-color: {surface_alt};
+}
+
+QComboBox#themeSelector {
+    min-width: 104px;
+    background-color: {surface_alt};
+    border-color: {surface_alt};
+    font-weight: 600;
+}
+
+QComboBox::drop-down {
+    border: none;
+}
+
+QComboBox QAbstractItemView {
+    background-color: {card};
+    color: {text};
+    border: 1px solid {surface_alt};
     border-radius: {radius_md}px;
-    padding: {spacing_md}px;
+    padding: {spacing_xs}px;
+    selection-background-color: {primary_soft};
+    selection-color: {text};
 }
 
-QLabel#dashboardCardTitle, QLabel#heroTitle {
-    font-size: {card_title_size}pt;
-    font-weight: 700;
+QCheckBox {
+    spacing: {spacing_sm}px;
     color: {text};
 }
 
-QLabel#dashboardCardDescription, QLabel#dashboardChecklistItem, QLabel#heroSubtitle {
+QTabWidget::pane {
+    background-color: {card};
+    border: 1px solid {surface_alt};
+    border-radius: {radius_lg}px;
+    top: -1px;
+}
+
+QTabBar::tab {
+    background-color: {background};
     color: {text_muted};
-    font-size: {body_size}pt;
+    border: 1px solid {surface_alt};
+    border-bottom: none;
+    border-top-left-radius: {radius_md}px;
+    border-top-right-radius: {radius_md}px;
+    padding: {spacing_sm}px {spacing_md}px;
+    margin: 0 2px;
+    font-weight: 600;
+}
+
+QTabBar::tab:hover:!selected {
+    background-color: {surface_alt};
+    color: {text};
+}
+
+QTabBar::tab:selected {
+    background-color: {card};
+    color: {text};
+    border-color: {surface_alt};
+    font-weight: 700;
+}
+
+QFrame#dashboardCard,
+QFrame#heroCard,
+QFrame#actionsCard {
+    background-color: {card};
+    border: 1px solid {surface_alt};
+    border-radius: {radius_lg}px;
+}
+
+QLabel#dashboardCardTitle,
+QLabel#heroTitle {
+    color: {text};
+    font-size: {card_title_size}pt;
+    font-weight: 700;
+}
+
+QLabel#dashboardCardDescription,
+QLabel#dashboardChecklistItem,
+QLabel#heroSubtitle,
+QLabel#themeSelectorLabel,
+QLabel#dashboardPolicyInfo,
+QLabel#labelStageDetail,
+QLabel#labelStatus,
+QLabel#lastRunBadge,
+QLabel#progressCaption {
+    color: {text_muted};
 }
 
 QLabel#heroBadge {
-    background: {primary_soft};
-    border: 1px solid {border};
+    background-color: {primary_soft};
+    border: 1px solid {surface_alt};
     color: {text};
-    padding: {spacing_xs}px {spacing_md}px;
-    border-radius: {radius_sm}px;
+    padding: {spacing_xs}px {spacing_sm}px;
+    border-radius: {radius_md}px;
     font-weight: 700;
 }
 
-QLabel#themeSelectorLabel, QLabel#dashboardPolicyInfo, QLabel#labelStageDetail, QLabel#labelStatus, QLabel#lastRunBadge, QLabel#progressCaption {
-    color: {text_muted};
+QLabel#lastRunBadge[empty="true"] {
+    background-color: {surface_alt};
+    border: 1px dashed {border};
+    padding: {spacing_xs}px {spacing_sm}px;
+    border-radius: {radius_md}px;
 }
 
-QLabel#lastRunBadge[empty="true"] {
-    background: {surface_alt};
-    border: 1px dashed {border};
-    padding: {spacing_xs}px {spacing_md}px;
-    border-radius: {radius_sm}px;
+QProgressBar {
+    background-color: {surface_alt};
+    color: {text};
+    border: 1px solid {surface_alt};
+    border-radius: {radius_md}px;
+    min-height: 12px;
+    text-align: center;
+}
+
+QProgressBar::chunk {
+    background-color: {primary};
+    border-radius: {radius_md}px;
 }
 
 QStatusBar {
-    background: {card};
-    border-top: 1px solid {border};
-    padding: {spacing_xs}px {spacing_md}px;
+    background-color: {card};
+    border-top: 1px solid {surface_alt};
+    padding: {spacing_xs}px {spacing_sm}px;
 }
 
-QLabel#languagePill, QLabel#statusPill {
-    background: {surface_alt};
-    border: 1px solid {border};
-    border-radius: {radius_sm}px;
-    padding: {spacing_xs}px {spacing_md}px;
+QLabel#languagePill,
+QLabel#statusPill {
+    background-color: {surface_alt};
+    border: 1px solid {surface_alt};
+    border-radius: {radius_md}px;
+    padding: {spacing_xs}px {spacing_sm}px;
+    font-weight: 700;
+}
+
+QTableView,
+QTableWidget {
+    background-color: {card};
+    alternate-background-color: {surface_alt};
+    color: {text};
+    border: 1px solid {surface_alt};
+    border-radius: {radius_md}px;
+    gridline-color: {surface_alt};
+    selection-background-color: {primary_soft};
+    selection-color: {text};
+}
+
+QHeaderView::section {
+    background-color: {surface_alt};
+    color: {text};
+    border: none;
+    border-bottom: 1px solid {surface_alt};
+    padding: {spacing_sm}px;
     font-weight: 700;
 }
 
 QFrame#logPanel {
-    background: {log_background};
+    background-color: {log_background};
     border: 1px solid {log_border};
-    border-radius: {radius_md}px;
+    border-radius: {radius_lg}px;
 }
 
 QPlainTextEdit#textLog {
-    background: transparent;
+    background-color: transparent;
     border: none;
     color: {log_foreground};
-    font-size: {body_size}pt;
     padding: {spacing_sm}px;
 }
 
@@ -178,36 +415,25 @@ QLabel#logPlaceholder {
     color: {text_muted};
 }
 
-QPushButton#btnClearLog, QPushButton#btnSaveLog {
-    border: 1px solid {border};
-    background: {card};
-    border-radius: {radius_sm}px;
-    padding: {spacing_xs}px {spacing_md}px;
+QPushButton#btnClearLog,
+QPushButton#btnSaveLog {
+    background-color: {card};
+    border: 1px solid {surface_alt};
+    border-radius: {radius_md}px;
+    padding: 0 {spacing_md}px;
 }
 
-QPushButton#btnClearLog:hover, QPushButton#btnSaveLog:hover {
-    background: {surface_alt};
+QPushButton#btnClearLog:hover,
+QPushButton#btnSaveLog:hover {
+    background-color: {surface_alt};
 }
 
 QSplitter::handle {
-    background: {border};
-    width: 5px;
-    margin: 2px 0;
+    background-color: {surface_alt};
+    width: 4px;
+    margin: 3px 0;
 }
 
 QSplitter::handle:hover {
-    background: {primary};
-}
-
-QProgressBar {
-    border: 1px solid {border};
-    border-radius: {radius_sm}px;
-    background: {surface_alt};
-    text-align: center;
-    height: 8px;
-}
-
-QProgressBar::chunk {
-    background: {primary};
-    border-radius: {radius_sm}px;
+    background-color: {primary};
 }
