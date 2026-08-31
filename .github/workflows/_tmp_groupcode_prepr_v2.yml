@@ -1,0 +1,61 @@
+name: temporary groupcode pre-pr validation v2
+
+on:
+  push:
+    branches:
+      - fix/groupcode-runtime-authority
+
+permissions:
+  contents: write
+
+env:
+  PYTHONUTF8: "1"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/groupcode-runtime-authority
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+      - name: Validate focused remediation and clean workflow
+        shell: bash
+        run: |
+          set +e
+          uv sync --locked
+          sync_rc=$?
+          rc=$sync_rc
+          if [ "$sync_rc" -eq 0 ]; then
+            uv run --locked ruff check \
+              app/infra/reference_students_repository.py \
+              app/infra/groupcode/groupcode_repository.py \
+              app/infra/cli_legacy.py \
+              app/ui/main_window.py \
+              tests/integration/test_groupcode_runtime_authority.py \
+              tests/ui/test_groupcode_runtime_authority_ui.py \
+              tests/infra/test_reference_students_repository.py \
+              tests/infra/test_join_key_validation_failures.py \
+              tests/infra/students/test_student_report_pipeline_v3.py \
+              tests/infra/test_cli_student_mentor_cache.py
+            lint_rc=$?
+            uv run --locked pytest \
+              tests/integration/test_groupcode_runtime_authority.py \
+              tests/infra/test_reference_students_repository.py \
+              tests/infra/test_join_key_validation_failures.py \
+              tests/infra/students/test_student_report_pipeline_v3.py \
+              tests/infra/test_cli_student_mentor_cache.py \
+              tests/infra/students/test_student_db_parity.py \
+              tests/infra/test_reference_repositories.py -q
+            test_rc=$?
+            if [ "$lint_rc" -ne 0 ]; then rc=$lint_rc; elif [ "$test_rc" -ne 0 ]; then rc=$test_rc; else rc=0; fi
+          fi
+          set -e
+          rm .github/workflows/_tmp_groupcode_prepr_v2.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows/_tmp_groupcode_prepr_v2.yml
+          git commit -m "chore: remove temporary GroupCode pre-PR workflow v2"
+          git push origin HEAD:fix/groupcode-runtime-authority
+          exit "$rc"
