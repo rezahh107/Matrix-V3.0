@@ -127,6 +127,12 @@ class GroupCodeRepository:
         return canonical_en[columns].copy()
 
     def _validate_import_frame(self, df: pd.DataFrame) -> None:
+        if df.empty or df["group_code"].dropna().empty:
+            raise DatabasePreparationError(
+                path="groupcodes.xlsx",
+                reason="مرجع کدگروه خالی است.",
+                hint="فایل باید حداقل یک group_code معتبر داشته باشد؛ مرجع قبلی حفظ شد.",
+            )
         imported_codes = set(df["group_code"].dropna().astype(int))
         invalid_codes_set = imported_codes - VALID_GROUP_CODES
         if invalid_codes_set:
