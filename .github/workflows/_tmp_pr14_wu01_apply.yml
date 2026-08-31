@@ -1,0 +1,248 @@
+name: temporary PR14 WU01 apply
+on:
+  push:
+    branches: [fix/groupcode-runtime-authority]
+permissions:
+  contents: write
+jobs:
+  apply-validate-commit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/groupcode-runtime-authority
+          fetch-depth: 0
+      - name: Verify implementation base tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "01f29eec4af6e47c79a431a19881ecc4c0d262e8"
+          test "$(git rev-parse HEAD^{tree})" != "$(git rev-parse HEAD^^{tree})"
+          test "$(git rev-parse HEAD^^{tree})" = "40ab5d8b2ad65f7a304c65eab3730cadf49ab2ea"
+      - name: Apply bounded G1/G2 repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace(path: str, old: str, new: str, count: int = 1) -> None:
+              p = Path(path)
+              text = p.read_text(encoding="utf-8")
+              actual = text.count(old)
+              if actual != count:
+                  raise SystemExit(f"{path}: expected {count} occurrence(s), found {actual}: {old[:80]!r}")
+              p.write_text(text.replace(old, new), encoding="utf-8")
+
+          # G2 production CLI: DB-only School authority during Build.
+          replace(
+              "app/infra/cli_legacy.py",
+              '>>> cli.main(["build-matrix", "--inspactor", "insp.xlsx", "--schools", "sch.xlsx",\n    ...           "--output", "out.xlsx", "--policy", "config/policy.json"])  # doctest: +SKIP',
+              '>>> cli.main(["build-matrix", "--inspactor", "insp.xlsx",\n    ...           "--output", "out.xlsx", "--policy", "config/policy.json"])  # doctest: +SKIP',
+          )
+          replace(
+              "app/infra/cli_legacy.py",
+              '    """بارگذاری دیتافریم مدارس و Crosswalk از SQLite یا Excel."""',
+              '    """بارگذاری مراجع عملیاتی School/GroupCode فقط از SQLite."""',
+          )
+          replace(
+              "app/infra/cli_legacy.py",
+              '''    if getattr(args, "schools", None):\n        schools_path = Path(args.schools)\n        schools_df = import_school_report_from_excel(schools_path, db)\n        inputs["schools"] = str(schools_path)\n        inputs_mtime["schools"] = schools_path.stat().st_mtime\n\n''',
+              '',
+          )
+          replace(
+              "app/infra/cli_legacy.py",
+              '''                message=(\n                    f"جدول {exc.table} در پایگاه داده یافت نشد؛ «build-matrix» را با "\n                    "گزینه‌های --schools اجرا کنید یا ابتدا «import-schools» را برای پر کردن کش SQLite اجرا نمایید."\n                ),''',
+              '''                message=(\n                    f"جدول {exc.table} در پایگاه داده یافت نشد؛ ابتدا مرجع مدارس را با "\n                    "«import-schools» یا تب Database به‌روزرسانی کنید و سپس build-matrix را بدون --schools اجرا نمایید."\n                ),''',
+          )
+          replace(
+              "app/infra/cli_legacy.py",
+              '''    build_cmd.add_argument(\n        "--schools",\n        required=False,\n        help="(اختیاری) مسیر SchoolReport برای بروزرسانی مرجع مدارس در SQLite",\n    )''',
+              '''    build_cmd.add_argument(\n        "--schools",\n        required=False,\n        help=(\n            "DEPRECATED: SchoolReport دیگر ورودی build-matrix نیست؛ "\n            "ابتدا import-schools یا تب Database را برای به‌روزرسانی مرجع اجرا کنید."\n        ),\n    )''',
+          )
+          replace(
+              "app/infra/cli_legacy.py",
+              '''        if args.command == "build-matrix":\n            if getattr(args, "crosswalk", None):''',
+              '''        if args.command == "build-matrix":\n            if getattr(args, "schools", None):\n                raise DatabasePreparationError(\n                    path=str(args.schools),\n                    reason="--schools در build-matrix دیگر یک ورودی runtime نیست.",\n                    hint=(\n                        "ابتدا مرجع مدارس را با import-schools یا تب Database به‌روزرسانی کنید؛ "\n                        "سپس build-matrix را بدون --schools اجرا کنید."\n                    ),\n                )\n            if getattr(args, "crosswalk", None):''',
+          )
+
+          # G2 GUI: School/GroupCode remain DB-reference indicators, never runtime pickers.
+          replace(
+              "app/ui/main_window.py",
+              '''        self._picker_schools = FilePicker(page, placeholder=self._t("files.schools", "فایل مدارس"))\n        self._picker_schools.setObjectName("editSchools")\n        self._picker_schools.setToolTip(\n            self._t("files.schools", "فایل رسمی مدارس برای تطبیق کد و نام مدرسه")\n        )\n        self._set_picker_button_text(self._picker_schools)\n        inputs_layout.addRow(self._t("files.schools", "گزارش مدارس"), self._picker_schools)''',
+              '''        self._picker_schools = FilePicker(\n            page,\n            placeholder=self._t(\n                "reference.hint",\n                "School reference is managed in the Database tab.",\n            ),\n        )\n        self._picker_schools.setObjectName("editSchools")\n        self._picker_schools.setEnabled(False)\n        self._picker_schools.setToolTip(\n            self._t(\n                "reference.hint",\n                "Runs use database-backed School/GroupCode data. Update from Excel only in the Database tab.",\n            )\n        )\n        inputs_layout.addRow(\n            self._t("files.schools", "Schools (Database reference)"),\n            self._picker_schools,\n        )''',
+          )
+          replace(
+              "app/ui/main_window.py",
+              '''            self._picker_inspactor,\n            self._picker_schools,\n            self._picker_crosswalk,\n            self._picker_policy_build,''',
+              '''            self._picker_inspactor,\n            self._picker_policy_build,''',
+          )
+          replace(
+              "app/ui/main_window.py",
+              '''        required = [\n            (self._picker_inspactor, "گزارش Inspactor"),\n            (self._picker_schools, "گزارش مدارس"),\n            (self._picker_output_matrix, "خروجی ماتریس"),\n        ]''',
+              '''        required = [\n            (self._picker_inspactor, "گزارش Inspactor"),\n            (self._picker_output_matrix, "خروجی ماتریس"),\n        ]''',
+          )
+          replace(
+              "app/ui/main_window.py",
+              '''            "--inspactor",\n            self._picker_inspactor.text(),\n            "--schools",\n            self._picker_schools.text(),\n            "--output",''',
+              '''            "--inspactor",\n            self._picker_inspactor.text(),\n            "--output",''',
+          )
+
+          # G1: migrate only the mechanically identified stale direct student consumer.
+          replace(
+              "tests/integration/test_alignment_allocation_parity.py",
+              'import pandas as pd\n\nfrom app.core.allocate_students import allocate_batch',
+              'import pandas as pd\nimport pytest\n\nfrom app.core.allocate_students import allocate_batch',
+          )
+          replace(
+              "tests/integration/test_alignment_allocation_parity.py",
+              '''from app.infra import cli_legacy as cli\nfrom app.infra.io_utils import read_excel_first_sheet\nfrom app.infra.pool_loader import load_pool''',
+              '''from app.infra import cli_legacy as cli\nfrom app.infra.errors import DatabasePreparationError\nfrom app.infra.groupcode.groupcode_repository import GroupCodeRepository\nfrom app.infra.io_utils import read_excel_first_sheet\nfrom app.infra.local_database import LocalDatabase\nfrom app.infra.pool_loader import load_pool\nfrom app.infra.schools.school_repository import SchoolRepository''',
+          )
+          replace(
+              "tests/integration/test_alignment_allocation_parity.py",
+              '''ROOT = Path(__file__).resolve().parents[2]\n\n\ndef _load_canonical_frames():''',
+              '''ROOT = Path(__file__).resolve().parents[2]\n\n\ndef _prepare_student_reference_db(tmp_path: Path) -> LocalDatabase:\n    db = LocalDatabase(tmp_path / "alignment-references.sqlite")\n    db.initialize()\n    schools_path = tmp_path / "alignment-schools.xlsx"\n    pd.DataFrame(\n        {\n            "کد مدرسه": [1],\n            "نام مدرسه": ["Synthetic Alignment School"],\n            "مرکز گلستان صدرا": [0],\n            "جنسیت": [1],\n            "فعال": [1],\n        }\n    ).to_excel(schools_path, index=False)\n    SchoolRepository(db).import_from_excel(schools_path)\n    assert SchoolRepository(db).status().row_count > 0\n    assert GroupCodeRepository(db).status().row_count > 0\n    return db\n\n\ndef _load_canonical_frames():''',
+          )
+          replace(
+              "tests/integration/test_alignment_allocation_parity.py",
+              'def test_allocation_preflight_matrix_pool_source() -> None:\n    policy = load_policy()',
+              'def test_allocation_preflight_matrix_pool_source(tmp_path: Path) -> None:\n    policy = load_policy()\n    db = _prepare_student_reference_db(tmp_path)',
+          )
+          replace(
+              "tests/integration/test_alignment_allocation_parity.py",
+              '    students_df, _, _ = cli._resolve_students_frame(args, policy, db=None)',
+              '    students_df, _, _ = cli._resolve_students_frame(args, policy, db=db)',
+          )
+          replace(
+              "tests/integration/test_alignment_allocation_parity.py",
+              '''    detection_after = pool_base.attrs.get("pool_detection")\n    assert detection_after is None or getattr(detection_after, "pool_type", None) == "matrix"\ndef test_cli_matrix_allocation''',
+              '''    detection_after = pool_base.attrs.get("pool_detection")\n    assert detection_after is None or getattr(detection_after, "pool_type", None) == "matrix"\n\n\ndef test_student_resolution_rejects_missing_authoritative_db() -> None:\n    policy = load_policy()\n    args = argparse.Namespace(students=str(ROOT / "students.xlsx"))\n    with pytest.raises(DatabasePreparationError):\n        cli._resolve_students_frame(args, policy, db=None)\n\n\ndef test_cli_matrix_allocation''',
+          )
+
+          # G2 integration authority controls: Build helper uses persisted refs only.
+          replace(
+              "tests/integration/test_groupcode_runtime_authority.py",
+              'def _schools() -> pd.DataFrame:\n    return pd.DataFrame(',
+              'def _schools(name: str = "Synthetic School") -> pd.DataFrame:\n    return pd.DataFrame(',
+          )
+          replace(
+              "tests/integration/test_groupcode_runtime_authority.py",
+              '            "نام مدرسه": ["Synthetic School"],',
+              '            "نام مدرسه": [name],',
+          )
+          replace(
+              "tests/integration/test_groupcode_runtime_authority.py",
+              '''def _build_matrix(\n    *, tmp_path: Path, db_path: Path, school_path: Path, group_code: int\n) -> Path:''',
+              '''def _build_matrix(*, tmp_path: Path, db_path: Path, group_code: int) -> Path:''',
+          )
+          replace(
+              "tests/integration/test_groupcode_runtime_authority.py",
+              '''            "--schools",\n            str(school_path),\n''',
+              '',
+              count=2,
+          )
+          replace(
+              "tests/integration/test_groupcode_runtime_authority.py",
+              '    db_path, school_path, _ = _prepare_reference_db(tmp_path, group_code=24)',
+              '    db_path, _, _ = _prepare_reference_db(tmp_path, group_code=24)',
+              count=2,
+          )
+          replace(
+              "tests/integration/test_groupcode_runtime_authority.py",
+              '    db_path, school_path, _ = _prepare_reference_db(tmp_path, group_code=25)',
+              '    db_path, _, _ = _prepare_reference_db(tmp_path, group_code=25)',
+          )
+          replace(
+              "tests/integration/test_groupcode_runtime_authority.py",
+              '        school_path=school_path,\n',
+              '',
+              count=2,
+          )
+          replace(
+              "tests/integration/test_groupcode_runtime_authority.py",
+              '''    assert meta.source_filename == group_a.name\n\n\ndef test_p0_05_stale_student_cache_is_revalidated_against_current_db''',
+              '''    assert meta.source_filename == group_a.name\n\n\ndef test_deprecated_build_schools_fails_without_mutating_db(tmp_path: Path) -> None:\n    db_path, school_a, _ = _prepare_reference_db(tmp_path, group_code=24)\n    school_b = _write_excel(_schools("Replacement School"), tmp_path / "schools-B.xlsx")\n    output = tmp_path / "must-not-build-schools.xlsx"\n\n    rc = cli_legacy.main(\n        [\n            "build-matrix",\n            "--schools",\n            str(school_b),\n            "--output",\n            str(output),\n            "--local-db",\n            str(db_path),\n        ]\n    )\n    assert rc == 2\n    assert not output.exists()\n\n    repo = SchoolRepository(LocalDatabase(db_path))\n    stored = repo.load_canonical_frame()\n    assert stored["نام مدرسه"].tolist() == ["Synthetic School"]\n    assert repo.status().source_filename == school_a.name\n\n\ndef test_p0_05_stale_student_cache_is_revalidated_against_current_db''',
+          )
+
+          # Same-root CLI unit consumers unrelated to School import: drop obsolete runtime option.
+          replace(
+              "tests/unit/test_cli_headless.py",
+              '            "--schools",\n            "schools.xlsx",\n',
+              '',
+              count=6,
+          )
+
+          # UI conformance controls for both reference indicators and generated Build argv.
+          replace(
+              "tests/ui/test_groupcode_runtime_authority_ui.py",
+              '''def test_build_crosswalk_control_is_not_selectable_runtime_input(\n    tmp_path: Path, qapp: QApplication\n) -> None:\n    window = _window(tmp_path)\n    assert not window._picker_crosswalk.isEnabled()\n    assert "database" in window._picker_crosswalk.toolTip().lower() or "پایگاه" in window._picker_crosswalk.toolTip()\n    window.close()\n    qapp.processEvents()\n\n\n''',
+              '''def test_build_reference_controls_are_not_selectable_runtime_inputs(\n    tmp_path: Path, qapp: QApplication\n) -> None:\n    window = _window(tmp_path)\n    assert not window._picker_schools.isEnabled()\n    assert not window._picker_crosswalk.isEnabled()\n    assert "database" in window._picker_schools.toolTip().lower() or "پایگاه" in window._picker_schools.toolTip()\n    assert "database" in window._picker_crosswalk.toolTip().lower() or "پایگاه" in window._picker_crosswalk.toolTip()\n    window.close()\n    qapp.processEvents()\n\n\ndef test_build_argv_contains_no_runtime_reference_files(\n    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, qapp: QApplication\n) -> None:\n    window = _window(tmp_path)\n    inspactor = tmp_path / "inspactor.xlsx"\n    inspactor.touch()\n    window._picker_inspactor.setText(str(inspactor))\n    window._picker_output_matrix.setText(str(tmp_path / "matrix.xlsx"))\n    window._picker_schools.setText(str(tmp_path / "ignored-schools.xlsx"))\n    window._picker_crosswalk.setText(str(tmp_path / "ignored-groupcodes.xlsx"))\n\n    launches: list[list[str]] = []\n\n    def _capture(argv: list[str], *_args: object, **_kwargs: object) -> None:\n        launches.append(list(argv))\n\n    monkeypatch.setattr(window, "_launch_cli", _capture)\n    window._start_build()\n\n    assert launches\n    assert "--schools" not in launches[0]\n    assert "--crosswalk" not in launches[0]\n    window.close()\n    qapp.processEvents()\n\n\n''',
+          )
+          PY
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9
+        with:
+          version: "0.12.7"
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+            .python-version
+      - run: uv python install
+      - run: uv sync --locked
+      - name: T-001 migrate stale preflight consumer
+        run: uv run --locked pytest tests/integration/test_alignment_allocation_parity.py::test_allocation_preflight_matrix_pool_source -q
+      - name: T-002 authority regression controls
+        run: uv run --locked pytest tests/integration/test_groupcode_runtime_authority.py -q
+      - name: T-003 db=None negative control
+        run: uv run --locked pytest tests/integration/test_alignment_allocation_parity.py::test_student_resolution_rejects_missing_authoritative_db -q
+      - name: T-004 DB-only real Build positive control
+        run: uv run --locked pytest tests/integration/test_groupcode_runtime_authority.py::test_p0_01_explicit_groupcode_import_reaches_real_build -q
+      - name: T-005 deprecated SchoolReport rejection
+        run: uv run --locked pytest tests/integration/test_groupcode_runtime_authority.py::test_deprecated_build_schools_fails_without_mutating_db -q
+      - name: Same-root CLI consumers
+        run: uv run --locked pytest tests/unit/test_cli_headless.py -q
+      - name: T-007 Ruff
+        run: uv run --locked ruff check .
+      - name: Mechanical closure search
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== final --schools occurrences ==='
+          git grep -n -- "--schools" app tests docs/SmartAlloc_GUI_Operator_Guide.fa.md || true
+          echo '=== final _resolve_students_frame callers ==='
+          git grep -n "_resolve_students_frame" -- app tests || true
+          echo '=== final picker_schools occurrences ==='
+          git grep -n "_picker_schools" -- app tests || true
+          test "$(git grep -n -- "--schools" tests/unit/test_cli_headless.py | wc -l)" -eq 0
+      - name: Commit validated repair and remove temporary workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/_tmp_pr14_wu01_apply.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/infra/cli_legacy.py app/ui/main_window.py tests/integration/test_alignment_allocation_parity.py tests/integration/test_groupcode_runtime_authority.py tests/unit/test_cli_headless.py tests/ui/test_groupcode_runtime_authority_ui.py .github/workflows/_tmp_pr14_wu01_apply.yml
+          git commit -m "fix: enforce DB-only School build authority"
+          git push origin HEAD:fix/groupcode-runtime-authority
+  cleanup-on-failure:
+    if: failure()
+    needs: apply-validate-commit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/groupcode-runtime-authority
+          fetch-depth: 0
+      - name: Remove temporary workflow after failure
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f .github/workflows/_tmp_pr14_wu01_apply.yml ]; then exit 0; fi
+          rm .github/workflows/_tmp_pr14_wu01_apply.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows/_tmp_pr14_wu01_apply.yml
+          git commit -m "chore: remove temporary PR14 apply workflow"
+          git push origin HEAD:fix/groupcode-runtime-authority
