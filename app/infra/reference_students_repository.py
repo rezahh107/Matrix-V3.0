@@ -43,6 +43,16 @@ def _db_backed_pipeline(*, db: LocalDatabase, policy: PolicyConfig) -> StudentPi
     )
 
 
+def _run_student_import(path: Path, *, db: LocalDatabase, policy: PolicyConfig):
+    """Run the authoritative DB-backed pipeline once and persist its canonical frame."""
+
+    raw_df = _read_student_source(path)
+    pipeline = _db_backed_pipeline(db=db, policy=policy)
+    result = pipeline.run(raw_df)
+    db.upsert_students_cache(result.canonical_df, join_keys=policy.join_keys)
+    return result
+
+
 def import_student_report_with_validation(
     path: Path, *, db: LocalDatabase, policy: PolicyConfig
 ) -> StudentValidationBundle:
@@ -52,11 +62,7 @@ def import_student_report_with_validation(
     فایل StudentReport هرگز GroupCode authority موازی ایجاد نمی‌کند.
     """
 
-    raw_df = _read_student_source(path)
-    pipeline = _db_backed_pipeline(db=db, policy=policy)
-    result = pipeline.run(raw_df)
-    db.upsert_students_cache(result.canonical_df, join_keys=policy.join_keys)
-    return result.validation
+    return _run_student_import(path, db=db, policy=policy).validation
 
 
 def import_student_report_from_excel(
@@ -64,9 +70,9 @@ def import_student_report_from_excel(
 ) -> pd.DataFrame:
     """Compatibility wrapper returning only canonical student data."""
 
-    result = import_student_report_with_validation(path, db=db, policy=policy)
-    if result.join_keys.issues:
-        raise JoinKeyValidationError(result.join_keys)
+    result = _run_student_import(path, db=db, policy=policy)
+    if result.validation.join_keys.issues:
+        raise JoinKeyValidationError(result.validation.join_keys)
     return result.canonical_df
 
 
