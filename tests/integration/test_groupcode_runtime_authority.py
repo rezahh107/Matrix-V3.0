@@ -7,10 +7,11 @@ import pandas as pd
 import pytest
 
 from app.core.policy_loader import load_policy
-from app.infra import cli_legacy
+from app.infra import cli, cli_legacy
 from app.infra.groupcode.groupcode_repository import GroupCodeRepository
 from app.infra.local_database import LocalDatabase
 from app.infra.schools.school_repository import SchoolRepository
+from app.infra.year_database_manager import YearDatabaseManager
 
 POLICY_PATH = Path("config/policy.json")
 
@@ -32,6 +33,18 @@ def _groupcodes(code: int) -> pd.DataFrame:
             "level": [level],
             "grade": [grade],
             "track": [track],
+            "is_active": [1],
+        }
+    )
+
+
+def _invalid_groupcodes() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "group_code": [999],
+            "level": ["متوسطه دوم"],
+            "grade": [10],
+            "track": ["ریاضی"],
             "is_active": [1],
         }
     )
@@ -95,17 +108,29 @@ def _inspactor(group_code: int) -> pd.DataFrame:
 def _prepare_reference_db(tmp_path: Path, group_code: int = 24) -> tuple[Path, Path, Path]:
     db_path = tmp_path / "annual.sqlite"
     school_path = _write_excel(_schools(), tmp_path / "schools.xlsx")
-    group_path = _write_excel(_groupcodes(group_code), tmp_path / f"groupcodes-{group_code}.xlsx")
+    group_path = _write_excel(
+        _groupcodes(group_code), tmp_path / f"groupcodes-{group_code}.xlsx"
+    )
     db = LocalDatabase(db_path)
     SchoolRepository(db).import_from_excel(school_path)
     GroupCodeRepository(db).import_from_excel(group_path)
     return db_path, school_path, group_path
 
 
+def _matrix_group_values(matrix_path: Path) -> set[int]:
+    matrix = pd.read_excel(matrix_path, sheet_name="matrix")
+    group_column = next(
+        column for column in matrix.columns if str(column).split("|", 1)[0].strip() == "کدرشته"
+    )
+    return set(pd.to_numeric(matrix[group_column], errors="coerce").dropna().astype(int))
+
+
 def _build_matrix(
     *, tmp_path: Path, db_path: Path, school_path: Path, group_code: int
 ) -> Path:
-    inspactor_path = _write_excel(_inspactor(group_code), tmp_path / f"inspactor-{group_code}.xlsx")
+    inspactor_path = _write_excel(
+        _inspactor(group_code), tmp_path / f"inspactor-{group_code}.xlsx"
+    )
     matrix_path = tmp_path / f"matrix-{group_code}.xlsx"
     rc = cli_legacy.main(
         [
@@ -145,8 +170,14 @@ def test_p0_01_explicit_groupcode_import_reaches_real_build(tmp_path: Path) -> N
     )
     assert rc == 0
 
-    stored = GroupCodeRepository(LocalDatabase(db_path)).load_canonical_frame()
+    repo = GroupCodeRepository(LocalDatabase(db_path))
+    stored = repo.load_canonical_frame()
     assert set(stored["group_code"].astype(int)) == {25}
+    status = repo.status()
+    assert status.row_count == 1
+    assert status.source_filename == group_b.name
+    assert status.version_tag == group_b.stem
+    assert status.imported_at is not None
 
     matrix_path = _build_matrix(
         tmp_path=tmp_path,
@@ -154,11 +185,7 @@ def test_p0_01_explicit_groupcode_import_reaches_real_build(tmp_path: Path) -> N
         school_path=school_path,
         group_code=25,
     )
-    matrix = pd.read_excel(matrix_path, sheet_name="matrix")
-    group_column = next(
-        column for column in matrix.columns if str(column).split("|", 1)[0].strip() == "کدرشته"
-    )
-    values = set(pd.to_numeric(matrix[group_column], errors="coerce").dropna().astype(int))
+    values = _matrix_group_values(matrix_path)
     assert 25 in values
     assert 24 not in values
 
@@ -293,6 +320,44 @@ def test_p0_05_stale_student_cache_is_revalidated_against_current_db(tmp_path: P
         cli_legacy._resolve_students_frame(Namespace(students=None), policy, db=db)
 
 
+def test_p0_06_gui_backend_and_direct_cli_share_groupcode_db(tmp_path: Path) -> None:
+    db_path, school_path, _ = _prepare_reference_db(tmp_path, group_code=25)
+    inspactor_path = _write_excel(_inspactor(25), tmp_path / "inspactor-parity.xlsx")
+    gui_output = tmp_path / "matrix-gui-backend.xlsx"
+    cli_output = tmp_path / "matrix-direct-cli.xlsx"
+
+    common_args = [
+        "build-matrix",
+        "--inspactor",
+        str(inspactor_path),
+        "--schools",
+        str(school_path),
+        "--policy",
+        str(POLICY_PATH),
+        "--min-coverage",
+        "0",
+        "--use-v3-mentor-pipeline",
+    ]
+    gui_rc = cli.main(
+        [*common_args, "--output", str(gui_output)],
+        ui_overrides={"local_db_path": str(db_path)},
+    )
+    direct_rc = cli_legacy.main(
+        [
+            *common_args,
+            "--output",
+            str(cli_output),
+            "--local-db",
+            str(db_path),
+        ]
+    )
+
+    assert gui_rc == 0
+    assert direct_rc == 0
+    assert _matrix_group_values(gui_output) == {25}
+    assert _matrix_group_values(cli_output) == {25}
+
+
 def test_allocate_cannot_disable_authoritative_reference_db(tmp_path: Path) -> None:
     students_path = _write_excel(_student(24), tmp_path / "students.xlsx")
     rc = cli_legacy.main(
@@ -332,3 +397,41 @@ def test_failed_empty_groupcode_import_preserves_previous_reference(tmp_path: Pa
     stored = repo.load_canonical_frame()
     assert set(stored["group_code"].astype(int)) == {24}
     assert repo.status().source_filename == group_a.name
+
+
+def test_failed_invalid_groupcode_import_preserves_previous_reference(tmp_path: Path) -> None:
+    db_path, _, group_a = _prepare_reference_db(tmp_path, group_code=24)
+    invalid = _write_excel(_invalid_groupcodes(), tmp_path / "invalid-groupcodes.xlsx")
+
+    rc = cli_legacy.main(
+        [
+            "import-groupcodes",
+            "--crosswalk",
+            str(invalid),
+            "--local-db",
+            str(db_path),
+        ]
+    )
+    assert rc == 2
+
+    repo = GroupCodeRepository(LocalDatabase(db_path))
+    stored = repo.load_canonical_frame()
+    assert set(stored["group_code"].astype(int)) == {24}
+    assert repo.status().source_filename == group_a.name
+
+
+def test_groupcode_authority_persists_across_annual_db_reopen(tmp_path: Path) -> None:
+    manager = YearDatabaseManager(tmp_path / "annual-dbs")
+    db = manager.open_year("1404")
+    group_path = _write_excel(_groupcodes(24), tmp_path / "year-groupcodes.xlsx")
+    GroupCodeRepository(db).import_from_excel(group_path)
+    db.close_all_connections()
+
+    reopened = manager.open_year("1404")
+    repo = GroupCodeRepository(reopened)
+    stored = repo.load_canonical_frame()
+    status = repo.status()
+
+    assert set(stored["group_code"].astype(int)) == {24}
+    assert status.source_filename == group_path.name
+    assert status.imported_at is not None
