@@ -10,9 +10,10 @@ pytest.importorskip(
     reason="PySide6 not available in test environment",
 )
 from PySide6.QtGui import QColor, QPalette
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QHBoxLayout, QPushButton
 
 from app.ui import theme
+from app.ui.widgets import FilePicker
 
 
 def _contrast_ratio(foreground: QColor, background: QColor) -> float:
@@ -84,9 +85,26 @@ def test_build_stylesheet_resolves_theme_tokens() -> None:
     assert dark_theme.colors.background in stylesheet
     assert dark_theme.colors.card in stylesheet
     assert dark_theme.colors.primary in stylesheet
+    assert "QComboBox#themeSelector" in stylesheet
+    assert "QPushButton#secondaryButton" in stylesheet
+    assert "QPushButton#btnAllocate:disabled" in stylesheet
     assert "{background}" not in stylesheet
     assert "{card}" not in stylesheet
     assert "{primary}" not in stylesheet
+
+
+def test_file_picker_preserves_path_space_and_browse_button_proportion() -> None:
+    app = QApplication.instance() or QApplication([])
+    picker = FilePicker()
+    layout = picker.layout()
+    browse_button = picker.findChild(QPushButton, "secondaryButton")
+
+    assert app is not None
+    assert isinstance(layout, QHBoxLayout)
+    assert layout.spacing() == 10
+    assert layout.stretch(1) == 1
+    assert browse_button is not None
+    assert browse_button.minimumWidth() == 92
 
 
 def test_primary_button_white_text_has_accessible_contrast_in_both_modes() -> None:

@@ -41,6 +41,7 @@ class FilePicker(QWidget):
 
         self._button = QPushButton("انتخاب…", self)
         self._button.setObjectName("secondaryButton")
+        self._button.setMinimumWidth(92)
         self._button.clicked.connect(self._pick)
 
         self._icon_label = QLabel(self)
@@ -50,9 +51,9 @@ class FilePicker(QWidget):
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(8)
+        layout.setSpacing(10)
         layout.addWidget(self._icon_label)
-        layout.addWidget(self._edit)
+        layout.addWidget(self._edit, 1)
         layout.addWidget(self._button)
 
         self._sync_icon("")
