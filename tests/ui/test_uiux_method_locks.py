@@ -217,6 +217,88 @@ def test_ui_shell_geometry_and_log_stack(qapp: QApplication) -> None:
     window.close()
 
 
+def test_ui_busy_overlay_is_not_splitter_pane(qapp: QApplication) -> None:
+    _fresh_settings()
+    window = MainWindow()
+    assert window._splitter.count() == 2
+    assert window._busy_overlay is not None
+    assert window._busy_overlay.parentWidget() is window
+    assert all(
+        window._splitter.widget(index) is not window._busy_overlay
+        for index in range(window._splitter.count())
+    )
+    window.close()
+
+
+def test_ui_busy_overlay_tracks_splitter_geometry(qapp: QApplication) -> None:
+    _fresh_settings()
+    window = MainWindow()
+    window.resize(960, 640)
+    window.show()
+    qapp.processEvents()
+
+    overlay = window._busy_overlay
+    splitter = window._splitter
+    assert overlay is not None and splitter is not None
+
+    window._disable_controls(True)
+    qapp.processEvents()
+    expected_top_left = splitter.mapTo(window, splitter.rect().topLeft())
+    assert overlay.isVisibleTo(window)
+    assert overlay.geometry().topLeft() == expected_top_left
+    assert overlay.size() == splitter.size()
+
+    window.resize(1100, 720)
+    qapp.processEvents()
+    expected_top_left = splitter.mapTo(window, splitter.rect().topLeft())
+    assert overlay.geometry().topLeft() == expected_top_left
+    assert overlay.size() == splitter.size()
+
+    window._disable_controls(False)
+    qapp.processEvents()
+    assert not overlay.isVisible()
+    window.close()
+
+
+def test_ui_splitter_state_roundtrip_preserves_two_panes(qapp: QApplication) -> None:
+    _fresh_settings()
+    first = MainWindow()
+    first.resize(960, 640)
+    first.show()
+    qapp.processEvents()
+    first._splitter.setSizes([1, 1])
+    qapp.processEvents()
+    saved_sizes = first._splitter.sizes()
+    assert len(saved_sizes) == 2 and all(value > 0 for value in saved_sizes)
+    saved_ratio = saved_sizes[0] / saved_sizes[1]
+    first.close()
+    qapp.processEvents()
+    QSettings().sync()
+
+    second = MainWindow()
+    second.resize(960, 640)
+    second.show()
+    qapp.processEvents()
+    restored_sizes = second._splitter.sizes()
+    assert len(restored_sizes) == 2 and all(value > 0 for value in restored_sizes)
+    restored_ratio = restored_sizes[0] / restored_sizes[1]
+    assert abs(restored_ratio - saved_ratio) <= 0.35
+    second.close()
+    qapp.processEvents()
+    _fresh_settings()
+
+
+def test_ui_busy_overlay_source_preserves_base_method() -> None:
+    base_source = (ROOT / "app/ui/main_window_base.py").read_text(encoding="utf-8")
+    wrapper_source = (ROOT / "app/ui/main_window.py").read_text(encoding="utf-8")
+    assert "_busy_overlay: QFrame | None = QFrame(self._splitter)" not in base_source
+    assert "_busy_overlay: QFrame | None = QFrame(self)" in base_source
+    assert "self._splitter.mapTo(" in base_source
+    assert "_busy_overlay.setParent" not in wrapper_source
+    assert "_splitter.restoreState(" not in wrapper_source
+    assert 'setValue("ui/main_splitter"' not in wrapper_source
+
+
 def test_ui_native_icon_source_has_no_emoji(qapp: QApplication) -> None:
     picker = FilePicker(translator=UiTranslator("en"))
     label = picker._icon_label
