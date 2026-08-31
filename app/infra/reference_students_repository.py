@@ -81,7 +81,8 @@ def load_students_from_cache(*, db: LocalDatabase, policy: PolicyConfig) -> pd.D
 
     The cache is storage, not a reference authority. Re-running the existing DB-mode
     student pipeline ensures a cache produced under GroupCode state A cannot silently
-    bypass the currently active GroupCode state B.
+    bypass the currently active GroupCode state B. Column order remains compatible
+    with the persisted canonical cache contract.
     """
 
     cached = db.load_students_cache(join_keys=policy.join_keys)
@@ -90,7 +91,11 @@ def load_students_from_cache(*, db: LocalDatabase, policy: PolicyConfig) -> pd.D
     result = pipeline.run(cached)
     if result.validation.join_keys.issues:
         raise JoinKeyValidationError(result.validation.join_keys)
-    return _coerce_int_columns(result.canonical_df, policy.join_keys)
+
+    canonical = _coerce_int_columns(result.canonical_df, policy.join_keys)
+    persisted_order = [column for column in cached.columns if column in canonical.columns]
+    added_columns = [column for column in canonical.columns if column not in persisted_order]
+    return canonical.loc[:, [*persisted_order, *added_columns]]
 
 
 __all__ = [
