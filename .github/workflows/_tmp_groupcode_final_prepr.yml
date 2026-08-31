@@ -1,0 +1,76 @@
+name: temporary groupcode final pre-pr validation
+
+on:
+  push:
+    branches:
+      - fix/groupcode-runtime-authority
+
+permissions:
+  contents: write
+
+env:
+  PYTHONUTF8: "1"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/groupcode-runtime-authority
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+      - name: Remove obsolete imports, validate, and clean workflow
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path("app/infra/cli_legacy.py")
+          text = path.read_text(encoding="utf-8")
+          for old in (
+              "    read_excel_first_sheet,\n",
+              "from app.infra.students.pipeline_v3 import StudentPipelineV3\n",
+          ):
+              if text.count(old) != 1:
+                  raise SystemExit(f"expected one exact import match for {old!r}, found {text.count(old)}")
+              text = text.replace(old, "", 1)
+          path.write_text(text, encoding="utf-8")
+          PY
+
+          set +e
+          uv sync --locked
+          sync_rc=$?
+          rc=$sync_rc
+          if [ "$sync_rc" -eq 0 ]; then
+            uv run --locked ruff check \
+              app/infra/reference_students_repository.py \
+              app/infra/groupcode/groupcode_repository.py \
+              app/infra/cli_legacy.py \
+              app/ui/main_window.py \
+              tests/integration/test_groupcode_runtime_authority.py \
+              tests/ui/test_groupcode_runtime_authority_ui.py \
+              tests/infra/test_reference_students_repository.py \
+              tests/infra/test_join_key_validation_failures.py \
+              tests/infra/students/test_student_report_pipeline_v3.py \
+              tests/infra/test_cli_student_mentor_cache.py
+            lint_rc=$?
+            uv run --locked pytest \
+              tests/integration/test_groupcode_runtime_authority.py \
+              tests/infra/test_reference_students_repository.py \
+              tests/infra/test_join_key_validation_failures.py \
+              tests/infra/students/test_student_report_pipeline_v3.py \
+              tests/infra/test_cli_student_mentor_cache.py \
+              tests/infra/students/test_student_db_parity.py \
+              tests/infra/test_reference_repositories.py -q
+            test_rc=$?
+            if [ "$lint_rc" -ne 0 ]; then rc=$lint_rc; elif [ "$test_rc" -ne 0 ]; then rc=$test_rc; else rc=0; fi
+          fi
+          set -e
+
+          rm .github/workflows/_tmp_groupcode_final_prepr.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/infra/cli_legacy.py .github/workflows/_tmp_groupcode_final_prepr.yml
+          git commit -m "fix: remove obsolete Student Excel fallback imports"
+          git push origin HEAD:fix/groupcode-runtime-authority
+          exit "$rc"
