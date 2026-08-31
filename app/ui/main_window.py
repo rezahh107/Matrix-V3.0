@@ -1170,14 +1170,24 @@ class MainWindow(QMainWindow):
         inputs_layout.addRow(self._t("files.schools", "گزارش مدارس"), self._picker_schools)
 
         self._picker_crosswalk = FilePicker(
-            page, placeholder=self._t("files.crosswalk", "فایل Crosswalk")
+            page,
+            placeholder=self._t(
+                "reference.hint",
+                "GroupCode reference is managed in the Database tab.",
+            ),
         )
         self._picker_crosswalk.setObjectName("editCrosswalk")
+        self._picker_crosswalk.setEnabled(False)
         self._picker_crosswalk.setToolTip(
-            self._t("files.crosswalk", "جدول Crosswalk جهت نگاشت رشته‌ها و گروه‌ها")
+            self._t(
+                "reference.hint",
+                "Runs use database-backed School/GroupCode data. Update from Excel only in the Database tab.",
+            )
         )
-        self._set_picker_button_text(self._picker_crosswalk)
-        inputs_layout.addRow(self._t("files.crosswalk", "Crosswalk"), self._picker_crosswalk)
+        inputs_layout.addRow(
+            self._t("files.crosswalk", "Crosswalk (Database reference)"),
+            self._picker_crosswalk,
+        )
 
         outer.addWidget(inputs_group)
 
@@ -2091,7 +2101,7 @@ class MainWindow(QMainWindow):
             )
             return
 
-        if not readiness.is_ready_for_run and (not readiness.schools_ready or pool_type != "matrix"):
+        if not readiness.is_ready_for_run:
             title = self._t("error.reference_not_ready.title", "داده مرجع آماده نیست")
             detail = self._t(
                 "error.reference_not_ready.detail",

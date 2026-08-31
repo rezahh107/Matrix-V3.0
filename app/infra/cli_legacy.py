@@ -6,9 +6,10 @@
 مثال::
 
     >>> from app.infra import cli
+    >>> cli.main(["import-groupcodes", "--crosswalk", "cross.xlsx"])  # doctest: +SKIP
+    0
     >>> cli.main(["build-matrix", "--inspactor", "insp.xlsx", "--schools", "sch.xlsx",
-    ...           "--crosswalk", "cross.xlsx", "--output", "out.xlsx", "--policy",
-    ...           "config/policy.json"])  # doctest: +SKIP
+    ...           "--output", "out.xlsx", "--policy", "config/policy.json"])  # doctest: +SKIP
 """
 
 # Program boundaries:
@@ -1256,29 +1257,25 @@ def _resolve_reference_frames(
 def _resolve_students_frame(
     args: argparse.Namespace, policy: PolicyConfig, *, db: LocalDatabase | None
 ) -> tuple[pd.DataFrame, dict[str, str], dict[str, float]]:
-    """بارگذاری دیتافریم دانش‌آموزان از مسیر فایل یا کش SQLite."""
+    """بارگذاری دانش‌آموزان با الزام مرجع عملیاتی LocalDatabase."""
+
+    if db is None:
+        raise DatabasePreparationError(
+            path="local_db",
+            reason="تخصیص دانش‌آموز بدون پایگاه دادهٔ مرجع مجاز نیست.",
+            hint=(
+                "LocalDatabase فعال را با --local-db مشخص کنید؛ schools و groupcodes "
+                "باید پیش از اجرا از مسیر import صریح آماده شده باشند."
+            ),
+        )
 
     if getattr(args, "students", None):
         students_path = Path(args.students)
-        if db:
-            df = import_student_report_from_excel(students_path, db=db, policy=policy)
-        else:
-            raw_df = read_excel_first_sheet(students_path)
-            pipeline = StudentPipelineV3(
-                policy=policy, header_mode="fa", reference_mode="excel"
-            )
-            result = pipeline.run(raw_df)
-            if result.validation.join_keys.issues:
-                raise JoinKeyValidationError(result.validation.join_keys)
-            df = result.canonical_df
+        df = import_student_report_from_excel(students_path, db=db, policy=policy)
         inputs = {"students": str(students_path)}
         inputs_mtime = {"students": students_path.stat().st_mtime}
         return df, inputs, inputs_mtime
 
-    if db is None:
-        raise ValueError(
-            "برای استفاده از کش دانش‌آموز باید --local-db فعال باشد یا مسیر فایل را مشخص کنید."
-        )
     df = load_students_from_cache(db=db, policy=policy)
     inputs = {"students": f"sqlite://{db.path}"}
     inputs_mtime = {"students": db.path.stat().st_mtime if db.path.exists() else 0.0}
@@ -2810,6 +2807,35 @@ def _run_import_schools(
     return 0
 
 
+def _run_import_groupcodes(
+    args: argparse.Namespace, policy: PolicyConfig, progress: ProgressFn
+) -> int:
+    """Import/update the sole operational GroupCode reference in LocalDatabase."""
+
+    del policy  # GroupCodeRepository owns reference validation semantics.
+    db = _resolve_local_db(args)
+    if db is None:
+        raise DatabasePreparationError(
+            path="local_db",
+            reason="پایگاه دادهٔ مرجع برای import-groupcodes غیرفعال است.",
+            hint="--disable-local-db را حذف کنید و --local-db را به DB سال فعال بدهید.",
+        )
+
+    crosswalk_path = Path(args.crosswalk)
+    progress(5, "reading GroupCode reference")
+    status = GroupCodeRepository(db).import_from_excel(crosswalk_path)
+    progress(100, "groupcodes imported")
+    imported_at = status.imported_at.isoformat() if status.imported_at is not None else "n/a"
+    safe_print(
+        "groupcodes imported "
+        f"rows={status.row_count} "
+        f"source={status.source_filename or crosswalk_path.name} "
+        f"version={status.version_tag or 'n/a'} "
+        f"imported_at={imported_at}"
+    )
+    return 0
+
+
 def _load_matrix_candidate_pool(matrix_path: Path, policy: PolicyConfig) -> pd.DataFrame:
     """خواندن شیت ماتریس و آماده‌سازی آن به‌عنوان استخر منتورها.
 
@@ -3952,7 +3978,10 @@ def _build_parser() -> argparse.ArgumentParser:
     build_cmd.add_argument(
         "--crosswalk",
         required=False,
-        help="(اختیاری) مسیر Crosswalk برای بروزرسانی مرجع در SQLite",
+        help=(
+            "DEPRECATED: Crosswalk دیگر ورودی build-matrix نیست؛ "
+            "ابتدا import-groupcodes را اجرا کنید."
+        ),
     )
     build_cmd.add_argument("--output", required=True, help="مسیر Excel خروجی")
     build_cmd.add_argument(
@@ -3986,6 +4015,7 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="استفاده از HeaderPipelineV3 برای کاننیکال‌سازی هدرهای پشتیبان",
     )
+    _add_local_db_args(build_cmd)
 
     refresh_cmd = sub.add_parser(
         "import-schools",
@@ -3994,6 +4024,15 @@ def _build_parser() -> argparse.ArgumentParser:
     refresh_cmd.add_argument("--school-report", required=True, help="مسیر فایل SchoolReport")
     refresh_cmd.add_argument("--crosswalk", required=True, help="مسیر فایل Crosswalk")
     _add_local_db_args(refresh_cmd)
+
+    import_groupcodes_cmd = sub.add_parser(
+        "import-groupcodes",
+        help="ورود/به‌روزرسانی مرجع عملیاتی GroupCode در SQLite",
+    )
+    import_groupcodes_cmd.add_argument(
+        "--crosswalk", required=True, help="مسیر فایل GroupCode/Crosswalk مرجع"
+    )
+    _add_local_db_args(import_groupcodes_cmd)
 
     import_students_cmd = sub.add_parser(
         "import-students",
@@ -4380,11 +4419,23 @@ def main(
 
     try:
         if args.command == "build-matrix":
+            if getattr(args, "crosswalk", None):
+                raise DatabasePreparationError(
+                    path=str(args.crosswalk),
+                    reason="--crosswalk در build-matrix دیگر یک ورودی runtime نیست.",
+                    hint=(
+                        "ابتدا import-groupcodes --crosswalk <file> --local-db <db> را اجرا کنید؛ "
+                        "سپس build-matrix را بدون --crosswalk اجرا کنید."
+                    ),
+                )
             runner = build_runner or _run_build_matrix
             return runner(args, policy, progress)
 
         if args.command == "import-schools":
             return _run_import_schools(args, policy, progress)
+
+        if args.command == "import-groupcodes":
+            return _run_import_groupcodes(args, policy, progress)
 
         if args.command == "import-students":
             db = _resolve_local_db(args)
