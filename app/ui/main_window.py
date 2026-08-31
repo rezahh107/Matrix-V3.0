@@ -1126,7 +1126,7 @@ class MainWindow(QMainWindow):
                 self._t("hero.build.title", "ساخت ماتریس"),
                 self._t(
                     "hero.build.subtitle",
-                    "ورود فایل‌های Inspactor، مدارس و Crosswalk برای ساخت eligibility matrix مطابق Policy.",
+                    "انتخاب Inspactor و استفاده از مراجع School/GroupCode پایگاه داده برای ساخت eligibility matrix مطابق Policy.",
                 ),
                 self._t("hero.build.badge", "گام ۱ از ۴"),
             )
