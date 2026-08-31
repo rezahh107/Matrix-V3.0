@@ -1,0 +1,108 @@
+name: temporary groupcode authority patch
+
+on:
+  push:
+    branches:
+      - fix/groupcode-runtime-authority
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/groupcode-runtime-authority
+          fetch-depth: 0
+      - name: Apply bounded source patch
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              target = Path(path)
+              text = target.read_text(encoding="utf-8")
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one exact match, found {count}")
+              target.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+          cli_path = "app/infra/cli_legacy.py"
+
+          replace_once(
+              cli_path,
+              '''    >>> from app.infra import cli\n    >>> cli.main(["build-matrix", "--inspactor", "insp.xlsx", "--schools", "sch.xlsx",\n    ...           "--crosswalk", "cross.xlsx", "--output", "out.xlsx", "--policy",\n    ...           "config/policy.json"])  # doctest: +SKIP\n''',
+              '''    >>> from app.infra import cli\n    >>> cli.main(["import-groupcodes", "--crosswalk", "cross.xlsx"])  # doctest: +SKIP\n    0\n    >>> cli.main(["build-matrix", "--inspactor", "insp.xlsx", "--schools", "sch.xlsx",\n    ...           "--output", "out.xlsx", "--policy", "config/policy.json"])  # doctest: +SKIP\n''',
+          )
+
+          replace_once(
+              cli_path,
+              '''def _resolve_students_frame(\n    args: argparse.Namespace, policy: PolicyConfig, *, db: LocalDatabase | None\n) -> tuple[pd.DataFrame, dict[str, str], dict[str, float]]:\n    """بارگذاری دیتافریم دانش‌آموزان از مسیر فایل یا کش SQLite."""\n\n    if getattr(args, "students", None):\n        students_path = Path(args.students)\n        if db:\n            df = import_student_report_from_excel(students_path, db=db, policy=policy)\n        else:\n            raw_df = read_excel_first_sheet(students_path)\n            pipeline = StudentPipelineV3(\n                policy=policy, header_mode="fa", reference_mode="excel"\n            )\n            result = pipeline.run(raw_df)\n            if result.validation.join_keys.issues:\n                raise JoinKeyValidationError(result.validation.join_keys)\n            df = result.canonical_df\n        inputs = {"students": str(students_path)}\n        inputs_mtime = {"students": students_path.stat().st_mtime}\n        return df, inputs, inputs_mtime\n\n    if db is None:\n        raise ValueError(\n            "برای استفاده از کش دانش‌آموز باید --local-db فعال باشد یا مسیر فایل را مشخص کنید."\n        )\n    df = load_students_from_cache(db=db, policy=policy)\n    inputs = {"students": f"sqlite://{db.path}"}\n    inputs_mtime = {"students": db.path.stat().st_mtime if db.path.exists() else 0.0}\n    return df, inputs, inputs_mtime\n''',
+              '''def _resolve_students_frame(\n    args: argparse.Namespace, policy: PolicyConfig, *, db: LocalDatabase | None\n) -> tuple[pd.DataFrame, dict[str, str], dict[str, float]]:\n    """بارگذاری دانش‌آموزان با الزام مرجع عملیاتی LocalDatabase."""\n\n    if db is None:\n        raise DatabasePreparationError(\n            path="local_db",\n            reason="تخصیص دانش‌آموز بدون پایگاه دادهٔ مرجع مجاز نیست.",\n            hint=(\n                "LocalDatabase فعال را با --local-db مشخص کنید؛ schools و groupcodes "\n                "باید پیش از اجرا از مسیر import صریح آماده شده باشند."\n            ),\n        )\n\n    if getattr(args, "students", None):\n        students_path = Path(args.students)\n        df = import_student_report_from_excel(students_path, db=db, policy=policy)\n        inputs = {"students": str(students_path)}\n        inputs_mtime = {"students": students_path.stat().st_mtime}\n        return df, inputs, inputs_mtime\n\n    df = load_students_from_cache(db=db, policy=policy)\n    inputs = {"students": f"sqlite://{db.path}"}\n    inputs_mtime = {"students": db.path.stat().st_mtime if db.path.exists() else 0.0}\n    return df, inputs, inputs_mtime\n''',
+          )
+
+          replace_once(
+              cli_path,
+              '''def _load_matrix_candidate_pool(matrix_path: Path, policy: PolicyConfig) -> pd.DataFrame:\n''',
+              '''def _run_import_groupcodes(\n    args: argparse.Namespace, policy: PolicyConfig, progress: ProgressFn\n) -> int:\n    """Import/update the sole operational GroupCode reference in LocalDatabase."""\n\n    del policy  # GroupCodeRepository owns reference validation semantics.\n    db = _resolve_local_db(args)\n    if db is None:\n        raise DatabasePreparationError(\n            path="local_db",\n            reason="پایگاه دادهٔ مرجع برای import-groupcodes غیرفعال است.",\n            hint="--disable-local-db را حذف کنید و --local-db را به DB سال فعال بدهید.",\n        )\n\n    crosswalk_path = Path(args.crosswalk)\n    progress(5, "reading GroupCode reference")\n    status = GroupCodeRepository(db).import_from_excel(crosswalk_path)\n    progress(100, "groupcodes imported")\n    imported_at = status.imported_at.isoformat() if status.imported_at is not None else "n/a"\n    safe_print(\n        "groupcodes imported "\n        f"rows={status.row_count} "\n        f"source={status.source_filename or crosswalk_path.name} "\n        f"version={status.version_tag or 'n/a'} "\n        f"imported_at={imported_at}"\n    )\n    return 0\n\n\ndef _load_matrix_candidate_pool(matrix_path: Path, policy: PolicyConfig) -> pd.DataFrame:\n''',
+          )
+
+          replace_once(
+              cli_path,
+              '''    build_cmd.add_argument(\n        "--crosswalk",\n        required=False,\n        help="(اختیاری) مسیر Crosswalk برای بروزرسانی مرجع در SQLite",\n    )\n''',
+              '''    build_cmd.add_argument(\n        "--crosswalk",\n        required=False,\n        help=(\n            "DEPRECATED: Crosswalk دیگر ورودی build-matrix نیست؛ "\n            "ابتدا import-groupcodes را اجرا کنید."\n        ),\n    )\n''',
+          )
+
+          replace_once(
+              cli_path,
+              '''    build_cmd.add_argument(\n        "--use-v3-mentor-pipeline",\n        action="store_true",\n        help="استفاده از HeaderPipelineV3 برای کاننیکال‌سازی هدرهای پشتیبان",\n    )\n\n    refresh_cmd = sub.add_parser(\n''',
+              '''    build_cmd.add_argument(\n        "--use-v3-mentor-pipeline",\n        action="store_true",\n        help="استفاده از HeaderPipelineV3 برای کاننیکال‌سازی هدرهای پشتیبان",\n    )\n    _add_local_db_args(build_cmd)\n\n    refresh_cmd = sub.add_parser(\n''',
+          )
+
+          replace_once(
+              cli_path,
+              '''    refresh_cmd.add_argument("--crosswalk", required=True, help="مسیر فایل Crosswalk")\n    _add_local_db_args(refresh_cmd)\n\n    import_students_cmd = sub.add_parser(\n''',
+              '''    refresh_cmd.add_argument("--crosswalk", required=True, help="مسیر فایل Crosswalk")\n    _add_local_db_args(refresh_cmd)\n\n    import_groupcodes_cmd = sub.add_parser(\n        "import-groupcodes",\n        help="ورود/به‌روزرسانی مرجع عملیاتی GroupCode در SQLite",\n    )\n    import_groupcodes_cmd.add_argument(\n        "--crosswalk", required=True, help="مسیر فایل GroupCode/Crosswalk مرجع"\n    )\n    _add_local_db_args(import_groupcodes_cmd)\n\n    import_students_cmd = sub.add_parser(\n''',
+          )
+
+          replace_once(
+              cli_path,
+              '''        if args.command == "build-matrix":\n            runner = build_runner or _run_build_matrix\n            return runner(args, policy, progress)\n\n        if args.command == "import-schools":\n            return _run_import_schools(args, policy, progress)\n\n        if args.command == "import-students":\n''',
+              '''        if args.command == "build-matrix":\n            if getattr(args, "crosswalk", None):\n                raise DatabasePreparationError(\n                    path=str(args.crosswalk),\n                    reason="--crosswalk در build-matrix دیگر یک ورودی runtime نیست.",\n                    hint=(\n                        "ابتدا import-groupcodes --crosswalk <file> --local-db <db> را اجرا کنید؛ "\n                        "سپس build-matrix را بدون --crosswalk اجرا کنید."\n                    ),\n                )\n            runner = build_runner or _run_build_matrix\n            return runner(args, policy, progress)\n\n        if args.command == "import-schools":\n            return _run_import_schools(args, policy, progress)\n\n        if args.command == "import-groupcodes":\n            return _run_import_groupcodes(args, policy, progress)\n\n        if args.command == "import-students":\n''',
+          )
+
+          ui_path = "app/ui/main_window.py"
+          replace_once(
+              ui_path,
+              '''        self._picker_crosswalk = FilePicker(\n            page, placeholder=self._t("files.crosswalk", "فایل Crosswalk")\n        )\n        self._picker_crosswalk.setObjectName("editCrosswalk")\n        self._picker_crosswalk.setToolTip(\n            self._t("files.crosswalk", "جدول Crosswalk جهت نگاشت رشته‌ها و گروه‌ها")\n        )\n        self._set_picker_button_text(self._picker_crosswalk)\n        inputs_layout.addRow(self._t("files.crosswalk", "Crosswalk"), self._picker_crosswalk)\n''',
+              '''        self._picker_crosswalk = FilePicker(\n            page,\n            placeholder=self._t(\n                "reference.hint",\n                "GroupCode reference is managed in the Database tab.",\n            ),\n        )\n        self._picker_crosswalk.setObjectName("editCrosswalk")\n        self._picker_crosswalk.setEnabled(False)\n        self._picker_crosswalk.setToolTip(\n            self._t(\n                "reference.hint",\n                "Runs use database-backed School/GroupCode data. Update from Excel only in the Database tab.",\n            )\n        )\n        inputs_layout.addRow(\n            self._t("files.crosswalk", "Crosswalk (Database reference)"),\n            self._picker_crosswalk,\n        )\n''',
+          )
+
+          replace_once(
+              ui_path,
+              '''        if not readiness.is_ready_for_run and (not readiness.schools_ready or pool_type != "matrix"):\n''',
+              '''        if not readiness.is_ready_for_run:\n''',
+          )
+
+          docs_path = "docs/SmartAlloc_GUI_Operator_Guide.fa.md"
+          replace_once(
+              docs_path,
+              '''- ورودی‌ها: فایل‌های Inspactor، School، Crosswalk و سایر جداول مرجع که Policy نیاز دارد.\n''',
+              '''- ورودی اجرای Build: فایل Inspactor و خروجی مقصد؛ School/GroupCode reference پیش از اجرا از تب Database به LocalDatabase وارد/به‌روزرسانی می‌شود و Build آن را فقط از DB می‌خواند.\n''',
+          )
+          replace_once(
+              docs_path,
+              '''1. جمع‌آوری فایل‌های مرجع به‌روز (Inspactor، School، Crosswalk، لیست پشتیبان‌ها).\n2. اجرای تب «ساخت ماتریس» و ذخیره‌ی `eligibility_matrix.xlsx` در پوشه‌ی پروژه سال جدید.\n''',
+              '''1. جمع‌آوری فایل‌های مرجع به‌روز و import صریح School/GroupCode در تب Database؛ Crosswalk فایل ورودی هر اجرای Build نیست.\n2. انتخاب Inspactor و اجرای تب «ساخت ماتریس» و ذخیره‌ی `eligibility_matrix.xlsx` در پوشه‌ی پروژه سال جدید.\n''',
+          )
+          PY
+
+          rm .github/workflows/_tmp_groupcode_authority_patch.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/infra/cli_legacy.py app/ui/main_window.py docs/SmartAlloc_GUI_Operator_Guide.fa.md .github/workflows/_tmp_groupcode_authority_patch.yml
+          git commit -m "fix: enforce GroupCode authority in CLI and GUI"
+          git push origin HEAD:fix/groupcode-runtime-authority
