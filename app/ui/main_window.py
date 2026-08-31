@@ -1126,7 +1126,7 @@ class MainWindow(QMainWindow):
                 self._t("hero.build.title", "ساخت ماتریس"),
                 self._t(
                     "hero.build.subtitle",
-                    "ورود فایل‌های Inspactor، مدارس و Crosswalk برای ساخت eligibility matrix مطابق Policy.",
+                    "انتخاب Inspactor و استفاده از مراجع School/GroupCode پایگاه داده برای ساخت eligibility matrix مطابق Policy.",
                 ),
                 self._t("hero.build.badge", "گام ۱ از ۴"),
             )
@@ -1161,23 +1161,45 @@ class MainWindow(QMainWindow):
         insp_row_layout.addWidget(self._btn_matrix_mentor_pool)
         inputs_layout.addRow(self._t("files.inspactor", "گزارش Inspactor"), insp_row)
 
-        self._picker_schools = FilePicker(page, placeholder=self._t("files.schools", "فایل مدارس"))
-        self._picker_schools.setObjectName("editSchools")
-        self._picker_schools.setToolTip(
-            self._t("files.schools", "فایل رسمی مدارس برای تطبیق کد و نام مدرسه")
+        self._picker_schools = FilePicker(
+            page,
+            placeholder=self._t(
+                "reference.hint",
+                "School reference is managed in the Database tab.",
+            ),
         )
-        self._set_picker_button_text(self._picker_schools)
-        inputs_layout.addRow(self._t("files.schools", "گزارش مدارس"), self._picker_schools)
+        self._picker_schools.setObjectName("editSchools")
+        self._picker_schools.setEnabled(False)
+        self._picker_schools.setToolTip(
+            self._t(
+                "reference.hint",
+                "Runs use database-backed School/GroupCode data. Update from Excel only in the Database tab.",
+            )
+        )
+        inputs_layout.addRow(
+            self._t("files.schools", "Schools (Database reference)"),
+            self._picker_schools,
+        )
 
         self._picker_crosswalk = FilePicker(
-            page, placeholder=self._t("files.crosswalk", "فایل Crosswalk")
+            page,
+            placeholder=self._t(
+                "reference.hint",
+                "GroupCode reference is managed in the Database tab.",
+            ),
         )
         self._picker_crosswalk.setObjectName("editCrosswalk")
+        self._picker_crosswalk.setEnabled(False)
         self._picker_crosswalk.setToolTip(
-            self._t("files.crosswalk", "جدول Crosswalk جهت نگاشت رشته‌ها و گروه‌ها")
+            self._t(
+                "reference.hint",
+                "Runs use database-backed School/GroupCode data. Update from Excel only in the Database tab.",
+            )
         )
-        self._set_picker_button_text(self._picker_crosswalk)
-        inputs_layout.addRow(self._t("files.crosswalk", "Crosswalk"), self._picker_crosswalk)
+        inputs_layout.addRow(
+            self._t("files.crosswalk", "Crosswalk (Database reference)"),
+            self._picker_crosswalk,
+        )
 
         outer.addWidget(inputs_group)
 
@@ -1697,8 +1719,6 @@ class MainWindow(QMainWindow):
             self._btn_update_schools,
             self._btn_update_groupcodes,
             self._picker_inspactor,
-            self._picker_schools,
-            self._picker_crosswalk,
             self._picker_policy_build,
             self._picker_output_matrix,
             self._picker_students,
@@ -1755,7 +1775,6 @@ class MainWindow(QMainWindow):
 
         required = [
             (self._picker_inspactor, "گزارش Inspactor"),
-            (self._picker_schools, "گزارش مدارس"),
             (self._picker_output_matrix, "خروجی ماتریس"),
         ]
         if not self._ensure_filled(required):
@@ -1768,8 +1787,6 @@ class MainWindow(QMainWindow):
             "build-matrix",
             "--inspactor",
             self._picker_inspactor.text(),
-            "--schools",
-            self._picker_schools.text(),
             "--output",
             self._picker_output_matrix.text(),
             "--policy",
@@ -2091,7 +2108,7 @@ class MainWindow(QMainWindow):
             )
             return
 
-        if not readiness.is_ready_for_run and (not readiness.schools_ready or pool_type != "matrix"):
+        if not readiness.is_ready_for_run:
             title = self._t("error.reference_not_ready.title", "داده مرجع آماده نیست")
             detail = self._t(
                 "error.reference_not_ready.detail",

@@ -4,11 +4,13 @@ import pandas as pd
 from pandas.testing import assert_frame_equal
 
 from app.core.policy_loader import load_policy
+from app.infra.groupcode.groupcode_repository import GroupCodeRepository
 from app.infra.local_database import LocalDatabase
 from app.infra.reference_students_repository import (
     import_student_report_from_excel,
     load_students_from_cache,
 )
+from app.infra.schools.school_repository import SchoolRepository
 
 
 def _write_student_excel(df: pd.DataFrame, path: Path) -> None:
@@ -16,9 +18,40 @@ def _write_student_excel(df: pd.DataFrame, path: Path) -> None:
         df.to_excel(writer, index=False)
 
 
+def _seed_references(db: LocalDatabase, tmp_path: Path) -> None:
+    schools_path = tmp_path / "schools.xlsx"
+    _write_student_excel(
+        pd.DataFrame(
+            {
+                "کد مدرسه": [3581],
+                "نام مدرسه": ["Synthetic School"],
+                "مرکز گلستان صدرا": [1],
+                "جنسیت": [1],
+            }
+        ),
+        schools_path,
+    )
+    SchoolRepository(db).import_from_excel(schools_path)
+
+    groups_path = tmp_path / "groupcodes.xlsx"
+    _write_student_excel(
+        pd.DataFrame(
+            {
+                "group_code": [1],
+                "level": ["کنکوری"],
+                "grade": [12],
+                "track": ["ریاضی"],
+            }
+        ),
+        groups_path,
+    )
+    GroupCodeRepository(db).import_from_excel(groups_path)
+
+
 def test_students_cache_roundtrip(tmp_path: Path) -> None:
     policy = load_policy()
     db = LocalDatabase(tmp_path / "cache.sqlite")
+    _seed_references(db, tmp_path)
 
     raw = pd.DataFrame(
         {

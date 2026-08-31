@@ -5,8 +5,10 @@ import pytest
 
 from app.core.policy_loader import load_policy
 from app.infra.errors import DatabasePreparationError
+from app.infra.groupcode.groupcode_repository import GroupCodeRepository
 from app.infra.local_database import LocalDatabase
 from app.infra.reference_students_repository import import_student_report_with_validation
+from app.infra.schools.school_repository import SchoolRepository
 
 
 def _write_excel(df: pd.DataFrame, path: Path):
@@ -14,9 +16,40 @@ def _write_excel(df: pd.DataFrame, path: Path):
         df.to_excel(writer, index=False)
 
 
+def _seed_references(db: LocalDatabase, tmp_path: Path) -> None:
+    schools_path = tmp_path / "schools.xlsx"
+    _write_excel(
+        pd.DataFrame(
+            {
+                "کد مدرسه": [1001],
+                "نام مدرسه": ["Synthetic School"],
+                "مرکز گلستان صدرا": [1],
+                "جنسیت": [1],
+            }
+        ),
+        schools_path,
+    )
+    SchoolRepository(db).import_from_excel(schools_path)
+
+    groups_path = tmp_path / "groupcodes.xlsx"
+    _write_excel(
+        pd.DataFrame(
+            {
+                "group_code": [27],
+                "level": ["متوسطه دوم"],
+                "grade": [11],
+                "track": ["ریاضی"],
+            }
+        ),
+        groups_path,
+    )
+    GroupCodeRepository(db).import_from_excel(groups_path)
+
+
 def test_student_report_aliases_produce_join_keys(tmp_path):
     policy = load_policy()
     db = LocalDatabase(tmp_path / "cache.sqlite")
+    _seed_references(db, tmp_path)
     raw = pd.DataFrame(
         {
             "student_id": ["s1"],
@@ -40,6 +73,7 @@ def test_student_report_aliases_produce_join_keys(tmp_path):
 def test_student_report_header_normalization_handles_variants(tmp_path):
     policy = load_policy()
     db = LocalDatabase(tmp_path / "cache.sqlite")
+    _seed_references(db, tmp_path)
     raw = pd.DataFrame(
         {
             "student_id": ["s1"],
@@ -63,6 +97,7 @@ def test_student_report_header_normalization_handles_variants(tmp_path):
 def test_student_report_missing_alias_surfaces_missing_column(tmp_path):
     policy = load_policy()
     db = LocalDatabase(tmp_path / "cache.sqlite")
+    _seed_references(db, tmp_path)
     raw = pd.DataFrame(
         {
             "student_id": ["s1"],
@@ -84,6 +119,7 @@ def test_student_report_missing_alias_surfaces_missing_column(tmp_path):
 def test_student_report_registration_status_alias_used_for_finance(tmp_path):
     policy = load_policy()
     db = LocalDatabase(tmp_path / "cache.sqlite")
+    _seed_references(db, tmp_path)
     raw = pd.DataFrame(
         {
             "student_id": ["s1"],
@@ -113,6 +149,7 @@ def test_student_report_registration_status_alias_used_for_finance(tmp_path):
 def test_student_report_registration_status_conflict_is_deterministic(tmp_path):
     policy = load_policy()
     db = LocalDatabase(tmp_path / "cache.sqlite")
+    _seed_references(db, tmp_path)
     raw = pd.DataFrame(
         {
             "student_id": ["s1"],

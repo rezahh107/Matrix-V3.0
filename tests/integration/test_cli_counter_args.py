@@ -7,11 +7,37 @@ import pandas as pd
 from app.core.build_matrix import REQUIRED_INSPACTOR_COLUMNS
 from app.core.common.columns import canonicalize_headers
 from app.infra import cli
+from app.infra.groupcode.groupcode_repository import GroupCodeRepository
+from app.infra.local_database import LocalDatabase
+from app.infra.schools.school_repository import SchoolRepository
 
 
 def _write_excel(df: pd.DataFrame, path: Path, *, sheet_name: str) -> None:
     with pd.ExcelWriter(path, engine="openpyxl") as writer:
         df.to_excel(writer, index=False, sheet_name=sheet_name)
+
+
+def _prepare_reference_db(tmp_path: Path) -> LocalDatabase:
+    db = LocalDatabase(tmp_path / "counter-args.sqlite")
+    db.initialize()
+    schools_path = tmp_path / "schools.xlsx"
+    _write_excel(
+        pd.DataFrame(
+            {
+                "کد مدرسه": [1010],
+                "نام مدرسه": ["Synthetic Counter School"],
+                "مرکز گلستان صدرا": [0],
+                "جنسیت": [1],
+                "فعال": [1],
+            }
+        ),
+        schools_path,
+        sheet_name="Schools",
+    )
+    SchoolRepository(db).import_from_excel(schools_path)
+    assert SchoolRepository(db).status().row_count > 0
+    assert GroupCodeRepository(db).status().row_count > 0
+    return db
 
 
 def test_cli_allocate_accepts_counter_args(tmp_path: Path) -> None:
@@ -100,6 +126,7 @@ def test_cli_allocate_accepts_counter_args(tmp_path: Path) -> None:
     _write_excel(current, current_path, sheet_name="StudentReport")
 
     output_path = tmp_path / "allocations.xlsx"
+    db = _prepare_reference_db(tmp_path)
 
     argv = [
         "allocate",
@@ -119,6 +146,8 @@ def test_cli_allocate_accepts_counter_args(tmp_path: Path) -> None:
         str(prior_path),
         "--current-roster",
         str(current_path),
+        "--local-db",
+        str(db.path),
     ]
 
     exit_code = cli.main(argv)
