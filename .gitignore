@@ -20,3 +20,12 @@ htmlcov/
 # Build and distribution artifacts
 build/
 dist/
+
+# Runtime-generated fonts
+app/ui/fonts/*.ttf
+
+# Local golden-run history
+.golden_runs/
+
+# Runtime logs
+logs/
