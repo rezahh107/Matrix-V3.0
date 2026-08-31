@@ -127,7 +127,6 @@ from app.infra.forms_repository import FormsRepository, WordPressFormsClient
 from app.infra.groupcode.groupcode_repository import GroupCodeRepository
 from app.infra.io_utils import (
     ALT_CODE_COLUMN,
-    read_excel_first_sheet,
     write_json_report,
     write_xlsx_atomic,
 )
@@ -153,7 +152,6 @@ from app.infra.reference_students_repository import (
     import_student_report_from_excel,
     load_students_from_cache,
 )
-from app.infra.students.pipeline_v3 import StudentPipelineV3
 from app.infra.validators.join_keys import (
     JoinKeyAuditResult,
     validate_allocation_join_keys,  # noqa: F401
