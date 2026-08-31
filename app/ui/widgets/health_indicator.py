@@ -2,11 +2,28 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Final, Literal, NamedTuple
 
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QMessageBox, QPushButton, QWidget
 
-from app.infra.health import HealthSummary
+from app.infra.health import HealthStatus, HealthSummary
 from app.ui.texts import UiTranslator
+
+
+_HealthQssState = Literal["ok", "warning", "error"]
+_HealthVisualState = Literal["ok", "warning", "error", "none"]
+
+
+class _HealthPresentation(NamedTuple):
+    text_key: str
+    qss_state: _HealthQssState
+
+
+_HEALTH_PRESENTATION: Final[dict[HealthStatus, _HealthPresentation]] = {
+    "OK": _HealthPresentation(text_key="health.summary.ok", qss_state="ok"),
+    "WARN": _HealthPresentation(text_key="health.summary.warn", qss_state="warning"),
+    "ERROR": _HealthPresentation(text_key="health.summary.error", qss_state="error"),
+}
 
 
 @dataclass(frozen=True)
@@ -71,15 +88,19 @@ class HealthIndicatorWidget(QFrame):
             self._btn_details.setEnabled(False)
             self._btn_export.setEnabled(False)
             return
-        template = self._t("health.summary", "System health: {summary}")
-        self._status_label.setText(template.format(summary=summary.summary_text))
-        self._set_health_state(summary.status.lower())
+
+        presentation = _HEALTH_PRESENTATION[summary.status]
+        if self._translator is None:
+            display_text = summary.summary_text
+        else:
+            display_text = self._translator.text(presentation.text_key, summary.summary_text)
+        self._status_label.setText(display_text)
+        self._set_health_state(presentation.qss_state)
         self._btn_details.setEnabled(True)
         self._btn_export.setEnabled(True)
 
-    def _set_health_state(self, state: str) -> None:
-        normalized = state if state in {"ok", "warning", "error"} else "none"
-        self._status_label.setProperty("health", normalized)
+    def _set_health_state(self, state: _HealthVisualState) -> None:
+        self._status_label.setProperty("health", state)
         self._status_label.style().unpolish(self._status_label)
         self._status_label.style().polish(self._status_label)
 
