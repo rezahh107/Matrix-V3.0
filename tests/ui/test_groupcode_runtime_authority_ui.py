@@ -32,12 +32,9 @@ def _window(tmp_path: Path) -> MainWindow:
     window._groupcode_repository = GroupCodeRepository(db)
 
     students = tmp_path / "students.xlsx"
-    pool = tmp_path / "matrix.xlsx"
     output = tmp_path / "allocation.xlsx"
     students.touch()
-    pool.touch()
     window._picker_students.setText(str(students))
-    window._picker_pool.setText(str(pool))
     window._picker_alloc_out.setText(str(output))
     window._combo_academic_year.setCurrentText("1404")
     return window
@@ -59,6 +56,7 @@ def test_build_argv_contains_no_runtime_reference_files(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, qapp: QApplication
 ) -> None:
     window = _window(tmp_path)
+    assert window._picker_pool.text().strip() == ""
     inspactor = tmp_path / "inspactor.xlsx"
     inspactor.touch()
     window._picker_inspactor.setText(str(inspactor))
