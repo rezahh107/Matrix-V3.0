@@ -11,7 +11,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pandas as pd
 import pytest
+
+from app.infra.groupcode.groupcode_repository import GroupCodeRepository
+from app.infra.local_database import LocalDatabase
+from app.infra.schools.school_repository import SchoolRepository
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -29,6 +34,23 @@ def canonical_allocation_outputs(tmp_path_factory: pytest.TempPathFactory) -> tu
     tmp_dir = tmp_path_factory.mktemp("canonical_allocation")
     output_path = tmp_dir / "output.xlsx"
     validation_path = tmp_dir / "output_validation.xlsx"
+
+    db = LocalDatabase(tmp_dir / "canonical-references.sqlite")
+    db.initialize()
+    schools_path = tmp_dir / "canonical-schools.xlsx"
+    pd.DataFrame(
+        {
+            "کد مدرسه": [1],
+            "نام مدرسه": ["Synthetic Canonical School"],
+            "مرکز گلستان صدرا": [0],
+            "جنسیت": [1],
+            "فعال": [1],
+        }
+    ).to_excel(schools_path, index=False)
+    school_repo = SchoolRepository(db)
+    school_repo.import_from_excel(schools_path)
+    assert school_repo.status().row_count > 0
+    assert GroupCodeRepository(db).status().row_count > 0
 
     cmd = [
         sys.executable,
@@ -49,6 +71,8 @@ def canonical_allocation_outputs(tmp_path_factory: pytest.TempPathFactory) -> tu
         "1404",
         "--counter-duplicate-strategy",
         "assign-new",
+        "--local-db",
+        str(db.path),
         "--output",
         str(output_path),
     ]
