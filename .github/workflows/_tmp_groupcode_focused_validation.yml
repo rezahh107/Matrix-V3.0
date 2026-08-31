@@ -1,0 +1,44 @@
+name: temporary groupcode focused validation
+
+on:
+  push:
+    branches:
+      - fix/groupcode-runtime-authority
+
+permissions:
+  contents: write
+
+env:
+  QT_QPA_PLATFORM: offscreen
+  PYTHONUTF8: "1"
+
+jobs:
+  focused:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/groupcode-runtime-authority
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+      - name: Run focused authority tests and remove temporary workflow
+        shell: bash
+        run: |
+          set +e
+          uv sync --locked
+          sync_rc=$?
+          if [ "$sync_rc" -eq 0 ]; then
+            uv run --locked pytest tests/integration/test_groupcode_runtime_authority.py tests/ui/test_groupcode_runtime_authority_ui.py -q
+            test_rc=$?
+          else
+            test_rc=$sync_rc
+          fi
+          set -e
+
+          rm .github/workflows/_tmp_groupcode_focused_validation.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows/_tmp_groupcode_focused_validation.yml
+          git commit -m "chore: remove temporary GroupCode validation workflow"
+          git push origin HEAD:fix/groupcode-runtime-authority
+          exit "$test_rc"
