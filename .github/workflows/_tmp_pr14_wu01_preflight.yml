@@ -1,0 +1,49 @@
+name: temporary PR14 WU01 preflight
+on:
+  push:
+    branches: [fix/groupcode-runtime-authority]
+permissions:
+  contents: write
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 028ffae09ce880306cfdc760a349d6ef63b8ba61
+      - name: Verify starting identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "028ffae09ce880306cfdc760a349d6ef63b8ba61"
+      - name: Search same-root consumers
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== _resolve_students_frame callers ==='
+          git grep -n "_resolve_students_frame" -- app tests || true
+          echo '=== db=None occurrences near allocation/student consumers ==='
+          git grep -n "db=None" -- tests app || true
+          echo '=== --schools occurrences ==='
+          git grep -n -- "--schools" app tests docs/SmartAlloc_GUI_Operator_Guide.fa.md || true
+          echo '=== picker_schools occurrences ==='
+          git grep -n "_picker_schools" -- app tests || true
+  cleanup:
+    if: always()
+    needs: inspect
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/groupcode-runtime-authority
+      - name: Remove temporary workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/_tmp_pr14_wu01_preflight.yml
+          if git diff --quiet; then exit 0; fi
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add .github/workflows/_tmp_pr14_wu01_preflight.yml
+          git commit -m "chore: remove temporary PR14 preflight workflow"
+          git push origin HEAD:fix/groupcode-runtime-authority
