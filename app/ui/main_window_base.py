@@ -628,7 +628,7 @@ class MainWindow(QMainWindow):
 
         self.setCentralWidget(self._splitter)
 
-        self._busy_overlay: QFrame | None = QFrame(self._splitter)
+        self._busy_overlay: QFrame | None = QFrame(self)
         self._busy_overlay.setObjectName("busyOverlay")
         overlay_layout = QVBoxLayout(self._busy_overlay)
         overlay_layout.setContentsMargins(0, 0, 0, 0)
@@ -3067,7 +3067,15 @@ class MainWindow(QMainWindow):
         ):
             return
         try:
-            self._busy_overlay.setGeometry(self._splitter.rect())
+            splitter_top_left = self._splitter.mapTo(
+                self, self._splitter.rect().topLeft()
+            )
+            self._busy_overlay.setGeometry(
+                splitter_top_left.x(),
+                splitter_top_left.y(),
+                self._splitter.width(),
+                self._splitter.height(),
+            )
         except RuntimeError:
             # Widget was deleted between validity check and geometry update.
             return
