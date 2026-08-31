@@ -9,7 +9,6 @@ from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QMessageBox, QPushBut
 from app.infra.health import HealthStatus, HealthSummary
 from app.ui.texts import UiTranslator
 
-
 _HealthQssState = Literal["ok", "warning", "error"]
 _HealthVisualState = Literal["ok", "warning", "error", "none"]
 

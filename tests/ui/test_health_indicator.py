@@ -8,7 +8,6 @@ from app.infra.health import HealthStatus, HealthSummary, IssueSummary
 from app.ui.texts import UiTranslator
 from app.ui.widgets.health_indicator import HealthCallbacks, HealthIndicatorWidget
 
-
 _SUMMARY_TEXT = {
     "OK": "System health: OK ✅ (output is safe to use)",
     "WARN": "System health: WARNING 🟡 (review warnings before using output)",
