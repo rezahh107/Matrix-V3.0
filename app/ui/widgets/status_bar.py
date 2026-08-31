@@ -12,7 +12,7 @@ __all__ = ["ThemedStatusBar", "DatabaseStatusWidget"]
 
 
 class ThemedStatusBar(QStatusBar):
-    """نوار وضعیت با اعمال رنگ و فونت هماهنگ با تم فعال."""
+    """نوار وضعیت؛ visual skin آن منحصراً از styles.qss می‌آید."""
 
     def __init__(self, theme: Theme, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -22,7 +22,7 @@ class ThemedStatusBar(QStatusBar):
         self.setFont(get_app_font())
 
     def apply_theme(self, theme: Theme) -> None:
-        """به‌روزرسانی رنگ پس‌زمینه و برچسب‌ها بر اساس تم."""
+        """فقط palette/state را به‌روزرسانی می‌کند، نه stylesheet محلی."""
 
         self._theme = theme
         palette = self.palette()
@@ -32,21 +32,6 @@ class ThemedStatusBar(QStatusBar):
         palette.setColor(QPalette.ColorRole.WindowText, theme.text_primary)
         self.setPalette(palette)
         self.setAutoFillBackground(True)
-
-        self.setStyleSheet(
-            f"QStatusBar {{"
-            f"background: {theme.colors.card};"
-            f"border-top: 1px solid {theme.colors.border};"
-            f"padding: {theme.spacing_xs}px {theme.spacing_md}px;"
-            f"}}"
-            f"QLabel#languagePill, QLabel#statusPill {{"
-            f"background: {theme.colors.surface_alt};"
-            f"border: 1px solid {theme.colors.border};"
-            f"border-radius: {theme.radius_sm}px;"
-            f"padding: {theme.spacing_xs}px {theme.spacing_md}px;"
-            f"font-weight: 700;"
-            f"}}"
-        )
 
     def refresh_fonts(self) -> None:
         """بازنشانی فونت برای هماهنگی با فونت سراسری."""

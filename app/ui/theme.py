@@ -37,25 +37,29 @@ __all__ = [
     "apply_theme_mode",
 ]
 
-
-# اندازهٔ پایهٔ فونت برنامه (بدنه): ۹ پوینت.
 BASE_FONT_PT = 9
-
-
 LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
 class ThemeColors:
-    """تعریف توکن‌های رنگی اصلی تم."""
+    """توکن‌های رنگی بر اساس نقش بصری، نه نوع ویجت."""
 
     background: str = "#f3f5f7"
     card: str = "#ffffff"
+    surface_alt: str = "#edf1f5"
+    subtle_boundary: str = "#dfe5ec"
+    control_boundary: str = "#aeb8c5"
+    focus_indicator: str = "#1d4ed8"
+    control_hover: str = "#f7f9fc"
     text: str = "#172033"
     text_muted: str = "#667085"
     primary: str = "#2563eb"
+    primary_hover: str = "#1d4ed8"
+    primary_pressed: str = "#1e40af"
     success: str = "#15803d"
-    warning: str = "#b7791f"
+    warning: str = "#8a4b08"
+    warning_surface: str = "#fff7ed"
     error: str = "#c2413a"
     log_background: str = "#f7f9fc"
     log_foreground: str = "#253047"
@@ -63,13 +67,14 @@ class ThemeColors:
     log_success: str = "#15803d"
     log_warning: str = "#a15c07"
     log_error: str = "#b42318"
-    border: str = "#cfd6df"
-    surface_alt: str = "#edf1f5"
+    # Backward-compatible token retained for callers/tests; interactive controls
+    # should use control_boundary and decorative surfaces subtle_boundary.
+    border: str = "#aeb8c5"
 
 
 @dataclass(frozen=True)
 class ThemeTypography:
-    """تعریف مقیاس تایپوگرافی انگلیسی با fallback فارسی."""
+    """مقیاس تایپوگرافی واحد برای فارسی و انگلیسی."""
 
     font_fa_stack: str = "Vazirmatn, Vazir, IRANSansX, Tahoma, sans-serif"
     font_en_stack: str = "Segoe UI, system-ui, sans-serif"
@@ -117,7 +122,6 @@ class Theme:
         soft.setAlphaF(0.12)
         return soft
 
-    # Backward-friendly names for legacy call sites
     @property
     def window(self) -> QColor:
         return QColor(self.colors.background)
@@ -140,7 +144,15 @@ class Theme:
 
     @property
     def border(self) -> QColor:
-        return QColor(self.colors.border)
+        return QColor(self.colors.control_boundary)
+
+    @property
+    def subtle_boundary(self) -> QColor:
+        return QColor(self.colors.subtle_boundary)
+
+    @property
+    def focus_indicator(self) -> QColor:
+        return QColor(self.colors.focus_indicator)
 
     @property
     def text_primary(self) -> QColor:
@@ -156,8 +168,6 @@ class Theme:
 
     @property
     def success_soft(self) -> QColor:
-        """نسخهٔ ملایم رنگ موفقیت برای هایلایت لاگ."""
-
         base = QColor(self.colors.success).darker(110)
         base.setAlpha(90)
         return base
@@ -184,7 +194,7 @@ class Theme:
 
 
 def apply_global_font(app: QApplication) -> None:
-    """اعمال فونت پیش‌فرض برنامه بر اساس وزیر یا تاهوما."""
+    """اعمال فونت پایهٔ Regular برنامه بر اساس وزیر یا تاهوما."""
 
     app.setFont(create_app_font(point_size=BASE_FONT_PT))
 
@@ -192,12 +202,11 @@ def apply_global_font(app: QApplication) -> None:
 def apply_palette(app: QApplication, theme: Theme) -> None:
     """تنظیم پالت هماهنگ با توکن‌های تم."""
 
-    palette = _create_palette_from_theme(theme)
-    app.setPalette(palette)
+    app.setPalette(_create_palette_from_theme(theme))
 
 
 def _create_palette_from_theme(theme: Theme) -> QPalette:
-    """ساخت پالت هماهنگ با توکن‌های تم (روشن یا تیره)."""
+    """ساخت پالت Fusion برای سطوح و complex controlهای native."""
 
     palette = QPalette()
     palette.setColor(QPalette.ColorRole.Window, theme.window)
@@ -209,6 +218,10 @@ def _create_palette_from_theme(theme: Theme) -> QPalette:
     palette.setColor(QPalette.ColorRole.Button, theme.card)
     palette.setColor(QPalette.ColorRole.ButtonText, theme.text_primary)
     palette.setColor(QPalette.ColorRole.WindowText, theme.text_primary)
+    palette.setColor(QPalette.ColorRole.Mid, theme.border)
+    palette.setColor(QPalette.ColorRole.Dark, theme.subtle_boundary)
+    palette.setColor(QPalette.ColorRole.Midlight, theme.surface_alt)
+    palette.setColor(QPalette.ColorRole.Light, theme.card)
     palette.setColor(QPalette.ColorRole.Highlight, theme.accent)
     highlighted_text = QColor("#ffffff")
     if relative_luminance(theme.accent) > 0.55:
@@ -237,12 +250,19 @@ def _stylesheet_token_mapping(theme: Theme) -> dict[str, str]:
         "background": theme.colors.background,
         "card": theme.colors.card,
         "surface_alt": theme.colors.surface_alt,
+        "subtle_boundary": theme.colors.subtle_boundary,
+        "control_boundary": theme.colors.control_boundary,
+        "focus_indicator": theme.colors.focus_indicator,
+        "control_hover": theme.colors.control_hover,
         "text": theme.colors.text,
         "text_muted": theme.colors.text_muted,
         "primary": theme.colors.primary,
+        "primary_hover": theme.colors.primary_hover,
+        "primary_pressed": theme.colors.primary_pressed,
         "primary_soft": _qss_rgba(theme.accent_soft),
         "success": theme.colors.success,
         "warning": theme.colors.warning,
+        "warning_surface": theme.colors.warning_surface,
         "error": theme.colors.error,
         "log_background": theme.colors.log_background,
         "log_foreground": theme.colors.log_foreground,
@@ -358,27 +378,34 @@ def setup_button_hover_animation(button: QPushButton) -> None:
 
 
 def build_theme(mode: str | None = None) -> Theme:
-    """ساخت تم بر پایهٔ حالت روشن یا تیره با توکن‌های هماهنگ."""
+    """ساخت تم بر پایهٔ حالت روشن یا تیره با توکن‌های نقش‌محور."""
 
     normalized = "dark" if (mode or "").lower() == "dark" else "light"
     if normalized == "dark":
         colors = ThemeColors(
-            background="#111418",
-            card="#181c22",
+            background="#101419",
+            card="#1c2530",
+            surface_alt="#242e3a",
+            subtle_boundary="#34404d",
+            control_boundary="#64748b",
+            focus_indicator="#60a5fa",
+            control_hover="#273341",
             text="#e6edf3",
-            text_muted="#9aa4b2",
-            primary="#2f6fed",
+            text_muted="#aeb8c5",
+            primary="#2563eb",
+            primary_hover="#1d4ed8",
+            primary_pressed="#1e40af",
             success="#3fb950",
-            warning="#d29922",
+            warning="#facc15",
+            warning_surface="#2b2515",
             error="#f47067",
             log_background="#0d1117",
             log_foreground="#d8dee9",
-            log_border="#2b333d",
+            log_border="#34404d",
             log_success="#3fb950",
-            log_warning="#d29922",
+            log_warning="#facc15",
             log_error="#f47067",
-            border="#303842",
-            surface_alt="#20262d",
+            border="#64748b",
         )
     else:
         colors = ThemeColors()

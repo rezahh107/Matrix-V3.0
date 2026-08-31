@@ -19,8 +19,6 @@ from PySide6.QtWidgets import (
 from app.ui.theme import Theme, apply_card_shadow
 
 __all__ = ["DashboardCard"]
-
-
 LOGGER = logging.getLogger(__name__)
 
 
@@ -74,19 +72,13 @@ class DashboardCard(QFrame):
         self.apply_theme(self._theme)
 
     def body_layout(self) -> QVBoxLayout:
-        """دسترسی به لایهٔ محتوای کارت."""
-
         return self._body
 
     def add_widgets(self, widgets: Iterable[QWidget]) -> None:
-        """افزودن مجموعه‌ای از ویجت‌ها به بدنه کارت."""
-
         for widget in widgets:
             self._body.addWidget(widget)
 
     def clear_body(self) -> None:
-        """پاک‌سازی محتوای بدنه برای بازسازی ترجمه یا محتوا."""
-
         while self._body.count():
             item = self._body.takeAt(0)
             widget = item.widget()
@@ -94,13 +86,11 @@ class DashboardCard(QFrame):
                 widget.setParent(None)
 
     def set_header(self, title: str, description: str) -> None:
-        """به‌روزرسانی عنوان و توضیح کارت."""
-
         self._title_label.setText(title)
         self._description_label.setText(description)
 
     def apply_theme(self, theme: Theme) -> None:
-        """اعمال تم روی کارت و متن‌های آن."""
+        """فقط spacing/state را به‌روزرسانی می‌کند؛ styles.qss visual authority است."""
 
         self._theme = theme
         self._layout.setContentsMargins(
@@ -111,12 +101,6 @@ class DashboardCard(QFrame):
         )
         self._layout.setSpacing(theme.spacing_sm)
         self._body.setSpacing(theme.spacing_xs + 2)
-        self.setStyleSheet(
-            f"#dashboardCard{{background:{theme.colors.card};border:1px solid {theme.colors.border};"
-            f"border-radius:{theme.radius_md}px;}}"
-            f"#dashboardCardTitle{{color:{theme.colors.text};font-weight:700;font-size:{theme.typography.card_title_size}pt;}}"
-            f"#dashboardCardDescription, #dashboardChecklistItem{{color:{theme.colors.text_muted};font-size:{theme.typography.body_size}pt;}}"
-        )
 
     def _apply_shadow(self, spec: object | None) -> None:
         apply_card_shadow(self)
