@@ -137,3 +137,13 @@ jobs:
 
       - name: Run UI pytest suite
         run: uv run --locked pytest tests/ui --maxfail=1 -q
+
+      - name: Generate deterministic UI render evidence
+        run: uv run --locked python tools/render_ui_matrix.py --output-dir artifacts/ui-render-matrix
+
+      - name: Upload UI render evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: matrix-ui-render-evidence
+          path: artifacts/ui-render-matrix
+          if-no-files-found: error
