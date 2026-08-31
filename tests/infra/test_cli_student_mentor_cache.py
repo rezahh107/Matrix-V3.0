@@ -7,6 +7,7 @@ import pandas as pd
 
 from app.core.policy_loader import load_policy
 from app.infra import cli
+from app.infra.groupcode.groupcode_repository import GroupCodeRepository
 from app.infra.local_database import LocalDatabase
 from app.infra.reference_mentors_repository import (
     import_mentor_pool_from_excel,
@@ -17,11 +18,42 @@ from app.infra.reference_schools_repository import (
     import_school_report_from_excel,
 )
 from app.infra.reference_students_repository import import_student_report_from_excel
+from app.infra.schools.school_repository import SchoolRepository
 
 
 def _write_excel(df: pd.DataFrame, path: Path) -> None:
     with pd.ExcelWriter(path, engine="openpyxl") as writer:
         df.to_excel(writer, index=False)
+
+
+def _seed_student_references(db: LocalDatabase, tmp_path: Path) -> None:
+    schools_path = tmp_path / "student-schools.xlsx"
+    _write_excel(
+        pd.DataFrame(
+            {
+                "کد مدرسه": [3581],
+                "نام مدرسه": ["Synthetic School"],
+                "مرکز گلستان صدرا": [1],
+                "جنسیت": [1],
+            }
+        ),
+        schools_path,
+    )
+    SchoolRepository(db).import_from_excel(schools_path)
+
+    groups_path = tmp_path / "student-groupcodes.xlsx"
+    _write_excel(
+        pd.DataFrame(
+            {
+                "group_code": [1],
+                "level": ["کنکوری"],
+                "grade": [12],
+                "track": ["ریاضی"],
+            }
+        ),
+        groups_path,
+    )
+    GroupCodeRepository(db).import_from_excel(groups_path)
 
 
 def _sample_students() -> pd.DataFrame:
@@ -66,6 +98,7 @@ def _sample_pool() -> pd.DataFrame:
 def test_allocate_uses_cached_students_and_pool(tmp_path: Path, monkeypatch) -> None:
     policy = load_policy()
     db = LocalDatabase(tmp_path / "cache.sqlite")
+    _seed_student_references(db, tmp_path)
 
     students_path = tmp_path / "students.xlsx"
     pool_path = tmp_path / "pool.xlsx"
@@ -158,7 +191,12 @@ def test_pool_sheet_selection_matches_cli_and_cache(tmp_path: Path) -> None:
     db = LocalDatabase(tmp_path / "cache.sqlite")
 
     schools_df = pd.DataFrame(
-        {"کد مدرسه": [3581], "نام مدرسه": ["نمونه"], "مرکز گلستان صدرا": [1], "جنسیت": [1]}
+        {
+            "کد مدرسه": [3581],
+            "نام مدرسه": ["نمونه"],
+            "مرکز گلستان صدرا": [1],
+            "جنسیت": [1],
+        }
     )
     schools_path = tmp_path / "schools.xlsx"
     _write_excel(schools_df, schools_path)
