@@ -5,6 +5,7 @@ from pathlib import Path
 
 from PySide6.QtWidgets import (
     QFileDialog,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QMessageBox,
@@ -22,7 +23,7 @@ __all__ = ["DatabaseTab"]
 
 
 class DatabaseTab(QWidget):
-    """نمای وضعیت و import داده‌های مرجع."""
+    """نمای وضعیت و import داده‌های مرجع با شناسه‌های ساختاری پایدار."""
 
     def __init__(
         self,
@@ -41,43 +42,59 @@ class DatabaseTab(QWidget):
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(12)
 
-        title = QLabel(self._t("database.title", "Database"))
-        title.setObjectName("databaseTitleLabel")
-        subtitle = QLabel(
+        self._title = QLabel(self._t("database.title", "Database"))
+        self._title.setObjectName("databaseTitleLabel")
+        self._title.setProperty("role", "sectionTitle")
+        self._subtitle = QLabel(
             self._t(
                 "database.subtitle",
                 "Reference data status and imports for schools and group codes.",
             )
         )
-        subtitle.setWordWrap(True)
-        subtitle.setObjectName("databaseSubtitleLabel")
+        self._subtitle.setWordWrap(True)
+        self._subtitle.setObjectName("databaseSubtitleLabel")
 
-        layout.addWidget(title)
-        layout.addWidget(subtitle)
+        layout.addWidget(self._title)
+        layout.addWidget(self._subtitle)
 
         self._schools_status_label = QLabel(self._t("database.placeholder", "Not connected yet"))
         self._schools_status_label.setObjectName("databaseSchoolsLabel")
         self._schools_status_label.setWordWrap(True)
-        layout.addLayout(
-            self._build_section(
-                self._t("database.schools", "Schools"),
-                self._schools_status_label,
-                self.import_schools_via_dialog,
-            )
+        self._schools_section, self._schools_heading, self._schools_button = self._build_section(
+            "schools",
+            self._t("database.schools", "Schools"),
+            self._schools_status_label,
+            self.import_schools_via_dialog,
         )
+        layout.addWidget(self._schools_section)
 
         self._groupcodes_status_label = QLabel(self._t("database.placeholder", "Not connected yet"))
         self._groupcodes_status_label.setObjectName("databaseGroupCodesLabel")
         self._groupcodes_status_label.setWordWrap(True)
-        layout.addLayout(
-            self._build_section(
-                self._t("database.group_codes", "Group codes"),
-                self._groupcodes_status_label,
-                self.import_groupcodes_via_dialog,
-            )
+        self._groupcodes_section, self._groupcodes_heading, self._groupcodes_button = self._build_section(
+            "groupcodes",
+            self._t("database.group_codes", "Group codes"),
+            self._groupcodes_status_label,
+            self.import_groupcodes_via_dialog,
         )
+        layout.addWidget(self._groupcodes_section)
 
         layout.addStretch(1)
+        self.refresh_status()
+
+    def update_translator(self, translator: UiTranslator) -> None:
+        self._translator = translator
+        self._title.setText(self._t("database.title", "Database"))
+        self._subtitle.setText(
+            self._t(
+                "database.subtitle",
+                "Reference data status and imports for schools and group codes.",
+            )
+        )
+        self._schools_heading.setText(self._t("database.schools", "Schools"))
+        self._groupcodes_heading.setText(self._t("database.group_codes", "Group codes"))
+        self._schools_button.setText(self._t("database.import", "Import"))
+        self._groupcodes_button.setText(self._t("database.import", "Import"))
         self.refresh_status()
 
     def refresh_status(self) -> None:
@@ -101,20 +118,29 @@ class DatabaseTab(QWidget):
         return " | ".join(parts)
 
     def _build_section(
-        self, title: str, status_label: QLabel, handler: Callable[[], None]
-    ) -> QHBoxLayout:
-        row = QHBoxLayout()
-        row.setContentsMargins(0, 0, 0, 0)
+        self,
+        section_id: str,
+        title: str,
+        status_label: QLabel,
+        handler: Callable[[], None],
+    ) -> tuple[QFrame, QLabel, QPushButton]:
+        section = QFrame(self)
+        section.setObjectName("databaseSection")
+        section.setProperty("sectionId", section_id)
+        row = QHBoxLayout(section)
+        row.setContentsMargins(12, 10, 12, 10)
         row.setSpacing(8)
-        heading = QLabel(title)
-        heading.setObjectName(f"label{title}Heading")
-        button = QPushButton(self._t("database.import", "Import"))
+        heading = QLabel(title, section)
+        heading.setObjectName(f"databaseHeading_{section_id}")
+        heading.setProperty("role", "sectionTitle")
+        button = QPushButton(self._t("database.import", "Import"), section)
+        button.setProperty("variant", "secondary")
         button.clicked.connect(handler)
         row.addWidget(heading)
         row.addStretch(1)
         row.addWidget(status_label)
         row.addWidget(button)
-        return row
+        return section, heading, button
 
     def import_schools_via_dialog(self) -> None:
         if self._school_repository is None:

@@ -1,4 +1,4 @@
-"""تست یکپارچه برای تم، جهت چیدمان و فونت وزیر."""
+"""تست یکپارچه برای تم، جهت چیدمان و سلسله‌مراتب فونت."""
 
 from __future__ import annotations
 
@@ -31,21 +31,17 @@ def test_create_app_font_prefers_vazir(monkeypatch: pytest.MonkeyPatch) -> None:
     assert font.family().lower().startswith("vazir")
 
 
-def test_create_app_font_sets_bold_weight_for_vazir(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_create_app_font_sets_regular_weight_for_vazir(monkeypatch: pytest.MonkeyPatch) -> None:
     fake = QFont("Vazir", 11)
     monkeypatch.setattr(fonts, "load_vazir_font", lambda point_size=None: fake)
-
     font = create_app_font()
+    assert font.weight() == QFont.Weight.Normal
 
-    assert font.weight() == QFont.Weight.Bold
 
-
-def test_create_app_font_sets_bold_weight_for_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_create_app_font_sets_regular_weight_for_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(fonts, "load_vazir_font", lambda point_size=None: None)
-
     font = create_app_font()
-
-    assert font.weight() == QFont.Weight.Bold
+    assert font.weight() == QFont.Weight.Normal
 
 
 def test_resolve_vazir_family_prefers_vazirmatn(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -67,15 +63,13 @@ def test_apply_global_font_sets_qapplication_font(
     fonts_dir = tmp_path / "fonts"
     monkeypatch.setattr(fonts, "FONTS_DIR", fonts_dir)
     monkeypatch.setattr(fonts, "_windows_candidates", lambda: [])
-
-    # نصب فونت و اعمال تم روی اپلیکیشن
     fonts.ensure_vazir_local_fonts()
     fonts._install_fonts_from_directory(fonts_dir)
     theme.apply_global_font(qapp)
-
     app_font = qapp.font()
     assert app_font.family().casefold().startswith(("vazir", "vazirmatn"))
     assert app_font.pointSize() == theme.BASE_FONT_PT
+    assert app_font.weight() == QFont.Weight.Normal
     assert app_font.styleStrategy() & QFont.StyleStrategy.PreferAntialias
     assert app_font.styleStrategy() & QFont.StyleStrategy.PreferQuality
     hint_pref = getattr(QFont.HintingPreference, "PreferFullHinting", None)
@@ -89,20 +83,18 @@ def test_widgets_inherit_global_font(
     fonts_dir = tmp_path / "fonts"
     monkeypatch.setattr(fonts, "FONTS_DIR", fonts_dir)
     monkeypatch.setattr(fonts, "_windows_candidates", lambda: [])
-
     fonts.ensure_vazir_local_fonts()
     fonts._install_fonts_from_directory(fonts_dir)
     theme.apply_global_font(qapp)
-
     label = QLabel("sample")
     assert label.font().family() == qapp.font().family()
     assert label.font().pointSize() == theme.BASE_FONT_PT
+    assert label.font().weight() == QFont.Weight.Normal
 
 
 def test_layout_direction_for_languages(qapp: QApplication) -> None:
     theme.apply_layout_direction(qapp, Language.FA)
     assert qapp.layoutDirection() == Qt.RightToLeft
-
     theme.apply_layout_direction(qapp, Language.EN)
     assert qapp.layoutDirection() == Qt.LeftToRight
 
@@ -110,23 +102,20 @@ def test_layout_direction_for_languages(qapp: QApplication) -> None:
 def test_light_theme_log_background_is_light() -> None:
     light_theme = theme.build_theme("light")
     dark_theme = theme.build_theme("dark")
-
     light_luminance = QColor(light_theme.colors.log_background).lightness()
     dark_luminance = QColor(dark_theme.colors.log_background).lightness()
-
     assert light_luminance > 210
     assert dark_luminance < 80
     assert dark_luminance < light_luminance
 
 
-def test_heading_font_is_larger_than_body(
+def test_heading_font_is_larger_and_more_emphasized_than_body(
     qapp: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(fonts, "load_vazir_font", lambda point_size=None: None)
     body_font = fonts.create_app_font()
     heading_font = fonts.get_heading_font()
-
     qapp.processEvents()
-
     assert heading_font.family() == body_font.family()
     assert heading_font.pointSize() > body_font.pointSize()
+    assert heading_font.weight() > body_font.weight()
