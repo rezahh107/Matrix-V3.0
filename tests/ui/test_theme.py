@@ -16,6 +16,46 @@ from app.ui import theme
 from app.ui.widgets import FilePicker
 
 
+_CANONICAL_STYLESHEET_TOKENS = (
+    "background",
+    "surface_primary",
+    "surface_secondary",
+    "control_surface",
+    "control_hover",
+    "boundary_subtle",
+    "boundary_control",
+    "text_primary",
+    "text_secondary",
+    "accent",
+    "accent_hover",
+    "accent_pressed",
+    "focus",
+    "selection",
+    "success",
+    "warning",
+    "error",
+    "disabled_text",
+    "disabled_surface",
+    "diagnostic_background",
+    "diagnostic_text",
+    "caption_size",
+    "body_size",
+    "body_strong_size",
+    "subtitle_size",
+    "title_size",
+    "micro",
+    "icon_to_text",
+    "label_to_control",
+    "within_group",
+    "between_groups",
+    "section_spacing",
+    "panel_padding",
+    "cta_separation",
+    "control_radius",
+    "container_radius",
+)
+
+
 def _contrast_ratio(foreground: QColor, background: QColor) -> float:
     foreground_luminance = theme.relative_luminance(foreground)
     background_luminance = theme.relative_luminance(background)
@@ -24,36 +64,57 @@ def _contrast_ratio(foreground: QColor, background: QColor) -> float:
     return (lighter + 0.05) / (darker + 0.05)
 
 
+def _palette_snapshot(app: QApplication) -> dict[QPalette.ColorRole, QColor]:
+    palette = app.palette()
+    return {
+        role: palette.color(role)
+        for role in (
+            QPalette.ColorRole.Window,
+            QPalette.ColorRole.Base,
+            QPalette.ColorRole.AlternateBase,
+            QPalette.ColorRole.Highlight,
+            QPalette.ColorRole.HighlightedText,
+            QPalette.ColorRole.Link,
+        )
+    }
+
+
+def _assert_palette_matches_theme(
+    palette: dict[QPalette.ColorRole, QColor], resolved_theme: theme.Theme
+) -> None:
+    colors = resolved_theme.colors
+    assert palette[QPalette.ColorRole.Window] == QColor(colors.background)
+    assert palette[QPalette.ColorRole.Base] == QColor(colors.control_surface)
+    assert palette[QPalette.ColorRole.AlternateBase] == QColor(colors.surface_secondary)
+    assert palette[QPalette.ColorRole.Highlight] == QColor(colors.selection)
+    assert palette[QPalette.ColorRole.HighlightedText] == QColor(colors.text_primary)
+    assert palette[QPalette.ColorRole.Link] == QColor(colors.accent)
+
+
 def test_apply_theme_switches_between_light_and_dark_palettes() -> None:
     app = QApplication.instance() or QApplication([])
 
     light_theme = theme.apply_theme(app, "light")
-    light_window = app.palette().color(QPalette.ColorRole.Window)
-    light_base = app.palette().color(QPalette.ColorRole.Base)
-    light_highlight = app.palette().color(QPalette.ColorRole.Highlight)
+    light_palette = _palette_snapshot(app)
     light_stylesheet = app.styleSheet()
 
     dark_theme = theme.apply_theme(app, "dark")
-    dark_window = app.palette().color(QPalette.ColorRole.Window)
-    dark_base = app.palette().color(QPalette.ColorRole.Base)
-    dark_highlight = app.palette().color(QPalette.ColorRole.Highlight)
+    dark_palette = _palette_snapshot(app)
     dark_stylesheet = app.styleSheet()
 
     assert light_theme.mode == "light"
     assert dark_theme.mode == "dark"
-    assert dark_window != light_window
-    assert dark_window.value() < light_window.value()
+    assert dark_palette[QPalette.ColorRole.Window] != light_palette[QPalette.ColorRole.Window]
+    assert (
+        dark_palette[QPalette.ColorRole.Window].value()
+        < light_palette[QPalette.ColorRole.Window].value()
+    )
     assert light_stylesheet
     assert dark_stylesheet
     assert dark_stylesheet != light_stylesheet
 
-    assert dark_window == dark_theme.window
-    assert dark_base == dark_theme.card
-    assert dark_highlight == dark_theme.accent
-
-    assert light_window == light_theme.window
-    assert light_base == light_theme.card
-    assert light_highlight == light_theme.accent
+    _assert_palette_matches_theme(light_palette, light_theme)
+    _assert_palette_matches_theme(dark_palette, dark_theme)
 
 
 def test_apply_theme_is_idempotent_and_replaces_ad_hoc_stylesheet() -> None:
@@ -83,14 +144,21 @@ def test_build_stylesheet_resolves_theme_tokens() -> None:
 
     assert stylesheet
     assert dark_theme.colors.background in stylesheet
-    assert dark_theme.colors.card in stylesheet
-    assert dark_theme.colors.primary in stylesheet
+    assert dark_theme.colors.control_surface in stylesheet
+    assert dark_theme.colors.surface_secondary in stylesheet
+    assert dark_theme.colors.selection in stylesheet
+    assert dark_theme.colors.text_primary in stylesheet
+    assert dark_theme.colors.accent in stylesheet
+
     assert "QComboBox#themeSelector" in stylesheet
-    assert "QPushButton#secondaryButton" in stylesheet
-    assert "QPushButton#btnAllocate:disabled" in stylesheet
-    assert "{background}" not in stylesheet
-    assert "{card}" not in stylesheet
-    assert "{primary}" not in stylesheet
+    assert "QComboBox::drop-down" in stylesheet
+    assert "QComboBox::down-arrow" in stylesheet
+    assert 'QPushButton[variant="primary"]' in stylesheet
+    assert 'QPushButton[variant="secondary"]' in stylesheet
+    assert "QPushButton:disabled" in stylesheet
+
+    for token in _CANONICAL_STYLESHEET_TOKENS:
+        assert "{" + token + "}" not in stylesheet
 
 
 def test_file_picker_preserves_path_space_and_browse_button_proportion() -> None:
