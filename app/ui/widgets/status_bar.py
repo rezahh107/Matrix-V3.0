@@ -30,3 +30,8 @@ class ThemedStatusBar(QStatusBar):
         palette.setColor(QPalette.ColorRole.WindowText, theme.text_primary)
         self.setPalette(palette)
         self.setAutoFillBackground(True)
+
+    def refresh_fonts(self) -> None:
+        """Compatibility no-op: font ownership belongs to QApplication."""
+
+        return None
