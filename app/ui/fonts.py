@@ -2,8 +2,8 @@
 
 این ماژول تلاش می‌کند فونت «وزیر» را از مسیر محلی ``app/ui/fonts/``
 بارگذاری کند و در صورت نبود، روی ویندوز از مسیرهای رایج توسعه‌دهنده
-کپی می‌کند. خروجی نهایی یک ``QFont`` سراسری است که در صورت نبود وزیر
-روی تاهوما بازمی‌گردد.
+کپی می‌کند. خروجی نهایی یک ``QFont`` سراسری Regular است که در صورت نبود
+وزیر روی تاهوما بازمی‌گردد؛ تأکیدهای معنایی در لایهٔ QSS/ویجت اعمال می‌شوند.
 """
 
 from __future__ import annotations
@@ -43,8 +43,8 @@ FONTS_DIR: Path = Path(__file__).resolve().parent / "fonts"
 FALLBACK_FAMILY = "Tahoma"
 DEFAULT_POINT_SIZE = 9
 
-# وزن پیش‌فرض برای فونت سراسری برنامه: بولد برای خوانایی بیشتر.
-DEFAULT_WEIGHT = "bold"
+# وزن پایهٔ برنامه باید خنثی باشد؛ QSS/heading helpers تأکید معنایی را تعیین می‌کنند.
+DEFAULT_WEIGHT = "normal"
 DEBUG_LOG_ENV = "MATRIX_FONT_LOG"
 
 _FONT_DEBUG_HANDLER: logging.Handler | None = None
@@ -287,9 +287,8 @@ def create_app_font(
         >>> bool(font.family())  # doctest: +SKIP
         True
 
-    نکته:
-        وزن پیش‌فرض روی Bold تنظیم می‌شود تا هماهنگی سراسری با درخواست
-        کاربر حفظ شود.
+    فونت پایه عمداً Regular/Normal است. وزن‌های DemiBold/Bold باید فقط برای
+    نقش‌های معنایی مانند عنوان یا CTA اعمال شوند.
     """
 
     from PySide6.QtGui import QFont
@@ -354,11 +353,13 @@ def get_app_font(point_size: int | None = None) -> QFont:
 
 
 def get_heading_font() -> QFont:
-    """فونت عناوین: مبتنی بر وزیر با اندازهٔ بزرگ‌تر و وزن بولد."""
+    """فونت عنوان با اندازهٔ بزرگ‌تر و تأکید DemiBold."""
+
+    from PySide6.QtGui import QFont
 
     heading = create_app_font()
     heading.setPointSize(11)
-    heading.setWeight(_resolve_weight())
+    heading.setWeight(QFont.Weight.DemiBold)
     return heading
 
 
@@ -443,7 +444,10 @@ def _resolve_weight() -> QFont.Weight:
     from PySide6.QtGui import QFont
 
     mapping = {
-        "bold": QFont.Weight.Bold,
+        "normal": QFont.Weight.Normal,
+        "regular": QFont.Weight.Normal,
+        "medium": QFont.Weight.Medium,
         "demibold": QFont.Weight.DemiBold,
+        "bold": QFont.Weight.Bold,
     }
     return mapping.get(DEFAULT_WEIGHT.lower(), QFont.Weight.Normal)

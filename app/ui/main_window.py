@@ -1,378 +1,164 @@
-"""پنجرهٔ اصلی PySide6 برای سناریوهای سامانه تخصیص دانشجو-منتور."""
+"""Public MainWindow entrypoint with the bounded UI/UX composition pass.
+
+The pre-existing execution implementation is retained verbatim in
+``main_window_base``.  This module changes presentation composition only: layout,
+localization bindings, shell geometry and semantic visual state.  All execution
+slots and domain/Infra calls continue to resolve to the preserved base methods.
+"""
 
 from __future__ import annotations
 
-import logging
-import re
-import threading
-import traceback
-from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
-from html import escape, unescape
-from pathlib import Path
-from typing import Literal
 
-import pandas as pd
-from PySide6.QtCore import (
-    QByteArray,
-    QDateTime,
-    QEasingCurve,
-    QEvent,
-    QObject,
-    QPropertyAnimation,
-    QSettings,
-    Qt,
-    QTimer,
-    QUrl,
-    Slot,
-)
-from PySide6.QtGui import (
-    QAction,
-    QCloseEvent,
-    QDesktopServices,
-    QEnterEvent,
-    QGuiApplication,
-    QKeySequence,
-    QPalette,
-    QResizeEvent,
-)
+from PySide6.QtCore import QByteArray, QSettings, Qt, QTimer
+from PySide6.QtGui import QShowEvent
 from PySide6.QtWidgets import (
-    QAbstractItemView,
-    QApplication,
+    QBoxLayout,
     QCheckBox,
-    QComboBox,
     QDialog,
     QDialogButtonBox,
-    QFileDialog,
     QFormLayout,
     QFrame,
-    QGraphicsOpacityEffect,
+    QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
+    QLayout,
     QLineEdit,
-    QMainWindow,
-    QMessageBox,
-    QPlainTextEdit,
-    QProgressBar,
     QPushButton,
     QScrollArea,
-    QSplitter,
-    QSplitterHandle,
-    QTableWidget,
-    QTableWidgetItem,
-    QTabWidget,
-    QToolBar,
+    QSizePolicy,
+    QSpacerItem,
     QVBoxLayout,
     QWidget,
-    QWidgetAction,
 )
-from shiboken6 import Shiboken
 
-from app.core.allocation.history_metrics import METRIC_COLUMNS
-from app.core.common.columns import canonicalize_headers
-from app.core.counter import find_max_sequence_by_prefix, year_to_yy
-from app.core.policy_loader import get_policy
-from app.infra import cli
-from app.infra.config_flags import UserSettings, load_user_settings, save_user_settings
-from app.infra.db import compute_reference_readiness
-from app.infra.errors import JoinKeyValidationError
-from app.infra.groupcode.groupcode_repository import GroupCodeRepository
-from app.infra.health import compute_run_health, export_llm_debug_report_to_file
-from app.infra.local_database import LocalDatabase
-from app.infra.schools.school_repository import SchoolRepository
-from app.infra.year_database_manager import YearDatabaseInfo, YearDatabaseManager
-from app.ui.database_manager_dialog import DatabaseManagerDialog
-from app.ui.database_tab import DatabaseTab
-from app.ui.dialogs.join_key_validation_dialog import JoinKeyValidationDialog
-from app.ui.dialogs.qa_dashboard_dialog import QADashboardDialog
-from app.ui.dialogs.unknown_data_dialog import (
-    UnknownDataDialog,
-    UnknownsReportSummary,
-    load_unknowns_report,
-    summarize_unknowns_report,
-)
-from app.ui.fonts import get_app_font
-from app.ui.helpers.counter_helpers import detect_year_candidates
-from app.ui.helpers.manager_helpers import extract_manager_names, load_manager_names_from_pool
-from app.ui.history_metrics import HistoryMetricsDialog
-from app.ui.loaders import ExcelLoader
-from app.ui.mentor_pool_dialog import MentorPoolDialog
-from app.ui.models import MentorPoolEntry, build_mentor_entries_from_dataframe
-from app.ui.policy_cache import get_cached_policy
-from app.ui.viewmodels.join_key_validation_vm import JoinKeyValidationVM
-from app.utils.path_utils import resource_path
+from app.infra.config_flags import UserSettings, save_user_settings
+from app.ui.texts import UiTranslator
+from app.ui.widgets.file_picker import FilePicker
 
-from .app_preferences import AppPreferences
-from .effects import SafeOpacityEffect
-from .i18n import Language
-from .log_panel import LogPanel
-from .preferences import (
-    format_last_run_label,
-    read_last_run_info,
-)
-from .preferences.language_dialog import LanguageDialog
-from .task_runner import ProgressFn, Worker
-from .texts import UiTranslator
-from .theme import (
-    Theme,
-    apply_card_shadow,
-    apply_layout_direction,
-    apply_theme,
-    apply_theme_mode,
-    build_theme,
-)
-from .viewmodels.qa_dashboard_vm import QADashboardVM
-from .widgets import DatabaseStatusWidget, FilePicker, ThemedStatusBar
-from .widgets.health_indicator import HealthCallbacks, HealthIndicatorWidget
+from . import main_window_base as _base
 
-logger = logging.getLogger(__name__)
+UnknownsPreflightResult = _base.UnknownsPreflightResult
+AccentSplitter = _base.AccentSplitter
+run_demo = _base.run_demo
+get_cached_policy = _base.get_cached_policy
+load_policy = _base.load_policy
 
-_LOG_FLUSH_THRESHOLD = 20
-_LOG_MAX_BLOCKS = 1200
-_LOG_TAG_RE = re.compile(r"<[^>]+>")
+__all__ = ["MainWindow", "run_demo", "FilePicker", "UnknownsPreflightResult"]
 
 
-def _extract_origin_hint(exc: BaseException) -> str | None:
-    traceback_data = exc.__traceback__
-    if traceback_data is None:
-        return None
-    frames = traceback.extract_tb(traceback_data)
-    if not frames:
-        return None
-    last_frame = frames[-1]
-    return f"{last_frame.filename}:{last_frame.lineno} in {last_frame.name}"
+@dataclass
+class _TextBinding:
+    target: object
+    key: str
+    fallback: str
+    kind: str = "text"
 
 
-def _format_exception_details(exc: BaseException) -> str:
-    origin_hint = _extract_origin_hint(exc)
-    # Use traceback.format_exception to be explicit about which exception is being formatted.
-    # This also includes the exception type and message, so the headline is redundant.
-    tb_str = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
-
-    detail_lines: list[str] = []
-    if origin_hint:
-        detail_lines.append(f"Origin: {origin_hint}")
-        detail_lines.append("")
-    detail_lines.append(tb_str)
-    return "\n".join(detail_lines).strip()
-
-
-@dataclass(frozen=True)
-class UnknownsPreflightResult:
-    status: Literal["clean", "issues", "blocking", "error"]
-    report_path: Path
-    exit_code: int
-    summary: UnknownsReportSummary | None = None
-
-_EN_TEXT_DEFAULTS: dict[str, str] = {
-    "app.title": "Student-Mentor Allocation",
-    "status.ready": "Ready",
-    "status.waiting": "Pending",
-    "status.error": "Error",
-    "status.cancelled": "Cancelled",
-    "status.cancelled.detail": "Operation stopped",
-    "status.complete": "Complete",
-    "status.complete.detail": "Operation finished successfully",
-    "status.last_run_prefix": "Last run",
-    "status.no_runs": "No runs recorded",
-    "status.language": "Language",
-    "status.restart_required": "Restart required to apply language.",
-    "status.running": "Processing",
-    "tabs.build": "Build",
-    "tabs.database": "Database",
-    "tabs.allocate": "Allocate",
-    "tabs.rule_engine": "Rule Engine",
-    "tabs.explain": "Explain",
-    "hero.build.title": "Build Matrix",
-    "hero.build.subtitle": "Select inputs and build the eligibility matrix.",
-    "hero.build.badge": "Step 1 of 3",
-    "hero.allocate.title": "Allocate",
-    "hero.allocate.subtitle": "Pick student and mentor pools for allocation and Sabt exports.",
-    "hero.allocate.badge": "Step 2 of 3",
-    "hero.rule.title": "Rule Engine",
-    "hero.rule.subtitle": "Execute the rule engine to review policy and counters.",
-    "hero.rule.badge": "Step 3 of 3",
-    "hero.explain.title": "Explain Report",
-    "hero.explain.subtitle": "Quick access to decision explainability for audits and training.",
-    "hero.explain.badge": "Appendix",
-    "ribbon.actions": "Actions",
-    "action.build": "Build",
-    "action.allocate": "Allocate",
-    "action.rule_engine": "Run Rule Engine",
-    "action.preferences": "Preferences",
-    "action.demo": "Run Demo",
-    "action.browse": "Browse…",
-    "dashboard.button.output": "Output Folder",
-    "dashboard.files.title": "Key Files",
-    "dashboard.files.description": "Last saved paths",
-    "dashboard.checklist.title": "Checklist",
-    "dashboard.checklist.description": "Delivery reminders",
-    "dashboard.no_checklist": "No checklist defined",
-    "dashboard.policy.info": "Active Policy",
-    "theme.label": "Theme",
-    "theme.light": "Light",
-    "theme.dark": "Dark",
-    "statusbar.ready": "Status: Ready",
-    "statusbar.running": "Status: Running",
-    "statusbar.error": "Status: Error",
-    "dashboard.button.build": "Build",
-    "dashboard.button.allocate": "Allocate",
-    "dashboard.button.rule_engine": "Rule Engine",
-    "tooltip.build": "Run the full matrix build pipeline",
-    "tooltip.allocate": "Allocate students to mentors",
-    "tooltip.rule_engine": "Execute the rule engine for policy testing",
-    "tooltip.output_folder": "Open the last generated output folder",
-    "tooltip.preferences": "Change appearance and language",
-    "error.reference_not_ready.title": "Reference data not ready",
-    "error.reference_not_ready.detail": "Import or update School/GroupCode data via the Database tab before running.",
-    "error.reference_not_ready.counts": "Schools: {schools} | Group codes: {groupcodes}",
-    "reference.hint": "Runs use database-backed School/GroupCode data. Update from Excel only if you need to refresh references.",
-    "reference.update.schools": "Update schools",
-    "reference.update.groupcodes": "Update group codes",
-    "group.inputs": "Inputs",
-    "group.policy": "Policy",
-    "group.output": "Output",
-    "group.actions": "Actions",
-    "group.counter": "Counter",
-    "group.preview": "Preview",
-    "files.inspactor": "Inspactor report",
-    "files.schools": "Schools report",
-    "files.crosswalk": "Crosswalk file",
-    "files.policy": "Policy",
-    "files.students": "Students",
-    "files.mentors": "Mentors",
-    "files.output.matrix": "Matrix output",
-    "stage.pick_scenario": "Select a scenario to start",
+# Existing literals are converted immediately into catalogue bindings.  The
+# mapping is intentionally bounded to the reviewed active pages in this work unit.
+_LITERAL_BINDINGS: dict[str, tuple[str, str]] = {
+    "ورودی‌ها": ("group.inputs", "Inputs"),
+    "ورودی‌های تخصیص": ("group.allocate_inputs", "Allocation inputs"),
+    "سیاست": ("group.policy", "Policy"),
+    "خروجی": ("group.outputs", "Output"),
+    "تنظیمات پیشرفته": ("group.advanced", "Advanced settings"),
+    "شناسهٔ ثبت‌نام": ("group.registration", "Registration ID"),
+    "خروجی Sabt (ImportToSabt)": ("group.sabt_allocate", "Sabt output (ImportToSabt)"),
+    "مدیریت مراکز": ("group.center_management", "Center management"),
+    "گزارش Inspactor": ("files.inspactor", "Inspactor report"),
+    "Schools (Database reference)": ("files.schools", "Schools (Database reference)"),
+    "Crosswalk (Database reference)": ("files.crosswalk", "Crosswalk (Database reference)"),
+    "خروجی ماتریس": ("files.matrix_output", "Matrix output"),
+    "فایل دانش‌آموزان": ("files.students", "Students file"),
+    "استخر منتورها": ("files.pool", "Mentor pool"),
+    "ستون ظرفیت": ("files.capacity_column", "Capacity column"),
+    "سال تحصیلی": ("files.registration_year", "Academic year"),
+    "روستر سال قبل": ("files.prior_roster", "Prior roster"),
+    "روستر سال جاری": ("files.current_roster", "Current roster"),
+    "خروجی تخصیص": ("files.alloc_output", "Allocation output"),
+    "فایل خروجی": ("files.sabt_output", "Output file"),
+    "فایل تنظیمات": ("files.sabt_config", "Configuration file"),
+    "فایل قالب": ("files.sabt_template", "Template file"),
+    "فایل ماتریس": ("files.rule_matrix", "Matrix file"),
+    "پیشنهاد خودکار": ("action.autodetect", "Auto-detect"),
+    "بازنشانی به پیش‌فرض": ("action.reset_default", "Reset to default"),
+    "بارگذاری مجدد مدیران": ("action.refresh", "Reload managers"),
+    "حاکمیت استخر": ("action.pool_governance", "Pool governance"),
+    "ساخت ماتریس": ("action.build", "Build Matrix"),
+    "تخصیص": ("action.allocate", "Allocate"),
+    "اجرای موتور قواعد": ("action.rule_engine", "Run Rule Engine"),
+    "گزارش Explain": ("hero.explain.title", "Explain Report"),
+    "ضمیمه": ("hero.explain.badge", "Appendix"),
+    "Inspactor report": ("files.inspactor", "Inspactor report"),
+    "Policy": ("group.policy", "Policy"),
+    "Output": ("group.outputs", "Output"),
+    "Allocate": ("action.allocate", "Allocate"),
+    "Build Matrix": ("action.build", "Build Matrix"),
+    "Rule Engine": ("hero.rule.title", "Rule Engine"),
 }
-_PERSIAN_PATTERN = re.compile(r"[\u0600-\u06FF]")
-
-# Alias kept for compatibility with tests that patch `app.ui.main_window.load_policy`.
-load_policy = get_cached_policy
-
-__all__ = ["MainWindow", "run_demo", "FilePicker"]
-
-
-class AccentSplitterHandle(QSplitterHandle):
-    """دستهٔ اسپلایتر با شاخص مرکزی و واکنش به Hover."""
-
-    def __init__(self, orientation: Qt.Orientation, parent: QSplitter, theme: Theme) -> None:
-        super().__init__(orientation, parent)
-        self._theme = theme
-        self._hover = False
-        self._grip = QLabel(
-            "⋮" if orientation == Qt.Orientation.Vertical else "⋯",
-            self,
-        )
-        self._grip.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._grip.setMargin(0)
-        self._grip.setContentsMargins(0, 0, 0, 0)
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(self._grip)
-
-        self.setMouseTracking(True)
-        self.setAutoFillBackground(True)
-        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self._apply_colors()
-
-    def set_theme(self, theme: Theme) -> None:
-        self._theme = theme
-        self._apply_colors()
-
-    def enterEvent(self, event: QEnterEvent) -> None:  # noqa: N802 - امضای Qt
-        self._hover = True
-        super().enterEvent(event)
-        self._apply_colors()
-
-    def leaveEvent(self, event: QEvent) -> None:  # noqa: N802 - امضای Qt
-        self._hover = False
-        super().leaveEvent(event)
-        self._apply_colors()
-
-    def _apply_colors(self) -> None:
-        """به‌روزرسانی رنگ پس‌زمینه و متن متناسب با تم و وضعیت Hover."""
-
-        palette = self.palette()
-        base_color = self._theme.border if self._theme else QPalette().color(QPalette.ColorRole.Mid)
-        hover_color = (
-            self._theme.accent if self._theme else QPalette().color(QPalette.ColorRole.Highlight)
-        )
-        text_color = (
-            self._theme.text_muted if self._theme else QPalette().color(QPalette.ColorRole.Text)
-        )
-        palette.setColor(QPalette.ColorRole.Window, hover_color if self._hover else base_color)
-        palette.setColor(QPalette.ColorRole.WindowText, text_color)
-        self.setPalette(palette)
-        self._grip.setPalette(palette)
-        self.update()
-
-
-class AccentSplitter(QSplitter):
-    """اسپلایتر با هندل قابل تم برای هایلایت و آیکون مرکزی."""
-
-    def __init__(self, orientation: Qt.Orientation, parent: QWidget | None, theme: Theme) -> None:
-        super().__init__(orientation, parent)
-        self._theme = theme
-        self.setHandleWidth(5)
-
-    def createHandle(self) -> QSplitterHandle:  # noqa: N802 - امضای Qt
-        return AccentSplitterHandle(self.orientation(), self, self._theme)
-
-    def set_theme(self, theme: Theme) -> None:
-        self._theme = theme
-        for index in range(self.count() + 1):
-            handle = self.handle(index)
-            if isinstance(handle, AccentSplitterHandle):
-                handle.set_theme(theme)
 
 
 class SettingsDialog(QDialog):
-    """Dialog for toggling optional diagnostics exports."""
+    """Localized presentation for the unchanged UserSettings contract."""
 
-    def __init__(self, settings: UserSettings, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        settings: UserSettings,
+        translator: UiTranslator,
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Settings")
-        self._history_checkbox = QCheckBox("History Metrics", self)
-        self._history_checkbox.setChecked(settings.enable_history_metrics)
-
-        self._debug_checkbox = QCheckBox("Trace Debug Sheets", self)
-        self._debug_checkbox.setChecked(settings.enable_trace_debug_sheets)
-
-        self._mentor_trace_checkbox = QCheckBox("Mentor Pipeline Trace", self)
-        self._mentor_trace_checkbox.setChecked(settings.enable_mentor_trace_debug)
-
-        self._pool_governance_checkbox = QCheckBox("Pool Governance Trace", self)
-        self._pool_governance_checkbox.setChecked(settings.enable_pool_governance_trace)
-
-        self._bucket_trace_checkbox = QCheckBox("Bucket Trace", self)
-        self._bucket_trace_checkbox.setChecked(settings.enable_bucket_trace)
-
-        self._qa_pool_coverage_checkbox = QCheckBox("QA Pool Coverage Rules", self)
-        self._qa_pool_coverage_checkbox.setChecked(settings.enable_qa_pool_coverage_rules)
-
-        self._join_bucket_checkbox = QCheckBox("Use Join Buckets", self)
-        self._join_bucket_checkbox.setChecked(settings.use_join_buckets)
-
-        self._trace_checkbox = QCheckBox("Trace Sheet Export", self)
-        self._trace_checkbox.setChecked(settings.enable_trace_export)
+        self._translator = translator
+        self.setWindowTitle(self._t("settings.title", "Settings"))
+        self._history_checkbox = self._check(
+            "settings.history_metrics", "History Metrics", settings.enable_history_metrics
+        )
+        self._debug_checkbox = self._check(
+            "settings.trace_debug_sheets", "Trace Debug Sheets", settings.enable_trace_debug_sheets
+        )
+        self._mentor_trace_checkbox = self._check(
+            "settings.mentor_trace", "Mentor Pipeline Trace", settings.enable_mentor_trace_debug
+        )
+        self._pool_governance_checkbox = self._check(
+            "settings.pool_trace", "Pool Governance Trace", settings.enable_pool_governance_trace
+        )
+        self._bucket_trace_checkbox = self._check(
+            "settings.bucket_trace", "Bucket Trace", settings.enable_bucket_trace
+        )
+        self._qa_pool_coverage_checkbox = self._check(
+            "settings.qa_coverage", "QA Pool Coverage Rules", settings.enable_qa_pool_coverage_rules
+        )
+        self._join_bucket_checkbox = self._check(
+            "settings.join_buckets", "Use Join Buckets", settings.use_join_buckets
+        )
+        self._trace_checkbox = self._check(
+            "settings.trace_export", "Trace Sheet Export", settings.enable_trace_export
+        )
 
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel("Toggle optional diagnostics and exports", self))
-        layout.addWidget(self._history_checkbox)
-        layout.addWidget(self._debug_checkbox)
-        layout.addWidget(self._mentor_trace_checkbox)
-        layout.addWidget(self._pool_governance_checkbox)
-        layout.addWidget(self._bucket_trace_checkbox)
-        layout.addWidget(self._qa_pool_coverage_checkbox)
-        layout.addWidget(self._join_bucket_checkbox)
-        layout.addWidget(self._trace_checkbox)
-
+        layout.addWidget(QLabel(self._t("settings.description", "Toggle optional diagnostics and exports"), self))
+        for checkbox in (
+            self._history_checkbox,
+            self._debug_checkbox,
+            self._mentor_trace_checkbox,
+            self._pool_governance_checkbox,
+            self._bucket_trace_checkbox,
+            self._qa_pool_coverage_checkbox,
+            self._join_bucket_checkbox,
+            self._trace_checkbox,
+        ):
+            layout.addWidget(checkbox)
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
+
+    def _check(self, key: str, fallback: str, checked: bool) -> QCheckBox:
+        widget = QCheckBox(self._t(key, fallback), self)
+        widget.setChecked(checked)
+        return widget
 
     @property
     def result_settings(self) -> UserSettings:
@@ -387,1509 +173,399 @@ class SettingsDialog(QDialog):
             use_join_buckets=self._join_bucket_checkbox.isChecked(),
         )
 
+    def _t(self, key: str, fallback: str) -> str:
+        return self._translator.text(key, fallback)
 
-class MainWindow(QMainWindow):
-    """پنجرهٔ اصلی PySide6 برای اجرای سناریوهای Build و Allocate."""
+
+class MainWindow(_base.MainWindow):
+    """Presentation-only composition over the preserved execution MainWindow."""
 
     def __init__(self) -> None:
+        self._ui_text_bindings: list[_TextBinding] = []
+        self._formatted_center_labels: list[tuple[QLabel, str]] = []
+        stored_splitter = QSettings().value("ui/main_splitter")
+        self._had_saved_splitter_state = isinstance(stored_splitter, QByteArray) and not stored_splitter.isEmpty()
+        self._default_splitter_ratio_pending = not self._had_saved_splitter_state
+        self._default_splitter_ratio_scheduled = False
         super().__init__()
-        self._prefs = AppPreferences()
-        self._user_settings = load_user_settings()
-        stored_language = self._prefs.language
-        if self._prefs.has_language_setting():
-            self._language = stored_language
-        else:
-            self._language = stored_language or Language.EN
-            self._prefs.set_language(self._language)
+        self._register_shell_bindings()
+        self._refresh_reviewed_surface_texts()
 
-        self._translator = UiTranslator(self._language)
-        self.setWindowTitle(self._translator.text("app.title", _EN_TEXT_DEFAULTS["app.title"]))
-        self.setMinimumSize(960, 640)
-        self.resize(1200, 800)
-        screen = QGuiApplication.primaryScreen()
-        if screen is not None:
-            geom = screen.availableGeometry()
-            frame = self.frameGeometry()
-            frame.moveCenter(geom.center())
-            self.move(frame.topLeft())
-        self._theme_name: str = self._prefs.theme or "light"
-        self._theme: Theme = self._load_theme(self._theme_name)
-        self._theme_selector: QComboBox | None = None
-        app = QApplication.instance()
-        if app is not None and isinstance(app, QApplication):
-            apply_layout_direction(app, self._language)
-            apply_theme(app, self._theme)
+    def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 - Qt signature
+        super().showEvent(event)
+        if self._default_splitter_ratio_pending and not self._default_splitter_ratio_scheduled:
+            self._default_splitter_ratio_scheduled = True
+            QTimer.singleShot(0, self._apply_default_splitter_ratio_once)
 
-        self._year_manager = YearDatabaseManager(Path.home() / ".smart_alloc" / "years")
-        self._year_info: YearDatabaseInfo | None = None
-        self._local_db: LocalDatabase | None = None
-        self._school_repository: SchoolRepository | None = None
-        self._groupcode_repository: GroupCodeRepository | None = None
-        self._ensure_year_loaded()
+    def _apply_default_splitter_ratio_once(self) -> None:
+        if not self._default_splitter_ratio_pending:
+            return
+        self._default_splitter_ratio_pending = False
+        splitter = self._splitter
+        if splitter is None or splitter.count() != 2:
+            return
+        sizes = splitter.sizes()
+        available = sum(sizes)
+        if available <= 1:
+            return
+        bottom = max(1, round(available * 0.25))
+        splitter.setSizes([available - bottom, bottom])
 
-        self._worker: Worker | None = None
-        self._worker_stop_event: threading.Event | None = None
-        self._success_hook: Callable[[], None] | None = None
-        self._btn_open_output_folder: QPushButton | None = None
-        self._btn_mentor_pool: QPushButton | None = None
-        self._btn_matrix_mentor_pool: QPushButton | None = None
-        self._center_manager_combos: dict[int, QComboBox] = {}
-        self._manager_names_cache: list[str] = []
-        self._btn_reset_managers: QPushButton | None = None
-        self._log: QPlainTextEdit | None = None
-        self._log_buffer: list[str] = []
-        self._log_pending: list[str] = []
-        self._log_line = 0
-        self._history_metrics_df = pd.DataFrame(columns=METRIC_COLUMNS)
-        self._history_metrics_dialog: HistoryMetricsDialog | None = None
-        self._settings_indicators: dict[str, QLabel] = {}
-        self._mentor_pool_entries: list[MentorPoolEntry] = []
-        self._mentor_pool_overrides: dict[str, bool] = {}
-        self._mentor_pool_source: str = ""
-        self._mentor_pool_dialog: MentorPoolDialog | None = None
-        self._matrix_mentor_pool_entries: list[MentorPoolEntry] = []
-        self._matrix_mentor_pool_overrides: dict[str, bool] = {}
-        self._matrix_manager_overrides: dict[str, bool] = {}
-        self._matrix_mentor_pool_source: str = ""
-        self._matrix_mentor_pool_dialog: MentorPoolDialog | None = None
-        self._mentor_pool_dialog_class = MentorPoolDialog
-        self._join_key_validation_dialog_class = JoinKeyValidationDialog
-        self._join_key_validation_dialog: JoinKeyValidationDialog | None = None
-        self._is_closing = False
-        self._toolbar_actions: dict[str, QAction] = {}
-        self._toolbar_theme_label: QLabel | None = None
-        self._language_label: QLabel | None = None
-        self._stage_badge: QLabel | None = None
-        self._stage_detail: QLabel | None = None
-        self._progress_caption: QLabel | None = None
-        self._progress_pulse: QPropertyAnimation | None = None
-        self._last_run_badge: QLabel | None = None
-        self._last_progress_pct: int | None = None
-        self._last_progress_message: str | None = None
-        self._current_action: str = self._translator.text("status.ready", "آماده")
-        self._status_bar: ThemedStatusBar | None = None
-        self._database_status: DatabaseStatusWidget | None = None
-        self._database_tab: DatabaseTab | None = None
-        self._database_tab_container: QWidget | None = None
-        self._health_widget: HealthIndicatorWidget | None = None
-        self._excel_loaders: set[ExcelLoader] = set()
-        self._db_status_timer: QTimer | None = None
-        policy_file = resource_path("config", "policy.json")
-        self._default_policy_path = str(policy_file) if policy_file.exists() else ""
-        exporter_config = resource_path("config", "SmartAlloc_Exporter_Config_v1.json")
-        self._default_sabt_config_path = str(exporter_config) if exporter_config.exists() else ""
-
-        self._splitter: AccentSplitter | None = AccentSplitter(
-            Qt.Orientation.Vertical, self, self._theme
+    # ---------------------------------------------------------- page composition
+    def _build_build_page(self) -> QWidget:
+        content = super()._build_build_page()
+        self._bind_hero(content, "build")
+        self._bind_existing_literals(content)
+        self._bind_picker(
+            self._picker_schools,
+            "reference.schools.placeholder",
+            "School reference is managed in the Database tab.",
         )
-        self._splitter.setChildrenCollapsible(False)
-        self._splitter.destroyed.connect(self._on_splitter_destroyed)
-        self._splitter.splitterMoved.connect(lambda *_: self._update_overlay_geometry())
-
-        top_pane = QWidget(self._splitter)
-        top_layout = QVBoxLayout(top_pane)
-        top_layout.setContentsMargins(12, 12, 12, 6)
-        top_layout.setSpacing(12)
-
-        self._tabs = QTabWidget(self)
-        self._tabs.setDocumentMode(True)
-        self._tabs.setTabPosition(QTabWidget.TabPosition.North)
-        self._tabs.addTab(
-            self._wrap_page(self._build_build_page()), self._t("tabs.build", "ساخت ماتریس")
+        self._bind(self._picker_schools, "reference.schools.tooltip", "School reference is database-backed; update it from the Database tab.", "tooltip")
+        self._bind_picker(
+            self._picker_crosswalk,
+            "reference.groupcodes.placeholder",
+            "GroupCode reference is managed in the Database tab.",
         )
-        self._tabs.addTab(
-            self._wrap_page(self._build_allocate_page()), self._t("tabs.allocate", "تخصیص")
+        self._bind(self._picker_crosswalk, "reference.groupcodes.tooltip", "GroupCode reference is database-backed; update it from the Database tab.", "tooltip")
+        self._bind_picker(self._picker_policy_build, "placeholder.policy", "Default: config/policy.json")
+        self._bind_picker(self._picker_output_matrix, "placeholder.matrix_output", "Matrix output (*.xlsx)")
+        self._bind(self._btn_matrix_mentor_pool, "action.pool_governance", "Pool governance")
+        self._prepare_form_geometry(
+            content,
+            {self._picker_inspactor: self._btn_matrix_mentor_pool},
         )
-        self._tabs.addTab(
-            self._wrap_page(self._build_rule_engine_page()),
-            self._t("tabs.rule_engine", "موتور قواعد"),
+        return self._fixed_action_page(content, self._btn_build, "Build")
+
+    def _build_allocate_page(self) -> QWidget:
+        content = super()._build_allocate_page()
+        self._bind_hero(content, "allocate")
+        self._bind_existing_literals(content)
+        self._bind_picker(self._picker_students, "placeholder.students", "Students (*.xlsx or *.csv)")
+        self._bind_picker(self._picker_pool, "placeholder.pool", "Mentor pool (*.xlsx)")
+        self._bind_picker(self._picker_policy_allocate, "placeholder.policy", "Default: config/policy.json")
+        self._bind_picker(self._picker_alloc_out, "placeholder.alloc_output", "Allocation output (*.xlsx)")
+        self._bind_picker(self._picker_prior_roster, "placeholder.prior_roster", "Prior roster (optional)")
+        self._bind_picker(self._picker_current_roster, "placeholder.current_roster", "Current roster / counters")
+        self._bind_picker(self._picker_sabt_output_alloc, "placeholder.sabt_output", "Sabt output (*.xlsx)")
+        self._bind_picker(self._picker_sabt_config_alloc, "placeholder.sabt_config", "SmartAlloc_Exporter_Config_v1.json")
+        self._bind_picker(self._picker_sabt_template_alloc, "placeholder.sabt_template", "Optional ImportToSabt template")
+        self._bind(self._btn_mentor_pool, "action.pool_governance", "Pool governance")
+        self._bind(self._btn_update_schools, "reference.update.schools", "Update schools")
+        self._bind(self._btn_update_groupcodes, "reference.update.groupcodes", "Update group codes")
+        self._bind(self._btn_autodetect, "action.autodetect", "Auto-detect")
+        self._bind_line_placeholder(self._combo_academic_year.lineEdit(), "placeholder.year", "e.g. 1404")
+        self._bind_first_spanning_label(content, "reference.allocate.hint", "Allocation uses database-backed references; update them from Excel only when needed.")
+        self._prepare_form_geometry(
+            content,
+            {self._picker_pool: self._btn_mentor_pool},
         )
-        self._tabs.addTab(
-            self._wrap_page(self._build_explain_page()), self._t("tabs.explain", "توضیحات")
-        )
-        self._database_tab = DatabaseTab(
-            self._translator,
-            self,
-            self._school_repository,
-            self._groupcode_repository,
-        )
-        self._database_tab_container = self._database_tab
-        self._tabs.addTab(self._database_tab, self._t("tabs.database", "پایگاه داده"))
-        self._tabs.currentChanged.connect(self._animate_tab_change)
-        top_layout.addWidget(self._tabs, 1)
+        return self._fixed_action_page(content, self._btn_allocate, "Allocate")
 
-        bottom_pane = QWidget(self._splitter)
-        bottom_layout = QVBoxLayout(bottom_pane)
-        bottom_layout.setContentsMargins(16, 0, 16, 16)
-        bottom_layout.setSpacing(12)
+    def _build_rule_engine_page(self) -> QWidget:
+        content = super()._build_rule_engine_page()
+        self._bind_hero(content, "rule")
+        self._bind_existing_literals(content)
+        self._bind_picker(self._picker_rule_matrix, "placeholder.rule_matrix", "Eligibility matrix (*.xlsx)")
+        self._bind_picker(self._picker_rule_students, "placeholder.rule_students", "Students for Rule Engine")
+        self._bind_picker(self._picker_policy_rule, "placeholder.policy", "Default: config/policy.json")
+        self._bind_picker(self._picker_rule_output, "placeholder.rule_output", "Rule Engine output (*.xlsx)")
+        self._bind_picker(self._picker_rule_prior_roster, "placeholder.prior_roster", "Prior roster (optional)")
+        self._bind_picker(self._picker_rule_current_roster, "placeholder.current_roster", "Current roster / counters")
+        self._bind_picker(self._picker_sabt_output_rule, "placeholder.sabt_output", "Sabt output (*.xlsx)")
+        self._bind_picker(self._picker_sabt_config_rule, "placeholder.sabt_config", "SmartAlloc_Exporter_Config_v1.json")
+        self._bind_picker(self._picker_sabt_template_rule, "placeholder.sabt_template", "Optional ImportToSabt template")
+        self._bind(self._btn_rule_autodetect, "action.autodetect", "Auto-detect")
+        self._bind_line_placeholder(self._combo_rule_academic_year.lineEdit(), "placeholder.year", "e.g. 1404")
+        self._prepare_form_geometry(content, {})
+        return self._fixed_action_page(content, self._btn_rule_engine, "RuleEngine")
 
-        status_layout = QHBoxLayout()
-        status_layout.setContentsMargins(0, 0, 0, 0)
-        status_layout.setSpacing(12)
-        self._stage_badge = QLabel(self._t("status.ready", "آماده"))
-        self._stage_badge.setObjectName("labelStageBadge")
-        self._stage_detail = QLabel(
-            self._t("stage.pick_scenario", "برای شروع یکی از سناریوها را انتخاب کنید")
-        )
-        self._stage_detail.setWordWrap(True)
-        self._stage_detail.setObjectName("labelStageDetail")
-        self._status = QLabel(self._t("status.ready", "آماده"))
-        self._status.setObjectName("labelStatus")
-        status_column = QVBoxLayout()
-        status_column.setSpacing(2)
-        status_column.addWidget(self._stage_badge)
-        status_column.addWidget(self._stage_detail)
-        status_column.addWidget(self._status)
-        self._last_run_badge = QLabel(
-            self._t("status.no_runs", "آخرین اجرا: هنوز اجرایی ثبت نشده است")
-        )
-        self._last_run_badge.setObjectName("lastRunBadge")
-        self._last_run_badge.setWordWrap(True)
-        status_column.addWidget(self._last_run_badge)
-        callbacks = HealthCallbacks(
-            fetch_summary=self._fetch_health_summary,
-            export_report=self._export_health_report,
-        )
-        self._health_widget = HealthIndicatorWidget(callbacks, self)
-        status_column.addWidget(self._health_widget)
-        status_layout.addLayout(status_column, 1)
+    def _build_explain_page(self) -> QWidget:
+        page = super()._build_explain_page()
+        self._bind_hero(page, "explain")
+        self._bind_existing_literals(page)
+        direct_labels = [
+            label
+            for label in page.findChildren(QLabel, options=Qt.FindChildOption.FindDirectChildrenOnly)
+            if label.objectName() not in {"heroTitle", "heroSubtitle", "heroBadge"}
+        ]
+        if direct_labels:
+            self._bind(direct_labels[0], "explain.summary", "Explain rows are stored in a separate Excel sheet so each decision remains traceable.")
+        if len(direct_labels) > 1:
+            self._bind(direct_labels[1], "explain.columns_hint", "Each Explain row contains student, selected mentor, active rule and the corresponding reason.")
+        return page
 
-        self._progress = QProgressBar()
-        self._progress.setRange(0, 100)
-        self._progress.setObjectName("progressBar")
-        self._progress.setProperty("busy", False)
-        self._progress_caption = QLabel(f"0% | {self._t('status.ready', 'آماده')}")
-        self._progress_caption.setAlignment(
-            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
-        )
-        self._progress_caption.setObjectName("progressCaption")
-        caption_effect = SafeOpacityEffect(
-            "progress_caption_opacity",
-            self._progress_caption,
-        )
-        self._progress_caption.setGraphicsEffect(caption_effect)
-        logger.debug(
-            "progress caption effect installed | widget=%s effect=%s",
-            self._progress_caption,
-            hex(id(caption_effect)),
-        )
-        self._progress_pulse = QPropertyAnimation(caption_effect, b"opacity", self)
-        self._progress_pulse.setDuration(820)
-        self._progress_pulse.setStartValue(0.6)
-        self._progress_pulse.setEndValue(1.0)
-        self._progress_pulse.setLoopCount(-1)
-        self._progress_pulse.setEasingCurve(QEasingCurve.Type.InOutQuad)
-        progress_column = QVBoxLayout()
-        progress_column.setSpacing(4)
-        progress_column.addWidget(self._progress)
-        progress_column.addWidget(self._progress_caption)
-        status_layout.addLayout(progress_column, 1)
-        bottom_layout.addLayout(status_layout)
+    def _wrap_page(self, page: QWidget) -> QWidget:
+        if bool(page.property("fixedActionPage")):
+            return page
+        return super()._wrap_page(page)
 
-        self._log_panel = LogPanel(self._translator, self._theme, self)
-        self._log_panel.connect_clear(self._clear_log)
-        self._log_panel.connect_save(self._save_log_to_file)
-        self._log = self._log_panel.text_edit
-        self._log.setMaximumBlockCount(_LOG_MAX_BLOCKS)
-        if self._log_buffer:
-            buffered_messages = self._log_buffer[:]
-            self._log_buffer.clear()
-            for message in buffered_messages:
-                self._append_log(message)
-        bottom_layout.addWidget(self._log_panel, 1)
+    def _fixed_action_page(self, content: QWidget, button: QPushButton, page_id: str) -> QWidget:
+        shell = QWidget(self)
+        shell.setObjectName(f"page{page_id}")
+        shell.setProperty("fixedActionPage", True)
+        layout = QVBoxLayout(shell)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
 
-        controls_layout = QHBoxLayout()
-        controls_layout.setContentsMargins(0, 0, 0, 0)
-        controls_layout.setSpacing(12)
-        controls_layout.addStretch(1)
-        self._btn_settings = QPushButton("Settings", self)
-        self._btn_settings.setObjectName("btnSettings")
-        self._btn_settings.clicked.connect(self._open_settings_dialog)
-        controls_layout.addWidget(self._btn_settings)
-        settings_strip = self._build_settings_indicator_strip()
-        controls_layout.addLayout(settings_strip)
-        self._btn_history_metrics = QPushButton("History Metrics", self)
-        self._btn_history_metrics.setObjectName("btnHistoryMetrics")
-        self._btn_history_metrics.clicked.connect(self._show_history_metrics)
-        controls_layout.addWidget(self._btn_history_metrics)
-        self._btn_demo = QPushButton(self._t("action.demo", "اجرای تست (دمو Progress)"))
-        self._btn_demo.setObjectName("btnDemo")
-        self._btn_demo.setToolTip(
-            self._t("log.demo.tooltip", "اجرای تست کوتاه برای نمایش انیمیشن پیشرفت")
-        )
-        self._btn_demo.clicked.connect(self._start_demo_task)
-        controls_layout.addWidget(self._btn_demo)
-        bottom_layout.addLayout(controls_layout)
+        scroll = QScrollArea(shell)
+        scroll.setObjectName(f"scroll{page_id}")
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        content.setObjectName(f"page{page_id}Content")
+        scroll.setWidget(content)
+        layout.addWidget(scroll, 1)
 
-        self._splitter.addWidget(top_pane)
-        self._splitter.addWidget(bottom_pane)
-        self._splitter.setStretchFactor(0, 3)
-        self._splitter.setStretchFactor(1, 1)
+        footer = QFrame(shell)
+        footer.setObjectName("pageActionFooter")
+        footer_layout = QHBoxLayout(footer)
+        footer_layout.setContentsMargins(24, 8, 24, 10)
+        footer_layout.addStretch(1)
+        button.setProperty("variant", "primary")
+        footer_layout.addWidget(button)
+        layout.addWidget(footer, 0)
+        return shell
 
-        self.setCentralWidget(self._splitter)
+    # -------------------------------------------------------------- geometry/bidi
+    def _prepare_form_geometry(
+        self,
+        root: QWidget,
+        utilities: dict[FilePicker, QPushButton],
+    ) -> None:
+        forms: list[QFormLayout] = []
+        for group in root.findChildren(QGroupBox):
+            layout = group.layout()
+            if isinstance(layout, QFormLayout):
+                forms.append(layout)
+        for form in forms:
+            form.setLabelAlignment(Qt.AlignmentFlag.AlignTrailing | Qt.AlignmentFlag.AlignVCenter)
+            form.setFormAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeading)
+            self._normalize_file_columns(form, utilities)
+            self._convert_empty_label_rows(form)
 
-        self._busy_overlay: QFrame | None = QFrame(self._splitter)
-        self._busy_overlay.setObjectName("busyOverlay")
-        overlay_layout = QVBoxLayout(self._busy_overlay)
-        overlay_layout.setContentsMargins(0, 0, 0, 0)
-        overlay_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._busy_label = QLabel(self._t("status.running", "در حال پردازش"), self._busy_overlay)
-        self._busy_label.setObjectName("busyOverlayLabel")
-        overlay_layout.addWidget(self._busy_label)
-        self._busy_overlay.hide()
-        self._update_overlay_geometry()
+    def _normalize_file_columns(
+        self,
+        form: QFormLayout,
+        utilities: dict[FilePicker, QPushButton],
+    ) -> None:
+        rows: list[tuple[int, QWidget, FilePicker, QPushButton | None]] = []
+        for row in range(form.rowCount()):
+            item = form.itemAt(row, QFormLayout.ItemRole.FieldRole)
+            field = item.widget() if item is not None else None
+            if field is None:
+                continue
+            picker = field if isinstance(field, FilePicker) else field.findChild(FilePicker)
+            if picker is None:
+                continue
+            rows.append((row, field, picker, utilities.get(picker)))
+        if not rows or not any(utility is not None for _, _, _, utility in rows):
+            return
 
-        self._build_ribbon()
-        self._build_status_bar()
+        utility_width = 124
+        for row, old_field, picker, utility in reversed(rows):
+            label_item = form.itemAt(row, QFormLayout.ItemRole.LabelRole)
+            label_widget = label_item.widget() if label_item is not None else None
+            taken = form.takeRow(row)
+            if taken.fieldItem is None:
+                continue
+            row_widget = QWidget(form.parentWidget())
+            row_widget.setProperty("normalizedFileRow", True)
+            grid = QGridLayout(row_widget)
+            grid.setContentsMargins(0, 0, 0, 0)
+            grid.setHorizontalSpacing(8)
+            picker.setParent(row_widget)
+            grid.addWidget(picker, 0, 0)
+            grid.setColumnStretch(0, 1)
+            if utility is not None:
+                utility.setParent(row_widget)
+                utility.setProperty("rowUtility", True)
+                utility.setMinimumWidth(utility_width)
+                grid.addWidget(utility, 0, 1)
+            else:
+                grid.addItem(
+                    QSpacerItem(utility_width, 1, QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Minimum),
+                    0,
+                    1,
+                )
+            if old_field is not picker and old_field.parent() is not None:
+                old_field.deleteLater()
+            if label_widget is not None:
+                form.insertRow(row, label_widget, row_widget)
+            else:
+                form.insertRow(row, row_widget)
 
-        settings = QSettings()
-        state = settings.value("ui/main_splitter")
-        if isinstance(state, QByteArray):
-            self._splitter.restoreState(state)
+    def _convert_empty_label_rows(self, form: QFormLayout) -> None:
+        for row in reversed(range(form.rowCount())):
+            label_item = form.itemAt(row, QFormLayout.ItemRole.LabelRole)
+            field_item = form.itemAt(row, QFormLayout.ItemRole.FieldRole)
+            label = label_item.widget() if label_item is not None else None
+            field = field_item.widget() if field_item is not None else None
+            if not isinstance(label, QLabel) or label.text().strip() or field is None:
+                continue
+            form.takeRow(row)
+            label.deleteLater()
+            form.insertRow(row, field)
 
-        self._interactive: list[QWidget] = []
-        self._is_busy_cursor = False
-        self._register_interactive_controls()
-        self._update_output_folder_button_state()
+    # --------------------------------------------------------------- localization
+    def _bind(self, target: object, key: str, fallback: str, kind: str = "text") -> None:
+        if target is None:
+            return
+        marker = (id(target), key, kind)
+        if any((id(item.target), item.key, item.kind) == marker for item in self._ui_text_bindings):
+            return
+        binding = _TextBinding(target, key, fallback, kind)
+        self._ui_text_bindings.append(binding)
+        self._apply_binding(binding)
+
+    def _apply_binding(self, binding: _TextBinding) -> None:
+        text = self._translator.text(binding.key, binding.fallback)
+        target = binding.target
+        if binding.kind == "text" and hasattr(target, "setText"):
+            target.setText(text)
+        elif binding.kind == "title" and hasattr(target, "setTitle"):
+            target.setTitle(text)
+        elif binding.kind == "placeholder" and hasattr(target, "setPlaceholderText"):
+            target.setPlaceholderText(text)
+        elif binding.kind == "picker_placeholder" and hasattr(target, "set_placeholder_text"):
+            target.set_placeholder_text(text)
+        elif binding.kind == "tooltip" and hasattr(target, "setToolTip"):
+            target.setToolTip(text)
+
+    def _bind_picker(self, picker: FilePicker, key: str, fallback: str) -> None:
+        picker.update_translator(self._translator)
+        self._bind(picker, key, fallback, "picker_placeholder")
+
+    def _bind_line_placeholder(self, edit: QLineEdit | None, key: str, fallback: str) -> None:
+        if edit is not None:
+            edit.setAlignment(Qt.AlignmentFlag.AlignLeading | Qt.AlignmentFlag.AlignVCenter)
+            self._bind(edit, key, fallback, "placeholder")
+
+    def _bind_hero(self, root: QWidget, scenario: str) -> None:
+        title = root.findChild(QLabel, "heroTitle")
+        subtitle = root.findChild(QLabel, "heroSubtitle")
+        badge = root.findChild(QLabel, "heroBadge")
+        names = {
+            "build": ("Build Matrix", "Select inputs and build the eligibility matrix.", "Step 1 of 3"),
+            "allocate": ("Allocate", "Pick student and mentor pools for allocation and Sabt exports.", "Step 2 of 3"),
+            "rule": ("Rule Engine", "Run the Rule Engine on the built matrix to review policy and counters.", "Step 3 of 3"),
+            "explain": ("Explain Report", "Quick access to decision explainability for audits and training.", "Appendix"),
+        }
+        fallback_title, fallback_subtitle, fallback_badge = names[scenario]
+        self._bind(title, f"hero.{scenario}.title", fallback_title)
+        self._bind(subtitle, f"hero.{scenario}.subtitle", fallback_subtitle)
+        self._bind(badge, f"hero.{scenario}.badge", fallback_badge)
+
+    def _bind_existing_literals(self, root: QWidget) -> None:
+        for group in root.findChildren(QGroupBox):
+            mapping = _LITERAL_BINDINGS.get(group.title())
+            if mapping is not None:
+                self._bind(group, mapping[0], mapping[1], "title")
+        for label in root.findChildren(QLabel):
+            mapping = _LITERAL_BINDINGS.get(label.text())
+            if mapping is not None:
+                self._bind(label, mapping[0], mapping[1])
+        for button in root.findChildren(QPushButton):
+            mapping = _LITERAL_BINDINGS.get(button.text())
+            if mapping is not None:
+                self._bind(button, mapping[0], mapping[1])
+        for picker in root.findChildren(FilePicker):
+            picker.update_translator(self._translator)
+
+    def _bind_first_spanning_label(self, root: QWidget, key: str, fallback: str) -> None:
+        for group in root.findChildren(QGroupBox):
+            form = group.layout()
+            if not isinstance(form, QFormLayout):
+                continue
+            for row in range(form.rowCount()):
+                spanning = form.itemAt(row, QFormLayout.ItemRole.SpanningRole)
+                widget = spanning.widget() if spanning is not None else None
+                if isinstance(widget, QLabel) and widget.text().strip():
+                    self._bind(widget, key, fallback)
+                    return
+
+    def _refresh_reviewed_surface_texts(self) -> None:
+        for binding in self._ui_text_bindings:
+            self._apply_binding(binding)
+        for label, center_name in self._formatted_center_labels:
+            template = self._translator.text("center.manager_label", "Manager {center}:")
+            label.setText(template.format(center=center_name))
+        for picker in self.findChildren(FilePicker):
+            picker.update_translator(self._translator)
+        if self._health_widget is not None:
+            self._health_widget.update_translator(self._translator)
+        if self._database_tab is not None:
+            self._database_tab.update_translator(self._translator)
         self._refresh_settings_indicators()
-        self._apply_theme()
-        self._refresh_last_run_badge()
-        self._animate_tab_change(self._tabs.currentIndex())
 
-    def _t(self, key: str, fallback: str) -> str:
-        """دسترسی سریع به ترجمهٔ UI برای زبان فعال."""
-        effective_fallback = _EN_TEXT_DEFAULTS.get(key, fallback)
-        if self._translator.language == "en" and _PERSIAN_PATTERN.search(effective_fallback):
-            effective_fallback = key.replace("_", " ").replace(".", " ").title()
-        return self._translator.text(key, effective_fallback)
+    def _register_shell_bindings(self) -> None:
+        self._bind(self._btn_settings, "settings.title", "Settings")
+        self._bind(self._btn_history_metrics, "settings.history_metrics", "History Metrics")
 
-    def _load_theme(self, name: str) -> Theme:
-        """بارگذاری تم بر اساس نام ذخیره‌شده."""
+    def _apply_language(self, language: object) -> None:
+        super()._apply_language(language)
+        self._refresh_reviewed_surface_texts()
 
-        return build_theme(name)
-
-    # ------------------------------------------------------------------ UI setup
+    # ------------------------------------------------------------- toolbar/status
     def _build_ribbon(self) -> None:
-        """ایجاد نوار ابزار بالایی با الهام از Ribbon Office."""
-
-        toolbar = QToolBar(self._t("ribbon.actions", "اکشن‌ها"), self)
-        toolbar.setMovable(False)
-        toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
-        toolbar.setContentsMargins(6, 6, 6, 6)
-        toolbar.setObjectName("mainToolbar")
-
-        build_action = QAction(self._t("action.build", "ساخت ماتریس"), self)
-        build_action.setShortcut(QKeySequence("Ctrl+B"))
-        build_action.setShortcutVisibleInContextMenu(True)
-        build_action.triggered.connect(self._start_build)
-        toolbar.addAction(build_action)
-        self._toolbar_actions["build"] = build_action
-
-        allocate_action = QAction(self._t("action.allocate", "تخصیص"), self)
-        allocate_action.setShortcut(QKeySequence("Ctrl+L"))
-        allocate_action.setShortcutVisibleInContextMenu(True)
-        allocate_action.triggered.connect(self._start_allocate)
-        toolbar.addAction(allocate_action)
-        self._toolbar_actions["allocate"] = allocate_action
-
-        mentor_pool_action = QAction("حاکمیت استخر", self)
-        mentor_pool_action.setShortcut(QKeySequence("Ctrl+M"))
-        mentor_pool_action.setShortcutVisibleInContextMenu(True)
-        mentor_pool_action.triggered.connect(self._open_mentor_pool_governance)
-        toolbar.addAction(mentor_pool_action)
-        self._toolbar_actions["mentor_pool"] = mentor_pool_action
-
-        rule_action = QAction(self._t("action.rule_engine", "اجرای Rule Engine"), self)
-        rule_action.setShortcut(QKeySequence("Ctrl+R"))
-        rule_action.setShortcutVisibleInContextMenu(True)
-        rule_action.triggered.connect(self._start_rule_engine)
-        toolbar.addAction(rule_action)
-        self._toolbar_actions["rule_engine"] = rule_action
-
-        toolbar.addSeparator()
-
-        output_action = QAction(
-            self._t("dashboard.button.output", "پوشه خروجی"),
-            self,
-        )
-        output_action.setShortcut(QKeySequence("Ctrl+O"))
-        output_action.setShortcutVisibleInContextMenu(True)
-        output_action.triggered.connect(self._open_last_output_folder)
-        toolbar.addAction(output_action)
-        self._toolbar_actions["output"] = output_action
-
-        toolbar.addSeparator()
-        prefs_action = QAction(self._t("action.preferences", "تنظیمات"), self)
-        prefs_action.triggered.connect(self._open_language_dialog)
-        toolbar.addAction(prefs_action)
-        self._toolbar_actions["prefs"] = prefs_action
-
-        db_action = QAction(self._t("action.database", "پایگاه‌داده"), self)
-        db_action.setShortcut(QKeySequence("Ctrl+D"))
-        db_action.setShortcutVisibleInContextMenu(True)
-        db_action.triggered.connect(self.open_database_manager)
-        toolbar.addAction(db_action)
-        self._toolbar_actions["database"] = db_action
-
-        toolbar.addSeparator()
-        theme_widget = QWidget(self)
-        theme_layout = QHBoxLayout(theme_widget)
-        theme_layout.setContentsMargins(4, 0, 4, 0)
-        theme_layout.setSpacing(6)
-        theme_label = QLabel(self._t("theme.label", "تم"), theme_widget)
-        theme_label.setObjectName("themeSelectorLabel")
-        selector = QComboBox(theme_widget)
-        selector.setObjectName("themeSelector")
-        selector.addItem(self._t("theme.light", "روشن"), userData="light")
-        selector.addItem(self._t("theme.dark", "تیره"), userData="dark")
-        selector.currentIndexChanged.connect(self._on_theme_changed)
-        theme_layout.addWidget(theme_label)
-        theme_layout.addWidget(selector)
-        widget_action = QWidgetAction(self)
-        widget_action.setDefaultWidget(theme_widget)
-        toolbar.addAction(widget_action)
-        self._theme_selector = selector
-        self._toolbar_theme_label = theme_label
-        active_index = selector.findData(self._prefs.theme)
-        if active_index >= 0:
-            selector.setCurrentIndex(active_index)
-
-        self.addToolBar(toolbar)
-        self._toolbar = toolbar
-
-    def _build_status_bar(self) -> None:
-        """نوار وضعیت پایین با نمایش زبان و وضعیت جاری."""
-
-        status_bar = ThemedStatusBar(self._theme, self)
-        db_widget = DatabaseStatusWidget(self._theme, status_bar)
-        db_widget.databaseManagerRequested.connect(self.open_database_manager)
-        language_label = QLabel(
-            f"{self._t('status.language', 'زبان فعال')}: {self._prefs.language.code.upper()}"
-        )
-        language_label.setObjectName("languagePill")
-        state_label = QLabel(f"✅ {self._t('statusbar.ready', 'وضعیت: آماده')}")
-        state_label.setObjectName("statusPill")
-        language_label.setFont(get_app_font())
-        state_label.setFont(get_app_font())
-        status_bar.setSizeGripEnabled(False)
-        status_bar.addWidget(state_label)
-        status_bar.addWidget(db_widget)
-        status_bar.addPermanentWidget(language_label)
-        self._language_label = language_label
-        self._status_bar_state = state_label
-        self._database_status = db_widget
-        self.setStatusBar(status_bar)
-        self._status_bar = status_bar
-        self._refresh_database_status()
-        if self._db_status_timer is None:
-            timer = QTimer(self)
-            timer.setInterval(60000)
-            timer.setSingleShot(False)
-            timer.timeout.connect(self._refresh_database_status)
-            timer.start()
-            self._db_status_timer = timer
+        super()._build_ribbon()
+        self._refresh_action_texts()
 
     def _refresh_action_texts(self) -> None:
-        """به‌روزرسانی متن و Tooltip اکشن‌های نوار ابزار بر اساس زبان فعال."""
-
         mapping = {
-            "build": (
-                self._t("action.build", "ساخت ماتریس"),
-                f"<b>{self._t('action.build', 'ساخت ماتریس')}</b><br/>"
-                f"{self._t('tooltip.build', 'اجرای کامل سناریوی ساخت ماتریس')}",
-            ),
-            "allocate": (
-                self._t("action.allocate", "تخصیص"),
-                f"<b>{self._t('action.allocate', 'تخصیص')}</b><br/>"
-                f"{self._t('tooltip.allocate', 'اجرای تخصیص دانش‌آموز به منتور')}",
-            ),
-            "rule_engine": (
-                self._t("action.rule_engine", "اجرای Rule Engine"),
-                f"<b>{self._t('action.rule_engine', 'اجرای Rule Engine')}</b><br/>"
-                f"{self._t('tooltip.rule_engine', 'اجرای Rule Engine برای تست سیاست')}",
-            ),
-            "output": (
-                self._t("dashboard.button.output", "پوشه خروجی"),
-                f"<b>{self._t('dashboard.button.output', 'پوشه خروجی')}</b><br/>"
-                f"{self._t('tooltip.output_folder', 'آخرین پوشه خروجی تولید شده را باز می‌کند')}",
-            ),
-            "prefs": (
-                self._t("action.preferences", "تنظیمات"),
-                f"<b>{self._t('action.preferences', 'تنظیمات')}</b><br/>"
-                f"{self._t('tooltip.preferences', 'تنظیمات نمایش و زبان را تغییر دهید')}",
-            ),
-            "database": (
-                self._t("action.database", "پایگاه‌داده"),
-                f"<b>{self._t('action.database', 'پایگاه‌داده')}</b><br/>"
-                f"{self._t('tooltip.database', 'تشخیص ساختار، مشاهده مسیر فعال و بازنشانی امن')}",
-            ),
+            "build": ("action.run_build", "Run Build", "tooltip.build", "Run the full matrix build pipeline"),
+            "allocate": ("action.run_allocate", "Run Allocation", "tooltip.allocate", "Allocate students to mentors"),
+            "mentor_pool": ("action.pool_governance", "Pool governance", "tooltip.pool_governance", "Review mentor and manager availability for this run"),
+            "rule_engine": ("action.run_rule_engine", "Run Rule Engine", "tooltip.rule_engine", "Execute the rule engine for policy testing"),
+            "output": ("dashboard.button.output", "Output Folder", "tooltip.output_folder", "Open the last generated output folder"),
+            "prefs": ("action.preferences", "Preferences", "tooltip.preferences", "Change appearance and language"),
+            "database": ("action.database", "Database", "tooltip.database", "Open database management"),
         }
-        for key, (text, tooltip) in mapping.items():
-            action = self._toolbar_actions.get(key)
+        for name, (text_key, text_fallback, tip_key, tip_fallback) in mapping.items():
+            action = self._toolbar_actions.get(name)
             if action is None:
                 continue
-            action.setText(text)
-            if tooltip:
-                action.setToolTip(tooltip)
+            action.setText(self._translator.text(text_key, text_fallback))
+            action.setToolTip(self._translator.text(tip_key, tip_fallback))
         if self._toolbar_theme_label is not None:
-            self._toolbar_theme_label.setText(self._t("theme.label", "تم"))
+            self._toolbar_theme_label.setText(self._t("theme.label", "Theme"))
         if self._theme_selector is not None:
-            self._theme_selector.setItemText(0, self._t("theme.light", "روشن"))
-            self._theme_selector.setItemText(1, self._t("theme.dark", "تیره"))
+            self._theme_selector.setItemText(0, self._t("theme.light", "Light"))
+            self._theme_selector.setItemText(1, self._t("theme.dark", "Dark"))
 
-    def _refresh_tab_texts(self) -> None:
-        """به‌روزرسانی عنوان تب‌ها با مترجم جدید."""
-
-        labels = [
-            (0, self._t("tabs.build", "ساخت ماتریس")),
-            (1, self._t("tabs.allocate", "تخصیص")),
-            (2, self._t("tabs.rule_engine", "موتور قواعد")),
-            (3, self._t("tabs.explain", "توضیحات")),
-            (4, self._t("tabs.database", "پایگاه داده")),
-        ]
-        for index, text in labels:
-            if index < self._tabs.count():
-                self._tabs.setTabText(index, text)
-
-    def _ensure_year_loaded(self) -> None:
-        """انتخاب سال پیش‌فرض و مقداردهی پایگاه دادهٔ محلی."""
-
-        if self._year_info is not None and self._local_db is not None:
-            return
-        default_year = "current"
-        db = self._year_manager.open_year(default_year)
-        self._local_db = db
-        self._school_repository = SchoolRepository(db)
-        self._groupcode_repository = GroupCodeRepository(db)
-        all_years_info = self._year_manager.list_years()
-        self._year_info = next(
-            (info for info in all_years_info if info.year_id == default_year), None
-        )
-
-        if self._year_info is None:
-            self._year_info = YearDatabaseInfo(
-                year_id=default_year,
-                path=db.path,
-                schema_version=None,
-                size_bytes=db.path.stat().st_size if db.path.exists() else 0,
-            )
-
-    def open_database_manager(self) -> None:
-        """باز کردن دیالوگ مدیریت پایگاه داده."""
-
-        self._ensure_year_loaded()
-        if self._local_db is None or self._year_info is None:
-            return
-        dialog = DatabaseManagerDialog(db=self._local_db, year_info=self._year_info, parent=self)
-        dialog.exec()
+    def _build_status_bar(self) -> None:
+        super()._build_status_bar()
+        self._compact_persistent_shell()
+        self._update_status_bar_state("ready")
 
     def _update_status_bar_state(self, key: str) -> None:
-        """به‌روزرسانی متن نوار وضعیت بر اساس کلید."""
-
         if not hasattr(self, "_status_bar_state"):
             return
         mapping = {
-            "ready": f"✅ {self._t('statusbar.ready', 'وضعیت: آماده')}",
-            "running": f"⏳ {self._t('statusbar.running', 'وضعیت: در حال اجرا')}",
-            "error": f"❌ {self._t('statusbar.error', 'وضعیت: خطا')}",
+            "ready": self._t("statusbar.ready", "Status: Ready"),
+            "running": self._t("statusbar.running", "Status: Running"),
+            "error": self._t("statusbar.error", "Status: Error"),
         }
-        self._status_bar_state.setText(mapping.get(key, mapping["ready"]))
-
-    def _refresh_database_status(self) -> None:
-        """به‌روزرسانی ویجت سلامت پایگاه‌داده بدون بلاک کردن UI."""
-
-        if self._database_status is None or self._local_db is None:
-            return
-        summary = self._local_db.get_database_health_summary()
-        self._database_status.set_summary(summary)
-
-    def _animate_tab_change(self, index: int) -> None:
-        """انیمیشن محو/نمایش نرم هنگام تغییر تب."""
-
-        widget = self._tabs.widget(index)
-        if widget is None:
-            return
-        # انیمیشن قبلی حذف شد تا از ایجاد افکت‌های مکرر جلوگیری شود.
-        effect = widget.graphicsEffect()
-        if isinstance(effect, SafeOpacityEffect):
-            effect.setOpacity(1.0)
-
-    def _open_database_tab_and_import(self, kind: str) -> None:
-        """باز کردن تب پایگاه داده و اجرای import اختیاری."""
-
-        if self._tabs is not None and self._database_tab_container is not None:
-            index = self._tabs.indexOf(self._database_tab_container)
-            if index >= 0:
-                self._tabs.setCurrentIndex(index)
-        if self._database_tab is None:
-            return
-        if kind == "schools":
-            self._database_tab.import_schools_via_dialog()
-        elif kind == "groupcodes":
-            self._database_tab.import_groupcodes_via_dialog()
-
-    def _wrap_page(self, page: QWidget) -> QScrollArea:
-        """پیچیدن صفحات فرم در اسکرول برای نمایش بهتر در اندازه‌های کوچک."""
-
-        scroll = QScrollArea(self)
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setObjectName(f"scroll_{page.objectName() or id(page)}")
-        scroll.setWidget(page)
-        return scroll
-
-    def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802 - امضای Qt
-        super().resizeEvent(event)
-        self._update_overlay_geometry()
-
-    def _apply_language(self, language: Language) -> None:
-        """اعمال زبان جدید و بازسازی متن‌های UI."""
-
-        self._prefs.set_language(language)
-        self._translator = UiTranslator(language)
-        self._language = language
-        app = QApplication.instance()
-        if app is not None and isinstance(app, QApplication):
-            apply_layout_direction(app, language)
-        self.setWindowTitle(self._t("app.title", "سامانه تخصیص دانشجو-منتور"))
-        if self._language_label is not None:
-            self._language_label.setText(
-                f"{self._t('status.language', 'زبان فعال')}: {language.code.upper()}"
-            )
-        self._refresh_tab_texts()
-        self._refresh_action_texts()
-        self._refresh_last_run_badge()
-        if hasattr(self, "_log_panel"):
-            self._log_panel.update_translator(self._translator)
-        if hasattr(self, "_busy_label"):
-            self._busy_label.setText(self._t("status.running", "در حال پردازش"))
-        if self._worker is None or not self._worker.isRunning():
-            self._status.setText(self._t("status.ready", "آماده"))
-            if self._stage_badge is not None:
-                self._stage_badge.setText(self._t("status.ready", "آماده"))
-            if self._stage_detail is not None:
-                self._stage_detail.setText(
-                    self._t("stage.pick_scenario", "برای شروع یکی از سناریوها را انتخاب کنید")
-                )
-            self._update_progress_caption(self._progress.value(), self._t("status.ready", "آماده"))
-            self._update_status_bar_state("ready")
-
-    def _refresh_last_run_badge(self) -> None:
-        """به‌روزرسانی برچسب آخرین اجرای ثبت‌شده."""
-
-        if self._last_run_badge is None:
-            return
-        info = read_last_run_info(self._prefs)
-        text = format_last_run_label(info, self._translator)
-        self._last_run_badge.setText(text)
-        self._last_run_badge.setProperty("empty", "هنوز" in text)
-        self._last_run_badge.style().unpolish(self._last_run_badge)
-        self._last_run_badge.style().polish(self._last_run_badge)
-        self._refresh_health_widget()
-
-    def _latest_run_identifier(self) -> str | None:
-        if self._local_db is None:
-            return None
-        try:
-            runs = self._local_db.fetch_runs()
-        except Exception:
-            return None
-        if not runs:
-            return None
-        latest = runs[-1]
-        try:
-            return str(latest["id"])
-        except Exception:
-            return None
-
-    def _fetch_health_summary(self) -> object:
-        run_id = self._latest_run_identifier()
-        if run_id is None or self._local_db is None:
-            return None
-        return compute_run_health(run_id, db=self._local_db)
-
-    def _export_health_report(self) -> str | None:
-        run_id = self._latest_run_identifier()
-        if run_id is None or self._local_db is None:
-            raise RuntimeError("No run available for export")
-        path = export_llm_debug_report_to_file(run_id, db=self._local_db)
-        return str(path)
-
-    def _refresh_health_widget(self) -> None:
-        if self._health_widget is not None:
-            self._health_widget.refresh()
-
-    def _create_page_hero(self, title: str, subtitle: str, badge: str) -> QFrame:
-        """ساخت هدر Hero برای صفحات تب‌ها."""
-
-        frame = QFrame(self)
-        frame.setObjectName("heroCard")
-        layout = QHBoxLayout(frame)
-        layout.setContentsMargins(
-            self._theme.spacing_lg,
-            self._theme.spacing_md,
-            self._theme.spacing_lg,
-            self._theme.spacing_md,
-        )
-        layout.setSpacing(12)
-
-        text_column = QVBoxLayout()
-        text_column.setSpacing(4)
-        title_label = QLabel(title)
-        title_label.setObjectName("heroTitle")
-        subtitle_label = QLabel(subtitle)
-        subtitle_label.setObjectName("heroSubtitle")
-        subtitle_label.setWordWrap(True)
-        text_column.addWidget(title_label)
-        text_column.addWidget(subtitle_label)
-        layout.addLayout(text_column, 1)
-
-        badge_label = QLabel(badge)
-        badge_label.setObjectName("heroBadge")
-        badge_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(badge_label, 0, Qt.AlignmentFlag.AlignVCenter)
-
-        apply_card_shadow(frame)
-
-        return frame
-
-    def _set_theme_mode(self, mode: str) -> None:
-        """تنظیم حالت تم، ذخیره در ترجیحات و اعمال آن."""
-
-        normalized = "dark" if mode == "dark" else "light"
-        self._theme_name = normalized
-        self._prefs.theme = normalized
-        app = QApplication.instance()
-        if app is not None and isinstance(app, QApplication):
-            self._theme = apply_theme_mode(app, normalized)
-        else:
-            self._theme = self._load_theme(normalized)
-        self._apply_theme_styles()
-
-    def _apply_theme(self) -> None:
-        app = QApplication.instance()
-        if app is not None and isinstance(app, QApplication):
-            apply_theme(app, self._theme)
-        self._apply_theme_styles()
-
-    def _apply_theme_styles(self) -> None:
-        if hasattr(self, "_log_panel"):
-            self._log_panel.apply_theme(self._theme)
-        if self._status_bar is not None:
-            self._status_bar.apply_theme(self._theme)
-            self._status_bar.refresh_fonts()
-        if isinstance(self._splitter, AccentSplitter):
-            self._splitter.set_theme(self._theme)
-        if self._theme_selector is not None:
-            active_index = self._theme_selector.findData(self._theme_name)
-            if active_index >= 0:
-                self._theme_selector.blockSignals(True)
-                self._theme_selector.setCurrentIndex(active_index)
-                self._theme_selector.blockSignals(False)
-
-    def _set_stage(self, title: str | None, detail: str | None = None) -> None:
-        """به‌روزرسانی عنوان و توضیح مرحلهٔ فعال."""
-
-        if self._stage_badge is not None:
-            self._stage_badge.setText((title or self._t("status.ready", "آماده")).strip())
-        if detail is not None and self._stage_detail is not None:
-            self._stage_detail.setText(detail.strip() or "")
-
-    def _update_progress_caption(self, pct: int, message: str | None) -> None:
-        """نمایش درصد پیشرفت همراه با توضیح مرحله."""
-
-        if self._progress_caption is None:
-            return
-        safe_message = message or self._status.text() or "در حال پردازش"
-        self._progress_caption.setText(f"{pct}% | {safe_message}")
-
-    def _on_theme_changed(self, index: int) -> None:
-        """تغییر تم بر اساس انتخاب کاربر."""
-
-        if self._theme_selector is None:
-            return
-        chosen = self._theme_selector.itemData(index)
-        if chosen not in {"light", "dark"}:
-            return
-        self._set_theme_mode(str(chosen))
-
-    def _build_build_page(self) -> QWidget:
-        """فرم ورودی‌های سناریوی ساخت ماتریس."""
-
-        page = QWidget(self)
-        outer = QVBoxLayout(page)
-        browse_text = self._t("action.browse", "انتخاب…")
-        outer.setContentsMargins(24, 24, 24, 24)
-        outer.setSpacing(16)
-        outer.addWidget(
-            self._create_page_hero(
-                self._t("hero.build.title", "ساخت ماتریس"),
-                self._t(
-                    "hero.build.subtitle",
-                    "انتخاب Inspactor و استفاده از مراجع School/GroupCode پایگاه داده برای ساخت eligibility matrix مطابق Policy.",
-                ),
-                self._t("hero.build.badge", "گام ۱ از ۴"),
-            )
-        )
-
-        inputs_group = QGroupBox(self._t("group.inputs", "ورودی‌ها"), page)
-        inputs_layout = QFormLayout(inputs_group)
-        inputs_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-        inputs_layout.setFormAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
-
-        self._picker_inspactor = FilePicker(
-            page, placeholder=self._t("files.inspactor", "فایل Inspactor")
-        )
-        self._picker_inspactor.setObjectName("editInspactor")
-        self._picker_inspactor.setToolTip(
-            self._t("files.inspactor", "خروجی گزارش Inspactor که فهرست پشتیبان‌ها را دارد")
-        )
-        self._picker_inspactor.line_edit().textChanged.connect(
-            lambda *_: self._reset_matrix_mentor_pool_cache()
-        )
-        self._set_picker_button_text(self._picker_inspactor)
-        insp_row = QWidget(page)
-        insp_row_layout = QHBoxLayout(insp_row)
-        insp_row_layout.setContentsMargins(0, 0, 0, 0)
-        insp_row_layout.setSpacing(8)
-        insp_row_layout.addWidget(self._picker_inspactor, 1)
-        self._btn_matrix_mentor_pool = QPushButton("حاکمیت استخر", insp_row)
-        self._btn_matrix_mentor_pool.setToolTip(
-            "فعال/غیرفعال کردن مدیران و منتورها قبل از ساخت ماتریس"
-        )
-        self._btn_matrix_mentor_pool.clicked.connect(self._open_matrix_mentor_pool_governance)
-        insp_row_layout.addWidget(self._btn_matrix_mentor_pool)
-        inputs_layout.addRow(self._t("files.inspactor", "گزارش Inspactor"), insp_row)
-
-        self._picker_schools = FilePicker(
-            page,
-            placeholder=self._t(
-                "reference.hint",
-                "School reference is managed in the Database tab.",
-            ),
-        )
-        self._picker_schools.setObjectName("editSchools")
-        self._picker_schools.setEnabled(False)
-        self._picker_schools.setToolTip(
-            self._t(
-                "reference.hint",
-                "Runs use database-backed School/GroupCode data. Update from Excel only in the Database tab.",
-            )
-        )
-        inputs_layout.addRow(
-            self._t("files.schools", "Schools (Database reference)"),
-            self._picker_schools,
-        )
-
-        self._picker_crosswalk = FilePicker(
-            page,
-            placeholder=self._t(
-                "reference.hint",
-                "GroupCode reference is managed in the Database tab.",
-            ),
-        )
-        self._picker_crosswalk.setObjectName("editCrosswalk")
-        self._picker_crosswalk.setEnabled(False)
-        self._picker_crosswalk.setToolTip(
-            self._t(
-                "reference.hint",
-                "Runs use database-backed School/GroupCode data. Update from Excel only in the Database tab.",
-            )
-        )
-        inputs_layout.addRow(
-            self._t("files.crosswalk", "Crosswalk (Database reference)"),
-            self._picker_crosswalk,
-        )
-
-        outer.addWidget(inputs_group)
-
-        policy_group = QGroupBox(self._t("files.policy", "سیاست"), page)
-        policy_layout = QFormLayout(policy_group)
-        policy_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-        policy_layout.setFormAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
-
-        self._picker_policy_build = FilePicker(page, placeholder="پیش‌فرض: config/policy.json")
-        self._picker_policy_build.setObjectName("editPolicy1")
-        if self._default_policy_path:
-            self._picker_policy_build.setText(self._default_policy_path)
-        self._set_picker_button_text(self._picker_policy_build)
-        policy_layout.addRow("سیاست", self._picker_policy_build)
-        outer.addWidget(policy_group)
-
-        output_group = QGroupBox("خروجی", page)
-        output_layout = QFormLayout(output_group)
-        output_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-        output_layout.setFormAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
-
-        self._picker_output_matrix = FilePicker(
-            page, save=True, placeholder="فایل خروجی ماتریس (*.xlsx)"
-        )
-        self._picker_output_matrix.setObjectName("editMatrixOut")
-        self._picker_output_matrix.setToolTip("مسیر ذخیرهٔ فایل خروجی ماتریس اهلیت")
-        self._picker_output_matrix.set_button_text(browse_text)
-        self._apply_pref_default(self._picker_output_matrix, self._prefs.last_matrix_path)
-        self._set_picker_button_text(self._picker_output_matrix)
-        output_layout.addRow("خروجی ماتریس", self._picker_output_matrix)
-        outer.addWidget(output_group)
-
-        self._btn_build = QPushButton("ساخت ماتریس")
-        self._btn_build.setObjectName("btnBuildMatrix")
-        self._btn_build.clicked.connect(self._start_build)
-        action_layout = QHBoxLayout()
-        action_layout.addStretch(1)
-        action_layout.addWidget(self._btn_build)
-        outer.addLayout(action_layout)
-        outer.addStretch(1)
-
-        return page
-
-    def _build_allocate_page(self) -> QWidget:
-        """فرم ورودی‌های سناریوی تخصیص."""
-
-        page = QWidget(self)
-        outer = QVBoxLayout(page)
-        browse_text = self._t("action.browse", "انتخاب…")
-        outer.setContentsMargins(24, 24, 24, 24)
-        outer.setSpacing(16)
-        outer.addWidget(
-            self._create_page_hero(
-                "تخصیص",
-                "انتخاب فایل دانش‌آموز و استخر منتورها برای محاسبهٔ تخصیص و خروجی‌های Sabt.",
-                "گام ۲ از ۴",
-            )
-        )
-
-        inputs_group = QGroupBox("ورودی‌های تخصیص", page)
-        inputs_layout = QFormLayout(inputs_group)
-        inputs_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-        inputs_layout.setFormAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
-
-        reference_hint = QLabel(
-            self._t(
-                "reference.hint",
-                "اجرای تخصیص از داده مرجع پایگاه داده استفاده می‌کند؛ در صورت نیاز می‌توانید مرجع را از اکسل به‌روزرسانی کنید.",
-            )
-        )
-        reference_hint.setWordWrap(True)
-        inputs_layout.addRow("", reference_hint)
-
-        reference_row = QWidget(page)
-        reference_row_layout = QHBoxLayout(reference_row)
-        reference_row_layout.setContentsMargins(0, 0, 0, 0)
-        reference_row_layout.setSpacing(8)
-        self._btn_update_schools = QPushButton(
-            self._t("reference.update.schools", "به‌روزرسانی مدارس"), reference_row
-        )
-        self._btn_update_schools.clicked.connect(
-            lambda *_: self._open_database_tab_and_import("schools")
-        )
-        self._btn_update_groupcodes = QPushButton(
-            self._t("reference.update.groupcodes", "به‌روزرسانی کد گروه"), reference_row
-        )
-        self._btn_update_groupcodes.clicked.connect(
-            lambda *_: self._open_database_tab_and_import("groupcodes")
-        )
-        reference_row_layout.addWidget(self._btn_update_schools)
-        reference_row_layout.addWidget(self._btn_update_groupcodes)
-        reference_row_layout.addStretch(1)
-        inputs_layout.addRow("", reference_row)
-
-        self._picker_students = FilePicker(page, placeholder="دانش‌آموزان (*.xlsx یا *.csv)")
-        self._picker_students.setObjectName("editStudents")
-        self._picker_students.setToolTip("لیست دانش‌آموزانی که باید به پشتیبان متصل شوند")
-        self._set_picker_button_text(self._picker_students)
-        inputs_layout.addRow("فایل دانش‌آموزان", self._picker_students)
-
-        self._picker_pool = FilePicker(page, placeholder="استخر منتورها (*.xlsx)")
-        self._picker_pool.setObjectName("editPool")
-        self._picker_pool.setToolTip("فهرست منتورها یا پشتیبان‌ها برای تخصیص")
-        self._picker_pool.set_button_text(browse_text)
-        self._picker_pool.line_edit().textChanged.connect(self._on_pool_text_changed)
-        self._set_picker_button_text(self._picker_pool)
-
-        pool_row = QWidget(page)
-        pool_row_layout = QHBoxLayout(pool_row)
-        pool_row_layout.setContentsMargins(0, 0, 0, 0)
-        pool_row_layout.setSpacing(8)
-        pool_row_layout.addWidget(self._picker_pool, 1)
-        self._btn_mentor_pool = QPushButton("حاکمیت استخر", pool_row)
-        self._btn_mentor_pool.setToolTip("فعال/غیرفعال کردن منتورها و مدیران برای این اجرا")
-        self._btn_mentor_pool.clicked.connect(self._open_mentor_pool_governance)
-        pool_row_layout.addWidget(self._btn_mentor_pool)
-
-        inputs_layout.addRow("استخر منتورها", pool_row)
-
-        outer.addWidget(inputs_group)
-
-        advanced_group = QGroupBox("تنظیمات پیشرفته", page)
-        advanced_layout = QFormLayout(advanced_group)
-        advanced_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-        advanced_layout.setFormAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
-
-        self._picker_policy_allocate = FilePicker(page, placeholder="پیش‌فرض: config/policy.json")
-        self._picker_policy_allocate.setObjectName("editPolicy2")
-        if self._default_policy_path:
-            self._picker_policy_allocate.setText(self._default_policy_path)
-        self._set_picker_button_text(self._picker_policy_allocate)
-        advanced_layout.addRow("سیاست", self._picker_policy_allocate)
-
-        self._picker_alloc_out = FilePicker(
-            page, save=True, placeholder="فایل خروجی تخصیص (*.xlsx)"
-        )
-        self._picker_alloc_out.setObjectName("editAllocOut")
-        self._picker_alloc_out.setToolTip("مسیر ذخیرهٔ نتیجه نهایی تخصیص دانش‌آموز-منتور")
-        self._picker_alloc_out.set_button_text(browse_text)
-        self._apply_pref_default(self._picker_alloc_out, self._prefs.last_alloc_output)
-        self._set_picker_button_text(self._picker_alloc_out)
-
-        self._edit_capacity = QLineEdit(page)
-        self._edit_capacity.setPlaceholderText("remaining_capacity")
-        self._edit_capacity.setText("remaining_capacity")
-        self._edit_capacity.setObjectName("editCapacityCol")
-        advanced_layout.addRow("ستون ظرفیت", self._edit_capacity)
-
-        outer.addWidget(advanced_group)
-
-        outer.addWidget(self._create_center_management_section())
-
-        register_box = QGroupBox("شناسهٔ ثبت‌نام", page)
-        register_box.setObjectName("registrationGroupBox")
-        register_layout = QFormLayout(register_box)
-        register_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-        register_layout.setFormAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
-
-        self._combo_academic_year = QComboBox(register_box)
-        self._combo_academic_year.setEditable(True)
-        self._combo_academic_year.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
-        self._combo_academic_year.setObjectName("academicYearInput")
-        academic_line_edit = self._combo_academic_year.lineEdit()
-        if academic_line_edit is not None:
-            academic_line_edit.setPlaceholderText("مثلاً 1404")
-        self._combo_academic_year.setToolTip(
-            "سال تحصیلی شروع شمارنده‌ها را تعیین کنید تا کدها درست ادامه یابند"
-        )
-        for year in range(1395, 1411):
-            self._combo_academic_year.addItem(str(year))
-        register_layout.addRow("سال تحصیلی", self._combo_academic_year)
-
-        self._picker_prior_roster = FilePicker(
-            register_box,
-            placeholder="روستر سال قبل (اختیاری)",
-        )
-        self._picker_prior_roster.setObjectName("priorRosterPicker")
-        self._picker_prior_roster.setToolTip("برای بازیابی شمارندهٔ سال قبل در صورت وجود")
-        self._set_picker_button_text(self._picker_prior_roster)
-        register_layout.addRow("روستر سال قبل", self._picker_prior_roster)
-
-        self._picker_current_roster = FilePicker(
-            register_box,
-            placeholder="روستر سال جاری / شمارنده‌ها",
-        )
-        self._picker_current_roster.setObjectName("currentRosterPicker")
-        self._picker_current_roster.setToolTip("برای کشف آخرین شمارنده‌های سال جاری")
-        self._set_picker_button_text(self._picker_current_roster)
-        register_layout.addRow("روستر سال جاری", self._picker_current_roster)
-
-        self._btn_autodetect = QPushButton("پیشنهاد خودکار", register_box)
-        self._btn_autodetect.setObjectName("autodetectCountersBtn")
-        self._btn_autodetect.clicked.connect(self._autodetect_counters)
-        register_layout.addRow("", self._btn_autodetect)
-
-        outer.addWidget(register_box)
-
-        output_group = QGroupBox("خروجی", page)
-        output_layout = QFormLayout(output_group)
-        output_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-        output_layout.setFormAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
-        output_layout.addRow("خروجی تخصیص", self._picker_alloc_out)
-        outer.addWidget(output_group)
-
-        sabt_group = QGroupBox("خروجی Sabt (ImportToSabt)", page)
-        sabt_layout = QFormLayout(sabt_group)
-        sabt_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-        sabt_layout.setFormAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
-
-        self._picker_sabt_output_alloc = FilePicker(
-            page,
-            save=True,
-            placeholder="خروجی Sabt (*.xlsx)",
-            dialog_filter="Excel (*.xlsx *.xlsm *.xls)",
-        )
-        self._picker_sabt_output_alloc.setObjectName("editSabtOutputAlloc")
-        self._picker_sabt_output_alloc.setToolTip("فایل ImportToSabt برای ارسال به سامانه ثبت")
-        self._picker_sabt_output_alloc.set_button_text(browse_text)
-        self._apply_pref_default(
-            self._picker_sabt_output_alloc, self._prefs.last_sabt_output_allocate
-        )
-        self._set_picker_button_text(self._picker_sabt_output_alloc)
-        sabt_layout.addRow("فایل خروجی", self._picker_sabt_output_alloc)
-
-        self._picker_sabt_config_alloc = FilePicker(
-            page,
-            placeholder="SmartAlloc_Exporter_Config_v1.json",
-            dialog_filter="JSON (*.json)",
-        )
-        self._picker_sabt_config_alloc.setObjectName("editSabtConfigAlloc")
-        self._picker_sabt_config_alloc.setToolTip("فایل تنظیمات SmartAlloc Exporter")
-        self._picker_sabt_config_alloc.set_button_text(browse_text)
-        self._apply_pref_default(self._picker_sabt_config_alloc, self._prefs.last_sabt_config_path)
-        self._apply_resource_default(self._picker_sabt_config_alloc, self._default_sabt_config_path)
-        self._set_picker_button_text(self._picker_sabt_config_alloc)
-        sabt_layout.addRow("فایل تنظیمات", self._picker_sabt_config_alloc)
-
-        self._picker_sabt_template_alloc = FilePicker(
-            page,
-            placeholder="قالب اختیاری ImportToSabt",
-            dialog_filter="Excel Template (*.xlsx *.xlsm *.xls)",
-        )
-        self._picker_sabt_template_alloc.setObjectName("editSabtTemplateAlloc")
-        self._picker_sabt_template_alloc.setToolTip(
-            "قالب اختیاری؛ در صورت خالی ساخت خودکار انجام می‌شود"
-        )
-        self._set_picker_button_text(self._picker_sabt_template_alloc)
-        sabt_layout.addRow("فایل قالب", self._picker_sabt_template_alloc)
-
-        sabt_hint = QLabel(
-            "اگر فایل قالب خالی بماند، ensure_template_workbook براساس"
-            " SmartAlloc_Exporter_Config_v1.json یک Workbook حداقلی می‌سازد و"
-            " نیازی به فایل باینری جدا نیست."
-        )
-        sabt_hint.setWordWrap(True)
-        sabt_layout.addRow("", sabt_hint)
-
-        outer.addWidget(sabt_group)
-
-        self._btn_allocate = QPushButton("تخصیص")
-        self._btn_allocate.setObjectName("btnAllocate")
-        self._btn_allocate.clicked.connect(self._start_allocate)
-        action_layout = QHBoxLayout()
-        action_layout.addStretch(1)
-        action_layout.addWidget(self._btn_allocate)
-        outer.addLayout(action_layout)
-        outer.addStretch(1)
-
-        QTimer.singleShot(0, self._refresh_all_manager_combos)
-
-        return page
-
-    def _build_rule_engine_page(self) -> QWidget:
-        """فرم اجرای موتور قواعد بر پایه ماتریس موجود."""
-
-        page = QWidget(self)
-        outer = QVBoxLayout(page)
-        browse_text = self._t("action.browse", "انتخاب…")
-        outer.setContentsMargins(24, 24, 24, 24)
-        outer.setSpacing(16)
-        outer.addWidget(
-            self._create_page_hero(
-                "موتور قواعد",
-                "اجرای Rule Engine روی ماتریس ساخته‌شده جهت بازبینی سیاست و شمارنده‌ها.",
-                "گام ۳ از ۴",
-            )
-        )
-
-        inputs_group = QGroupBox("ورودی‌ها", page)
-        inputs_layout = QFormLayout(inputs_group)
-        inputs_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-        inputs_layout.setFormAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
-
-        self._picker_rule_matrix = FilePicker(page, placeholder="ماتریس اهلیت (*.xlsx)")
-        self._picker_rule_matrix.setObjectName("editRuleMatrix")
-        self._picker_rule_matrix.setToolTip("فایل ماتریس اهلیت ساخته‌شده را انتخاب کنید")
-        self._picker_rule_matrix.set_button_text(browse_text)
-        self._apply_pref_default(self._picker_rule_matrix, self._prefs.last_matrix_path)
-        self._set_picker_button_text(self._picker_rule_matrix)
-        inputs_layout.addRow("فایل ماتریس", self._picker_rule_matrix)
-
-        self._picker_rule_students = FilePicker(page, placeholder="دانش‌آموزان (*.xlsx یا *.csv)")
-        self._picker_rule_students.setObjectName("editRuleStudents")
-        self._picker_rule_students.setToolTip("لیست دانش‌آموزان برای ارزیابی مجدد با موتور قواعد")
-        self._set_picker_button_text(self._picker_rule_students)
-        inputs_layout.addRow("فایل دانش‌آموزان", self._picker_rule_students)
-
-        outer.addWidget(inputs_group)
-
-        register_box = QGroupBox("شناسهٔ ثبت‌نام", page)
-        register_box.setObjectName("ruleRegistrationGroup")
-        register_layout = QFormLayout(register_box)
-        register_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-        register_layout.setFormAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
-
-        self._combo_rule_academic_year = QComboBox(register_box)
-        self._combo_rule_academic_year.setEditable(True)
-        self._combo_rule_academic_year.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
-        self._combo_rule_academic_year.setObjectName("ruleAcademicYearInput")
-        rule_academic_line_edit = self._combo_rule_academic_year.lineEdit()
-        if rule_academic_line_edit is not None:
-            rule_academic_line_edit.setPlaceholderText("مثلاً 1404")
-        self._combo_rule_academic_year.setToolTip(
-            "سال تحصیلی مرجع شمارنده‌ها برای موتور قواعد را مشخص کنید"
-        )
-        for year in range(1395, 1411):
-            self._combo_rule_academic_year.addItem(str(year))
-        register_layout.addRow("سال تحصیلی", self._combo_rule_academic_year)
-
-        self._picker_rule_prior_roster = FilePicker(
-            register_box,
-            placeholder="روستر سال قبل (اختیاری)",
-        )
-        self._picker_rule_prior_roster.setObjectName("rulePriorRosterPicker")
-        self._set_picker_button_text(self._picker_rule_prior_roster)
-        register_layout.addRow("روستر سال قبل", self._picker_rule_prior_roster)
-
-        self._picker_rule_current_roster = FilePicker(
-            register_box,
-            placeholder="روستر سال جاری / شمارنده‌ها",
-        )
-        self._picker_rule_current_roster.setObjectName("ruleCurrentRosterPicker")
-        self._set_picker_button_text(self._picker_rule_current_roster)
-        register_layout.addRow("روستر سال جاری", self._picker_rule_current_roster)
-
-        self._btn_rule_autodetect = QPushButton("پیشنهاد خودکار", register_box)
-        self._btn_rule_autodetect.setObjectName("ruleAutodetectBtn")
-        self._btn_rule_autodetect.clicked.connect(self._autodetect_rule_engine_counters)
-        register_layout.addRow("", self._btn_rule_autodetect)
-
-        outer.addWidget(register_box)
-
-        advanced_group = QGroupBox("تنظیمات پیشرفته", page)
-        advanced_layout = QFormLayout(advanced_group)
-        advanced_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-        advanced_layout.setFormAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
-
-        self._picker_policy_rule = FilePicker(page, placeholder="پیش‌فرض: config/policy.json")
-        self._picker_policy_rule.setObjectName("editRulePolicy")
-        if self._default_policy_path:
-            self._picker_policy_rule.setText(self._default_policy_path)
-        self._set_picker_button_text(self._picker_policy_rule)
-        advanced_layout.addRow("سیاست", self._picker_policy_rule)
-
-        self._edit_rule_capacity = QLineEdit(page)
-        self._edit_rule_capacity.setPlaceholderText("remaining_capacity")
-        self._edit_rule_capacity.setText("remaining_capacity")
-        self._edit_rule_capacity.setObjectName("editRuleCapacity")
-        advanced_layout.addRow("ستون ظرفیت", self._edit_rule_capacity)
-
-        outer.addWidget(advanced_group)
-
-        output_group = QGroupBox("خروجی", page)
-        output_layout = QFormLayout(output_group)
-        output_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-        output_layout.setFormAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
-        self._picker_rule_output = FilePicker(page, save=True, placeholder="خروجی تخصیص (*.xlsx)")
-        self._picker_rule_output.setObjectName("editRuleOutput")
-        self._picker_rule_output.setToolTip("فایل خروجی موتور قواعد برای ذخیره گزارش جدید")
-        self._set_picker_button_text(self._picker_rule_output)
-        output_layout.addRow("خروجی", self._picker_rule_output)
-        outer.addWidget(output_group)
-
-        sabt_group = QGroupBox("خروجی Sabt (ImportToSabt)", page)
-        sabt_layout = QFormLayout(sabt_group)
-        sabt_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-        sabt_layout.setFormAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
-
-        self._picker_sabt_output_rule = FilePicker(
-            page,
-            save=True,
-            placeholder="خروجی Sabt (*.xlsx)",
-            dialog_filter="Excel (*.xlsx *.xlsm *.xls)",
-        )
-        self._picker_sabt_output_rule.setObjectName("editSabtOutputRule")
-        self._picker_sabt_output_rule.setToolTip("فایل ImportToSabt برای خروجی سناریوی موتور قواعد")
-        self._picker_sabt_output_rule.set_button_text(browse_text)
-        self._apply_pref_default(self._picker_sabt_output_rule, self._prefs.last_sabt_output_rule)
-        self._set_picker_button_text(self._picker_sabt_output_rule)
-        sabt_layout.addRow("فایل خروجی", self._picker_sabt_output_rule)
-
-        self._picker_sabt_config_rule = FilePicker(
-            page,
-            placeholder="SmartAlloc_Exporter_Config_v1.json",
-            dialog_filter="JSON (*.json)",
-        )
-        self._picker_sabt_config_rule.setObjectName("editSabtConfigRule")
-        self._picker_sabt_config_rule.setToolTip(
-            "فایل تنظیمات SmartAlloc Exporter برای Rule-Engine"
-        )
-        self._picker_sabt_config_rule.set_button_text(browse_text)
-        self._apply_pref_default(self._picker_sabt_config_rule, self._prefs.last_sabt_config_path)
-        self._apply_resource_default(self._picker_sabt_config_rule, self._default_sabt_config_path)
-        self._set_picker_button_text(self._picker_sabt_config_rule)
-        sabt_layout.addRow("فایل تنظیمات", self._picker_sabt_config_rule)
-
-        self._picker_sabt_template_rule = FilePicker(
-            page,
-            placeholder="قالب اختیاری ImportToSabt",
-            dialog_filter="Excel Template (*.xlsx *.xlsm *.xls)",
-        )
-        self._picker_sabt_template_rule.setObjectName("editSabtTemplateRule")
-        self._picker_sabt_template_rule.setToolTip(
-            "قالب اختیاری؛ در صورت خالی همان ساخت خودکار اعمال می‌شود"
-        )
-        self._set_picker_button_text(self._picker_sabt_template_rule)
-        sabt_layout.addRow("فایل قالب", self._picker_sabt_template_rule)
-
-        sabt_hint = QLabel(
-            "خالی‌گذاشتن قالب باعث می‌شود ensure_template_workbook از تنظیمات"
-            " JSON یک فایل پایه بسازد و نیازی به قالب جدا نیست."
-        )
-        sabt_hint.setWordWrap(True)
-        sabt_layout.addRow("", sabt_hint)
-
-        outer.addWidget(sabt_group)
-
-        self._btn_rule_engine = QPushButton("اجرای موتور قواعد")
-        self._btn_rule_engine.setObjectName("btnRuleEngine")
-        self._btn_rule_engine.clicked.connect(self._start_rule_engine)
-        action_layout = QHBoxLayout()
-        action_layout.addStretch(1)
-        action_layout.addWidget(self._btn_rule_engine)
-        outer.addLayout(action_layout)
-        outer.addStretch(1)
-
-        return page
-
-    def _build_explain_page(self) -> QWidget:
-        """صفحهٔ سبک توضیح گزارش Explain."""
-
-        page = QWidget(self)
-        page.setObjectName("pageExplain")
-        layout = QVBoxLayout(page)
-        layout.setContentsMargins(24, 24, 24, 24)
-        layout.setSpacing(12)
-        layout.addWidget(
-            self._create_page_hero(
-                "گزارش Explain",
-                "دسترسی سریع به ساختار گزارش توضیح تصمیمات برای ممیزی و آموزش.",
-                "ضمیمه",
-            )
-        )
-
-        label = QLabel(
-            "خلاصهٔ Explain در شیت جداگانه داخل فایل اکسل ذخیره می‌شود تا روند"
-            " تصمیم‌گیری هر دانش‌آموز قابل پیگیری باشد."
-        )
-        label.setWordWrap(True)
-        layout.addWidget(label)
-
-        hint = QLabel(
-            "هر سطر Explain شامل شناسه دانش‌آموز، پشتیبان انتخاب‌شده،"
-            " قانون فعال و توضیح متناظر است."
-        )
-        hint.setWordWrap(True)
-        layout.addWidget(hint)
-
-        columns = [
-            "student_id",
-            "mentor_id",
-            "rule_tag",
-            "reason",
-            "score",
-            "trace_step",
-        ]
-        table = QTableWidget(2, len(columns), page)
-        table.setHorizontalHeaderLabels(columns)
-        table.verticalHeader().setVisible(False)
-        table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
-        table.setMaximumHeight(160)
-        sample_rows = [
-            ("STU-125", "MENT-009", "R_CAPACITY", "ظرفیت منطقه", "0.82", "capacity_gate"),
-            ("STU-230", "MENT-104", "R_PRIORITY", "اولویت دانش‌آموز فارغ", "0.76", "priority"),
-        ]
-        for row, values in enumerate(sample_rows):
-            for col, value in enumerate(values):
-                item = QTableWidgetItem(value)
-                item.setFlags(Qt.ItemFlag.ItemIsEnabled)
-                table.setItem(row, col, item)
-        layout.addWidget(table)
-        layout.addStretch(1)
-
-        return page
-
-    def _register_interactive_controls(self) -> None:
-        """ثبت کنترل‌هایی که هنگام اجرای تسک غیرفعال می‌شوند."""
-
-        self._interactive = []
-        optional_widgets = [
-            self._btn_build,
-            self._btn_allocate,
-            self._btn_rule_engine,
-            self._btn_demo,
-            self._btn_history_metrics,
-            self._btn_update_schools,
-            self._btn_update_groupcodes,
-            self._picker_inspactor,
-            self._picker_policy_build,
-            self._picker_output_matrix,
-            self._picker_students,
-            self._picker_pool,
-            self._picker_policy_allocate,
-            self._picker_alloc_out,
-            self._picker_sabt_output_alloc,
-            self._picker_sabt_config_alloc,
-            self._picker_sabt_template_alloc,
-            self._edit_capacity,
-            self._combo_academic_year,
-            self._picker_prior_roster,
-            self._picker_current_roster,
-            self._btn_autodetect,
-            self._picker_rule_matrix,
-            self._picker_rule_students,
-            self._picker_policy_rule,
-            self._picker_rule_output,
-            self._picker_sabt_output_rule,
-            self._picker_sabt_config_rule,
-            self._picker_sabt_template_rule,
-            self._edit_rule_capacity,
-            self._combo_rule_academic_year,
-            self._picker_rule_prior_roster,
-            self._picker_rule_current_roster,
-            self._btn_rule_autodetect,
-            self._btn_mentor_pool,
-            self._btn_matrix_mentor_pool,
-            self._btn_reset_managers,
-        ]
-        for widget in optional_widgets:
-            if widget is not None:
-                self._interactive.append(widget)
-        self._interactive.extend(self._center_manager_combos.values())
-
-    # ------------------------------------------------------------------ Actions
-    def _open_language_dialog(self) -> None:
-        """باز کردن دیالوگ انتخاب زبان و ذخیره در تنظیمات."""
-
-        dialog = LanguageDialog(self._prefs.language, self._translator, self)
-        dialog.setModal(True)
-        dialog.setWindowOpacity(0.98)
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            chosen = dialog.selected_language()
-            if chosen != self._prefs.language:
-                self._apply_language(chosen)
-
-    def _start_build(self) -> None:
-        """اجرای سناریوی ساخت ماتریس با فراخوانی CLI."""
-
-        if self._worker is not None and self._worker.isRunning():
-            QMessageBox.warning(self, "تسک در حال اجرا", "لطفاً تا پایان عملیات جاری صبر کنید.")
-            return
-
-        required = [
-            (self._picker_inspactor, "گزارش Inspactor"),
-            (self._picker_output_matrix, "خروجی ماتریس"),
-        ]
-        if not self._ensure_filled(required):
-            return
-
-        policy_path = (
-            self._picker_policy_build.text() or self._default_policy_path or "config/policy.json"
-        )
-        argv = [
-            "build-matrix",
-            "--inspactor",
-            self._picker_inspactor.text(),
-            "--output",
-            self._picker_output_matrix.text(),
-            "--policy",
-            policy_path,
-            "--use-v3-mentor-pipeline",
-        ]
-
-        def _remember_build_output() -> None:
-            output_path = self._picker_output_matrix.text().strip()
-            if output_path:
-                self._prefs.last_matrix_path = output_path
-            self._update_output_folder_button_state()
-            self._prefs.record_last_run("build")
-            self._refresh_last_run_badge()
-
-        overrides = self._build_matrix_overrides()
-
-        self._launch_cli(
-            argv, "ساخت ماتریس", overrides=overrides, on_success=_remember_build_output
-        )
-
-    def _build_matrix_overrides(self) -> dict[str, object]:
-        """تنظیم پارامترهای حاکمیت برای تب ساخت ماتریس."""
-
-        overrides: dict[str, object] = {}
-        if self._matrix_mentor_pool_overrides:
-            overrides["mentor_pool_overrides"] = dict(self._matrix_mentor_pool_overrides)
-        if self._matrix_manager_overrides:
-            overrides["mentor_pool_manager_overrides"] = dict(self._matrix_manager_overrides)
-        return overrides
-
-    def _reset_history_metrics(self) -> None:
-        """پاک‌سازی خروجی KPI تاریخچه برای اجرای جدید."""
-
-        self._history_metrics_df = pd.DataFrame(columns=METRIC_COLUMNS)
-        if self._history_metrics_dialog is not None:
-            self._history_metrics_dialog.update_metrics(self._history_metrics_df)
-
-    def _capture_history_metrics(self, metrics_df: pd.DataFrame | None) -> None:
-        """ذخیرهٔ KPI تاریخچه محاسبه‌شده در نخ Worker."""
-
-        if not self._user_settings.enable_history_metrics:
-            self._reset_history_metrics()
-            return
-        if isinstance(metrics_df, pd.DataFrame):
-            self._history_metrics_df = metrics_df.copy()
-        else:
-            self._reset_history_metrics()
-        if self._history_metrics_dialog is not None:
-            self._history_metrics_dialog.update_metrics(self._history_metrics_df)
-
-    @staticmethod
-    def _indicator_markup(enabled: bool, label: str) -> str:
-        color = "#2ecc71" if enabled else "#e74c3c"
-        dot = "●"
-        return f"<span style='color:{color}'>{dot}</span> {escape(label)}"
+        state = key if key in mapping else "ready"
+        self._status_bar_state.setText(mapping[state])
+        self._status_bar_state.setProperty("state", state)
+        self._status_bar_state.style().unpolish(self._status_bar_state)
+        self._status_bar_state.style().polish(self._status_bar_state)
 
     def _settings_label_map(self) -> dict[str, str]:
         return {
-            "enable_history_metrics": "History",
-            "enable_trace_debug_sheets": "Debug Sheets",
-            "enable_trace_export": "Trace",
-            "enable_mentor_trace_debug": "Mentor Trace",
-            "enable_pool_governance_trace": "Pool Trace",
-            "enable_bucket_trace": "Bucket Trace",
-            "enable_qa_pool_coverage_rules": "QA Coverage",
-            "use_join_buckets": "Join Buckets",
+            "enable_history_metrics": self._t("settings.short.history", "History"),
+            "enable_trace_debug_sheets": self._t("settings.short.debug_sheets", "Debug Sheets"),
+            "enable_trace_export": self._t("settings.short.trace", "Trace"),
+            "enable_mentor_trace_debug": self._t("settings.short.mentor_trace", "Mentor Trace"),
+            "enable_pool_governance_trace": self._t("settings.short.pool_trace", "Pool Trace"),
+            "enable_bucket_trace": self._t("settings.short.bucket_trace", "Bucket Trace"),
+            "enable_qa_pool_coverage_rules": self._t("settings.short.qa_coverage", "QA Coverage"),
+            "use_join_buckets": self._t("settings.short.join_buckets", "Join Buckets"),
         }
 
-    def _build_settings_indicator_strip(self) -> QHBoxLayout:
-        layout = QHBoxLayout()
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(6)
-        for key, label in self._settings_label_map().items():
-            indicator = QLabel(self)
-            indicator.setObjectName(f"settingsIndicator_{key}")
-            self._settings_indicators[key] = indicator
-            layout.addWidget(indicator)
-        return layout
-
-    def _refresh_settings_indicators(self) -> None:
-        status = self._user_settings
-        label_map = self._settings_label_map()
-        indicator_values = status.to_dict()
-        for key, label in label_map.items():
-            indicator = self._settings_indicators.get(key)
-            if indicator is None:
-                continue
-            enabled = indicator_values.get(key, False)
-            indicator.setText(self._indicator_markup(enabled, label))
-
-    def _show_history_metrics(self) -> None:
-        """نمایش دیالوگ History Metrics با داده‌های آخرین اجرا."""
-
-        if self._history_metrics_dialog is None:
-            self._history_metrics_dialog = HistoryMetricsDialog(self._history_metrics_df, self)
-        else:
-            self._history_metrics_dialog.update_metrics(self._history_metrics_df)
-        self._history_metrics_dialog.show()
-        self._history_metrics_dialog.raise_()
-
     def _open_settings_dialog(self) -> None:
-        dialog = SettingsDialog(self._user_settings, self)
+        dialog = SettingsDialog(self._user_settings, self._translator, self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self._user_settings = dialog.result_settings
             save_user_settings(self._user_settings)
@@ -1897,1560 +573,105 @@ class MainWindow(QMainWindow):
             if not self._user_settings.enable_history_metrics:
                 self._reset_history_metrics()
 
-    def _unknown_report_path(self, output_path: str) -> Path:
-        output = Path(output_path).expanduser()
-        output_dir = output if output.is_dir() else output.parent
-        return (output_dir / "reports" / "unknown_data_report.json").resolve()
+    # --------------------------------------------------------------- shell balance
+    def _compact_persistent_shell(self) -> None:
+        # Keep _status alive because execution code uses its value as internal state,
+        # but remove its duplicated user-visible presentation.
+        self._status.hide()
+        self._stage_detail.setMaximumHeight(36)
+        self._last_run_badge.setMaximumHeight(36)
+        self._progress_caption.setAlignment(Qt.AlignmentFlag.AlignTrailing | Qt.AlignmentFlag.AlignVCenter)
+        self._progress_caption.setMaximumWidth(220)
+        self._log_panel.setMinimumHeight(84)
 
-    def _preflight_result_override(
-        self, report_path: Path
-    ) -> UnknownsPreflightResult | None:
+        progress_layout = self._find_layout_containing(self._progress.parentWidget().layout(), self._progress)
+        if isinstance(progress_layout, QBoxLayout):
+            progress_layout.setDirection(QBoxLayout.Direction.LeftToRight)
+            progress_layout.setSpacing(6)
+
+        lower = self._log_panel.parentWidget()
+        lower_layout = lower.layout() if lower is not None else None
+        if not isinstance(lower_layout, QBoxLayout):
+            return
+        lower_layout.setDirection(QBoxLayout.Direction.LeftToRight)
+        lower_layout.setContentsMargins(12, 4, 12, 8)
+        lower_layout.setSpacing(8)
+        lower_layout.setStretch(0, 2)
+        lower_layout.setStretch(1, 4)
+        lower_layout.setStretch(2, 0)
+
+        controls_item = lower_layout.itemAt(2)
+        controls_layout = controls_item.layout() if controls_item is not None else None
+        if not isinstance(controls_layout, QBoxLayout):
+            return
+        if controls_layout.count() and controls_layout.itemAt(0).spacerItem() is not None:
+            controls_layout.takeAt(0)
+        controls_layout.setDirection(QBoxLayout.Direction.TopToBottom)
+        controls_layout.setContentsMargins(0, 0, 0, 0)
+        controls_layout.setSpacing(4)
+        controls_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self._compact_settings_indicator_grid(controls_layout)
+
+    def _compact_settings_indicator_grid(self, controls_layout: QBoxLayout) -> None:
+        indicators = list(self._settings_indicators.values())
+        for index in range(controls_layout.count()):
+            child_layout = controls_layout.itemAt(index).layout()
+            if child_layout is None or not any(child_layout.indexOf(item) >= 0 for item in indicators):
+                continue
+            controls_layout.takeAt(index)
+            while child_layout.count():
+                child_layout.takeAt(0)
+            grid = QGridLayout()
+            grid.setContentsMargins(0, 0, 0, 0)
+            grid.setHorizontalSpacing(4)
+            grid.setVerticalSpacing(2)
+            for item_index, indicator in enumerate(indicators):
+                grid.addWidget(indicator, item_index // 4, item_index % 4)
+            controls_layout.insertLayout(index, grid)
+            child_layout.deleteLater()
+            return
+
+    def _find_layout_containing(self, layout: QLayout | None, widget: QWidget) -> QLayout | None:
+        if layout is None:
+            return None
+        for index in range(layout.count()):
+            item = layout.itemAt(index)
+            if item.widget() is widget:
+                return layout
+            child_layout = item.layout()
+            found = self._find_layout_containing(child_layout, widget)
+            if found is not None:
+                return found
         return None
 
-    def _get_unknowns_preflight_result(
-        self, *, exit_code: int, report_path: Path
-    ) -> UnknownsPreflightResult:
-        if exit_code == 0:
-            return UnknownsPreflightResult(
-                status="clean",
-                report_path=report_path,
-                exit_code=exit_code,
-                summary=None,
-            )
-        if exit_code == 3:
-            return UnknownsPreflightResult(
-                status="blocking",
-                report_path=report_path,
-                exit_code=exit_code,
-                summary=None,
-            )
-        if exit_code != 2:
-            return UnknownsPreflightResult(
-                status="error",
-                report_path=report_path,
-                exit_code=exit_code,
-                summary=None,
-            )
-        if not report_path.exists():
-            return UnknownsPreflightResult(
-                status="error",
-                report_path=report_path,
-                exit_code=exit_code,
-                summary=None,
-            )
-        report = load_unknowns_report(report_path)
-        summary = summarize_unknowns_report(report, sample_limit=5)
-        return UnknownsPreflightResult(
-            status="issues",
-            report_path=report_path,
-            exit_code=exit_code,
-            summary=summary,
-        )
+    # -------------------------------------------------- compatibility/test seams
+    def _create_center_management_section(self) -> QGroupBox:
+        # Preserve the established monkeypatch seam on app.ui.main_window.
+        _base.get_cached_policy = get_cached_policy
+        group = _base.MainWindow._create_center_management_section(self)
+        self._bind(group, "group.center_management", "Center management", "title")
+        buttons = group.findChildren(QPushButton)
+        if buttons:
+            self._bind(buttons[0], "action.reset_default", "Reset to default")
+        if len(buttons) > 1:
+            self._bind(buttons[1], "action.refresh", "Reload managers")
+        for label in group.findChildren(QLabel):
+            text = label.text().strip()
+            if text.startswith("مدیر ") and text.endswith(":"):
+                center_name = text.removeprefix("مدیر ").removesuffix(":")
+                self._formatted_center_labels.append((label, center_name))
+        return group
 
-    def _run_unknowns_preflight(
-        self,
-        argv: Sequence[str],
-        *,
-        overrides: dict[str, object],
-        report_path: Path,
-        on_proceed: Callable[[], None],
-    ) -> None:
-        override = self._preflight_result_override(report_path)
-        if override is not None:
-            self._handle_preflight_result(override, on_proceed=on_proceed)
-            return
-        result: dict[str, int] = {}
-        override_payload = dict(overrides)
-        override_payload.pop("history_metrics_callback", None)
-        if self._local_db is not None:
-            override_payload = {"local_db_path": str(self._local_db.path), **override_payload}
-
-        def _task(*, progress: ProgressFn) -> None:
-            exit_code = cli.main(
-                argv,
-                progress_factory=lambda: progress,
-                ui_overrides=override_payload,
-            )
-            result["exit_code"] = exit_code
-
-        def _after() -> None:
-            exit_code = result.get("exit_code", 0)
-            preflight = self._get_unknowns_preflight_result(
-                exit_code=exit_code, report_path=report_path
-            )
-            self._handle_preflight_result(preflight, on_proceed=on_proceed)
-
-        action = self._t(
-            "status.preflight_unknowns",
-            "پیش‌بررسی داده‌های ناشناخته",
-        )
-        self._launch_worker(_task, action, on_success=_after)
-
-    def _handle_preflight_result(
-        self,
-        result: UnknownsPreflightResult,
-        *,
-        on_proceed: Callable[[], None],
-    ) -> None:
-        if result.status == "clean":
-            on_proceed()
-            return
-        if result.status == "blocking":
-            QMessageBox.warning(
-                self,
-                self._t("error.unknowns.blocking.title", "خطای دادهٔ ناشناخته"),
-                self._t(
-                    "error.unknowns.blocking.detail",
-                    "پیش‌بررسی داده‌های ناشناخته با خطای مسدودکننده مواجه شد.",
-                ),
-            )
-            return
-        if result.status != "issues":
-            unexpected_template = self._t(
-                "error.unknowns.unexpected",
-                "کد خروج پیش‌بررسی ناشناخته‌ها نامعتبر است: {code}",
-            )
-            QMessageBox.warning(
-                self,
-                self._t("status.error", "خطا"),
-                unexpected_template.format(code=result.exit_code),
-            )
-            return
-        if result.summary is None:
-            QMessageBox.warning(
-                self,
-                self._t("status.error", "خطا"),
-                self._t(
-                    "error.unknowns.report_missing",
-                    "گزارش پیش‌بررسی داده‌های ناشناخته یافت نشد.",
-                ),
-            )
-            return
-        counts_template = self._t(
-            "dialog.unknowns.counts",
-            "تعداد موارد: {total} | دانش‌آموز: {student} | استخر: {pool} | منتور: {mentor}",
-        )
-        counts_text = counts_template.format(
-            total=result.summary.total,
-            student=result.summary.by_entity_type.get("student", 0),
-            pool=result.summary.by_entity_type.get("pool", 0),
-            mentor=result.summary.by_entity_type.get("mentor", 0),
-        )
-        dialog = UnknownDataDialog(
-            result.summary,
-            report_path=result.report_path,
-            title=self._t(
-                "dialog.unknowns.title",
-                "دادهٔ ناشناخته تشخیص داده شد",
-            ),
-            body=self._t(
-                "dialog.unknowns.body",
-                "پیش از تخصیص، برخی داده‌ها ناشناخته هستند و نیاز به تصمیم دارند.",
-            ),
-            counts_text=counts_text,
-            headers=[
-                self._t("dialog.unknowns.table.entity", "نوع"),
-                self._t("dialog.unknowns.table.row", "ردیف"),
-                self._t("dialog.unknowns.table.column", "ستون"),
-                self._t("dialog.unknowns.table.value", "مقدار"),
-                self._t("dialog.unknowns.table.error", "کد خطا"),
-            ],
-            cancel_text=self._t("dialog.unknowns.cancel", "لغو تخصیص"),
-            proceed_text=self._t("dialog.unknowns.proceed", "ادامه به‌رغم ریسک"),
-            open_report_text=self._t(
-                "dialog.unknowns.open_report",
-                "بازکردن پوشه گزارش",
-            ),
-            parent=self,
-        )
-        dialog.setModal(True)
-        if dialog.exec() == QDialog.DialogCode.Accepted and dialog.should_proceed:
-            on_proceed()
-
-    def _start_allocate(self) -> None:
-        """اجرای سناریوی تخصیص با فراخوانی CLI."""
-
-        if self._worker is not None and self._worker.isRunning():
-            QMessageBox.warning(self, "تسک در حال اجرا", "لطفاً تا پایان عملیات جاری صبر کنید.")
-            return
-
-        self._ensure_year_loaded()
-        if self._school_repository is None or self._groupcode_repository is None:
-            QMessageBox.warning(
-                self,
-                self._t("error.reference_not_ready.title", "داده مرجع آماده نیست"),
-                self._t(
-                    "error.reference_not_ready.detail",
-                    "وارد کردن داده‌های مدارس و کد گروه از تب پایگاه داده ضروری است.",
-                ),
-            )
-            return
-
-        pool_type = "matrix"
-        try:
-            readiness = compute_reference_readiness(
-                school_repo=self._school_repository, groupcode_repo=self._groupcode_repository
-            )
-        except Exception as exc:  # pragma: no cover - defensive guard
-            details = "\n".join(
-                [
-                    self._t(
-                        "error.reference_not_ready.detail",
-                        "لطفاً داده‌های مدارس و کد گروه را از تب پایگاه داده وارد کنید.",
-                    ),
-                    str(exc),
-                ]
-            )
-            QMessageBox.warning(
-                self,
-                self._t("error.reference_not_ready.title", "داده مرجع آماده نیست"),
-                details,
-            )
-            return
-
-        if not readiness.is_ready_for_run:
-            title = self._t("error.reference_not_ready.title", "داده مرجع آماده نیست")
-            detail = self._t(
-                "error.reference_not_ready.detail",
-                "لطفاً داده‌های مدارس و کد گروه را از تب پایگاه داده وارد یا به‌روزرسانی کنید.",
-            )
-            counts = self._t(
-                "error.reference_not_ready.counts",
-                f"مدارس: {readiness.schools.row_count} | کد گروه: {readiness.groupcodes.row_count}",
-            )
-            QMessageBox.warning(self, title, f"{detail}\n{counts}")
-            return
-
-        self._reset_history_metrics()
-
-        required = [
-            (self._picker_students, "فایل دانش‌آموزان"),
-            (self._picker_pool, "استخر منتورها"),
-            (self._picker_alloc_out, "خروجی تخصیص"),
-        ]
-        if not self._ensure_filled(required):
-            return
-
-        capacity = self._edit_capacity.text().strip() or "remaining_capacity"
-        self._edit_capacity.setText(capacity)
-        policy_path = (
-            self._picker_policy_allocate.text() or self._default_policy_path or "config/policy.json"
-        )
-
-        overrides = self._build_allocate_overrides()
-        overrides["history_metrics_callback"] = self._capture_history_metrics
-        academic_year = overrides.get("academic_year")
-        if academic_year is None:
-            QMessageBox.warning(
-                self,
-                "سال تحصیلی نامشخص",
-                "لطفاً سال تحصیلی را وارد کنید یا از پیشنهاد خودکار استفاده کنید.",
-            )
-            return
-
-        prior_path = str(overrides.get("prior_roster") or "").strip()
-        current_path = str(overrides.get("current_roster") or "").strip()
-        for path, label in ((prior_path, "روستر سال قبل"), (current_path, "روستر سال جاری")):
-            if path and not Path(path).exists():
-                QMessageBox.warning(self, "فایل یافت نشد", f"{label} قابل دسترسی نیست: {path}")
-                return
-
-        alloc_argv = [
-            "allocate",
-            "--students",
-            self._picker_students.text(),
-            "--pool",
-            self._picker_pool.text(),
-            "--pool-type",
-            pool_type,
-            "--output",
-            self._picker_alloc_out.text(),
-            "--capacity-column",
-            capacity,
-            "--policy",
-            policy_path,
-            "--academic-year",
-            str(academic_year),
-        ]
-
-        if prior_path:
-            alloc_argv.extend(["--prior-roster", prior_path])
-        if current_path:
-            alloc_argv.extend(["--current-roster", current_path])
-
-        def _remember_allocate_outputs() -> None:
-            alloc_out = self._picker_alloc_out.text().strip()
-            if alloc_out:
-                self._prefs.last_alloc_output = alloc_out
-            sabt_output = self._picker_sabt_output_alloc.text().strip()
-            if sabt_output:
-                self._prefs.last_sabt_output_allocate = sabt_output
-            sabt_config = self._picker_sabt_config_alloc.text().strip()
-            if sabt_config:
-                self._prefs.last_sabt_config_path = sabt_config
-            self._update_output_folder_button_state()
-            self._prefs.record_last_run("allocate")
-            self._refresh_last_run_badge()
-
-        preflight_argv = [
-            "preflight-unknowns",
-            "--students",
-            self._picker_students.text(),
-            "--pool",
-            self._picker_pool.text(),
-            "--pool-type",
-            pool_type,
-            "--output",
-            self._picker_alloc_out.text(),
-            "--policy",
-            policy_path,
-        ]
-        report_path = self._unknown_report_path(self._picker_alloc_out.text())
-
-        def _run_allocation() -> None:
-            self._launch_cli(
-                alloc_argv,
-                "تخصیص",
-                overrides=overrides,
-                on_success=_remember_allocate_outputs,
-            )
-
-        self._run_unknowns_preflight(
-            preflight_argv,
-            overrides=overrides,
-            report_path=report_path,
-            on_proceed=_run_allocation,
-        )
-
-    def _start_rule_engine(self) -> None:
-        """اجرای موتور قواعد با استفاده از ماتریس موجود."""
-
-        if self._worker is not None and self._worker.isRunning():
-            QMessageBox.warning(self, "تسک در حال اجرا", "لطفاً تا پایان عملیات جاری صبر کنید.")
-            return
-
-        required = [
-            (self._picker_rule_matrix, "فایل ماتریس"),
-            (self._picker_rule_students, "فایل دانش‌آموزان"),
-            (self._picker_rule_output, "خروجی"),
-        ]
-        if not self._ensure_filled(required):
-            return
-
-        capacity = self._edit_rule_capacity.text().strip() or "remaining_capacity"
-        self._edit_rule_capacity.setText(capacity)
-        policy_path = (
-            self._picker_policy_rule.text() or self._default_policy_path or "config/policy.json"
-        )
-
-        overrides = self._build_rule_engine_overrides()
-        academic_year = overrides.get("academic_year")
-        if academic_year is None:
-            QMessageBox.warning(
-                self,
-                "سال تحصیلی نامشخص",
-                "لطفاً سال تحصیلی را برای موتور قواعد مشخص کنید.",
-            )
-            return
-
-        prior_path = str(overrides.get("prior_roster") or "").strip()
-        current_path = str(overrides.get("current_roster") or "").strip()
-        for path, label in ((prior_path, "روستر سال قبل"), (current_path, "روستر سال جاری")):
-            if path and not Path(path).exists():
-                QMessageBox.warning(self, "فایل یافت نشد", f"{label} قابل دسترسی نیست: {path}")
-                return
-
-        argv = [
-            "rule-engine",
-            "--matrix",
-            self._picker_rule_matrix.text(),
-            "--students",
-            self._picker_rule_students.text(),
-            "--output",
-            self._picker_rule_output.text(),
-            "--capacity-column",
-            capacity,
-            "--policy",
-            policy_path,
-            "--academic-year",
-            str(academic_year),
-        ]
-
-        if prior_path:
-            argv.extend(["--prior-roster", prior_path])
-        if current_path:
-            argv.extend(["--current-roster", current_path])
-
-        def _remember_rule_engine_outputs() -> None:
-            matrix_path = self._picker_rule_matrix.text().strip()
-            if matrix_path:
-                self._prefs.last_matrix_path = matrix_path
-            sabt_output = self._picker_sabt_output_rule.text().strip()
-            if sabt_output:
-                self._prefs.last_sabt_output_rule = sabt_output
-            sabt_config = self._picker_sabt_config_rule.text().strip()
-            if sabt_config:
-                self._prefs.last_sabt_config_path = sabt_config
-            self._update_output_folder_button_state()
-            self._prefs.record_last_run("rule-engine")
-            self._refresh_last_run_badge()
-
-        self._launch_cli(
-            argv,
-            "موتور قواعد",
-            overrides=overrides,
-            on_success=_remember_rule_engine_outputs,
-        )
-
-    def _build_allocate_overrides(self) -> dict[str, object]:
-        """ساخت دیکشنری پارامترهای شمارنده بر اساس ورودی UI."""
-
-        overrides: dict[str, object] = {}
-        year = self._get_academic_year()
-        if year is not None:
-            overrides["academic_year"] = year
-
-        prior = self._picker_prior_roster.text().strip()
-        if prior:
-            overrides["prior_roster"] = prior
-
-        current = self._picker_current_roster.text().strip()
-        if current:
-            overrides["current_roster"] = current
-
-        sabt_output = self._picker_sabt_output_alloc.text().strip()
-        if sabt_output:
-            overrides["sabt_output"] = sabt_output
-
-        sabt_config = self._picker_sabt_config_alloc.text().strip()
-        if sabt_config:
-            overrides["sabt_config"] = sabt_config
-
-        sabt_template = self._picker_sabt_template_alloc.text().strip()
-        if sabt_template:
-            overrides["sabt_template"] = sabt_template
-
-        center_overrides = self.get_center_manager_map()
-        if center_overrides:
-            overrides["center_managers"] = center_overrides
-
-        if self._mentor_pool_overrides:
-            overrides["mentor_pool_overrides"] = dict(self._mentor_pool_overrides)
-
-        overrides["user_settings"] = self._user_settings.to_dict()
-
-        return overrides
-
-    def _build_rule_engine_overrides(self) -> dict[str, object]:
-        """تنظیم ورودی‌های شمارنده برای تب موتور قواعد."""
-
-        overrides: dict[str, object] = {}
-        year = self._get_rule_engine_year()
-        if year is not None:
-            overrides["academic_year"] = year
-
-        prior = self._picker_rule_prior_roster.text().strip()
-        if prior:
-            overrides["prior_roster"] = prior
-
-        current = self._picker_rule_current_roster.text().strip()
-        if current:
-            overrides["current_roster"] = current
-
-        sabt_output = self._picker_sabt_output_rule.text().strip()
-        if sabt_output:
-            overrides["sabt_output"] = sabt_output
-
-        sabt_config = self._picker_sabt_config_rule.text().strip()
-        if sabt_config:
-            overrides["sabt_config"] = sabt_config
-
-        sabt_template = self._picker_sabt_template_rule.text().strip()
-        if sabt_template:
-            overrides["sabt_template"] = sabt_template
-
-        overrides["user_settings"] = self._user_settings.to_dict()
-
-        return overrides
-
-    def _create_center_management_section(self) -> QWidget:
-        """ایجاد بخش پویای مدیریت مراکز بر اساس پیکربندی Policy.
-
-        این تابع با خواندن تنظیمات مراکز از Policy، یک ویجت پویا ایجاد می‌کند
-        که شامل ComboBoxهای انتخاب مدیر برای هر مرکز (به جز مرکز 0) می‌باشد.
-
-        Returns:
-            QWidget: گروه ویجت شامل تمام کنترل‌های مدیریت مراکز
-
-        Note:
-            - برای هر مرکز تعریف شده در Policy (به جز مرکز 0) یک ردیف ایجاد می‌شود
-            - مقادیر پیش‌فرض از policy.center_management.centers خوانده می‌شوند
-            - در صورت خطا در بارگذاری Policy، پیام خطا نمایش داده می‌شود
-        """
-
-        group_box = QGroupBox("مدیریت مراکز")
-        group_box.setObjectName("centerManagerGroup")
-        main_layout = QVBoxLayout()
-        self._center_manager_combos.clear()
-
-        try:
-            policy = load_policy()
-            if not policy.center_management.enabled:
-                label = QLabel("مدیریت مراکز غیرفعال است")
-                main_layout.addWidget(label)
-                group_box.setLayout(main_layout)
-                return group_box
-            for center in policy.center_management.centers:
-                if center.id == 0:
-                    continue
-                row_layout = QHBoxLayout()
-                label = QLabel(f"مدیر {center.name}:")
-                combo = self._create_manager_combo(group_box)
-                combo.setMinimumWidth(250)
-                preferred = self._prefs.get_center_manager(center.id, center.default_manager or "")
-                self._refresh_manager_combo(center.id, combo)
-                if preferred:
-                    combo.setCurrentText(preferred)
-                combo.currentTextChanged.connect(
-                    lambda text, cid=center.id: self._on_center_manager_changed(cid, text)
-                )
-                self._center_manager_combos[center.id] = combo
-                row_layout.addWidget(label)
-                row_layout.addWidget(combo)
-                row_layout.addStretch()
-                main_layout.addLayout(row_layout)
-        except Exception as exc:
-            error_label = QLabel(f"خطا در بارگذاری تنظیمات مراکز: {exc}")
-            main_layout.addWidget(error_label)
-
-        button_layout = QHBoxLayout()
-        reset_btn = QPushButton("بازنشانی به پیش‌فرض")
-        reset_btn.clicked.connect(self._reset_center_managers_to_default)
-        button_layout.addWidget(reset_btn)
-        refresh_btn = QPushButton("بارگذاری مجدد مدیران")
-        refresh_btn.clicked.connect(self._refresh_all_manager_combos)
-        button_layout.addWidget(refresh_btn)
-        button_layout.addStretch()
-        self._btn_reset_managers = reset_btn
-        main_layout.addLayout(button_layout)
-        group_box.setLayout(main_layout)
-        self._load_manager_names_async()
-        return group_box
-
-    def _create_manager_combo(self, parent: QWidget) -> QComboBox:
-        """ساخت ComboBox قابل‌ویرایش برای انتخاب مدیران مراکز."""
-
-        combo = QComboBox(parent)
-        combo.setEditable(True)
-        combo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
-        combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
-        combo.setMinimumContentsLength(1)
-        combo.setToolTip("نام مدیر مرکز را انتخاب یا وارد کنید")
+    def _create_manager_combo(self, parent: QWidget):
+        combo = _base.MainWindow._create_manager_combo(self, parent)
+        self._bind(combo, "center.manager_tooltip", "Select or enter the center manager", "tooltip")
+        edit = combo.lineEdit()
+        if edit is not None:
+            edit.setAlignment(Qt.AlignmentFlag.AlignLeading | Qt.AlignmentFlag.AlignVCenter)
         return combo
 
-    def _on_center_manager_changed(self, center_id: int, text: str) -> None:
-        """ذخیرهٔ انتخاب مدیر مرکز پویا در تنظیمات."""
 
-        cleaned = text.strip()
-        if cleaned:
-            self._prefs.set_center_manager(center_id, cleaned)
-        else:
-            self._prefs.clear_center_manager(center_id)
+def __getattr__(name: str) -> object:
+    """Delegate compatibility attributes to the preserved implementation module."""
 
-    def _run_excel_loader(
-        self, path: Path, *, description: str, on_loaded: Callable[[pd.DataFrame], None]
-    ) -> None:
-        """اجرای بارگذار Excel/CSV در نخ جداگانه و مدیریت UI."""
-
-        if not path.exists():
-            QMessageBox.warning(self, "فایل یافت نشد", f"مسیر مشخص‌شده وجود ندارد: {path}")
-            return
-        if path.is_dir():
-            QMessageBox.warning(self, "مسیر نامعتبر", "مسیر انتخاب‌شده یک پوشه است.")
-            return
-        loader = ExcelLoader(path)
-        self._excel_loaders.add(loader)
-        self._disable_controls(True)
-        self._set_busy_cursor(True)
-
-        def _finish() -> None:
-            self._excel_loaders.discard(loader)
-            if not self._excel_loaders and self._worker is None:
-                self._disable_controls(False)
-                self._set_busy_cursor(False)
-
-        def _handle_loaded(df: pd.DataFrame) -> None:
-            try:
-                on_loaded(df)
-            finally:
-                _finish()
-
-        def _handle_failed(message: str) -> None:
-            QMessageBox.warning(self, "خواندن فایل", f"{description}: {message}")
-            self._append_log(f"❌ {description} ناموفق: {message}")
-            _finish()
-
-        loader.loaded.connect(_handle_loaded)
-        loader.failed.connect(_handle_failed)
-        loader.start()
-
-    def _refresh_manager_combo(
-        self, center_id: int, combo: QComboBox, names: list[str] | None = None
-    ) -> None:
-        """پر کردن ComboBox با لیست مدیران."""
-
-        try:
-            if not Shiboken.isValid(combo):
-                return
-            combo.blockSignals(True)
-            combo.clear()
-            source_names = names or self._manager_names_cache or self._get_default_managers()
-            combo.addItems(source_names)
-            preferred = self._prefs.get_center_manager(center_id, "")
-            if preferred:
-                combo.setCurrentText(preferred)
-            combo.blockSignals(False)
-        except RuntimeError:
-            # Combo was deleted between validity check and refresh; drop it.
-            self._center_manager_combos.pop(center_id, None)
-
-    def _refresh_all_manager_combos(self) -> None:
-        """بارگذاری مجدد تمام ComboBoxهای مدیران."""
-
-        self._prune_invalid_manager_combos()
-        if not self._center_manager_combos or not Shiboken.isValid(self._picker_pool):
-            return
-        self._load_manager_names_async()
-
-    def _is_widget_valid(self, widget: QObject | None) -> bool:
-        """Check whether a Qt object is still alive before touching it."""
-
-        return widget is not None and Shiboken.isValid(widget)
-
-    def _on_pool_text_changed(self) -> None:
-        """واکنش به تغییر مسیر استخر منتورها."""
-
-        self._refresh_all_manager_combos()
-        self._reset_mentor_pool_cache()
-
-    def _load_manager_names_async(self) -> None:
-        """بارگذاری نام مدیران از استخر بدون مسدود کردن UI."""
-
-        if not Shiboken.isValid(self._picker_pool):
-            return
-
-        try:
-            path_text = self._picker_pool.text().strip()
-        except RuntimeError:
-            return
-        if not path_text:
-            self._apply_manager_names(self._get_default_managers())
-            return
-        pool_path = Path(path_text)
-        if not pool_path.exists():
-            self._append_log("⚠️ فایل استخر پیدا نشد؛ از لیست پیش‌فرض مدیران استفاده می‌شود.")
-            self._apply_manager_names(self._get_default_managers())
-            return
-        if pool_path.is_dir():
-            self._append_log("⚠️ مسیر انتخاب‌شده پوشه است؛ از لیست پیش‌فرض مدیران استفاده می‌شود.")
-            self._apply_manager_names(self._get_default_managers())
-            return
-        self._run_excel_loader(
-            pool_path,
-            description="بارگذاری مدیران",
-            on_loaded=self._process_manager_dataframe,
-        )
-
-    def _load_manager_names_from_pool(self) -> list[str]:
-        """خواندن همزمان نام مدیران برای استفاده در تست‌ها و fallback ها."""
-
-        if not Shiboken.isValid(self._picker_pool):
-            return self._get_default_managers()
-
-        try:
-            path_text = self._picker_pool.text().strip()
-        except RuntimeError:
-            return self._get_default_managers()
-        if not path_text:
-            return self._get_default_managers()
-
-        pool_path = Path(path_text)
-        try:
-            return load_manager_names_from_pool(pool_path)
-        except FileNotFoundError:
-            QMessageBox.warning(self, "فایل یافت نشد", f"مسیر مشخص‌شده وجود ندارد: {pool_path}")
-        except IsADirectoryError:
-            QMessageBox.warning(self, "مسیر نامعتبر", "مسیر انتخاب‌شده یک پوشه است.")
-        except Exception as exc:  # pragma: no cover - defensive UI guard
-            self._append_log(f"❌ خطا در خواندن مدیران: {exc}")
-            QMessageBox.warning(
-                self,
-                "بارگذاری مدیران",
-                "امکان استخراج مدیران از فایل استخر نبود؛ از پیش‌فرض استفاده می‌شود.",
-            )
-        return self._get_default_managers()
-
-    def _process_manager_dataframe(self, dataframe: pd.DataFrame) -> None:
-        """پردازش دیتافریم مدیران خوانده‌شده و به‌روزرسانی ComboBoxها."""
-
-        try:
-            names = extract_manager_names(dataframe)
-        except Exception as exc:
-            self._append_log(f"❌ خطا در خواندن مدیران: {exc}")
-            QMessageBox.warning(
-                self,
-                "بارگذاری مدیران",
-                "امکان استخراج مدیران از فایل استخر نبود؛ از پیش‌فرض استفاده می‌شود.",
-            )
-            names = self._get_default_managers()
-        self._apply_manager_names(names)
-
-    def _apply_manager_names(self, names: list[str]) -> None:
-        """به‌روزرسانی تمام ComboBoxهای مدیران با لیست داده‌شده."""
-
-        self._manager_names_cache = list(names)
-        self._prune_invalid_manager_combos()
-        for center_id, combo in self._center_manager_combos.items():
-            if not Shiboken.isValid(combo):
-                continue
-            try:
-                self._refresh_manager_combo(center_id, combo, list(names))
-            except RuntimeError:
-                continue
-        self._append_log("✅ لیست مدیران به‌روزرسانی شد")
-
-    def _prune_invalid_manager_combos(self) -> None:
-        """حذف ComboBoxهایی که دیگر در سطح Qt معتبر نیستند."""
-
-        invalid_ids = [
-            center_id
-            for center_id, combo in self._center_manager_combos.items()
-            if not Shiboken.isValid(combo)
-        ]
-        for center_id in invalid_ids:
-            self._center_manager_combos.pop(center_id, None)
-
-    def _reset_mentor_pool_cache(self) -> None:
-        """پاک‌سازی کش استخر منتورها هنگام تغییر مسیر فایل."""
-
-        self._mentor_pool_entries = []
-        self._mentor_pool_overrides = {}
-        self._mentor_pool_source = ""
-        if self._mentor_pool_dialog is not None:
-            self._mentor_pool_dialog.close()
-            self._mentor_pool_dialog = None
-
-    def _reset_matrix_mentor_pool_cache(self) -> None:
-        """پاک‌سازی کش حاکمیت استخر در تب ساخت ماتریس."""
-
-        self._matrix_mentor_pool_entries = []
-        self._matrix_mentor_pool_overrides = {}
-        self._matrix_manager_overrides = {}
-        self._matrix_mentor_pool_source = ""
-        if self._matrix_mentor_pool_dialog is not None:
-            self._matrix_mentor_pool_dialog.close()
-            self._matrix_mentor_pool_dialog = None
-
-    def _open_mentor_pool_governance(self) -> None:
-        """بارگذاری استخر و نمایش دیالوگ حاکمیت بدون مسدود کردن UI."""
-
-        path_text = self._picker_pool.text().strip()
-        if not path_text:
-            QMessageBox.warning(self, "استخر منتورها", "لطفاً ابتدا فایل استخر را انتخاب کنید.")
-            return
-
-        pool_path = Path(path_text)
-        if pool_path.is_dir():
-            QMessageBox.warning(self, "مسیر نامعتبر", "مسیر انتخاب‌شده یک پوشه است.")
-            return
-
-        if self._mentor_pool_entries and self._mentor_pool_source == str(pool_path):
-            self._show_mentor_pool_dialog(self._mentor_pool_entries)
-            return
-
-        self._run_excel_loader(
-            pool_path,
-            description="بارگذاری استخر منتورها",
-            on_loaded=lambda df: self._process_mentor_pool_dataframe(df, str(pool_path)),
-        )
-
-    def _open_matrix_mentor_pool_governance(self) -> None:
-        """باز کردن دیالوگ حاکمیت برای گزارش Inspactor (تب ساخت ماتریس)."""
-
-        path_text = self._picker_inspactor.text().strip()
-        if not path_text:
-            QMessageBox.warning(self, "استخر منتورها", "لطفاً ابتدا فایل Inspactor را انتخاب کنید.")
-            return
-        insp_path = Path(path_text)
-        if insp_path.is_dir():
-            QMessageBox.warning(self, "مسیر نامعتبر", "مسیر انتخاب‌شده یک پوشه است.")
-            return
-        if self._matrix_mentor_pool_entries and self._matrix_mentor_pool_source == str(insp_path):
-            self._show_matrix_mentor_pool_dialog(self._matrix_mentor_pool_entries)
-            return
-
-        self._run_excel_loader(
-            insp_path,
-            description="بارگذاری Inspactor برای حاکمیت",
-            on_loaded=lambda df: self._process_matrix_mentor_pool_dataframe(df, str(insp_path)),
-        )
-
-    def _process_mentor_pool_dataframe(self, dataframe: pd.DataFrame, source: str) -> None:
-        """تبدیل دیتافریم استخر به ورودی UI و نمایش دیالوگ."""
-
-        try:
-            entries = build_mentor_entries_from_dataframe(
-                dataframe, existing_overrides=self._mentor_pool_overrides
-            )
-        except Exception as exc:
-            self._append_log(f"❌ خطا در خواندن استخر منتورها: {exc}")
-            QMessageBox.warning(
-                self,
-                "بارگذاری استخر",
-                "امکان استخراج منتورها از فایل نبود؛ لطفاً فایل را بررسی کنید.",
-            )
-            return
-
-        if not entries:
-            QMessageBox.warning(
-                self,
-                "استخر خالی",
-                "هیچ منتوری در فایل یافت نشد؛ لطفاً فایل را بررسی کنید.",
-            )
-            return
-
-        self._mentor_pool_entries = entries
-        self._mentor_pool_source = source
-        self._show_mentor_pool_dialog(entries)
-
-    def _process_matrix_mentor_pool_dataframe(self, dataframe: pd.DataFrame, source: str) -> None:
-        """آماده‌سازی داده‌های Inspactor برای دیالوگ حاکمیت تب ساخت ماتریس."""
-
-        try:
-            entries = build_mentor_entries_from_dataframe(
-                dataframe, existing_overrides=self._matrix_mentor_pool_overrides
-            )
-        except Exception as exc:
-            self._append_log(f"❌ خطا در خواندن Inspactor: {exc}")
-            QMessageBox.warning(
-                self,
-                "بارگذاری Inspactor",
-                "امکان استخراج منتورها از فایل نبود؛ لطفاً فایل را بررسی کنید.",
-            )
-            return
-
-        if not entries:
-            QMessageBox.warning(
-                self,
-                "استخر خالی",
-                "هیچ منتوری در فایل Inspactor یافت نشد؛ لطفاً فایل را بررسی کنید.",
-            )
-            return
-
-        self._matrix_mentor_pool_entries = entries
-        self._matrix_mentor_pool_source = source
-        self._show_matrix_mentor_pool_dialog(entries)
-
-    def _show_mentor_pool_dialog(self, entries: list[MentorPoolEntry]) -> None:
-        """نمایش/به‌روزرسانی دیالوگ حاکمیت استخر."""
-
-        if self._mentor_pool_dialog is None:
-            dialog = self._mentor_pool_dialog_class(entries, self)
-            dialog.finished.connect(
-                lambda result, dlg=dialog: self._handle_mentor_pool_finished(result, dlg)
-            )
-            self._mentor_pool_dialog = dialog
-        else:
-            self._mentor_pool_dialog.set_entries(entries)
-        self._mentor_pool_dialog.show()
-        self._mentor_pool_dialog.raise_()
-
-    def _show_matrix_mentor_pool_dialog(self, entries: list[MentorPoolEntry]) -> None:
-        """نمایش دیالوگ حاکمیت برای تب ساخت ماتریس."""
-
-        dialog = self._mentor_pool_dialog_class(entries, self)
-        dialog.finished.connect(
-            lambda result, dlg=dialog: self._handle_matrix_mentor_pool_finished(result, dlg)
-        )
-        self._matrix_mentor_pool_dialog = dialog
-        dialog.show()
-        dialog.raise_()
-
-    def _handle_mentor_pool_finished(self, result: int, dialog: MentorPoolDialog) -> None:
-        """ذخیرهٔ overrideها در صورت پذیرش دیالوگ."""
-
-        if result == QDialog.DialogCode.Accepted:
-            overrides = dialog.get_overrides()
-            self._mentor_pool_overrides = {str(k): bool(v) for k, v in overrides.items()}
-
-    def _handle_matrix_mentor_pool_finished(self, result: int, dialog: MentorPoolDialog) -> None:
-        """ذخیرهٔ overrideهای مدیر/منتور برای تب ساخت ماتریس."""
-
-        if result == QDialog.DialogCode.Accepted:
-            overrides = dialog.get_overrides()
-            manager_overrides = dialog.get_manager_overrides()
-            self._matrix_mentor_pool_overrides = {str(k): bool(v) for k, v in overrides.items()}
-            self._matrix_manager_overrides = {str(k): bool(v) for k, v in manager_overrides.items()}
-        self._matrix_mentor_pool_dialog = None
-
-    def _reset_center_managers_to_default(self) -> None:
-        """بازنشانی تمام مدیران به مقادیر پیش‌فرض Policy."""
-
-        try:
-            policy = get_cached_policy()
-        except Exception as exc:
-            self._show_exception_dialog(
-                title="Policy",
-                user_text="خطا در بارگذاری Policy.",
-                exc=exc,
-            )
-            return
-        for center in policy.center_management.centers:
-            if center.id == 0:
-                continue
-            combo = self._center_manager_combos.get(center.id)
-            if combo is None:
-                continue
-            default_manager = center.default_manager or ""
-            combo.blockSignals(True)
-            combo.setCurrentText(default_manager)
-            combo.blockSignals(False)
-            self._on_center_manager_changed(center.id, default_manager)
-        self._append_log("✅ مدیران به پیش‌فرض Policy بازنشانی شدند")
-
-    def get_center_manager_map(self) -> dict[int, list[str]]:
-        """دریافت نگاشت مراکز به مدیران از UI."""
-
-        result: dict[int, list[str]] = {}
-        for center_id, combo in self._center_manager_combos.items():
-            manager = combo.currentText().strip()
-            if manager:
-                result[int(center_id)] = [manager]
-        return result
-
-    def _get_default_managers(self) -> list[str]:
-        """دریافت لیست پیش‌فرض مدیران از Policy."""
-
-        try:
-            policy = get_cached_policy()
-            managers: list[str] = []
-            seen: set[str] = set()
-            for center in policy.center_management.centers:
-                if center.default_manager:
-                    text = center.default_manager.strip()
-                    if text and text not in seen:
-                        managers.append(text)
-                        seen.add(text)
-            return managers if managers else ["شهدخت کشاورز", "آیناز هوشمند"]
-        except Exception:
-            return ["شهدخت کشاورز", "آیناز هوشمند"]
-
-    def _start_demo_task(self) -> None:
-        """اجرای پیش‌نمایش پیشرفت برای تست UI."""
-
-        if self._worker is not None and self._worker.isRunning():
-            QMessageBox.information(self, "مشغول", "یک عملیات دیگر در حال اجراست.")
-            return
-
-        def _demo_task(*, progress: ProgressFn) -> None:
-            for pct, msg in ((0, "آغاز"), (30, "در حال پردازش"), (60, "گام پایانی"), (100, "کامل")):
-                progress(pct, msg)
-
-        self._launch_worker(_demo_task, "دموی پیشرفت")
-
-    def _autodetect_counters(self) -> None:
-        """خواندن روستر سال جاری و پیشنهاد سال و آخرین شمارنده‌ها."""
-
-        self._autodetect_counters_for(self._picker_current_roster, self._combo_academic_year)
-
-    def _autodetect_rule_engine_counters(self) -> None:
-        """پیشنهاد شمارنده‌ها برای تب موتور قواعد."""
-
-        self._autodetect_counters_for(
-            self._picker_rule_current_roster, self._combo_rule_academic_year
-        )
-
-    def _autodetect_counters_for(self, picker: FilePicker, combo: QComboBox) -> None:
-        """منطق مشترک پیشنهاد شمارنده بر اساس روستر ورودی."""
-
-        path_text = picker.text().strip()
-        if not path_text:
-            QMessageBox.information(
-                self,
-                "فایل نامشخص",
-                "ابتدا روستر سال جاری را انتخاب کنید.",
-            )
-            return
-
-        self._run_excel_loader(
-            Path(path_text),
-            description="پیشنهاد شمارنده",
-            on_loaded=lambda df: self._process_counter_dataframe(df, combo),
-        )
-
-    def _process_counter_dataframe(self, dataframe: pd.DataFrame, combo: QComboBox) -> None:
-        """بررسی دیتافریم شمارنده و پیشنهاد سال/شمارنده."""
-
-        try:
-            canonical = canonicalize_headers(dataframe, header_mode="en")
-        except Exception as exc:
-            self._show_exception_dialog(
-                title="خواندن فایل",
-                user_text="امکان پردازش فایل ورودی نبود.",
-                exc=exc,
-            )
-            return
-
-        strict_year, fallback_year = detect_year_candidates(canonical)
-        messages: list[str] = []
-        if strict_year is not None:
-            self._set_year_for_combo(combo, strict_year)
-            messages.append(f"سال پیشنهادی: {strict_year}")
-        elif fallback_year is not None:
-            messages.append(f"سال احتمالی (غیر یکتا): {fallback_year}")
-        else:
-            messages.append("سال قابل تشخیص نیست")
-
-        try:
-            policy = get_policy()
-        except Exception as exc:  # pragma: no cover - خطای policy در UI
-            self._show_exception_dialog(
-                title="بارگذاری سیاست",
-                user_text="امکان خواندن policy نبود.",
-                exc=exc,
-            )
-            self._status.setText("بارگذاری policy ناموفق")
-            return
-
-        year = strict_year or self._get_year_value(combo)
-        if year is not None:
-            try:
-                yy = year_to_yy(year)
-            except ValueError:
-                yy = None
-            if yy is not None:
-                male_mid3 = str(policy.gender_codes.male.counter_code).zfill(3)
-                female_mid3 = str(policy.gender_codes.female.counter_code).zfill(3)
-                male_prefix = f"{yy:02d}{male_mid3}"
-                female_prefix = f"{yy:02d}{female_mid3}"
-                last_male = find_max_sequence_by_prefix(canonical, male_prefix)
-                last_female = find_max_sequence_by_prefix(canonical, female_prefix)
-                next_male = last_male + 1 if last_male else 1
-                next_female = last_female + 1 if last_female else 1
-                if last_male:
-                    messages.append(f"آخرین پسر: {yy:02d}{male_mid3}{last_male:04d}")
-                else:
-                    messages.append("آخرین پسر یافت نشد")
-                messages.append(f"شروع بعدی پسر: {next_male:04d}")
-                if last_female:
-                    messages.append(f"آخرین دختر: {yy:02d}{female_mid3}{last_female:04d}")
-                else:
-                    messages.append("آخرین دختر یافت نشد")
-                messages.append(f"شروع بعدی دختر: {next_female:04d}")
-        else:
-            messages.append("برای محاسبهٔ شمارندهٔ آخر، سال را مشخص کنید")
-
-        status = " | ".join(messages)
-        self._status.setText(status or "پیشنهاد خودکار انجام شد")
-        self._append_log(f"ℹ️ پیشنهاد شمارنده: {status}")
-
-    def _launch_cli(
-        self,
-        argv: Sequence[str],
-        action: str,
-        *,
-        overrides: dict[str, object] | None = None,
-        on_success: Callable[[], None] | None = None,
-    ) -> None:
-        """اجرای فرمان CLI با Worker و رعایت قرارداد progress."""
-
-        override_payload = overrides or {}
-        if self._local_db is not None:
-            override_payload = {"local_db_path": str(self._local_db.path), **override_payload}
-
-        def _task(*, progress: ProgressFn) -> None:
-            exit_code = cli.main(
-                argv,
-                progress_factory=lambda: progress,
-                ui_overrides=override_payload,
-            )
-            if exit_code != 0:
-                raise RuntimeError(f"کد خروج غیرصفر: {exit_code}")
-
-        self._launch_worker(_task, action, on_success=on_success)
-
-    def run_task(
-        self,
-        func: Callable[[threading.Event, ProgressFn], None],
-        stop_event: threading.Event,
-        *,
-        description: str | None = None,
-    ) -> Worker:
-        """Execute a callable in a Worker thread with a stop_event contract."""
-
-        def _task(*, progress: ProgressFn) -> None:
-            func(stop_event, progress)
-
-        self._worker_stop_event = stop_event
-        action = description or "background task"
-        worker = self._launch_worker(_task, action)
-        return worker
-
-    def _launch_worker(
-        self,
-        func: Callable[..., None],
-        action: str,
-        *,
-        on_success: Callable[[], None] | None = None,
-    ) -> Worker:
-        """اجرای تابع در Worker با آماده‌سازی UI."""
-
-        self._progress.setValue(0)
-        self._current_action = action
-        running_text = f"{action} در حال اجرا…"
-        self._status.setText(running_text)
-        self._set_stage(action, "در انتظار گزارش پیشرفت")
-        self._update_progress_caption(0, running_text)
-        self._append_log(f"<b>▶️ شروع {action}</b>")
-        self._disable_controls(True)
-        self._set_busy_cursor(True)
-        self._progress.setRange(0, 0)
-        self._progress.setProperty("busy", True)
-        self._success_hook = on_success
-
-        worker = Worker(func)
-        worker.progress.connect(self._on_progress)
-        worker.finished.connect(self._on_finished)
-        self._worker = worker
-        worker.start()
-        return worker
-
-    # ----------------------------------------------------------------- Helpers
-    def _disable_controls(self, disabled: bool) -> None:
-        """فعال/غیرفعال کردن کنترل‌های تعاملی."""
-
-        if self._is_closing:
-            return
-        for widget in self._interactive:
-            if not self._is_widget_valid(widget):
-                continue
-            widget.setEnabled(not disabled)
-        if hasattr(self, "_busy_overlay") and self._busy_overlay is not None:
-            self._update_overlay_geometry()
-            if self._is_widget_valid(self._busy_overlay):
-                self._busy_overlay.setVisible(disabled)
-                if disabled:
-                    self._busy_overlay.raise_()
-        if self._progress_caption is not None and self._progress_pulse is not None:
-            if disabled:
-                self._progress_caption.setProperty("busy", True)
-                self._progress_pulse.start()
-            else:
-                self._progress_caption.setProperty("busy", False)
-                self._progress_pulse.stop()
-                effect = self._progress_caption.graphicsEffect()
-                if isinstance(effect, QGraphicsOpacityEffect):
-                    effect.setOpacity(1.0)
-        if hasattr(self, "_tabs"):
-            self._tabs.setProperty("busy", disabled)
-            self._tabs.style().unpolish(self._tabs)
-            self._tabs.style().polish(self._tabs)
-
-    def _update_overlay_geometry(self) -> None:
-        """همگام‌سازی اندازه پوشش مشغول برای جلوگیری از کلیک."""
-
-        if (
-            self._busy_overlay is None
-            or self._splitter is None
-            or not self._is_widget_valid(self._busy_overlay)
-            or not self._is_widget_valid(self._splitter)
-        ):
-            return
-        try:
-            self._busy_overlay.setGeometry(self._splitter.rect())
-        except RuntimeError:
-            # Widget was deleted between validity check and geometry update.
-            return
-
-    def _on_splitter_destroyed(self, _obj: QObject | None = None) -> None:
-        """Align overlay updates with splitter lifetime to avoid dangling access."""
-
-        self._splitter = None
-        if self._busy_overlay is not None and self._is_widget_valid(self._busy_overlay):
-            self._busy_overlay.hide()
-        self._busy_overlay = None
-
-    def _set_busy_cursor(self, busy: bool) -> None:
-        """نمایش نشانگر مشغول هنگام اجرای عملیات طولانی."""
-
-        app = QApplication.instance()
-        if app is None or not isinstance(app, QApplication):
-            return
-        if busy and not self._is_busy_cursor:
-            app.setOverrideCursor(Qt.CursorShape.BusyCursor)
-            self._is_busy_cursor = True
-        elif not busy and self._is_busy_cursor:
-            app.restoreOverrideCursor()
-            self._is_busy_cursor = False
-
-    def _get_year_value(self, combo: QComboBox) -> int | None:
-        """دریافت سال تحصیلی از یک ComboBox مشخص."""
-
-        text = combo.currentText().strip()
-        if not text:
-            return None
-        try:
-            year = int(text)
-        except ValueError:
-            return None
-        if year < 1300 or year > 1500:
-            return None
-        return year
-
-    def _get_academic_year(self) -> int | None:
-        """دریافت سال تحصیلی معتبر از ورودی تب تخصیص."""
-
-        return self._get_year_value(self._combo_academic_year)
-
-    def _get_rule_engine_year(self) -> int | None:
-        """دریافت سال تحصیلی از تب موتور قواعد."""
-
-        return self._get_year_value(self._combo_rule_academic_year)
-
-    def _set_academic_year(self, year: int) -> None:
-        """قرار دادن مقدار سال تحصیلی در کنترل مربوطه."""
-
-        self._set_year_for_combo(self._combo_academic_year, year)
-
-    def _set_year_for_combo(self, combo: QComboBox, year: int) -> None:
-        """کمک‌کننده برای تنظیم مقدار سال در ComboBox."""
-
-        combo.setEditText(str(year))
-
-    def _apply_pref_default(self, picker: FilePicker, value: str | None) -> None:
-        """اگر ورودی خالی بود، مقدار پیش‌فرض را از تنظیمات اعمال می‌کند."""
-
-        if value and not picker.text().strip():
-            picker.setText(value)
-
-    def _apply_resource_default(self, picker: FilePicker, value: str | None) -> None:
-        """اعمال مسیر منابع باندل‌شده در صورت نبود ترجیح کاربر."""
-
-        if value and not picker.text().strip():
-            picker.setText(value)
-
-    def _set_picker_button_text(self, picker: FilePicker) -> None:
-        """تنظیم متن دکمهٔ انتخاب فایل برای ترجمهٔ جاری."""
-
-        picker.set_button_text(self._t("action.browse", "انتخاب…"))
-
-    def _save_log_to_file(self) -> None:
-        """ذخیرهٔ محتوای لاگ در فایل متنی یا HTML."""
-
-        filename, _ = QFileDialog.getSaveFileName(
-            self,
-            "ذخیره گزارش",
-            "",
-            "HTML (*.html *.htm);;Text (*.txt *.log);;All Files (*)",
-        )
-        if not filename:
-            return
-        if self._log is None:
-            return
-        self._flush_log_pending()
-        path = Path(filename)
-        suffix = path.suffix.lower()
-        raw_text = self._log.toPlainText()
-        content = (
-            f"<pre>{escape(raw_text)}</pre>"
-            if suffix in {".html", ".htm"}
-            else raw_text
-        )
-        try:
-            path.write_text(content, encoding="utf-8")
-        except OSError as exc:
-            self._show_exception_dialog(
-                title="ذخیره گزارش",
-                user_text="امکان ذخیرهٔ فایل نبود.",
-                exc=exc,
-            )
-            return
-        QMessageBox.information(self, "ذخیره گزارش", "گزارش با موفقیت ذخیره شد.")
-
-    def _clear_log(self) -> None:
-        """پاک کردن لاگ و بازگرداندن حالت خالی."""
-
-        if self._log is None:
-            return
-        self._log.clear()
-        self._log_line = 0
-        self._log_pending.clear()
-        self._log_buffer.clear()
-        self._sync_log_placeholder()
-
-    def _show_async_message(self, icon: QMessageBox.Icon, title: str, text: str) -> None:
-        """نمایش پیام غیرمسدودکننده برای خطاها/هشدارها."""
-
-        if self._is_closing or not self._is_widget_valid(self):
-            return
-        box = QMessageBox(self)
-        box.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
-        box.setIcon(icon)
-        box.setWindowTitle(title)
-        box.setText(text)
-        box.setStandardButtons(QMessageBox.StandardButton.Ok)
-        box.setModal(True)
-        box.open()
-
-    def _show_exception_dialog(
-        self,
-        *,
-        title: str,
-        user_text: str,
-        exc: BaseException,
-        icon: QMessageBox.Icon = QMessageBox.Icon.Warning,
-    ) -> None:
-        """نمایش خطا همراه با جزئیات فنی برای دیباگ."""
-
-        if self._is_closing or not self._is_widget_valid(self):
-            return
-        box = QMessageBox(self)
-        box.setIcon(icon)
-        box.setWindowTitle(title)
-        box.setText(user_text)
-        box.setDetailedText(_format_exception_details(exc))
-        box.setStandardButtons(QMessageBox.StandardButton.Ok)
-        box.exec()
-
-    def _normalize_log_message(self, message: str) -> str:
-        """پاک‌سازی ورودی‌ها از برچسب‌های HTML برای نمایش متن ساده."""
-
-        cleaned = _LOG_TAG_RE.sub("", message)
-        return unescape(cleaned).strip()
-
-    def _should_flush_log(self, message: str) -> bool:
-        stripped = message.lstrip()
-        return stripped.startswith("❌")
-
-    def _flush_log_pending(self) -> None:
-        if self._log is None or not self._log_pending:
-            return
-        timestamp = QDateTime.currentDateTime().toString("HH:mm:ss")
-        lines: list[str] = []
-        for message in self._log_pending:
-            self._log_line += 1
-            prefix = f"[{self._log_line:03d} | {timestamp}]"
-            lines.append(f"{prefix} {message}")
-        self._log_pending.clear()
-        self._log.appendPlainText("\n".join(lines))
-        self._sync_log_placeholder()
-
-    def _append_log(self, text: str) -> None:
-        """افزودن پیام به لاگ با بافر محدود و متن ساده."""
-
-        if self._log is None or not self._is_widget_valid(self._log) or self._is_closing:
-            if not self._is_closing:
-                self._log_buffer.append(text)
-            return
-        message = self._normalize_log_message(str(text or ""))
-        if not message:
-            return
-        self._log_pending.append(message)
-        should_flush = self._should_flush_log(message) or len(self._log_pending) >= _LOG_FLUSH_THRESHOLD
-        if should_flush:
-            self._flush_log_pending()
-
-    def _sync_log_placeholder(self) -> None:
-        """به‌روزرسانی وضعیت نمایش placeholder لاگ."""
-
-        if hasattr(self, "_log_panel"):
-            self._log_panel.sync_placeholder()
-
-    def _determine_last_output_path(self) -> str:
-        """بررسی آخرین خروجی‌های ذخیره شده در تنظیمات."""
-
-        return (
-            self._prefs.last_sabt_output_allocate
-            or self._prefs.last_sabt_output_rule
-            or self._prefs.last_alloc_output
-        )
-
-    def _open_last_output_folder(self) -> None:
-        """باز کردن پوشهٔ خروجی ذخیره شده در سیستم عامل."""
-
-        path_text = self._determine_last_output_path()
-        if not path_text:
-            QMessageBox.information(self, "مسیر موجود نیست", "ابتدا یک خروجی تولید کنید.")
-            return
-        path = Path(path_text)
-        folder = path if path.is_dir() else path.parent
-        if not folder.exists():
-            QMessageBox.warning(self, "پوشه یافت نشد", f"پوشهٔ ذخیره‌شده در دسترس نیست: {folder}")
-            return
-        QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder.resolve())))
-
-    def _update_output_folder_button_state(self) -> None:
-        """فعال/غیرفعال کردن دکمهٔ باز کردن پوشه بر اساس Prefs."""
-
-        available = bool(self._determine_last_output_path())
-        if self._btn_open_output_folder is not None:
-            self._btn_open_output_folder.setEnabled(available)
-
-    def _ensure_filled(self, fields: Iterable[tuple[FilePicker | QLineEdit, str]]) -> bool:
-        """بررسی پر بودن فیلدهای ضروری و نمایش هشدار در صورت نقص."""
-
-        missing = [label for widget, label in fields if not widget.text().strip()]
-        if missing:
-            details = "\n".join(f"- {label}" for label in missing)
-            QMessageBox.warning(self, "ورودی ناقص", f"لطفاً فیلدهای زیر را تکمیل کنید:\n{details}")
-            return False
-        return True
-
-    # ----------------------------------------------------------------- Signals
-    @Slot(int, str)
-    def _on_progress(self, pct: int, message: str) -> None:
-        """به‌روزرسانی نوار پیشرفت و ثبت لاگ."""
-
-        pct_value = max(0, min(100, int(pct)))
-        safe_msg = message or "(بدون پیام)"
-        update_progress = self._last_progress_pct is None or pct_value != self._last_progress_pct
-        update_message = self._last_progress_message is None or safe_msg != self._last_progress_message
-        if not update_progress and not update_message:
-            return
-        if self._progress.maximum() == 0:
-            self._progress.setRange(0, 100)
-            self._progress.setProperty("busy", False)
-        if update_progress:
-            self._last_progress_pct = pct_value
-            self._progress.setValue(pct_value)
-        if update_message:
-            self._last_progress_message = safe_msg
-            self._status.setText(message or "در حال پردازش")
-            self._set_stage(self._current_action, safe_msg)
-        if update_progress or update_message:
-            self._update_progress_caption(self._progress.value(), safe_msg)
-        self._update_status_bar_state("running")
-
-    @Slot(bool, object)
-    def _on_finished(self, success: bool, error: object | None) -> None:
-        """پایان عملیات را مدیریت کرده و پیام مناسب را نمایش می‌دهد."""
-
-        self._worker_stop_event = None
-        if self._is_closing or not self._is_widget_valid(self):
-            self._worker = None
-            self._success_hook = None
-            return
-        self._flush_log_pending()
-        self._disable_controls(False)
-        self._set_busy_cursor(False)
-        self._progress.setRange(0, 100)
-        self._progress.setProperty("busy", False)
-        self._worker = None
-        hook, self._success_hook = self._success_hook, None
-        if error is not None:
-            if isinstance(error, JoinKeyValidationError):
-                vm = JoinKeyValidationVM.from_core_result(error.result)
-                dialog_class = self._join_key_validation_dialog_class
-                dialog = dialog_class(vm, self)
-                self._join_key_validation_dialog = dialog
-                dialog.setModal(True)
-                dialog.show()
-                dialog.raise_()
-                detail = self._t(
-                    "status.join_key_validation",
-                    "خطای کلید الحاق؛ نیاز به پاکسازی داده",
-                )
-                color = self._theme.colors.warning
-                self._status.setText(self._t("status.error", "خطا"))
-                self._set_stage(self._t("status.error", "خطا"), detail)
-                self._update_progress_caption(self._progress.value(), detail)
-                self._append_log(f'<span style="color:{color}">❌ {detail}</span>')
-                self._update_status_bar_state("error")
-                return
-            msg = str(error)
-            if isinstance(error, (FileNotFoundError, PermissionError)):
-                color = self._theme.colors.error
-                self._show_async_message(
-                    QMessageBox.Icon.Critical, self._t("status.error", "خطا"), msg
-                )
-            elif isinstance(error, ValueError):
-                color = self._theme.colors.warning
-                self._show_async_message(
-                    QMessageBox.Icon.Warning, self._t("status.error", "خطا"), msg
-                )
-            else:
-                color = self._theme.colors.error
-                self._show_async_message(
-                    QMessageBox.Icon.Critical, self._t("status.error", "خطا"), msg
-                )
-            self._status.setText(self._t("status.error", "خطا"))
-            self._set_stage(self._t("status.error", "خطا"), msg)
-            self._update_progress_caption(self._progress.value(), self._t("status.error", "خطا"))
-            self._append_log(f'<span style="color:{color}">❌ {msg}</span>')
-            self._update_status_bar_state("error")
-            return
-
-        if not success:
-            self._status.setText(self._t("status.cancelled", "لغو شد"))
-            self._set_stage(
-                self._t("status.cancelled", "لغو شد"),
-                self._t("status.cancelled.detail", "عملیات متوقف شد"),
-            )
-            self._update_progress_caption(
-                self._progress.value(), self._t("status.cancelled", "لغو شد")
-            )
-            self._append_log(f'⚠️ {self._t("status.cancelled.detail", "عملیات متوقف شد")}')
-            self._update_status_bar_state("ready")
-            return
-
-        self._progress.setValue(100)
-        self._status.setText(self._t("status.complete", "کامل"))
-        self._set_stage(
-            self._current_action, self._t("status.complete.detail", "عملیات با موفقیت پایان یافت")
-        )
-        self._update_progress_caption(100, self._t("status.complete", "کامل"))
-        self._append_log(
-            f'<span style="color:{self._theme.colors.success}">✅ {self._t("status.complete.detail", "عملیات با موفقیت پایان یافت")}</span>'
-        )
-        self._update_status_bar_state("ready")
-        self._refresh_database_status()
-        if hook is not None:
-            try:
-                hook()
-            except Exception as exc:  # pragma: no cover - unexpected UI failure
-                self._append_log(f"⚠️ خطا در ذخیره تنظیمات: {exc}")
-
-    def open_qa_dashboard(self) -> None:
-        """Launch the QA dashboard dialog with the latest summaries."""
-
-        vm = QADashboardVM()
-        dialog = QADashboardDialog(vm, self)
-        dialog.exec()
-
-    # -------------------------------------------------------------- Qt events
-    def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 - امضای Qt
-        """در صورت اجرای تسک فعال، تلاش برای لغو امن و سپس بستن."""
-
-        self._is_closing = True
-        if self._worker is not None and self._worker.isRunning():
-            if self._worker_stop_event is not None:
-                self._worker_stop_event.set()
-            self._worker.request_cancel()
-            self._worker.wait(3000)
-        if hasattr(self, "_splitter") and self._splitter is not None:
-            settings = QSettings()
-            settings.setValue("ui/main_splitter", self._splitter.saveState())
-        super().closeEvent(event)
-
-
-def run_demo() -> None:  # pragma: no cover - اجرای دستی UI
-    """اجرای سادهٔ پنجره برای تست دستی."""
-
-    app = QApplication.instance() or QApplication([])
-    window = MainWindow()
-    window.show()
-    app.exec()
-
-
-if __name__ == "__main__":  # pragma: no cover
-    run_demo()
+    return getattr(_base, name)

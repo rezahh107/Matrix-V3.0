@@ -2,18 +2,27 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Final, Literal, NamedTuple
 
-from PySide6.QtWidgets import (
-    QFrame,
-    QHBoxLayout,
-    QLabel,
-    QMessageBox,
-    QPushButton,
-    QVBoxLayout,
-    QWidget,
-)
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QMessageBox, QPushButton, QWidget
 
-from app.infra.health import HealthSummary
+from app.infra.health import HealthStatus, HealthSummary
+from app.ui.texts import UiTranslator
+
+_HealthQssState = Literal["ok", "warning", "error"]
+_HealthVisualState = Literal["ok", "warning", "error", "none"]
+
+
+class _HealthPresentation(NamedTuple):
+    text_key: str
+    qss_state: _HealthQssState
+
+
+_HEALTH_PRESENTATION: Final[dict[HealthStatus, _HealthPresentation]] = {
+    "OK": _HealthPresentation(text_key="health.summary.ok", qss_state="ok"),
+    "WARN": _HealthPresentation(text_key="health.summary.warn", qss_state="warning"),
+    "ERROR": _HealthPresentation(text_key="health.summary.error", qss_state="error"),
+}
 
 
 @dataclass(frozen=True)
@@ -23,35 +32,46 @@ class HealthCallbacks:
 
 
 class HealthIndicatorWidget(QFrame):
-    """ویجت ساده برای نمایش وضعیت سلامت و دکمهٔ خروجی گزارش."""
+    """نمایش compact سلامت با حفظ دو action و summary موجود."""
 
-    def __init__(self, callbacks: HealthCallbacks, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        callbacks: HealthCallbacks,
+        parent: QWidget | None = None,
+        translator: UiTranslator | None = None,
+    ) -> None:
         super().__init__(parent)
         self._callbacks = callbacks
+        self._translator = translator
         self.setFrameShape(QFrame.Shape.StyledPanel)
         self.setObjectName("healthIndicator")
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(8, 6, 8, 6)
-        layout.setSpacing(12)
+        layout.setContentsMargins(6, 4, 6, 4)
+        layout.setSpacing(6)
 
-        self._status_label = QLabel("System health: n/a", self)
-        self._status_label.setWordWrap(True)
+        self._status_label = QLabel(self._t("health.na", "System health: n/a"), self)
+        self._status_label.setObjectName("healthStatus")
+        self._status_label.setWordWrap(False)
         layout.addWidget(self._status_label, 1)
 
-        buttons_layout = QVBoxLayout()
-        buttons_layout.setContentsMargins(0, 0, 0, 0)
-        buttons_layout.setSpacing(4)
-        self._btn_details = QPushButton("View details", self)
-        self._btn_export = QPushButton("Export report for technical support / language model", self)
+        self._btn_details = QPushButton(self._t("health.details", "View details"), self)
+        self._btn_details.setProperty("variant", "secondary")
+        self._btn_export = QPushButton(self._t("health.export", "Export report"), self)
+        self._btn_export.setProperty("variant", "secondary")
         self._btn_details.clicked.connect(self._on_view_details)
         self._btn_export.clicked.connect(self._on_export)
         self._btn_details.setEnabled(False)
         self._btn_export.setEnabled(False)
-        buttons_layout.addWidget(self._btn_details)
-        buttons_layout.addWidget(self._btn_export)
-        layout.addLayout(buttons_layout)
+        layout.addWidget(self._btn_details)
+        layout.addWidget(self._btn_export)
 
         self._current_summary: HealthSummary | None = None
+        self.refresh()
+
+    def update_translator(self, translator: UiTranslator) -> None:
+        self._translator = translator
+        self._btn_details.setText(self._t("health.details", "View details"))
+        self._btn_export.setText(self._t("health.export", "Export report"))
         self.refresh()
 
     def refresh(self) -> None:
@@ -62,15 +82,24 @@ class HealthIndicatorWidget(QFrame):
             summary = None
         self._current_summary = summary
         if summary is None:
-            self._status_label.setText("System health: unavailable")
-            self._status_label.setProperty("health", "none")
+            self._status_label.setText(self._t("health.unavailable", "System health: unavailable"))
+            self._set_health_state("none")
             self._btn_details.setEnabled(False)
             self._btn_export.setEnabled(False)
             return
-        self._status_label.setText(summary.summary_text)
-        self._status_label.setProperty("health", summary.status.lower())
+
+        presentation = _HEALTH_PRESENTATION[summary.status]
+        if self._translator is None:
+            display_text = summary.summary_text
+        else:
+            display_text = self._translator.text(presentation.text_key, summary.summary_text)
+        self._status_label.setText(display_text)
+        self._set_health_state(presentation.qss_state)
         self._btn_details.setEnabled(True)
         self._btn_export.setEnabled(True)
+
+    def _set_health_state(self, state: _HealthVisualState) -> None:
+        self._status_label.setProperty("health", state)
         self._status_label.style().unpolish(self._status_label)
         self._status_label.style().polish(self._status_label)
 
@@ -91,13 +120,23 @@ class HealthIndicatorWidget(QFrame):
         )
         if issue_lines:
             details = details + "\n" + "\n".join(issue_lines)
-        QMessageBox.information(self, "Health details", details)
+        QMessageBox.information(self, self._t("health.details_title", "Health details"), details)
 
     def _on_export(self) -> None:
         try:
             path = self._callbacks.export_report()
         except Exception as exc:
-            QMessageBox.critical(self, "Export failed", str(exc))
+            QMessageBox.critical(self, self._t("health.export_failed", "Export failed"), str(exc))
             return
         if path:
-            QMessageBox.information(self, "Report exported", f"Report saved to: {path}")
+            template = self._t("health.exported_detail", "Report saved to: {path}")
+            QMessageBox.information(
+                self,
+                self._t("health.exported", "Report exported"),
+                template.format(path=path),
+            )
+
+    def _t(self, key: str, fallback: str) -> str:
+        if self._translator is None:
+            return fallback
+        return self._translator.text(key, fallback)

@@ -1,7 +1,8 @@
-/* Matrix visual polish: token-driven, presentation-only Qt Style Sheet. */
+/* Matrix UI/UX authority: token-driven, presentation-only Qt Style Sheet. */
 QWidget {
     color: {text};
     font-size: {body_size}pt;
+    font-weight: 400;
 }
 
 QMainWindow,
@@ -12,14 +13,14 @@ QDialog {
 QToolTip {
     background-color: {card};
     color: {text};
-    border: 1px solid {surface_alt};
+    border: 1px solid {subtle_boundary};
     border-radius: {radius_md}px;
     padding: {spacing_xs}px {spacing_sm}px;
 }
 
 QMenuBar {
     background-color: {card};
-    border-bottom: 1px solid {surface_alt};
+    border-bottom: 1px solid {subtle_boundary};
 }
 
 QMenuBar::item {
@@ -35,7 +36,7 @@ QMenu::item:selected {
 
 QMenu {
     background-color: {card};
-    border: 1px solid {surface_alt};
+    border: 1px solid {subtle_boundary};
     border-radius: {radius_md}px;
     padding: {spacing_xs}px;
 }
@@ -47,7 +48,7 @@ QMenu::item {
 
 QToolBar#mainToolbar {
     background-color: {card};
-    border: 1px solid {surface_alt};
+    border: 1px solid {subtle_boundary};
     border-radius: {radius_lg}px;
     padding: {spacing_sm}px;
     spacing: {spacing_sm}px;
@@ -60,12 +61,11 @@ QToolBar#mainToolbar QToolButton {
     padding: 0 {spacing_md}px;
     min-height: 30px;
     color: {text};
-    font-weight: 600;
+    font-weight: 500;
 }
 
 QToolBar#mainToolbar QToolButton:hover {
-    background-color: {primary_soft};
-    border-color: transparent;
+    background-color: {control_hover};
 }
 
 QToolBar#mainToolbar QToolButton:pressed {
@@ -73,14 +73,14 @@ QToolBar#mainToolbar QToolButton:pressed {
 }
 
 QToolBar#mainToolbar QToolButton:focus {
-    border-color: {primary};
+    border-color: {focus_indicator};
 }
 
 QGroupBox {
-    background-color: {card};
-    border: 1px solid {surface_alt};
+    background-color: transparent;
+    border: 1px solid {subtle_boundary};
     border-radius: {radius_lg}px;
-    margin-top: {spacing_lg}px;
+    margin-top: {spacing_md}px;
     padding: {spacing_md}px;
 }
 
@@ -88,7 +88,7 @@ QGroupBox::title {
     subcontrol-origin: margin;
     padding: 0 {spacing_sm}px;
     color: {text};
-    font-weight: 700;
+    font-weight: 600;
     font-size: {card_title_size}pt;
 }
 
@@ -96,28 +96,26 @@ QPushButton,
 QToolButton {
     background-color: {card};
     color: {text};
-    border: 1px solid {border};
+    border: 1px solid {control_boundary};
     border-radius: {radius_md}px;
     padding: 0 {spacing_md}px;
     min-height: 30px;
-    font-weight: 600;
+    font-weight: 400;
 }
 
 QPushButton:hover,
 QToolButton:hover {
-    background-color: {surface_alt};
-    border-color: {primary};
+    background-color: {control_hover};
 }
 
 QPushButton:pressed,
 QToolButton:pressed {
-    background-color: {primary_soft};
-    border-color: {primary};
+    background-color: {surface_alt};
 }
 
 QPushButton:focus,
 QToolButton:focus {
-    border-color: {primary};
+    border-color: {focus_indicator};
 }
 
 QPushButton#btnBuildMatrix,
@@ -140,8 +138,8 @@ QPushButton#btnAllocate:hover,
 QPushButton#btnRuleEngine:hover,
 QPushButton[variant="primary"]:hover,
 QToolButton[variant="primary"]:hover {
-    background-color: {primary};
-    border-color: {text_muted};
+    background-color: {primary_hover};
+    border-color: {primary_hover};
 }
 
 QPushButton#btnBuildMatrix:pressed,
@@ -149,9 +147,9 @@ QPushButton#btnAllocate:pressed,
 QPushButton#btnRuleEngine:pressed,
 QPushButton[variant="primary"]:pressed,
 QToolButton[variant="primary"]:pressed {
-    background-color: {primary_soft};
-    color: {text};
-    border-color: {primary};
+    background-color: {primary_pressed};
+    color: #ffffff;
+    border-color: {primary_pressed};
 }
 
 QPushButton#btnBuildMatrix:focus,
@@ -159,19 +157,22 @@ QPushButton#btnAllocate:focus,
 QPushButton#btnRuleEngine:focus,
 QPushButton[variant="primary"]:focus,
 QToolButton[variant="primary"]:focus {
-    border-color: {text};
+    border-color: {focus_indicator};
 }
 
 QPushButton[variant="secondary"],
 QToolButton[variant="secondary"],
 QPushButton#secondaryButton,
-QToolButton#secondaryButton {
+QToolButton#secondaryButton,
+QPushButton[rowUtility="true"] {
     background-color: {surface_alt};
     color: {text};
-    border-color: {surface_alt};
+    border-color: {control_boundary};
+    font-weight: 400;
 }
 
-QPushButton#secondaryButton {
+QPushButton#secondaryButton,
+QPushButton[rowUtility="true"] {
     min-width: 92px;
     padding: 0 {spacing_md}px;
 }
@@ -188,7 +189,7 @@ QPushButton[variant="secondary"]:disabled,
 QToolButton[variant="secondary"]:disabled {
     background-color: {surface_alt};
     color: {text_muted};
-    border-color: {surface_alt};
+    border-color: {subtle_boundary};
 }
 
 QLineEdit,
@@ -199,10 +200,11 @@ QSpinBox,
 QDoubleSpinBox {
     background-color: {card};
     color: {text};
-    border: 1px solid {border};
+    border: 1px solid {control_boundary};
     border-radius: {radius_md}px;
     selection-background-color: {primary_soft};
     selection-color: {text};
+    font-weight: 400;
 }
 
 QLineEdit,
@@ -224,7 +226,7 @@ QPlainTextEdit:hover,
 QComboBox:hover,
 QSpinBox:hover,
 QDoubleSpinBox:hover {
-    border-color: {primary};
+    background-color: {control_hover};
 }
 
 QLineEdit:focus,
@@ -233,7 +235,7 @@ QPlainTextEdit:focus,
 QComboBox:focus,
 QSpinBox:focus,
 QDoubleSpinBox:focus {
-    border-color: {primary};
+    border-color: {focus_indicator};
     background-color: {card};
 }
 
@@ -245,24 +247,21 @@ QSpinBox:disabled,
 QDoubleSpinBox:disabled {
     background-color: {surface_alt};
     color: {text_muted};
-    border-color: {surface_alt};
+    border-color: {subtle_boundary};
 }
 
 QComboBox#themeSelector {
     min-width: 104px;
     background-color: {surface_alt};
-    border-color: {surface_alt};
-    font-weight: 600;
+    border-color: {control_boundary};
+    font-weight: 500;
 }
 
-QComboBox::drop-down {
-    border: none;
-}
-
+/* QComboBox drop-down/arrow intentionally stays Fusion-native. */
 QComboBox QAbstractItemView {
     background-color: {card};
     color: {text};
-    border: 1px solid {surface_alt};
+    border: 1px solid {control_boundary};
     border-radius: {radius_md}px;
     padding: {spacing_xs}px;
     selection-background-color: {primary_soft};
@@ -272,11 +271,12 @@ QComboBox QAbstractItemView {
 QCheckBox {
     spacing: {spacing_sm}px;
     color: {text};
+    font-weight: 400;
 }
 
 QTabWidget::pane {
     background-color: {card};
-    border: 1px solid {surface_alt};
+    border: 1px solid {subtle_boundary};
     border-radius: {radius_lg}px;
     top: -1px;
 }
@@ -284,40 +284,43 @@ QTabWidget::pane {
 QTabBar::tab {
     background-color: {background};
     color: {text_muted};
-    border: 1px solid {surface_alt};
-    border-bottom: none;
+    border: 1px solid {subtle_boundary};
+    border-bottom: 3px solid transparent;
     border-top-left-radius: {radius_md}px;
     border-top-right-radius: {radius_md}px;
     padding: {spacing_sm}px {spacing_md}px;
     margin: 0 2px;
-    font-weight: 600;
+    font-weight: 500;
 }
 
 QTabBar::tab:hover:!selected {
-    background-color: {surface_alt};
+    background-color: {control_hover};
     color: {text};
 }
 
 QTabBar::tab:selected {
     background-color: {card};
     color: {text};
-    border-color: {surface_alt};
-    font-weight: 700;
+    border-color: {subtle_boundary};
+    border-bottom-color: {focus_indicator};
+    font-weight: 600;
 }
 
 QFrame#dashboardCard,
 QFrame#heroCard,
-QFrame#actionsCard {
+QFrame#actionsCard,
+QFrame#databaseSection {
     background-color: {card};
-    border: 1px solid {surface_alt};
+    border: 1px solid {subtle_boundary};
     border-radius: {radius_lg}px;
 }
 
 QLabel#dashboardCardTitle,
-QLabel#heroTitle {
+QLabel#heroTitle,
+QLabel[role="sectionTitle"] {
     color: {text};
     font-size: {card_title_size}pt;
-    font-weight: 700;
+    font-weight: 600;
 }
 
 QLabel#dashboardCardDescription,
@@ -330,51 +333,84 @@ QLabel#labelStatus,
 QLabel#lastRunBadge,
 QLabel#progressCaption {
     color: {text_muted};
+    font-weight: 400;
 }
 
 QLabel#heroBadge {
     background-color: {primary_soft};
-    border: 1px solid {surface_alt};
+    border: 1px solid {subtle_boundary};
     color: {text};
     padding: {spacing_xs}px {spacing_sm}px;
     border-radius: {radius_md}px;
-    font-weight: 700;
+    font-weight: 600;
 }
 
 QLabel#lastRunBadge[empty="true"] {
     background-color: {surface_alt};
-    border: 1px dashed {border};
+    border: 1px dashed {subtle_boundary};
     padding: {spacing_xs}px {spacing_sm}px;
     border-radius: {radius_md}px;
+}
+
+QLabel#healthStatus[health="ok"] {
+    color: {success};
+    font-weight: 600;
+}
+
+QLabel#healthStatus[health="warning"] {
+    color: {warning};
+    background-color: {warning_surface};
+    border-radius: {radius_sm}px;
+    padding: {spacing_xs}px;
+    font-weight: 600;
+}
+
+QLabel#healthStatus[health="error"] {
+    color: {error};
+    font-weight: 600;
+}
+
+QLabel#healthStatus[health="none"] {
+    color: {text_muted};
 }
 
 QProgressBar {
     background-color: {surface_alt};
     color: {text};
-    border: 1px solid {surface_alt};
-    border-radius: {radius_md}px;
-    min-height: 12px;
+    border: 1px solid {subtle_boundary};
+    border-radius: {radius_sm}px;
+    min-height: 14px;
+    max-height: 18px;
     text-align: center;
 }
 
 QProgressBar::chunk {
     background-color: {primary};
-    border-radius: {radius_md}px;
+    border-radius: {radius_sm}px;
 }
 
 QStatusBar {
     background-color: {card};
-    border-top: 1px solid {surface_alt};
+    border-top: 1px solid {subtle_boundary};
     padding: {spacing_xs}px {spacing_sm}px;
 }
 
 QLabel#languagePill,
 QLabel#statusPill {
     background-color: {surface_alt};
-    border: 1px solid {surface_alt};
+    border: 1px solid {subtle_boundary};
     border-radius: {radius_md}px;
     padding: {spacing_xs}px {spacing_sm}px;
-    font-weight: 700;
+    font-weight: 500;
+}
+
+QLabel#statusPill[state="running"] {
+    border-color: {focus_indicator};
+}
+
+QLabel#statusPill[state="error"] {
+    color: {error};
+    border-color: {error};
 }
 
 QTableView,
@@ -382,9 +418,9 @@ QTableWidget {
     background-color: {card};
     alternate-background-color: {surface_alt};
     color: {text};
-    border: 1px solid {surface_alt};
+    border: 1px solid {subtle_boundary};
     border-radius: {radius_md}px;
-    gridline-color: {surface_alt};
+    gridline-color: {subtle_boundary};
     selection-background-color: {primary_soft};
     selection-color: {text};
 }
@@ -393,9 +429,9 @@ QHeaderView::section {
     background-color: {surface_alt};
     color: {text};
     border: none;
-    border-bottom: 1px solid {surface_alt};
+    border-bottom: 1px solid {subtle_boundary};
     padding: {spacing_sm}px;
-    font-weight: 700;
+    font-weight: 600;
 }
 
 QFrame#logPanel {
@@ -418,22 +454,22 @@ QLabel#logPlaceholder {
 QPushButton#btnClearLog,
 QPushButton#btnSaveLog {
     background-color: {card};
-    border: 1px solid {surface_alt};
+    border: 1px solid {control_boundary};
     border-radius: {radius_md}px;
     padding: 0 {spacing_md}px;
 }
 
 QPushButton#btnClearLog:hover,
 QPushButton#btnSaveLog:hover {
-    background-color: {surface_alt};
+    background-color: {control_hover};
 }
 
 QSplitter::handle {
-    background-color: {surface_alt};
+    background-color: {subtle_boundary};
     width: 4px;
     margin: 3px 0;
 }
 
 QSplitter::handle:hover {
-    background-color: {primary};
+    background-color: {focus_indicator};
 }
