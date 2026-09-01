@@ -72,6 +72,30 @@ def _governing_scroll_area(widget: QWidget, surface: QWidget) -> QScrollArea | N
     return None
 
 
+def _scroll_fully_to_widget(
+    scroll: QScrollArea, widget: QWidget, qapp: QApplication
+) -> QRect:
+    scroll.ensureWidgetVisible(widget, 0, 0)
+    qapp.processEvents()
+    viewport = scroll.viewport()
+    rect = _mapped_rect(widget, viewport)
+    bounds = viewport.rect()
+    horizontal = scroll.horizontalScrollBar()
+    vertical = scroll.verticalScrollBar()
+
+    if rect.left() < bounds.left():
+        horizontal.setValue(horizontal.value() + rect.left() - bounds.left())
+    elif rect.right() > bounds.right():
+        horizontal.setValue(horizontal.value() + rect.right() - bounds.right())
+    if rect.top() < bounds.top():
+        vertical.setValue(vertical.value() + rect.top() - bounds.top())
+    elif rect.bottom() > bounds.bottom():
+        vertical.setValue(vertical.value() + rect.bottom() - bounds.bottom())
+
+    qapp.processEvents()
+    return _mapped_rect(widget, viewport)
+
+
 def _assert_scroll_reachable(
     widget: QWidget, surface: QWidget, qapp: QApplication
 ) -> None:
@@ -81,10 +105,8 @@ def _assert_scroll_reachable(
     vertical = scroll.verticalScrollBar()
     previous = (horizontal.value(), vertical.value())
     try:
-        scroll.ensureWidgetVisible(widget, 0, 0)
-        qapp.processEvents()
+        rect = _scroll_fully_to_widget(scroll, widget, qapp)
         viewport = scroll.viewport()
-        rect = _mapped_rect(widget, viewport)
         assert rect.width() > 0 and rect.height() > 0
         assert viewport.rect().contains(rect)
     finally:
