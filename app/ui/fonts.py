@@ -1,8 +1,8 @@
 """Matrix application font authority.
 
-Production startup registers the embedded Vazirmatn bytes directly with Qt.  It
+Production startup registers the embedded Vazirmatn bytes directly with Qt. It
 never needs to write into the application source/install directory and it does
-not scan user Downloads folders.  Filesystem helpers remain only as explicit
+not scan user Downloads folders. Filesystem helpers remain only as explicit
 compatibility/development seams.
 """
 
@@ -93,7 +93,7 @@ def _materialize_embedded_font(target_dir: Path) -> Path | None:
 def ensure_vazir_local_fonts() -> Path:
     """Compatibility helper that only ensures the explicitly requested directory exists.
 
-    It intentionally does not materialize the bundled font.  Call
+    It intentionally does not materialize the bundled font. Call
     ``_materialize_embedded_font`` with an explicit writable directory when a
     development/test file is actually required.
     """
@@ -106,7 +106,7 @@ def _windows_candidates() -> list[Path]:
     """Return only explicitly opted-in development font paths.
 
     Normal startup does not inspect Downloads, LocalAppData or globally installed
-    font directories.  ``VAZIR_FONT_PATHS`` is an explicit development fallback.
+    font directories. ``VAZIR_FONT_PATHS`` is an explicit development fallback.
     """
 
     raw = os.environ.get("VAZIR_FONT_PATHS", "")
@@ -185,7 +185,7 @@ def create_app_font(
     fallback_family: str | None = None,
     prefer_vazir: bool = True,
 ) -> QFont:
-    """Create the semantic base font without introducing a second UI authority."""
+    """Create a low-level semantic base font without selecting application language."""
 
     from PySide6.QtGui import QFont
 
@@ -217,13 +217,28 @@ def _select_fallback_family(preferred: str | None) -> str:
 
 
 def get_app_font(point_size: int | None = None) -> QFont:
+    """Return a copy of the active QApplication font, optionally changing only size.
+
+    This is a compatibility/semantic helper, not a language or family selector.
+    Ordinary widgets should inherit the QApplication font without calling it.
+    """
+
+    from PySide6.QtGui import QFont
+    from PySide6.QtWidgets import QApplication
+
+    app = QApplication.instance()
+    if isinstance(app, QApplication):
+        font = QFont(app.font())
+        if point_size is not None:
+            font.setPointSize(point_size)
+        return font
     return create_app_font(point_size=point_size)
 
 
 def get_heading_font() -> QFont:
     from PySide6.QtGui import QFont
 
-    heading = create_app_font(point_size=11)
+    heading = get_app_font(point_size=11)
     heading.setWeight(QFont.Weight.DemiBold)
     return heading
 
@@ -251,9 +266,17 @@ def apply_default_font(
     point_size: int | None = None,
     family_override: str | None = None,
 ) -> QFont:
-    """Compatibility API; the application bootstrap uses theme.apply_global_font."""
+    """Compatibility API; production application authority lives in app.ui.theme."""
 
-    font = create_app_font(point_size=point_size, fallback_family=family_override)
+    from PySide6.QtCore import Qt
+
+    is_rtl = app.layoutDirection() == Qt.LayoutDirection.RightToLeft
+    preferred = family_override or (FALLBACK_FAMILY if is_rtl else "Segoe UI")
+    font = create_app_font(
+        point_size=point_size,
+        fallback_family=preferred,
+        prefer_vazir=is_rtl,
+    )
     app.setFont(font)
     return font
 
