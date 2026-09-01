@@ -67,7 +67,7 @@ def test_create_app_font_sets_regular_weight_for_fallback(
     assert font.weight() == QFont.Weight.Normal
 
 
-def test_resolve_vazir_family_prefers_vazirmatn() -> None:
+def test_resolve_vazir_family_uses_first_registered_vazir_candidate() -> None:
     class _FakeDB:
         def __init__(self, families: list[str]):
             self._families = families
@@ -77,7 +77,7 @@ def test_resolve_vazir_family_prefers_vazirmatn() -> None:
 
     db = _FakeDB(["Tahoma", "Vazir", "Vazirmatn", "Vazir Code"])
     family = resolve_vazir_family_name(db)
-    assert family == "Vazirmatn"
+    assert family == "Vazir"
 
 
 def test_apply_global_font_uses_fa_embedded_authority(qapp: QApplication) -> None:
