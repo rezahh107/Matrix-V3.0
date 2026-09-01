@@ -59,6 +59,33 @@ def _assert_contained(widget: QWidget, ancestor: QWidget) -> None:
     assert ancestor.rect().contains(rect)
 
 
+def _assert_visible_statusbar_children_contained(
+    status_bar: QWidget, window: QWidget
+) -> None:
+    visible_children = [
+        child
+        for child in status_bar.children()
+        if isinstance(child, QWidget)
+        and child.parentWidget() is status_bar
+        and child.isVisibleTo(window)
+    ]
+    assert visible_children, "QStatusBar has no visible direct QWidget children"
+    for child in visible_children:
+        _assert_contained(child, status_bar)
+
+
+def _qss_rule_declarations(source: str, selector: str) -> dict[str, str]:
+    match = re.search(rf"{re.escape(selector)}\s*\{{(?P<body>[^}}]*)\}}", source)
+    assert match is not None, f"missing QSS rule: {selector}"
+    declarations: dict[str, str] = {}
+    for raw_declaration in match.group("body").split(";"):
+        if ":" not in raw_declaration:
+            continue
+        key, value = raw_declaration.split(":", 1)
+        declarations[key.strip()] = value.strip()
+    return declarations
+
+
 def _governing_scroll_area(widget: QWidget, surface: QWidget) -> QScrollArea | None:
     current: QWidget | None = widget.parentWidget()
     while current is not None:
@@ -230,6 +257,21 @@ def test_ui_combo_is_matrix_styled_while_qt_keeps_behavior(qapp: QApplication) -
         assert combo.rect().contains(arrow)
 
 
+def test_ui_statusbar_height_is_content_derived_and_secondary_density_is_preserved() -> None:
+    source = (ROOT / "app/ui/styles.qss").read_text(encoding="utf-8")
+    status_bar = _qss_rule_declarations(source, "QStatusBar")
+    assert "min-height" not in status_bar
+    assert "height" not in status_bar
+    assert "max-height" not in status_bar
+
+    secondary = _qss_rule_declarations(
+        source,
+        'QPushButton[variant="secondary"], QToolButton[variant="secondary"]',
+    )
+    assert secondary.get("min-height") == "28px"
+    assert "diagnosticsToggle" not in source
+
+
 def test_ui_translation_inventory_is_complete_and_reference_keys_are_split() -> None:
     payload = json.loads(
         (ROOT / "resources/translations/ui_texts.json").read_text(encoding="utf-8")
@@ -389,6 +431,7 @@ def test_ui_bidi_and_primary_actions_are_contained(
     assert status_bar.isAncestorOf(toggle)
     _assert_contained(navigation, window)
     _assert_contained(toggle, status_bar)
+    _assert_visible_statusbar_children_contained(status_bar, window)
     window.close()
 
 
