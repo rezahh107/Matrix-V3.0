@@ -4,13 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-pytest.importorskip(
-    "PySide6.QtWidgets",
-    exc_type=ImportError,
-    reason="PySide6 not available in test environment",
-)
-from PySide6.QtGui import QColor, QPalette
-from PySide6.QtWidgets import QApplication, QHBoxLayout, QPushButton
+try:
+    from PySide6.QtGui import QColor, QPalette
+    from PySide6.QtWidgets import QApplication, QHBoxLayout, QPushButton
+except ImportError as exc:
+    pytest.skip(f"PySide6 unavailable: {exc}", allow_module_level=True)
 
 from app.ui import theme
 from app.ui.widgets import FilePicker
