@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
-from PySide6.QtCore import QRect, QSettings, Qt
+from PySide6.QtCore import QByteArray, QRect, QSettings, Qt
 from PySide6.QtGui import QColor, QFont
 from PySide6.QtWidgets import (
     QApplication,
@@ -338,21 +338,32 @@ def test_ui_busy_overlay_tracks_splitter_geometry(qapp: QApplication) -> None:
 def test_ui_splitter_state_roundtrip_preserves_two_panes(qapp: QApplication) -> None:
     _fresh_settings()
     first = MainWindow()
-    first.resize(960, 640)
     first.show()
     qapp.processEvents()
-    first._splitter.setSizes([1, 3])
+    first_outer_size = first.size()
+    available = sum(first._splitter.sizes())
+    assert available > 1
+    top = round(available * 0.40)
+    first._splitter.setSizes([top, available - top])
     qapp.processEvents()
     saved_ratio = _splitter_ratio(first)
     assert not 2.2 <= saved_ratio <= 4.2
     first.close()
     qapp.processEvents()
-    QSettings().sync()
+
+    settings = QSettings()
+    settings.sync()
+    saved_state = settings.value("ui/main_splitter")
+    assert isinstance(saved_state, QByteArray)
+    assert not saved_state.isEmpty()
 
     second = MainWindow()
-    second.resize(960, 640)
+    assert second.size() == first_outer_size
+    assert second._had_saved_splitter_state
+    assert not second._default_splitter_ratio_pending
     second.show()
     qapp.processEvents()
+    assert second.size() == first_outer_size
     restored_ratio = _splitter_ratio(second)
     assert abs(restored_ratio - saved_ratio) <= 0.35
     assert not 2.2 <= restored_ratio <= 4.2
