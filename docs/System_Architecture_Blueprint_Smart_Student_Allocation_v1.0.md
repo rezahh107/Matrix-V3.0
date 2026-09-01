@@ -29,6 +29,7 @@
   - Responsibilities: Thin orchestration of Infra/Core, progress display, operator commands, run status, log viewing, file pickers.
   - Prohibitions: Business rules, Policy interpretation, data mutation beyond user intent, Core imports must be via Infra façade; no WordPress/Excel logic directly.
   - Interfaces: Calls Infra services, injects `progress(pct:int, msg:str)` into Core, subscribes to logs/traces.
+  - Presentation ownership: `docs/UI_PRESENTATION_AUTHORITY.md` specifies Native/Styled/Hybrid visual ownership for materially used Qt control families. This architecture retains layering authority; the presentation authority is subordinate to LAW/Technical SSoT and does not define domain behavior.
 - **Agents Layer (LLM/Codex & Automation)**
   - Responsibilities: Follow AGENTS.md (repo) + agentsmd.net standard, execute tasks within allowed scopes, maintain version alignment, avoid policy drift, run QA checklists.
   - Boundaries: Agents may touch layers only via defined APIs; no cross-layer shortcuts; must respect Core purity, Infra ownership of I/O, UI thinness.
@@ -81,6 +82,7 @@
   - `app/infra/config_loader.py`: reads `config/policy.json`, enforces version and required fields.
 - **UI**
   - `run_gui.py` + `app/ui/*`: PySide6 shells, dialogs, progress callbacks, log viewers; thin orchestrator calling Infra services.
+  - `docs/UI_PRESENTATION_AUTHORITY.md`: presentation-only ownership registry for current Qt control families; it does not change the Core/Infra/UI dependency model.
   - `app/cli/*` (optional): CLI entrypoints invoking Infra pipelines.
 - **Agents Layer**
   - AGENTS.md (repo root): global rules for agents (agentsmd.net compliant).
@@ -152,6 +154,7 @@ External (WP, Excel, FS) --> Infra --> Core
 - **Policy v1.0.3 & SSoT v1.0.2:** authoritative for rules (Join Keys, ranking, trace steps, error taxonomy). Architecture never overrides them.
 - **Vision & Scope v1.0:** defines product boundaries, phases, quality attributes; this blueprint instantiates the system design to satisfy those boundaries.
 - **AGENTS.md (repo root + Eligibility Matrix):** operational rules for agents; architecture embeds them as governance for coding agents and CI. If conflicts occur: Policy/SSoT > Vision/Scope > AGENTS.md.
+- **UI Presentation Authority:** `docs/UI_PRESENTATION_AUTHORITY.md` is the presentation-only authority for Native/Styled/Hybrid ownership inside the PySide6 layer. It is subordinate to LAW/Technical SSoT and to this document's layer/dependency architecture; it must not be used to redefine domain semantics.
 - **Agentsmd.net Standard:** ensures AGENTS.md structures remain parse-friendly for LLM agents; architecture mandates adherence for any new AGENTS.md.
 
 ## 11. Governance for Agents (Agents Layer)
