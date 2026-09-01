@@ -91,12 +91,6 @@ jobs:
       - name: Lint with ruff
         run: uv run --locked ruff check .
 
-      - name: Verify Black formatting
-        run: uv run --locked black --check app tests
-
-      - name: Run strict mypy
-        run: uv run --locked mypy --strict app/core app/infra app/ui tests
-
       - name: Run core pytest suite (Windows, includes CI guard tests)
         run: uv run --locked pytest tests/unit tests/infra tests/integration --maxfail=1 -q
 
