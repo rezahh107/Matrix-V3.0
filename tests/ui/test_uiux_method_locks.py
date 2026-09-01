@@ -348,7 +348,8 @@ def test_ui_splitter_state_roundtrip_preserves_two_panes(qapp: QApplication) -> 
     qapp.processEvents()
     saved_ratio = _splitter_ratio(first)
     assert not 2.2 <= saved_ratio <= 4.2
-    first.close()
+    assert first.close()
+    qapp.sendPostedEvents()
     qapp.processEvents()
 
     settings = QSettings()
