@@ -1,6 +1,8 @@
-"""تست یکپارچه برای تم، جهت چیدمان و سلسله‌مراتب فونت."""
+"""Integration tests for C2/V2 theme, direction and application-font authority."""
 
 from __future__ import annotations
+
+from pathlib import Path
 
 import pytest
 
@@ -16,35 +18,56 @@ from PySide6.QtWidgets import QApplication, QLabel
 from app.ui import fonts, theme
 from app.ui.fonts import create_app_font, resolve_vazir_family_name
 from app.ui.i18n import Language
+from app.ui.log_panel import LogPanel
+from app.ui.texts import UiTranslator
+from app.ui.widgets.database_status_widget import DatabaseStatusWidget
+from app.ui.widgets.status_bar import ThemedStatusBar
+
+ROOT = Path(__file__).resolve().parents[2]
 
 
-def test_create_app_font_uses_fallback_when_vazir_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+def _is_vazir_family(family: str) -> bool:
+    normalized = family.casefold()
+    return "vazirmatn" in normalized or normalized.startswith("vazir") or "وزیر" in family
+
+
+def test_create_app_font_generic_fallback_does_not_define_en_authority(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(fonts, "load_vazir_font", lambda point_size=None: None)
-    font = create_app_font()
-    assert font.family().lower().startswith(fonts.FALLBACK_FAMILY.lower())
+    monkeypatch.setattr(fonts, "_select_fallback_family", lambda preferred: "Segoe UI")
+    font = create_app_font(fallback_family="Segoe UI", prefer_vazir=False)
+    assert font.family().casefold().startswith("segoe ui")
 
 
-def test_create_app_font_prefers_vazir(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_create_app_font_prefers_vazir_when_explicitly_requested(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     fake = QFont("Vazir", 11)
     monkeypatch.setattr(fonts, "load_vazir_font", lambda point_size=None: fake)
-    font = create_app_font()
-    assert font.family().lower().startswith("vazir")
+    font = create_app_font(prefer_vazir=True)
+    assert font.family().casefold().startswith("vazir")
 
 
-def test_create_app_font_sets_regular_weight_for_vazir(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_create_app_font_sets_regular_weight_for_vazir(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     fake = QFont("Vazir", 11)
     monkeypatch.setattr(fonts, "load_vazir_font", lambda point_size=None: fake)
-    font = create_app_font()
+    font = create_app_font(prefer_vazir=True)
     assert font.weight() == QFont.Weight.Normal
 
 
-def test_create_app_font_sets_regular_weight_for_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_create_app_font_sets_regular_weight_for_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(fonts, "load_vazir_font", lambda point_size=None: None)
-    font = create_app_font()
+    monkeypatch.setattr(fonts, "_select_fallback_family", lambda preferred: "Segoe UI")
+    font = create_app_font(fallback_family="Segoe UI", prefer_vazir=False)
     assert font.weight() == QFont.Weight.Normal
 
 
-def test_resolve_vazir_family_prefers_vazirmatn(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_resolve_vazir_family_prefers_vazirmatn() -> None:
     class _FakeDB:
         def __init__(self, families: list[str]):
             self._families = families
@@ -57,46 +80,132 @@ def test_resolve_vazir_family_prefers_vazirmatn(monkeypatch: pytest.MonkeyPatch)
     assert family == "Vazirmatn"
 
 
-def test_apply_global_font_sets_qapplication_font(
-    qapp: QApplication, tmp_path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    fonts_dir = tmp_path / "fonts"
-    monkeypatch.setattr(fonts, "FONTS_DIR", fonts_dir)
-    monkeypatch.setattr(fonts, "_windows_candidates", lambda: [])
-    fonts.ensure_vazir_local_fonts()
-    fonts._install_fonts_from_directory(fonts_dir)
-    theme.apply_global_font(qapp)
-    app_font = qapp.font()
-    assert app_font.family().casefold().startswith(("vazir", "vazirmatn"))
-    assert app_font.pointSize() == theme.BASE_FONT_PT
-    assert app_font.weight() == QFont.Weight.Normal
-    assert app_font.styleStrategy() & QFont.StyleStrategy.PreferAntialias
-    assert app_font.styleStrategy() & QFont.StyleStrategy.PreferQuality
-    hint_pref = getattr(QFont.HintingPreference, "PreferFullHinting", None)
-    if hint_pref is not None:
-        assert app_font.hintingPreference() == hint_pref
+def test_apply_global_font_uses_fa_embedded_authority(qapp: QApplication) -> None:
+    original_font = QFont(qapp.font())
+    original_direction = qapp.layoutDirection()
+    try:
+        qapp.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
+        theme.apply_global_font(qapp)
+        app_font = qapp.font()
+        assert _is_vazir_family(app_font.family())
+        assert app_font.pointSize() == theme.BASE_FONT_PT
+        assert app_font.weight() == QFont.Weight.Normal
+        assert app_font.styleStrategy() & QFont.StyleStrategy.PreferAntialias
+        assert app_font.styleStrategy() & QFont.StyleStrategy.PreferQuality
+        hint_pref = getattr(QFont.HintingPreference, "PreferFullHinting", None)
+        if hint_pref is not None:
+            assert app_font.hintingPreference() == hint_pref
+    finally:
+        qapp.setLayoutDirection(original_direction)
+        qapp.setFont(original_font)
 
 
-def test_widgets_inherit_global_font(
-    qapp: QApplication, tmp_path, monkeypatch: pytest.MonkeyPatch
+def test_fa_en_fa_updates_existing_widgets_without_reconstruction(
+    qapp: QApplication,
 ) -> None:
-    fonts_dir = tmp_path / "fonts"
-    monkeypatch.setattr(fonts, "FONTS_DIR", fonts_dir)
-    monkeypatch.setattr(fonts, "_windows_candidates", lambda: [])
-    fonts.ensure_vazir_local_fonts()
-    fonts._install_fonts_from_directory(fonts_dir)
-    theme.apply_global_font(qapp)
-    label = QLabel("sample")
-    assert label.font().family() == qapp.font().family()
-    assert label.font().pointSize() == theme.BASE_FONT_PT
-    assert label.font().weight() == QFont.Weight.Normal
+    original_font = QFont(qapp.font())
+    original_direction = qapp.layoutDirection()
+    current_theme = theme.build_theme("light")
+
+    status = ThemedStatusBar(current_theme)
+    database = DatabaseStatusWidget(current_theme)
+    log = LogPanel(UiTranslator("fa"), current_theme)
+    legacy_label = QLabel("legacy neutral compatibility seam")
+    legacy_label.setFont(fonts.get_app_font())
+    representative = (
+        status,
+        database,
+        database._icon_label,
+        database._text_label,
+        log,
+        log._placeholder,
+        log.text_edit,
+        legacy_label,
+    )
+
+    try:
+        expected_families: list[str] = []
+        for language in (Language.FA, Language.EN, Language.FA):
+            theme.apply_layout_direction(qapp, language)
+            qapp.processEvents()
+            app_family = qapp.font().family()
+            expected_families.append(app_family)
+
+            if language is Language.FA:
+                assert qapp.layoutDirection() == Qt.LayoutDirection.RightToLeft
+                assert _is_vazir_family(app_family)
+            else:
+                assert qapp.layoutDirection() == Qt.LayoutDirection.LeftToRight
+                assert app_family.casefold().startswith("segoe ui")
+
+            for widget in representative:
+                assert widget.font().family() == app_family
+
+        assert _is_vazir_family(expected_families[0])
+        assert expected_families[1].casefold().startswith("segoe ui")
+        assert _is_vazir_family(expected_families[2])
+    finally:
+        for widget in representative:
+            widget.close()
+        qapp.setLayoutDirection(original_direction)
+        qapp.setFont(original_font)
+        qapp.processEvents()
+
+
+def test_font_consumer_inventory_has_no_independent_base_family_owners() -> None:
+    production_files = sorted((ROOT / "app/ui").rglob("*.py"))
+    get_app_font_consumers: list[str] = []
+    forbidden_direct_family_assignments: list[str] = []
+
+    for path in production_files:
+        relative = path.relative_to(ROOT).as_posix()
+        source = path.read_text(encoding="utf-8")
+        if path.name != "fonts.py" and "get_app_font" in source:
+            get_app_font_consumers.append(relative)
+        if path.name not in {"fonts.py", "theme.py"}:
+            for family in ("Vazir", "Vazirmatn", "Tahoma", "Segoe UI"):
+                if f'QFont("{family}"' in source or f"QFont('{family}'" in source:
+                    forbidden_direct_family_assignments.append(f"{relative}:{family}")
+
+    # The preserved execution base still calls the compatibility helper for two
+    # status labels. The helper is intentionally unresolved for no-size calls,
+    # and the directional runtime test above proves this legacy seam inherits.
+    assert get_app_font_consumers == ["app/ui/main_window_base.py"]
+    base_source = (ROOT / "app/ui/main_window_base.py").read_text(encoding="utf-8")
+    assert base_source.count("setFont(get_app_font())") == 2
+    fonts_source = (ROOT / "app/ui/fonts.py").read_text(encoding="utf-8")
+    assert "if point_size is None:\n        return QFont()" in fonts_source
+    assert forbidden_direct_family_assignments == []
+
+
+def test_widgets_created_without_local_font_inherit_application_font(
+    qapp: QApplication,
+) -> None:
+    original_font = QFont(qapp.font())
+    try:
+        theme.apply_layout_direction(qapp, Language.EN)
+        label = QLabel("sample")
+        assert label.font().family() == qapp.font().family()
+        assert label.font().pointSize() == theme.BASE_FONT_PT
+        assert label.font().weight() == QFont.Weight.Normal
+        label.close()
+    finally:
+        qapp.setFont(original_font)
 
 
 def test_layout_direction_for_languages(qapp: QApplication) -> None:
-    theme.apply_layout_direction(qapp, Language.FA)
-    assert qapp.layoutDirection() == Qt.RightToLeft
-    theme.apply_layout_direction(qapp, Language.EN)
-    assert qapp.layoutDirection() == Qt.LeftToRight
+    original_font = QFont(qapp.font())
+    original_direction = qapp.layoutDirection()
+    try:
+        theme.apply_layout_direction(qapp, Language.FA)
+        assert qapp.layoutDirection() == Qt.LayoutDirection.RightToLeft
+        assert _is_vazir_family(qapp.font().family())
+        theme.apply_layout_direction(qapp, Language.EN)
+        assert qapp.layoutDirection() == Qt.LayoutDirection.LeftToRight
+        assert qapp.font().family().casefold().startswith("segoe ui")
+    finally:
+        qapp.setLayoutDirection(original_direction)
+        qapp.setFont(original_font)
 
 
 def test_light_theme_log_background_is_light() -> None:
@@ -109,13 +218,18 @@ def test_light_theme_log_background_is_light() -> None:
     assert dark_luminance < light_luminance
 
 
-def test_heading_font_is_larger_and_more_emphasized_than_body(
-    qapp: QApplication, monkeypatch: pytest.MonkeyPatch
+def test_heading_font_preserves_active_family_and_adds_semantic_emphasis(
+    qapp: QApplication,
 ) -> None:
-    monkeypatch.setattr(fonts, "load_vazir_font", lambda point_size=None: None)
-    body_font = fonts.create_app_font()
-    heading_font = fonts.get_heading_font()
-    qapp.processEvents()
-    assert heading_font.family() == body_font.family()
-    assert heading_font.pointSize() > body_font.pointSize()
-    assert heading_font.weight() > body_font.weight()
+    original_font = QFont(qapp.font())
+    original_direction = qapp.layoutDirection()
+    try:
+        theme.apply_layout_direction(qapp, Language.EN)
+        body_font = QFont(qapp.font())
+        heading_font = fonts.get_heading_font()
+        assert heading_font.family() == body_font.family()
+        assert heading_font.pointSize() > body_font.pointSize()
+        assert heading_font.weight() > body_font.weight()
+    finally:
+        qapp.setLayoutDirection(original_direction)
+        qapp.setFont(original_font)
