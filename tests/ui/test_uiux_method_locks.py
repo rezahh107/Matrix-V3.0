@@ -59,6 +59,13 @@ def _assert_contained(widget: QWidget, ancestor: QWidget) -> None:
     assert ancestor.rect().contains(rect)
 
 
+def _assert_overlay_matches_splitter(window: MainWindow) -> None:
+    overlay = window._busy_overlay
+    splitter = window._splitter
+    assert overlay is not None and splitter is not None
+    assert overlay.geometry() == _mapped_rect(splitter, window)
+
+
 def _assert_visible_statusbar_children_contained(
     status_bar: QWidget, window: QWidget
 ) -> None:
@@ -560,6 +567,101 @@ def test_ui_busy_overlay_tracks_splitter_geometry(qapp: QApplication) -> None:
     expected_top_left = splitter.mapTo(window, splitter.rect().topLeft())
     assert overlay.geometry().topLeft() == expected_top_left
     assert overlay.size() == splitter.size()
+
+    window._disable_controls(False)
+    qapp.processEvents()
+    assert not overlay.isVisible()
+    window.close()
+
+
+def test_ui_busy_overlay_tracks_splitter_without_window_resize(
+    qapp: QApplication,
+) -> None:
+    _fresh_settings()
+    window = MainWindow()
+    window.resize(960, 640)
+    window.show()
+    qapp.processEvents()
+
+    overlay = window._busy_overlay
+    splitter = window._splitter
+    toolbar = window._toolbar
+    assert overlay is not None and splitter is not None and toolbar is not None
+    assert toolbar.isVisibleTo(window)
+
+    window._disable_controls(True)
+    qapp.processEvents()
+    top_level_size = window.size()
+    before = _mapped_rect(splitter, window)
+    assert overlay.isVisibleTo(window)
+    _assert_overlay_matches_splitter(window)
+
+    toolbar.hide()
+    qapp.processEvents()
+    hidden = _mapped_rect(splitter, window)
+    assert window.size() == top_level_size
+    assert hidden != before
+    _assert_overlay_matches_splitter(window)
+
+    toolbar.show()
+    qapp.processEvents()
+    restored = _mapped_rect(splitter, window)
+    assert window.size() == top_level_size
+    assert restored != hidden
+    _assert_overlay_matches_splitter(window)
+
+    window._disable_controls(False)
+    qapp.processEvents()
+    assert not overlay.isVisible()
+    window.close()
+
+
+def test_ui_busy_overlay_sync_uses_splitter_geometry_event_path(
+    qapp: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _fresh_settings()
+    window = MainWindow()
+    window.resize(960, 640)
+    window.show()
+    qapp.processEvents()
+
+    overlay = window._busy_overlay
+    splitter = window._splitter
+    toolbar = window._toolbar
+    assert overlay is not None and splitter is not None and toolbar is not None
+
+    window._disable_controls(True)
+    qapp.processEvents()
+    _assert_overlay_matches_splitter(window)
+
+    calls = 0
+    original_update = window._update_overlay_geometry
+
+    def tracked_update() -> None:
+        nonlocal calls
+        calls += 1
+        original_update()
+
+    monkeypatch.setattr(window, "_update_overlay_geometry", tracked_update)
+    top_level_size = window.size()
+    before = _mapped_rect(splitter, window)
+
+    toolbar.hide()
+    qapp.processEvents()
+    hidden = _mapped_rect(splitter, window)
+    assert window.size() == top_level_size
+    assert hidden != before
+    assert calls > 0
+    _assert_overlay_matches_splitter(window)
+
+    calls_after_hide = calls
+    toolbar.show()
+    qapp.processEvents()
+    restored = _mapped_rect(splitter, window)
+    assert window.size() == top_level_size
+    assert restored != hidden
+    assert calls > calls_after_hide
+    _assert_overlay_matches_splitter(window)
 
     window._disable_controls(False)
     qapp.processEvents()
