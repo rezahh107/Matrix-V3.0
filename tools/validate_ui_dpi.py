@@ -35,6 +35,15 @@ def _rect(widget: Any) -> dict[str, int] | None:
     }
 
 
+def _rect_record(rect: Any) -> dict[str, int]:
+    return {
+        "x": rect.x(),
+        "y": rect.y(),
+        "width": rect.width(),
+        "height": rect.height(),
+    }
+
+
 def _mapped_rect(widget: Any, ancestor: Any) -> Any:
     from PySide6.QtCore import QRect
 
@@ -52,6 +61,54 @@ def _contained(widget: Any, ancestor: Any) -> bool:
     )
 
 
+def _governing_scroll_area(widget: Any, surface: Any) -> Any | None:
+    from PySide6.QtWidgets import QScrollArea
+
+    if widget is None or surface is None:
+        return None
+    current = widget.parentWidget()
+    while current is not None:
+        if isinstance(current, QScrollArea):
+            if current is surface or surface.isAncestorOf(current):
+                return current
+            return None
+        if current is surface:
+            return None
+        current = current.parentWidget()
+    return None
+
+
+def _scroll_reachability_record(widget: Any, surface: Any, app: Any) -> dict[str, object]:
+    scroll = _governing_scroll_area(widget, surface)
+    if scroll is None:
+        raise AssertionError("critical workflow control has no governing QScrollArea")
+    horizontal = scroll.horizontalScrollBar()
+    vertical = scroll.verticalScrollBar()
+    previous = (horizontal.value(), vertical.value())
+    try:
+        scroll.ensureWidgetVisible(widget, 0, 0)
+        app.processEvents()
+        viewport = scroll.viewport()
+        rect = _mapped_rect(widget, viewport)
+        contained = bool(
+            rect.width() > 0
+            and rect.height() > 0
+            and viewport.rect().contains(rect)
+        )
+        return {
+            "visible": bool(widget.isVisibleTo(surface)),
+            "geometry": _rect_record(rect),
+            "container_geometry": _rect_record(viewport.rect()),
+            "contained": contained,
+            "containment_mode": "scroll_viewport_reachability",
+            "scroll_area": scroll.objectName(),
+        }
+    finally:
+        horizontal.setValue(previous[0])
+        vertical.setValue(previous[1])
+        app.processEvents()
+
+
 def _visible_descendant(root: Any, cls: type[Any]) -> Any | None:
     for widget in root.findChildren(cls):
         if widget.isVisibleTo(root):
@@ -65,6 +122,7 @@ def _critical_record(widget: Any, container: Any) -> dict[str, object]:
         "geometry": _rect(widget),
         "container_geometry": _rect(container),
         "contained": _contained(widget, container),
+        "containment_mode": "direct",
     }
 
 
@@ -159,8 +217,8 @@ def _child(args: argparse.Namespace) -> int:
         raise AssertionError("status bar missing")
     critical = {
         "navigation": _critical_record(navigation, window),
-        "combo": _critical_record(combo, surface if surface.isAncestorOf(combo) else window),
-        "file_picker": _critical_record(picker, surface),
+        "combo": _scroll_reachability_record(combo, surface, app),
+        "file_picker": _scroll_reachability_record(picker, surface, app),
         "diagnostics_toggle": _critical_record(diagnostics_toggle, status_bar),
         "primary_cta": _critical_record(cta, surface),
     }
