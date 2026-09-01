@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
-from PySide6.QtCore import QSettings, Qt
+from PySide6.QtCore import QRect, QSettings, Qt
 from PySide6.QtGui import QColor, QFont
 from PySide6.QtWidgets import (
     QApplication,
@@ -57,6 +57,16 @@ def _fresh_settings() -> None:
     settings = QSettings()
     settings.clear()
     settings.sync()
+
+
+def _splitter_ratio(window: MainWindow) -> float:
+    sizes = window._splitter.sizes()
+    assert len(sizes) == 2 and all(value > 0 for value in sizes)
+    return sizes[0] / sizes[1]
+
+
+def _mapped_rect(widget: QWidget, ancestor: QWidget) -> QRect:
+    return QRect(widget.mapTo(ancestor, widget.rect().topLeft()), widget.size())
 
 
 def test_ui_typography_hierarchy(qapp: QApplication) -> None:
@@ -201,9 +211,7 @@ def test_ui_shell_geometry_and_log_stack(qapp: QApplication) -> None:
     window.resize(960, 640)
     window.show()
     qapp.processEvents()
-    sizes = window._splitter.sizes()
-    assert len(sizes) == 2 and all(value > 0 for value in sizes)
-    ratio = sizes[0] / sizes[1]
+    ratio = _splitter_ratio(window)
     assert 2.2 <= ratio <= 4.2
     assert not window._status.isVisible()
     assert window._log_panel.isVisibleTo(window)
@@ -215,6 +223,73 @@ def test_ui_shell_geometry_and_log_stack(qapp: QApplication) -> None:
     qapp.processEvents()
     assert window._log_panel._stack.currentWidget() is window._log_panel.text_edit
     window.close()
+
+
+@pytest.mark.parametrize("size", [(960, 640), (1200, 800)])
+@pytest.mark.parametrize("language", [Language.FA, Language.EN])
+def test_ui_default_splitter_ratio_is_stable_across_size_and_language(
+    qapp: QApplication, size: tuple[int, int], language: Language
+) -> None:
+    _fresh_settings()
+    window = MainWindow()
+    window._apply_language(language)
+    window.resize(*size)
+    window.show()
+    qapp.processEvents()
+    ratio = _splitter_ratio(window)
+    assert 2.2 <= ratio <= 4.2
+    window.close()
+    qapp.processEvents()
+    _fresh_settings()
+
+
+def test_ui_compact_lower_shell_keeps_required_surfaces_visible_and_contained(
+    qapp: QApplication,
+) -> None:
+    _fresh_settings()
+    window = MainWindow()
+    window.resize(960, 640)
+    window.show()
+    qapp.processEvents()
+
+    lower = window._splitter.widget(1)
+    assert lower is not None
+    required = [
+        window._stage_badge,
+        window._stage_detail,
+        window._last_run_badge,
+        window._health_widget,
+        window._progress,
+        window._progress_caption,
+        window._log_panel,
+        window._log_panel.clear_button,
+        window._log_panel.save_button,
+        window._btn_settings,
+        window._btn_history_metrics,
+        window._btn_demo,
+        *window._settings_indicators.values(),
+    ]
+    for widget in required:
+        assert widget is not None
+        assert widget.isVisibleTo(lower)
+        assert lower.rect().contains(_mapped_rect(widget, lower))
+
+    assert not window._status.isVisible()
+    major = [
+        window._health_widget,
+        window._progress,
+        window._log_panel,
+        window._btn_settings,
+        window._btn_history_metrics,
+        window._btn_demo,
+    ]
+    rects = [_mapped_rect(widget, lower) for widget in major if widget is not None]
+    for index, rect in enumerate(rects):
+        assert all(not rect.intersects(other) for other in rects[index + 1 :])
+
+    window.close()
+    qapp.processEvents()
+    _fresh_settings()
 
 
 def test_ui_busy_overlay_is_not_splitter_pane(qapp: QApplication) -> None:
@@ -266,11 +341,10 @@ def test_ui_splitter_state_roundtrip_preserves_two_panes(qapp: QApplication) -> 
     first.resize(960, 640)
     first.show()
     qapp.processEvents()
-    first._splitter.setSizes([1, 1])
+    first._splitter.setSizes([1, 3])
     qapp.processEvents()
-    saved_sizes = first._splitter.sizes()
-    assert len(saved_sizes) == 2 and all(value > 0 for value in saved_sizes)
-    saved_ratio = saved_sizes[0] / saved_sizes[1]
+    saved_ratio = _splitter_ratio(first)
+    assert not 2.2 <= saved_ratio <= 4.2
     first.close()
     qapp.processEvents()
     QSettings().sync()
@@ -279,11 +353,35 @@ def test_ui_splitter_state_roundtrip_preserves_two_panes(qapp: QApplication) -> 
     second.resize(960, 640)
     second.show()
     qapp.processEvents()
-    restored_sizes = second._splitter.sizes()
-    assert len(restored_sizes) == 2 and all(value > 0 for value in restored_sizes)
-    restored_ratio = restored_sizes[0] / restored_sizes[1]
+    restored_ratio = _splitter_ratio(second)
     assert abs(restored_ratio - saved_ratio) <= 0.35
+    assert not 2.2 <= restored_ratio <= 4.2
     second.close()
+    qapp.processEvents()
+    _fresh_settings()
+
+
+def test_ui_default_splitter_ratio_is_one_shot(qapp: QApplication) -> None:
+    _fresh_settings()
+    window = MainWindow()
+    window.resize(960, 640)
+    window.show()
+    qapp.processEvents()
+    assert 2.2 <= _splitter_ratio(window) <= 4.2
+
+    window._splitter.setSizes([1, 3])
+    qapp.processEvents()
+    manual_ratio = _splitter_ratio(window)
+    assert not 2.2 <= manual_ratio <= 4.2
+
+    qapp.processEvents()
+    assert not 2.2 <= _splitter_ratio(window) <= 4.2
+    window.resize(1200, 800)
+    qapp.processEvents()
+    assert not 2.2 <= _splitter_ratio(window) <= 4.2
+    assert not window._default_splitter_ratio_pending
+
+    window.close()
     qapp.processEvents()
     _fresh_settings()
 
@@ -297,6 +395,9 @@ def test_ui_busy_overlay_source_preserves_base_method() -> None:
     assert "_busy_overlay.setParent" not in wrapper_source
     assert "_splitter.restoreState(" not in wrapper_source
     assert 'setValue("ui/main_splitter"' not in wrapper_source
+    assert "setSizes([3, 1])" not in wrapper_source
+    assert "QTimer.singleShot(0, self._apply_default_splitter_ratio_once)" in wrapper_source
+    assert "def resizeEvent(" not in wrapper_source
 
 
 def test_ui_native_icon_source_has_no_emoji(qapp: QApplication) -> None:
