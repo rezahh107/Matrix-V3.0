@@ -17,7 +17,6 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.ui.fonts import get_app_font
 from app.ui.texts import UiTranslator
 from app.ui.theme import Theme
 
@@ -52,12 +51,10 @@ class LogPanel(QFrame):
         self._placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._placeholder.setObjectName("logPlaceholder")
         self._placeholder.setWordWrap(True)
-        self._placeholder.setFont(get_app_font())
 
         self._text = QPlainTextEdit(self)
         self._text.setReadOnly(True)
         self._text.setObjectName("textLog")
-        self._text.setFont(get_app_font())
 
         stack_layout.addWidget(self._placeholder)
         stack_layout.addWidget(self._text)
