@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 from PySide6.QtGui import QPalette
-from PySide6.QtWidgets import QLabel, QStatusBar, QWidget
+from PySide6.QtWidgets import QStatusBar, QWidget
 
-from app.ui.fonts import get_app_font
 from app.ui.theme import Theme
 
 from .database_status_widget import DatabaseStatusWidget
@@ -19,10 +18,9 @@ class ThemedStatusBar(QStatusBar):
         self._theme = theme
         self.setSizeGripEnabled(False)
         self.apply_theme(theme)
-        self.setFont(get_app_font())
 
     def apply_theme(self, theme: Theme) -> None:
-        """فقط palette/state را به‌روزرسانی می‌کند، نه stylesheet محلی."""
+        """فقط palette/state را به‌روزرسانی می‌کند، نه stylesheet یا font محلی."""
 
         self._theme = theme
         palette = self.palette()
@@ -32,10 +30,3 @@ class ThemedStatusBar(QStatusBar):
         palette.setColor(QPalette.ColorRole.WindowText, theme.text_primary)
         self.setPalette(palette)
         self.setAutoFillBackground(True)
-
-    def refresh_fonts(self) -> None:
-        """بازنشانی فونت برای هماهنگی با فونت سراسری."""
-
-        self.setFont(get_app_font())
-        for label in self.findChildren(QLabel):
-            label.setFont(get_app_font())
