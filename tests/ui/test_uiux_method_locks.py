@@ -324,6 +324,41 @@ def test_ui_c2_surface_registry_is_id_based(qapp: QApplication) -> None:
     window.close()
 
 
+def test_ui_dpi_combo_inventory_is_surface_local(qapp: QApplication) -> None:
+    _fresh_settings()
+    window = MainWindow()
+    window.resize(1200, 800)
+    window.show()
+    qapp.processEvents()
+
+    assert window.activate_surface("build")
+    qapp.processEvents()
+    build = window._workspace_surfaces["build"]
+    build_combos = [
+        widget for widget in build.findChildren(QComboBox) if widget.isVisibleTo(build)
+    ]
+    assert build_combos == []
+    assert window._theme_selector is not None
+    assert not build.isAncestorOf(window._theme_selector)
+
+    assert window.activate_surface("allocate")
+    qapp.processEvents()
+    allocate = window._workspace_surfaces["allocate"]
+    combo = window.findChild(QComboBox, "academicYearInput")
+    assert combo is not None
+    assert allocate.isAncestorOf(combo)
+    assert combo.isVisibleTo(allocate)
+    _assert_scroll_reachable(combo, allocate, qapp)
+    window.close()
+
+
+def test_ui_dpi_harness_has_no_global_combo_fallback() -> None:
+    source = (ROOT / "tools/validate_ui_dpi.py").read_text(encoding="utf-8")
+    assert "combo = window._theme_selector" not in source
+    assert "combo = _visible_descendant(surface, QComboBox)" in source
+    assert 'critical["combo"] = _scroll_reachability_record(combo, surface, app)' in source
+
+
 def test_scroll_aware_oracle_reaches_target_outside_initial_viewport(
     qapp: QApplication,
 ) -> None:
