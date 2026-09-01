@@ -16,6 +16,9 @@ except Exception as exc:  # pragma: no cover - defensive skip for CI images with
 # Windows CI skip removed after stabilizing the loader harness cleanup. Qt UI
 # tests now run on all platforms to keep coverage consistent.
 
+_TEST_QSETTINGS_ORGANIZATION = "MatrixV3Tests"
+_TEST_QSETTINGS_APPLICATION = "MatrixV3UI"
+
 
 @pytest.fixture(scope="session")
 def qapp():
@@ -35,14 +38,46 @@ def qapp():
     if app is None:
         app = qapplication_cls([])
 
-    yield app
+    previous_application_name = app.applicationName()
+    previous_organization_name = app.organizationName()
+    app.setOrganizationName(_TEST_QSETTINGS_ORGANIZATION)
+    app.setApplicationName(_TEST_QSETTINGS_APPLICATION)
 
-    thread_pool_cls.globalInstance().waitForDone(2000)
-    app.closeAllWindows()
-    app.processEvents()
-    app.sendPostedEvents()
-    app.processEvents()
-    gc.collect()
+    try:
+        yield app
+    finally:
+        thread_pool_cls.globalInstance().waitForDone(2000)
+        app.closeAllWindows()
+        app.processEvents()
+        app.sendPostedEvents()
+        app.processEvents()
+        app.setApplicationName(previous_application_name)
+        app.setOrganizationName(previous_organization_name)
+        gc.collect()
+
+
+@pytest.fixture(autouse=True)
+def _isolate_default_qsettings(qapp):
+    from PySide6.QtCore import QSettings
+
+    settings = QSettings()
+    assert settings.status() == QSettings.Status.NoError
+    settings.clear()
+    settings.sync()
+    assert settings.status() == QSettings.Status.NoError
+
+    yield
+
+    qapp.closeAllWindows()
+    qapp.processEvents()
+    qapp.sendPostedEvents()
+    qapp.processEvents()
+
+    settings = QSettings()
+    assert settings.status() == QSettings.Status.NoError
+    settings.clear()
+    settings.sync()
+    assert settings.status() == QSettings.Status.NoError
 
 
 def waitSignal(signal: Any, *, timeout: int | None = None) -> list[tuple[Any, ...]]:  # noqa: N802
