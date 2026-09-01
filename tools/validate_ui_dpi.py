@@ -78,6 +78,28 @@ def _governing_scroll_area(widget: Any, surface: Any) -> Any | None:
     return None
 
 
+def _scroll_fully_to_widget(scroll: Any, widget: Any, app: Any) -> Any:
+    scroll.ensureWidgetVisible(widget, 0, 0)
+    app.processEvents()
+    viewport = scroll.viewport()
+    rect = _mapped_rect(widget, viewport)
+    bounds = viewport.rect()
+    horizontal = scroll.horizontalScrollBar()
+    vertical = scroll.verticalScrollBar()
+
+    if rect.left() < bounds.left():
+        horizontal.setValue(horizontal.value() + rect.left() - bounds.left())
+    elif rect.right() > bounds.right():
+        horizontal.setValue(horizontal.value() + rect.right() - bounds.right())
+    if rect.top() < bounds.top():
+        vertical.setValue(vertical.value() + rect.top() - bounds.top())
+    elif rect.bottom() > bounds.bottom():
+        vertical.setValue(vertical.value() + rect.bottom() - bounds.bottom())
+
+    app.processEvents()
+    return _mapped_rect(widget, viewport)
+
+
 def _scroll_reachability_record(widget: Any, surface: Any, app: Any) -> dict[str, object]:
     scroll = _governing_scroll_area(widget, surface)
     if scroll is None:
@@ -86,10 +108,8 @@ def _scroll_reachability_record(widget: Any, surface: Any, app: Any) -> dict[str
     vertical = scroll.verticalScrollBar()
     previous = (horizontal.value(), vertical.value())
     try:
-        scroll.ensureWidgetVisible(widget, 0, 0)
-        app.processEvents()
+        rect = _scroll_fully_to_widget(scroll, widget, app)
         viewport = scroll.viewport()
-        rect = _mapped_rect(widget, viewport)
         contained = bool(
             rect.width() > 0
             and rect.height() > 0
