@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Final
 
-from PySide6.QtCore import QByteArray, QSettings, Qt
+from PySide6.QtCore import QByteArray, QEvent, QObject, QSettings, Qt
 from PySide6.QtGui import QAction, QCloseEvent, QResizeEvent
 from PySide6.QtWidgets import (
     QApplication,
@@ -75,6 +75,7 @@ class MainWindow(_v1.MainWindow):
         self._diagnostics_expanded = False
         self._support_toolbar_actions: dict[str, QAction] = {}
         super().__init__()
+        self._splitter.installEventFilter(self)
         # The prior presentation layer used a delayed 25% default. C2 always
         # starts collapsed, so any pending legacy callback becomes a no-op.
         self._default_splitter_ratio_pending = False
@@ -467,6 +468,14 @@ class MainWindow(_v1.MainWindow):
         self._progress_pulse = None
         if self._progress_caption.graphicsEffect() is not None:
             self._progress_caption.setGraphicsEffect(None)
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802
+        if watched is self._splitter and event.type() in (
+            QEvent.Type.Resize,
+            QEvent.Type.Move,
+        ):
+            self._update_overlay_geometry()
+        return super().eventFilter(watched, event)
 
     def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802
         super().resizeEvent(event)
