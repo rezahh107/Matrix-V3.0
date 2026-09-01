@@ -152,6 +152,52 @@ def test_fa_en_fa_updates_existing_widgets_without_reconstruction(
         qapp.processEvents()
 
 
+def test_runtime_family_rebind_preserves_semantic_font_properties(
+    qapp: QApplication,
+) -> None:
+    original_font = QFont(qapp.font())
+    original_direction = qapp.layoutDirection()
+    label: QLabel | None = None
+
+    try:
+        theme.apply_layout_direction(qapp, Language.EN)
+        label = QLabel("semantic existing widget")
+        semantic_font = QFont(label.font())
+        semantic_font.setPointSize(theme.BASE_FONT_PT + 3)
+        semantic_font.setWeight(QFont.Weight.DemiBold)
+        semantic_font.setItalic(True)
+        label.setFont(semantic_font)
+
+        widget_identity = id(label)
+        point_size = label.font().pointSize()
+        weight = label.font().weight()
+        italic = label.font().italic()
+
+        theme.apply_layout_direction(qapp, Language.FA)
+        qapp.processEvents()
+        assert id(label) == widget_identity
+        assert label.font().family() == qapp.font().family()
+        assert _is_vazir_family(label.font().family())
+        assert label.font().pointSize() == point_size
+        assert label.font().weight() == weight
+        assert label.font().italic() == italic
+
+        theme.apply_layout_direction(qapp, Language.EN)
+        qapp.processEvents()
+        assert id(label) == widget_identity
+        assert label.font().family() == qapp.font().family()
+        assert label.font().family().casefold().startswith("segoe ui")
+        assert label.font().pointSize() == point_size
+        assert label.font().weight() == weight
+        assert label.font().italic() == italic
+    finally:
+        if label is not None:
+            label.close()
+        qapp.setLayoutDirection(original_direction)
+        qapp.setFont(original_font)
+        qapp.processEvents()
+
+
 def test_font_consumer_inventory_has_no_independent_base_family_owners() -> None:
     production_files = sorted((ROOT / "app/ui").rglob("*.py"))
     get_app_font_consumers: list[str] = []
@@ -167,14 +213,18 @@ def test_font_consumer_inventory_has_no_independent_base_family_owners() -> None
                 if f'QFont("{family}"' in source or f"QFont('{family}'" in source:
                     forbidden_direct_family_assignments.append(f"{relative}:{family}")
 
-    # The preserved execution base still calls the compatibility helper for two
-    # status labels. The helper is intentionally unresolved for no-size calls,
-    # and the directional runtime test above proves this legacy seam inherits.
+    # The preserved execution base retains two compatibility calls. Family
+    # propagation is now enforced centrally from the QApplication widget inventory.
     assert get_app_font_consumers == ["app/ui/main_window_base.py"]
     base_source = (ROOT / "app/ui/main_window_base.py").read_text(encoding="utf-8")
     assert base_source.count("setFont(get_app_font())") == 2
     fonts_source = (ROOT / "app/ui/fonts.py").read_text(encoding="utf-8")
     assert "if point_size is None:\n        return QFont()" in fonts_source
+    theme_source = (ROOT / "app/ui/theme.py").read_text(encoding="utf-8")
+    assert "QApplication.allWidgets()" in theme_source
+    assert "captured_font.family().casefold() != previous_key" in theme_source
+    assert "rebound = QFont(captured_font)" in theme_source
+    assert "rebound.setFamily(target_family)" in theme_source
     assert forbidden_direct_family_assignments == []
 
 
@@ -183,6 +233,9 @@ def test_vazir_font_pipeline_document_matches_current_authority() -> None:
     required_markers = (
         "docs/UI_DESIGN_CONTRACT.md",
         "QFontDatabase.addApplicationFontFromData()",
+        "QApplication.allWidgets()",
+        "setFamily()",
+        "captured QFont",
         "FA / RTL",
         "EN / LTR",
         "Segoe UI",
@@ -195,6 +248,7 @@ def test_vazir_font_pipeline_document_matches_current_authority() -> None:
     assert all(marker in document for marker in required_markers)
     assert "Matrix2" not in document
     assert "ensure_vazir_local_fonts()` پوشهٔ `app/ui/fonts/` را می‌سازد، اگر TTFی" not in document
+    assert "به‌تنهایی تضمین نمی‌کند" in document
 
 
 def test_widgets_created_without_local_font_inherit_application_font(
