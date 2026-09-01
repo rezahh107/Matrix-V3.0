@@ -19,12 +19,10 @@ from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
     QHBoxLayout,
-    QLayout,
     QPushButton,
     QSizePolicy,
     QSpacerItem,
     QToolButton,
-    QVBoxLayout,
     QWidget,
 )
 
@@ -290,11 +288,13 @@ class MainWindow(_v1.MainWindow):
             pane.hide()
 
         self._diagnostics_expanded = expanded
-        if self._diagnostics_toggle is not None:
-            if self._diagnostics_toggle.isChecked() != expanded:
-                self._diagnostics_toggle.blockSignals(True)
-                self._diagnostics_toggle.setChecked(expanded)
-                self._diagnostics_toggle.blockSignals(False)
+        if (
+            self._diagnostics_toggle is not None
+            and self._diagnostics_toggle.isChecked() != expanded
+        ):
+            self._diagnostics_toggle.blockSignals(True)
+            self._diagnostics_toggle.setChecked(expanded)
+            self._diagnostics_toggle.blockSignals(False)
 
     def diagnostics_expanded(self) -> bool:
         return self._diagnostics_expanded
@@ -492,9 +492,7 @@ class MainWindow(_v1.MainWindow):
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802
         if self._diagnostics_expanded and self._splitter is not None:
-            QSettings().setValue(
-                _DIAGNOSTICS_STATE_KEY, self._splitter.saveState()
-            )
+            QSettings().setValue(_DIAGNOSTICS_STATE_KEY, self._splitter.saveState())
         super().closeEvent(event)
 
 
