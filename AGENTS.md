@@ -1,4 +1,4 @@
-# AGENTS — Smart Student Allocation Engine (v3.3)
+# AGENTS — Smart Student Allocation Engine (v3.4)
 
 **Scope:** Coding / refactor agents working on the student→mentor allocation system  
 **Audience:** LLM-based coding agents (Codex, etc.) + human reviewers  
@@ -21,11 +21,12 @@ Always treat these as the **Single Source of Truth (SSoT)** for domain rules:
 **AGENTS.md MUST NOT define new domain rules.**  
 If anything here conflicts with these documents, **those documents win**.
 
-Presentation-only authority for visual ownership inside `app/ui/**`:
+Presentation-only authorities inside `app/ui/**`:
 
-- `docs/UI_PRESENTATION_AUTHORITY.md`
+- `docs/UI_PRESENTATION_AUTHORITY.md` — defines **who owns** each visible Qt control/subcontrol surface (`STYLED`, `NATIVE`, `HYBRID`).
+- `docs/UI_DESIGN_CONTRACT.md` — defines **how** the owned Matrix presentation is composed under the selected C2 workspace and V2 visual direction.
 
-This presentation authority is subordinate to LAW/Technical SSoT and governs only Qt visual ownership (`STYLED`, `NATIVE`, `HYBRID`). It does not define or override domain behavior.
+Both presentation documents are subordinate to LAW/Technical SSoT and domain authorities. They do not define or override domain behavior.
 
 Machine hint:
 
@@ -60,6 +61,7 @@ Machine hint:
   - No business rules: no allocation/join/ranking/trace logic.
   - Talks to Infra/Core via public APIs.
   - Visual ownership changes MUST follow `docs/UI_PRESENTATION_AUTHORITY.md`; do not introduce a second incompatible visual owner for a geometry-sharing Qt control.
+  - Workspace composition, presentation hierarchy, density, typography, diagnostics placement, bidi/resize/DPI presentation and V2 visual decisions MUST follow `docs/UI_DESIGN_CONTRACT.md`.
 
 ### 2.2. Dependency rule
 
@@ -433,7 +435,8 @@ When editing:
 
   * view-only orchestration and interaction;
   * do not add allocation/join/QA logic here;
-  * for visual rendering or control/subcontrol styling, obey `docs/UI_PRESENTATION_AUTHORITY.md` before changing QSS, palette, fonts, or local stylesheets.
+  * for visual rendering or control/subcontrol styling, obey `docs/UI_PRESENTATION_AUTHORITY.md` before changing QSS, palette, fonts, or local stylesheets;
+  * for C2/V2 workspace composition, hierarchy, density, diagnostics placement, bidi/resize/DPI presentation or visual-direction changes, obey `docs/UI_DESIGN_CONTRACT.md`.
 
 If a change blurs these boundaries, treat it as a red flag and consider **RISK_REFUSAL**.
 
@@ -449,6 +452,7 @@ This AGENTS file targets:
 * Refactor Narrative v3.0 — Import & Join Pipeline
 * LAW v3.0 — Regulatory Coverage Map v1.0
 * UI Presentation Authority (presentation-only; subordinate to LAW/TECH)
+* UI Design Contract (C2/V2 composition-only; subordinate to LAW/TECH)
 
 When any upstream doc changes in a way that affects code:
 
@@ -484,6 +488,10 @@ For any PR touching mentors or mentor import:
   - Health check جدید فقط با خواندن سیگنال‌های QA/History موجود یا قوانین مستند LAW/Technical SSoT مجاز است؛ business rule تازه در Health ممنوع است.
 
 ## 12. Changelog
+
+**v3.4**
+
+* Added `docs/UI_DESIGN_CONTRACT.md` discoverability beside `docs/UI_PRESENTATION_AUTHORITY.md`, clarifying ownership vs C2/V2 composition; no domain semantics changed.
 
 **v3.3**
 
