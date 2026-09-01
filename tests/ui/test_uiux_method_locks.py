@@ -15,7 +15,6 @@ from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
     QFormLayout,
-    QPushButton,
     QStyle,
     QStyleOptionComboBox,
     QWidget,
@@ -344,7 +343,9 @@ def test_ui_diagnostics_roundtrip_uses_only_v2_persistence(qapp: QApplication) -
     _fresh_settings()
 
 
-def test_ui_diagnostics_error_path_auto_reveals(qapp: QApplication, monkeypatch) -> None:
+def test_ui_diagnostics_error_path_auto_reveals(
+    qapp: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
     _fresh_settings()
     window = MainWindow()
     window.show()
@@ -421,7 +422,9 @@ def test_ui_authority_documents_are_synchronized() -> None:
     assert "SOLID_LAYERED_PRODUCTIVITY" in design
 
 
-def test_public_demo_instantiates_current_public_main_window(monkeypatch) -> None:
+def test_public_demo_instantiates_current_public_main_window(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     events: list[str] = []
 
     class FakeWindow:
