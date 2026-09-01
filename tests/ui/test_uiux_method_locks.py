@@ -382,10 +382,13 @@ def test_ui_bidi_and_primary_actions_are_contained(
 
     navigation = window._workspace_navigation
     toggle = window._diagnostics_toggle
+    status_bar = window._status_bar
     assert navigation is not None and navigation.isVisibleTo(window)
     assert toggle is not None and toggle.isVisibleTo(window)
+    assert status_bar is not None and status_bar.isVisibleTo(window)
+    assert status_bar.isAncestorOf(toggle)
     _assert_contained(navigation, window)
-    _assert_contained(toggle, window)
+    _assert_contained(toggle, status_bar)
     window.close()
 
 
