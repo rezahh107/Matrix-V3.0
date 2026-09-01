@@ -1,6 +1,6 @@
 """C2 workspace composition over the preserved Matrix execution/presentation base.
 
-This module changes only presentation ownership and composition.  Runtime/domain
+This module changes only presentation ownership and composition. Runtime/domain
 slots remain implemented by ``main_window_base`` through the preserved prior
 presentation layer in ``main_window_presentation_base``.
 """
@@ -13,6 +13,7 @@ from typing import Final
 from PySide6.QtCore import QByteArray, QSettings, Qt
 from PySide6.QtGui import QAction, QCloseEvent, QResizeEvent
 from PySide6.QtWidgets import (
+    QApplication,
     QBoxLayout,
     QFormLayout,
     QFrame,
@@ -159,7 +160,9 @@ class MainWindow(_v1.MainWindow):
         button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
         button.setText(self._t(spec.text_key, spec.fallback))
         button.setAccessibleName(button.text())
-        button.clicked.connect(lambda _checked=False, sid=spec.surface_id: self.activate_surface(sid))
+        button.clicked.connect(
+            lambda _checked=False, sid=spec.surface_id: self.activate_surface(sid)
+        )
         self._workspace_nav_buttons[spec.surface_id] = button
         return button
 
@@ -167,14 +170,10 @@ class MainWindow(_v1.MainWindow):
         return tuple(self._workspace_surfaces)
 
     def primary_surface_ids(self) -> tuple[str, ...]:
-        return tuple(
-            sid for sid, spec in self._workspace_specs.items() if spec.primary
-        )
+        return tuple(sid for sid, spec in self._workspace_specs.items() if spec.primary)
 
     def secondary_surface_ids(self) -> tuple[str, ...]:
-        return tuple(
-            sid for sid, spec in self._workspace_specs.items() if not spec.primary
-        )
+        return tuple(sid for sid, spec in self._workspace_specs.items() if not spec.primary)
 
     def activate_surface(self, surface_id: str) -> bool:
         target = self._workspace_surfaces.get(surface_id)
@@ -245,6 +244,7 @@ class MainWindow(_v1.MainWindow):
         toggle.setObjectName("diagnosticsToggle")
         toggle.setProperty("variant", "secondary")
         toggle.setCheckable(True)
+        toggle.setChecked(False)
         toggle.setAccessibleName(self._diagnostics_label())
         toggle.setText(self._diagnostics_label())
         toggle.toggled.connect(self.set_diagnostics_expanded)
@@ -252,7 +252,11 @@ class MainWindow(_v1.MainWindow):
         if self._status_bar is not None:
             self._status_bar.addPermanentWidget(toggle)
 
-        # C2 migration rule: legacy ui/main_splitter state never opens the panel.
+        # Before a top-level show(), isVisible() is false even for children that
+        # are not explicitly hidden. Set the hidden property directly so legacy
+        # splitter state can never surface diagnostics on routine C2 startup.
+        pane.hide()
+        self._diagnostics_expanded = False
         self.set_diagnostics_expanded(False)
 
     def _diagnostics_label(self) -> str:
@@ -263,25 +267,34 @@ class MainWindow(_v1.MainWindow):
         if pane is None:
             return
         expanded = bool(expanded)
-        if expanded == self._diagnostics_expanded and pane.isVisible() == expanded:
-            return
+
         if expanded:
-            pane.show()
             saved = QSettings().value(_DIAGNOSTICS_STATE_KEY)
-            restored = isinstance(saved, QByteArray) and not saved.isEmpty() and self._splitter.restoreState(saved)
+            restored = (
+                isinstance(saved, QByteArray)
+                and not saved.isEmpty()
+                and self._splitter.restoreState(saved)
+            )
+            pane.show()
             if not restored:
                 total = max(2, sum(self._splitter.sizes()))
                 diagnostics = max(160, round(total * 0.28))
                 self._splitter.setSizes([max(1, total - diagnostics), diagnostics])
         else:
-            if self._diagnostics_expanded and pane.isVisible():
-                QSettings().setValue(_DIAGNOSTICS_STATE_KEY, self._splitter.saveState())
+            # Persist only an intentionally expanded C2 geometry. Hiding first
+            # during startup must never promote legacy `ui/main_splitter` state.
+            if self._diagnostics_expanded and not pane.isHidden():
+                QSettings().setValue(
+                    _DIAGNOSTICS_STATE_KEY, self._splitter.saveState()
+                )
             pane.hide()
+
         self._diagnostics_expanded = expanded
-        if self._diagnostics_toggle is not None and self._diagnostics_toggle.isChecked() != expanded:
-            self._diagnostics_toggle.blockSignals(True)
-            self._diagnostics_toggle.setChecked(expanded)
-            self._diagnostics_toggle.blockSignals(False)
+        if self._diagnostics_toggle is not None:
+            if self._diagnostics_toggle.isChecked() != expanded:
+                self._diagnostics_toggle.blockSignals(True)
+                self._diagnostics_toggle.setChecked(expanded)
+                self._diagnostics_toggle.blockSignals(False)
 
     def diagnostics_expanded(self) -> bool:
         return self._diagnostics_expanded
@@ -315,14 +328,20 @@ class MainWindow(_v1.MainWindow):
         settings_action = self._support_toolbar_actions.get("settings")
         if settings_action is not None:
             settings_action.setText(self._t("settings.title", "Settings"))
-            settings_action.setToolTip(self._t("tooltip.preferences", "Change appearance and language"))
+            settings_action.setToolTip(
+                self._t("tooltip.preferences", "Change appearance and language")
+            )
         history_action = self._support_toolbar_actions.get("history")
         if history_action is not None:
-            history_action.setText(self._t("settings.history_metrics", "History Metrics"))
+            history_action.setText(
+                self._t("settings.history_metrics", "History Metrics")
+            )
 
     # ------------------------------------------------ semantic configuration
     def _refresh_settings_indicators(self) -> None:
-        if not hasattr(self, "_settings_indicators") or not hasattr(self, "_user_settings"):
+        if not hasattr(self, "_settings_indicators") or not hasattr(
+            self, "_user_settings"
+        ):
             return
         values = self._user_settings.to_dict()
         labels = self._settings_label_map()
@@ -330,13 +349,17 @@ class MainWindow(_v1.MainWindow):
         off_text = "خاموش" if self._language is Language.FA else "Off"
         for key, indicator in self._settings_indicators.items():
             enabled = bool(values.get(key, False))
-            indicator.setText(f"{labels.get(key, key)}: {on_text if enabled else off_text}")
+            indicator.setText(
+                f"{labels.get(key, key)}: {on_text if enabled else off_text}"
+            )
             indicator.setProperty("settingEnabled", enabled)
             indicator.style().unpolish(indicator)
             indicator.style().polish(indicator)
 
     # ------------------------------------------------------- geometry / bidi
-    def _fixed_action_page(self, content: QWidget, button: QPushButton, page_id: str) -> QWidget:
+    def _fixed_action_page(
+        self, content: QWidget, button: QPushButton, page_id: str
+    ) -> QWidget:
         shell = super()._fixed_action_page(content, button, page_id)
         content.setProperty("workspaceContent", True)
         if content.layout() is not None:
@@ -411,7 +434,12 @@ class MainWindow(_v1.MainWindow):
             if self.width() <= _COMPACT_WORKSPACE_WIDTH
             else self._theme.page_margin_normal
         )
-        for name in ("pageBuildContent", "pageAllocateContent", "pageRuleEngineContent", "pageExplain"):
+        for name in (
+            "pageBuildContent",
+            "pageAllocateContent",
+            "pageRuleEngineContent",
+            "pageExplain",
+        ):
             widget = self.findChild(QWidget, name)
             if widget is not None and widget.layout() is not None:
                 widget.layout().setContentsMargins(margin, margin, margin, margin)
@@ -426,7 +454,9 @@ class MainWindow(_v1.MainWindow):
         if self._workspace_navigation is not None:
             layout = self._workspace_navigation.layout()
             if layout is not None:
-                layout.setContentsMargins(margin, self._theme.micro, margin, self._theme.micro)
+                layout.setContentsMargins(
+                    margin, self._theme.micro, margin, self._theme.micro
+                )
         compact = self.width() <= _COMPACT_WORKSPACE_WIDTH
         self._progress_caption.setVisible(not compact)
 
@@ -462,12 +492,19 @@ class MainWindow(_v1.MainWindow):
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802
         if self._diagnostics_expanded and self._splitter is not None:
-            QSettings().setValue(_DIAGNOSTICS_STATE_KEY, self._splitter.saveState())
+            QSettings().setValue(
+                _DIAGNOSTICS_STATE_KEY, self._splitter.saveState()
+            )
         super().closeEvent(event)
 
 
-def run_demo() -> None:  # pragma: no cover
-    _v1.run_demo()
+def run_demo() -> None:  # pragma: no cover - manual public C2 demo
+    """Run the current public C2 MainWindow rather than the preserved base seam."""
+
+    app = QApplication.instance() or QApplication([])
+    window = MainWindow()
+    window.show()
+    app.exec()
 
 
 def __getattr__(name: str) -> object:
