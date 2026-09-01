@@ -10,8 +10,8 @@ try:
 except ImportError as exc:
     pytest.skip(f"PySide6 unavailable: {exc}", allow_module_level=True)
 
-from app.ui import theme
 from app.ui.widgets import FilePicker
+from app.ui import theme
 
 
 _CANONICAL_STYLESHEET_TOKENS = (
