@@ -69,6 +69,29 @@ def _mapped_rect(widget: QWidget, ancestor: QWidget) -> QRect:
     return QRect(widget.mapTo(ancestor, widget.rect().topLeft()), widget.size())
 
 
+def test_ui_qsettings_harness_uses_isolated_test_identity(qapp: QApplication) -> None:
+    assert (qapp.organizationName(), qapp.applicationName()) == (
+        "MatrixV3Tests",
+        "MatrixV3UI",
+    )
+    assert (qapp.organizationName(), qapp.applicationName()) != (
+        "YourOrg",
+        "AllocationApp",
+    )
+
+    settings = QSettings()
+    assert settings.status() == QSettings.Status.NoError
+    sentinel = "tests/qsettings_harness_sentinel"
+    settings.setValue(sentinel, "ok")
+    settings.sync()
+    assert settings.status() == QSettings.Status.NoError
+    assert settings.value(sentinel) == "ok"
+    settings.remove(sentinel)
+    settings.sync()
+    assert settings.status() == QSettings.Status.NoError
+    assert settings.value(sentinel) is None
+
+
 def test_ui_typography_hierarchy(qapp: QApplication) -> None:
     current = build_theme("light")
     apply_theme(qapp, current)
