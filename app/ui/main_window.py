@@ -10,7 +10,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from PySide6.QtCore import QByteArray, QSettings, Qt
+from PySide6.QtCore import QByteArray, QSettings, QTimer, Qt
+from PySide6.QtGui import QShowEvent
 from PySide6.QtWidgets import (
     QBoxLayout,
     QCheckBox,
@@ -184,12 +185,32 @@ class MainWindow(_base.MainWindow):
         self._formatted_center_labels: list[tuple[QLabel, str]] = []
         stored_splitter = QSettings().value("ui/main_splitter")
         self._had_saved_splitter_state = isinstance(stored_splitter, QByteArray) and not stored_splitter.isEmpty()
+        self._default_splitter_ratio_pending = not self._had_saved_splitter_state
+        self._default_splitter_ratio_scheduled = False
         super().__init__()
         self._register_shell_bindings()
         self._compact_persistent_shell()
         self._refresh_reviewed_surface_texts()
-        if not self._had_saved_splitter_state and self._splitter is not None:
-            self._splitter.setSizes([3, 1])
+
+    def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 - Qt signature
+        super().showEvent(event)
+        if self._default_splitter_ratio_pending and not self._default_splitter_ratio_scheduled:
+            self._default_splitter_ratio_scheduled = True
+            QTimer.singleShot(0, self._apply_default_splitter_ratio_once)
+
+    def _apply_default_splitter_ratio_once(self) -> None:
+        if not self._default_splitter_ratio_pending:
+            return
+        self._default_splitter_ratio_pending = False
+        splitter = self._splitter
+        if splitter is None or splitter.count() != 2:
+            return
+        sizes = splitter.sizes()
+        available = sum(sizes)
+        if available <= 1:
+            return
+        bottom = max(1, round(available * 0.25))
+        splitter.setSizes([available - bottom, bottom])
 
     # ---------------------------------------------------------- page composition
     def _build_build_page(self) -> QWidget:
@@ -569,9 +590,46 @@ class MainWindow(_base.MainWindow):
             progress_layout.setSpacing(6)
 
         lower = self._log_panel.parentWidget()
-        if lower is not None and isinstance(lower.layout(), QVBoxLayout):
-            lower.layout().setContentsMargins(12, 0, 12, 10)
-            lower.layout().setSpacing(6)
+        lower_layout = lower.layout() if lower is not None else None
+        if not isinstance(lower_layout, QBoxLayout):
+            return
+        lower_layout.setDirection(QBoxLayout.Direction.LeftToRight)
+        lower_layout.setContentsMargins(12, 4, 12, 8)
+        lower_layout.setSpacing(8)
+        lower_layout.setStretch(0, 2)
+        lower_layout.setStretch(1, 4)
+        lower_layout.setStretch(2, 0)
+
+        controls_item = lower_layout.itemAt(2)
+        controls_layout = controls_item.layout() if controls_item is not None else None
+        if not isinstance(controls_layout, QBoxLayout):
+            return
+        if controls_layout.count() and controls_layout.itemAt(0).spacerItem() is not None:
+            controls_layout.takeAt(0)
+        controls_layout.setDirection(QBoxLayout.Direction.TopToBottom)
+        controls_layout.setContentsMargins(0, 0, 0, 0)
+        controls_layout.setSpacing(4)
+        controls_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self._compact_settings_indicator_grid(controls_layout)
+
+    def _compact_settings_indicator_grid(self, controls_layout: QBoxLayout) -> None:
+        indicators = list(self._settings_indicators.values())
+        for index in range(controls_layout.count()):
+            child_layout = controls_layout.itemAt(index).layout()
+            if child_layout is None or not any(child_layout.indexOf(item) >= 0 for item in indicators):
+                continue
+            controls_layout.takeAt(index)
+            while child_layout.count():
+                child_layout.takeAt(0)
+            grid = QGridLayout()
+            grid.setContentsMargins(0, 0, 0, 0)
+            grid.setHorizontalSpacing(4)
+            grid.setVerticalSpacing(2)
+            for item_index, indicator in enumerate(indicators):
+                grid.addWidget(indicator, item_index // 4, item_index % 4)
+            controls_layout.insertLayout(index, grid)
+            child_layout.deleteLater()
+            return
 
     def _find_layout_containing(self, layout: QLayout | None, widget: QWidget) -> QLayout | None:
         if layout is None:
