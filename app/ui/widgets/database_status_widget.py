@@ -7,7 +7,6 @@ from PySide6.QtGui import QMouseEvent, QPalette
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QWidget
 
 from app.infra.local_database import DatabaseHealthStatus, DatabaseHealthSummary
-from app.ui.fonts import get_app_font
 from app.ui.theme import Theme
 
 __all__ = ["DatabaseStatusWidget"]
@@ -25,8 +24,6 @@ class DatabaseStatusWidget(QWidget):
         self._icon_label.setObjectName("databaseHealthIcon")
         self._text_label = QLabel(self)
         self._text_label.setObjectName("databaseHealthText")
-        self._text_label.setFont(get_app_font())
-        self._icon_label.setFont(get_app_font())
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(theme.micro, 0, theme.micro, 0)
