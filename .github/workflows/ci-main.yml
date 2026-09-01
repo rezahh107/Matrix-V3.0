@@ -91,6 +91,12 @@ jobs:
       - name: Lint with ruff
         run: uv run --locked ruff check .
 
+      - name: Verify Black formatting
+        run: uv run --locked black --check app tests
+
+      - name: Run strict mypy
+        run: uv run --locked mypy --strict app/core app/infra app/ui tests
+
       - name: Run core pytest suite (Windows, includes CI guard tests)
         run: uv run --locked pytest tests/unit tests/infra tests/integration --maxfail=1 -q
 
@@ -141,9 +147,19 @@ jobs:
       - name: Generate deterministic UI render evidence
         run: uv run --locked python tools/render_ui_matrix.py --output-dir artifacts/ui-render-matrix
 
+      - name: Validate bounded High-DPI evidence
+        run: uv run --locked python tools/validate_ui_dpi.py --output-dir artifacts/ui-dpi
+
       - name: Upload UI render evidence
         uses: actions/upload-artifact@v4
         with:
           name: matrix-ui-render-evidence
           path: artifacts/ui-render-matrix
+          if-no-files-found: error
+
+      - name: Upload UI High-DPI evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: matrix-ui-dpi-evidence
+          path: artifacts/ui-dpi
           if-no-files-found: error
