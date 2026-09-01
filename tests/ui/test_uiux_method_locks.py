@@ -15,8 +15,10 @@ from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
     QFormLayout,
+    QScrollArea,
     QStyle,
     QStyleOptionComboBox,
+    QVBoxLayout,
     QWidget,
 )
 
@@ -55,6 +57,40 @@ def _assert_contained(widget: QWidget, ancestor: QWidget) -> None:
     rect = _mapped_rect(widget, ancestor)
     assert rect.width() > 0 and rect.height() > 0
     assert ancestor.rect().contains(rect)
+
+
+def _governing_scroll_area(widget: QWidget, surface: QWidget) -> QScrollArea | None:
+    current: QWidget | None = widget.parentWidget()
+    while current is not None:
+        if isinstance(current, QScrollArea):
+            if current is surface or surface.isAncestorOf(current):
+                return current
+            return None
+        if current is surface:
+            return None
+        current = current.parentWidget()
+    return None
+
+
+def _assert_scroll_reachable(
+    widget: QWidget, surface: QWidget, qapp: QApplication
+) -> None:
+    scroll = _governing_scroll_area(widget, surface)
+    assert scroll is not None, "critical control has no governing QScrollArea"
+    horizontal = scroll.horizontalScrollBar()
+    vertical = scroll.verticalScrollBar()
+    previous = (horizontal.value(), vertical.value())
+    try:
+        scroll.ensureWidgetVisible(widget, 0, 0)
+        qapp.processEvents()
+        viewport = scroll.viewport()
+        rect = _mapped_rect(widget, viewport)
+        assert rect.width() > 0 and rect.height() > 0
+        assert viewport.rect().contains(rect)
+    finally:
+        horizontal.setValue(previous[0])
+        vertical.setValue(previous[1])
+        qapp.processEvents()
 
 
 def _combo_arrow_rect(combo: QComboBox) -> QRect:
@@ -217,6 +253,62 @@ def test_ui_c2_surface_registry_is_id_based(qapp: QApplication) -> None:
     window.close()
 
 
+def test_scroll_aware_oracle_reaches_target_outside_initial_viewport(
+    qapp: QApplication,
+) -> None:
+    surface = QWidget()
+    surface.resize(240, 140)
+    surface_layout = QVBoxLayout(surface)
+    scroll = QScrollArea(surface)
+    scroll.setWidgetResizable(True)
+    surface_layout.addWidget(scroll)
+
+    content = QWidget()
+    content_layout = QVBoxLayout(content)
+    spacer = QWidget(content)
+    spacer.setFixedHeight(320)
+    target = QWidget(content)
+    target.setFixedSize(120, 32)
+    content_layout.addWidget(spacer)
+    content_layout.addWidget(target)
+    scroll.setWidget(content)
+
+    surface.show()
+    qapp.processEvents()
+    initial_rect = _mapped_rect(target, scroll.viewport())
+    assert not scroll.viewport().rect().contains(initial_rect)
+    initial_scroll = scroll.verticalScrollBar().value()
+
+    _assert_scroll_reachable(target, surface, qapp)
+
+    assert scroll.verticalScrollBar().value() == initial_scroll
+    surface.close()
+
+
+def test_scroll_aware_oracle_rejects_target_that_cannot_fit_viewport(
+    qapp: QApplication,
+) -> None:
+    surface = QWidget()
+    surface.resize(240, 140)
+    surface_layout = QVBoxLayout(surface)
+    scroll = QScrollArea(surface)
+    scroll.setWidgetResizable(True)
+    surface_layout.addWidget(scroll)
+
+    content = QWidget()
+    content_layout = QVBoxLayout(content)
+    target = QWidget(content)
+    target.setFixedSize(120, 240)
+    content_layout.addWidget(target)
+    scroll.setWidget(content)
+
+    surface.show()
+    qapp.processEvents()
+    with pytest.raises(AssertionError):
+        _assert_scroll_reachable(target, surface, qapp)
+    surface.close()
+
+
 @pytest.mark.parametrize("size", [(1200, 800), (960, 640)])
 @pytest.mark.parametrize("language", [Language.FA, Language.EN])
 def test_ui_bidi_and_primary_actions_are_contained(
@@ -259,12 +351,12 @@ def test_ui_bidi_and_primary_actions_are_contained(
     allocate = window._workspace_surfaces["allocate"]
     combo = window.findChild(QComboBox, "academicYearInput")
     assert combo is not None and combo.isVisibleTo(allocate)
-    _assert_contained(combo, allocate)
+    _assert_scroll_reachable(combo, allocate, qapp)
     arrow = _combo_arrow_rect(combo)
     assert arrow.width() > 0 and arrow.height() > 0
     assert combo.rect().contains(arrow)
     assert window._picker_students.isVisibleTo(allocate)
-    _assert_contained(window._picker_students, allocate)
+    _assert_scroll_reachable(window._picker_students, allocate, qapp)
 
     navigation = window._workspace_navigation
     toggle = window._diagnostics_toggle
