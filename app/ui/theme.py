@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor, QPalette
+from PySide6.QtGui import QColor, QFont, QPalette
 from PySide6.QtWidgets import QApplication, QPushButton, QWidget
 
 from app.ui.fonts import create_app_font
@@ -292,8 +292,38 @@ class Theme:
         return QColor(self.colors.diagnostic_text)
 
 
+def _snapshot_existing_widget_fonts() -> tuple[tuple[QWidget, QFont], ...]:
+    """Snapshot current QWidget fonts before the application family changes."""
+
+    return tuple((widget, QFont(widget.font())) for widget in QApplication.allWidgets())
+
+
+def _rebind_existing_widget_families(
+    snapshots: tuple[tuple[QWidget, QFont], ...],
+    *,
+    previous_family: str,
+    target_family: str,
+) -> None:
+    """Rebind only widgets still carrying the previous application family."""
+
+    previous_key = previous_family.casefold()
+    target_key = target_family.casefold()
+    if not previous_key or not target_key or previous_key == target_key:
+        return
+
+    for widget, captured_font in snapshots:
+        if captured_font.family().casefold() != previous_key:
+            continue
+        rebound = QFont(captured_font)
+        rebound.setFamily(target_family)
+        widget.setFont(rebound)
+
+
 def apply_global_font(app: QApplication) -> None:
-    """Apply the one application base-font authority for the current UI direction."""
+    """Apply the directional base family and rebind eligible existing widgets."""
+
+    previous_font = QFont(app.font())
+    existing_widget_fonts = _snapshot_existing_widget_fonts()
 
     is_rtl = app.layoutDirection() == Qt.LayoutDirection.RightToLeft
     font = create_app_font(
@@ -302,6 +332,11 @@ def apply_global_font(app: QApplication) -> None:
         prefer_vazir=is_rtl,
     )
     app.setFont(font)
+    _rebind_existing_widget_families(
+        existing_widget_fonts,
+        previous_family=previous_font.family(),
+        target_family=font.family(),
+    )
 
 
 def apply_palette(app: QApplication, theme: Theme) -> None:
