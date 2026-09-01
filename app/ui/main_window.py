@@ -88,11 +88,10 @@ class MainWindow(_v1.MainWindow):
 
     # ------------------------------------------------------------ C2 surfaces
     def _resolve_tab_container(self, marker: QWidget) -> QWidget | None:
-        current: QWidget | None = marker
-        while current is not None:
-            if current.parentWidget() is self._tabs:
-                return current
-            current = current.parentWidget()
+        for index in range(self._tabs.count()):
+            page = self._tabs.widget(index)
+            if page is not None and (marker is page or page.isAncestorOf(marker)):
+                return page
         return None
 
     def _discover_workspace_surfaces(self) -> dict[str, QWidget]:
