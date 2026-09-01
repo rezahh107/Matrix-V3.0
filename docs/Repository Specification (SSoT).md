@@ -1,7 +1,7 @@
 # Repository Specification (SSoT)
 
 **Version**: 2025-11-28  
-**Coverage**: Complete – Core (`app/core`), Infra (`app/infra`), UI (`app/ui`), plus LAW / Technical SSoT / Policy documents / architecture docs / README (certain) [code][LAW][TECH][README]
+**Coverage**: Complete – Core (`app/core`), Infra (`app/infra`), UI (`app/ui`), plus LAW / Technical SSoT / Policy documents / architecture docs / UI presentation authority / README (certain) [code][LAW][TECH][README]
 
 ---
 
@@ -46,6 +46,7 @@ The repository follows a layered Policy-First architecture: (certain) [TECH][AGE
   - `main_window.py` → main workflow: file selection, running matrix/allocation, displaying QA and history. (certain) [app/ui/main_window.py]
   - `history_dialog.py`, `history_metrics_dialog.py` → browsing past runs and metrics from LocalDatabase. (certain) [app/ui/history_dialog.py][app/ui/history_metrics_dialog.py]
   - `widgets/database_status_widget.py`, `widgets/status_bar.py`, `widgets/file_picker.py` → DB health indicator, status bar, and unified file picker. (certain) [app/ui/widgets/*]
+  - `docs/UI_PRESENTATION_AUTHORITY.md` → presentation-only authority for Native/Styled/Hybrid visual ownership of materially used Qt control families; subordinate to LAW/Technical SSoT and this repository layering model. (certain) [docs/UI_PRESENTATION_AUTHORITY.md]
 
 - **Policy Layer** — Policy is injected only via `config/policy.json` (or YAML) and `PolicyConfig` in Core: (certain) [TECH][config/policy.json][app/core/policy_loader.py]
 
@@ -149,6 +150,8 @@ This repository-level spec aligns with the following hierarchy: (certain) [LAW][
 3. **This document** – mapping LAW/TECH invariants to concrete repo files and behaviors.  
 4. Source code + tests – actual implementation of the invariants.  
 5. QA workbooks + history – runtime evidence for audit and CodeSurgeon.
+
+For presentation-only questions inside `app/ui/**`, `docs/UI_PRESENTATION_AUTHORITY.md` specifies Native/Styled/Hybrid visual ownership. It is subordinate to LAW/TECH and to this repository-level architecture/specification and does not alter domain precedence. (certain) [docs/UI_PRESENTATION_AUTHORITY.md]
 
 Where code conflicts with LAW/TECH, **LAW/TECH and this spec are authoritative** and the implementation is treated as a discrepancy. (certain) [LAW][TECH][AGENTS.md]
 
@@ -444,6 +447,11 @@ This section summarizes the roles and responsibilities of key modules. For line-
   - `DatabaseStatusWidget` → visual DB health indicator. (certain)
   - `ThemedStatusBar` → hosts logs and DB status widget. (certain)
   - `FilePicker` → reusable widget for file paths. (certain)
+
+#### 3.3.4 Presentation ownership authority
+
+- **Role**: `docs/UI_PRESENTATION_AUTHORITY.md` classifies materially used Qt control families as `STYLED`, `NATIVE`, or explicitly partitioned `HYBRID` so later UI work does not invent conflicting visual ownership. (certain) [docs/UI_PRESENTATION_AUTHORITY.md]
+- **Precedence**: Presentation-only; subordinate to LAW/Technical SSoT and the Core/Infra/UI architecture in this specification. It does not create domain invariants or executable enforcement. (certain) [docs/UI_PRESENTATION_AUTHORITY.md]
 
 ---
 
