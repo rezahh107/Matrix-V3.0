@@ -63,7 +63,7 @@ QLabel[databaseHealth="ok"] { color: {success}; }
 QLabel[databaseHealth="warning"] { color: {warning}; }
 QLabel[databaseHealth="error"] { color: {error}; }
 QLabel[settingEnabled="true"], QLabel[settingEnabled="false"] { background-color: transparent; color: {text_secondary}; border: none; font-size: {caption_size}pt; }
-QStatusBar { background-color: {surface_primary}; color: {text_primary}; border-top: 1px solid {boundary_subtle}; min-height: 28px; }
+QStatusBar { background-color: {surface_primary}; color: {text_primary}; border-top: 1px solid {boundary_subtle}; }
 QStatusBar::item { border: none; }
 QFrame#busyOverlay { background-color: {surface_primary}; border: 1px solid {boundary_subtle}; }
 QLabel#busyOverlayLabel { background-color: transparent; color: {text_primary}; font-size: {subtitle_size}pt; font-weight: 600; }
