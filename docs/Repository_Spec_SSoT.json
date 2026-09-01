@@ -39,9 +39,6 @@
       "Policy-Eligibility-Matrix-v1.0.3.md",
       "docs/System_Architecture_Blueprint_Smart_Student_Allocation_v1.0.md",
       "README.md"
-    ],
-    "presentation_docs": [
-      "docs/UI_PRESENTATION_AUTHORITY.md"
     ]
   },
   "invariants": [
