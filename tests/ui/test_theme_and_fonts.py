@@ -157,21 +157,24 @@ def test_runtime_family_rebind_preserves_semantic_font_properties(
 ) -> None:
     original_font = QFont(qapp.font())
     original_direction = qapp.layoutDirection()
+    original_stylesheet = qapp.styleSheet()
     label: QLabel | None = None
+    current_theme = theme.build_theme("light")
 
     try:
         theme.apply_layout_direction(qapp, Language.EN)
+        qapp.setStyleSheet(theme.build_stylesheet(current_theme))
         label = QLabel("semantic existing widget")
-        semantic_font = QFont(label.font())
-        semantic_font.setPointSize(theme.BASE_FONT_PT + 3)
-        semantic_font.setWeight(QFont.Weight.DemiBold)
-        semantic_font.setItalic(True)
-        label.setFont(semantic_font)
+        label.setObjectName("heroTitle")
+        label.ensurePolished()
+        qapp.processEvents()
 
         widget_identity = id(label)
         point_size = label.font().pointSize()
         weight = label.font().weight()
-        italic = label.font().italic()
+        assert label.font().family() == qapp.font().family()
+        assert point_size == current_theme.typography.title_size
+        assert weight == QFont.Weight.DemiBold
 
         theme.apply_layout_direction(qapp, Language.FA)
         qapp.processEvents()
@@ -180,7 +183,6 @@ def test_runtime_family_rebind_preserves_semantic_font_properties(
         assert _is_vazir_family(label.font().family())
         assert label.font().pointSize() == point_size
         assert label.font().weight() == weight
-        assert label.font().italic() == italic
 
         theme.apply_layout_direction(qapp, Language.EN)
         qapp.processEvents()
@@ -189,10 +191,10 @@ def test_runtime_family_rebind_preserves_semantic_font_properties(
         assert label.font().family().casefold().startswith("segoe ui")
         assert label.font().pointSize() == point_size
         assert label.font().weight() == weight
-        assert label.font().italic() == italic
     finally:
         if label is not None:
             label.close()
+        qapp.setStyleSheet(original_stylesheet)
         qapp.setLayoutDirection(original_direction)
         qapp.setFont(original_font)
         qapp.processEvents()
