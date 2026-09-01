@@ -7,11 +7,11 @@ import pytest
 try:
     from PySide6.QtGui import QColor, QPalette
     from PySide6.QtWidgets import QApplication, QHBoxLayout, QPushButton
+
+    from app.ui import theme
+    from app.ui.widgets import FilePicker
 except ImportError as exc:
     pytest.skip(f"PySide6 unavailable: {exc}", allow_module_level=True)
-
-from app.ui import theme
-from app.ui.widgets import FilePicker
 
 
 _CANONICAL_STYLESHEET_TOKENS = (
