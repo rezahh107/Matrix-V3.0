@@ -189,7 +189,6 @@ class MainWindow(_base.MainWindow):
         self._default_splitter_ratio_scheduled = False
         super().__init__()
         self._register_shell_bindings()
-        self._compact_persistent_shell()
         self._refresh_reviewed_surface_texts()
 
     def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 - Qt signature
@@ -536,6 +535,7 @@ class MainWindow(_base.MainWindow):
 
     def _build_status_bar(self) -> None:
         super()._build_status_bar()
+        self._compact_persistent_shell()
         self._update_status_bar_state("ready")
 
     def _update_status_bar_state(self, key: str) -> None:
