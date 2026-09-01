@@ -178,6 +178,25 @@ def test_font_consumer_inventory_has_no_independent_base_family_owners() -> None
     assert forbidden_direct_family_assignments == []
 
 
+def test_vazir_font_pipeline_document_matches_current_authority() -> None:
+    document = (ROOT / "docs/vazir-font-pipeline.md").read_text(encoding="utf-8")
+    required_markers = (
+        "docs/UI_DESIGN_CONTRACT.md",
+        "QFontDatabase.addApplicationFontFromData()",
+        "FA / RTL",
+        "EN / LTR",
+        "Segoe UI",
+        "10pt",
+        "_materialize_embedded_font(target_dir)",
+        "VAZIR_FONT_PATHS",
+        "production startup برای این کار **هیچ TTFای داخل source/install directory نمی‌نویسد**",
+        "production مسیرهای `Downloads` یا `LocalAppData` را به‌طور خودکار scan یا copy نمی‌کند",
+    )
+    assert all(marker in document for marker in required_markers)
+    assert "Matrix2" not in document
+    assert "ensure_vazir_local_fonts()` پوشهٔ `app/ui/fonts/` را می‌سازد، اگر TTFی" not in document
+
+
 def test_widgets_created_without_local_font_inherit_application_font(
     qapp: QApplication,
 ) -> None:
