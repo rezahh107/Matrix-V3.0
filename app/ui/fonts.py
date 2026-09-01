@@ -217,20 +217,24 @@ def _select_fallback_family(preferred: str | None) -> str:
 
 
 def get_app_font(point_size: int | None = None) -> QFont:
-    """Return a copy of the active QApplication font, optionally changing only size.
+    """Return a compatibility font without becoming a base-family authority.
 
-    This is a compatibility/semantic helper, not a language or family selector.
-    Ordinary widgets should inherit the QApplication font without calling it.
+    With no semantic size request this returns an unresolved ``QFont`` so legacy
+    ``setFont(get_app_font())`` calls keep Qt/QApplication inheritance instead of
+    snapshotting the current FA/EN family. When a semantic size is requested, a
+    copy of the active application font is used and only that size is changed.
     """
 
     from PySide6.QtGui import QFont
     from PySide6.QtWidgets import QApplication
 
+    if point_size is None:
+        return QFont()
+
     app = QApplication.instance()
     if isinstance(app, QApplication):
         font = QFont(app.font())
-        if point_size is not None:
-            font.setPointSize(point_size)
+        font.setPointSize(point_size)
         return font
     return create_app_font(point_size=point_size)
 
