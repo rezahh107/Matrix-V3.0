@@ -1,5 +1,7 @@
 # Theme stylesheet crash analysis (str.format KeyError)
 
+> **Status: HISTORICAL / RESOLVED.** This report records a prior `str.format`-based stylesheet failure. The current `app/ui/theme.py` uses targeted token replacement rather than `str.format`, so the crash mechanism described below is not the current runtime state. For current Qt visual-ownership boundaries, use `docs/UI_PRESENTATION_AUTHORITY.md`.
+
 > **منبع حقیقت قوانین تخصیص (LAW v3.0 / Technical SSoT v3.0):** این سند راهنما/تاریخچه است؛ تمام قواعد ثابت (کلیدهای join، رتبه‌بندی، انواع منتور/دانش‌آموز، گیت ظرفیت، trace و ...) فقط در `docs/LAW_Smart_Student_Allocation_v3.0.md` و `docs/Technical_SSoT_Smart_Student_Allocation_v3.0-TECH.md` معتبرند. در صورت هر تعارض، محتوای این دو فایل حاکم است و نکات قدیمی این سند به‌عنوان LEGACY خوانده شوند.
 ## Crash surface
 - Entry path: `MainWindow.__init__` calls `apply_theme(app, self._theme)`, which loads `styles.qss` and runs `qss.format(**_token_mapping(theme))`. This explodes with `KeyError: '\n    background-color'` when raw CSS braces are fed to `str.format`.
