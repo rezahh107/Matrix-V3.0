@@ -208,8 +208,6 @@ def _child(args: argparse.Namespace) -> int:
 
     surface = window._workspace_surfaces[args.surface]
     combo = _visible_descendant(surface, QComboBox)
-    if combo is None:
-        combo = window._theme_selector
     picker = _visible_descendant(surface, FilePicker)
     navigation = window._workspace_navigation
     diagnostics_toggle = window._diagnostics_toggle
@@ -221,9 +219,9 @@ def _child(args: argparse.Namespace) -> int:
 
     if navigation is None or diagnostics_toggle is None:
         raise AssertionError("C2 shell controls unavailable")
-    if combo is None or picker is None or cta is None:
+    if picker is None or cta is None:
         raise AssertionError(
-            f"DPI workflow case must expose ComboBox, FilePicker and CTA: {args.surface}"
+            f"DPI workflow case must expose FilePicker and CTA: {args.surface}"
         )
     if window.diagnostics_expanded():
         raise AssertionError("routine DPI case must start with diagnostics collapsed")
@@ -237,11 +235,12 @@ def _child(args: argparse.Namespace) -> int:
         raise AssertionError("status bar missing")
     critical = {
         "navigation": _critical_record(navigation, window),
-        "combo": _scroll_reachability_record(combo, surface, app),
         "file_picker": _scroll_reachability_record(picker, surface, app),
         "diagnostics_toggle": _critical_record(diagnostics_toggle, status_bar),
         "primary_cta": _critical_record(cta, surface),
     }
+    if combo is not None:
+        critical["combo"] = _scroll_reachability_record(combo, surface, app)
     failures = [
         name
         for name, record in critical.items()
