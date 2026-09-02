@@ -9,9 +9,9 @@ import struct
 import subprocess
 from typing import Any
 
-import pytest
 import PySide6
-from PySide6.QtCore import QByteArray, Qt, qVersion
+import pytest
+from PySide6.QtCore import QByteArray, qVersion
 from PySide6.QtGui import QFont, QFontDatabase, QFontInfo, QFontMetrics, QRawFont
 from PySide6.QtWidgets import (
     QApplication,
