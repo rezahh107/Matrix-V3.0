@@ -7,11 +7,13 @@ import platform
 import re
 import struct
 import subprocess
+import sys
+from pathlib import Path
 from typing import Any
 
 import PySide6
 import pytest
-from PySide6.QtCore import QByteArray, qVersion
+from PySide6.QtCore import QByteArray, QChar, QSettings, qVersion
 from PySide6.QtGui import QFont, QFontDatabase, QFontInfo, QFontMetrics, QRawFont
 from PySide6.QtWidgets import (
     QApplication,
@@ -28,6 +30,8 @@ from app.ui import fonts
 from app.ui.i18n import Language
 from app.ui.main_window import MainWindow
 from app.ui.widgets.file_picker import FilePicker
+
+PROBE_MARKER = "FONT_RUNTIME_PROBE_JSON="
 
 
 def _enum_value(value: Any) -> int | str:
@@ -63,12 +67,13 @@ def _font_info(font: QFont) -> dict[str, object]:
     }
 
 
-def _font_pair(widget: QWidget) -> dict[str, object]:
+def _font_pair(widget: QWidget, role: str) -> dict[str, object]:
     widget.ensurePolished()
     font = widget.font()
     return {
         "widget_class": type(widget).__name__,
         "object_name": widget.objectName(),
+        "visible_text_sample_or_role": role,
         "requested": {
             "family": font.family(),
             "pointSize": font.pointSize(),
@@ -157,47 +162,42 @@ def _required_widget_map(window: MainWindow) -> dict[str, QWidget]:
 
 def _glyph_evidence(font: QFont) -> dict[str, object]:
     chars = ["م", "ی", "ژ", "ک", "گ"]
-    result: dict[str, object] = {"sample": "سلام فارسی"}
-
     metrics = QFontMetrics(font)
     metrics_result: dict[str, object] = {}
     for char in chars:
         row: dict[str, object] = {}
         try:
-            row["inFont"] = bool(metrics.inFont(char))
+            row["inFont_QChar"] = bool(metrics.inFont(QChar(char)))
         except (AttributeError, TypeError) as exc:
-            row["inFont"] = f"GLYPH_API_UNAVAILABLE:{type(exc).__name__}"
+            row["inFont_QChar"] = f"GLYPH_API_UNAVAILABLE:{type(exc).__name__}"
         try:
             row["inFontUcs4"] = bool(metrics.inFontUcs4(ord(char)))
         except (AttributeError, TypeError) as exc:
             row["inFontUcs4"] = f"GLYPH_API_UNAVAILABLE:{type(exc).__name__}"
         metrics_result[char] = row
-    result["QFontMetrics"] = metrics_result
 
+    result: dict[str, object] = {
+        "sample": "سلام فارسی",
+        "QFontMetrics": metrics_result,
+    }
     try:
         raw = QRawFont.fromFont(font)
         raw_result: dict[str, object] = {
             "familyName": raw.familyName(),
             "styleName": raw.styleName(),
             "isValid": raw.isValid(),
-            "supports": {},
+            "supportsCharacter_ucs4": {},
         }
-        supports = raw_result["supports"]
-        assert isinstance(supports, dict)
+        support = raw_result["supportsCharacter_ucs4"]
+        assert isinstance(support, dict)
         for char in chars:
             try:
-                supports[char] = bool(raw.supportsCharacter(char))
-            except TypeError:
-                try:
-                    supports[char] = bool(raw.supportsCharacter(ord(char)))
-                except (AttributeError, TypeError) as exc:
-                    supports[char] = f"GLYPH_API_UNAVAILABLE:{type(exc).__name__}"
-            except AttributeError as exc:
-                supports[char] = f"GLYPH_API_UNAVAILABLE:{type(exc).__name__}"
+                support[char] = bool(raw.supportsCharacter(ord(char)))
+            except (AttributeError, TypeError) as exc:
+                support[char] = f"GLYPH_API_UNAVAILABLE:{type(exc).__name__}"
         result["QRawFont"] = raw_result
     except (AttributeError, TypeError) as exc:
         result["QRawFont"] = f"GLYPH_API_UNAVAILABLE:{type(exc).__name__}"
-
     return result
 
 
@@ -269,18 +269,14 @@ def _transition_record(
             "resolved_QFontInfo": _font_info(app_font),
         },
         "widget_object_ids": {role: id(widget) for role, widget in widgets.items()},
-        "widgets": {role: _font_pair(widget) for role, widget in widgets.items()},
+        "widgets": {role: _font_pair(widget, role) for role, widget in widgets.items()},
         "glyph_support_primary_font": _glyph_evidence(app_font),
         "override_evidence": _active_override_evidence(app, widgets),
     }
 
 
-def test_font_runtime_resolution_probe(qapp: QApplication) -> None:
-    checkout_head = subprocess.check_output(
-        ["git", "rev-parse", "HEAD"],
-        text=True,
-    ).strip()
-
+def _collect_payload(app: QApplication) -> dict[str, object]:
+    checkout_head = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
     embedded = fonts._embedded_font_bytes()
     production_diagnostics = fonts.collect_font_diagnostics()
 
@@ -293,18 +289,14 @@ def test_font_runtime_resolution_probe(qapp: QApplication) -> None:
 
     window = MainWindow()
     window.show()
-    qapp.processEvents()
+    app.processEvents()
     widgets = _required_widget_map(window)
 
     transitions: list[dict[str, object]] = []
     for index, language in enumerate((Language.FA, Language.EN, Language.FA), start=1):
-        transitions.append(
-            _transition_record(qapp, window, widgets, language, f"FA_EN_FA_{index}")
-        )
+        transitions.append(_transition_record(app, window, widgets, language, f"FA_EN_FA_{index}"))
     for index, language in enumerate((Language.EN, Language.FA, Language.EN), start=1):
-        transitions.append(
-            _transition_record(qapp, window, widgets, language, f"EN_FA_EN_{index}")
-        )
+        transitions.append(_transition_record(app, window, widgets, language, f"EN_FA_EN_{index}"))
 
     payload = {
         "probe_contract": "MATRIX-C2V2-F01-WINDOWS-FONT-RUNTIME-EVIDENCE",
@@ -320,6 +312,7 @@ def test_font_runtime_resolution_probe(qapp: QApplication) -> None:
             "PySide6_version": PySide6.__version__,
             "Qt_version": qVersion(),
             "QT_QPA_PLATFORM": os.environ.get("QT_QPA_PLATFORM", ""),
+            "qt_platform_name": app.platformName(),
             "process_architecture": {
                 "machine": platform.machine(),
                 "pointer_bits": struct.calcsize("P") * 8,
@@ -337,15 +330,63 @@ def test_font_runtime_resolution_probe(qapp: QApplication) -> None:
         "family_database": _family_database_evidence(),
         "transitions": transitions,
     }
+    window.close()
+    app.processEvents()
+    return payload
 
-    compact = json.dumps(
-        payload,
-        ensure_ascii=False,
-        separators=(",", ":"),
-        sort_keys=True,
-        default=str,
+
+def _child_probe() -> int:
+    app = QApplication.instance() or QApplication([])
+    app.setOrganizationName("MatrixFontRuntimeProbe")
+    app.setApplicationName("MatrixFontRuntimeProbe")
+    settings = QSettings()
+    settings.clear()
+    settings.sync()
+    try:
+        payload = _collect_payload(app)
+        print(
+            PROBE_MARKER
+            + json.dumps(
+                payload,
+                ensure_ascii=False,
+                separators=(",", ":"),
+                sort_keys=True,
+                default=str,
+            )
+        )
+        return 0
+    finally:
+        settings.clear()
+        settings.sync()
+        app.closeAllWindows()
+        app.processEvents()
+
+
+def test_font_runtime_resolution_probe(qapp: QApplication) -> None:
+    del qapp
+    result = subprocess.run(
+        [sys.executable, str(Path(__file__).resolve()), "--child-probe"],
+        cwd=Path(__file__).resolve().parents[2],
+        env=os.environ.copy(),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
     )
-    pytest.fail(
-        "EXPECTED_FONT_EVIDENCE_CAPTURE\n"
-        f"FONT_RUNTIME_PROBE_JSON={compact}"
+    marker_line = next(
+        (line for line in result.stdout.splitlines() if line.startswith(PROBE_MARKER)),
+        None,
     )
+    if marker_line is None:
+        pytest.fail(
+            "FONT_PROBE_CHILD_FAILED\n"
+            f"returncode={result.returncode}\n"
+            f"stdout={result.stdout[-4000:]}\n"
+            f"stderr={result.stderr[-4000:]}"
+        )
+    pytest.fail("EXPECTED_FONT_EVIDENCE_CAPTURE\n" + marker_line)
+
+
+if __name__ == "__main__" and "--child-probe" in sys.argv:
+    raise SystemExit(_child_probe())
