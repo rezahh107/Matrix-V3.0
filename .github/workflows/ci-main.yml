@@ -157,3 +157,103 @@ jobs:
           name: matrix-ui-dpi-evidence
           path: artifacts/ui-dpi
           if-no-files-found: error
+
+  font-lifecycle-diagnostics:
+    name: TEMP — Windows font lifecycle probes
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      QT_QPA_PLATFORM: offscreen
+      PYTEST_QT_API: pyside6
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+
+      - name: Verify exact checkout identity
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: |
+          actual_sha="$(git rev-parse HEAD)"
+          printf 'Expected SHA: %s\n' "$EXPECTED_SHA"
+          printf 'Actual SHA:   %s\n' "$actual_sha"
+          test "$actual_sha" = "$EXPECTED_SHA"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.7"
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+            .python-version
+
+      - name: Set up Python
+        run: uv python install
+
+      - name: Sync locked environment
+        run: uv sync --locked
+
+      - name: Probe suspect node alone x20
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          1..20 | ForEach-Object {
+            Write-Host "PROBE suspect-alone iteration=$_"
+            uv run --locked pytest -q tests/ui/test_mentor_pool_model.py::test_mentor_pool_model_can_be_instantiated_with_standard_item_model
+            if ($LASTEXITCODE -ne 0) { throw "suspect-alone failed at iteration $_ exit=$LASTEXITCODE" }
+          }
+
+      - name: Probe one registration plus suspect x20
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          1..20 | ForEach-Object {
+            Write-Host "PROBE one-registration iteration=$_"
+            uv run --locked pytest -q tests/ui/test_font_materialization.py::test_embedded_vazirmatn_registers_in_memory_without_disk_write tests/ui/test_mentor_pool_model.py::test_mentor_pool_model_can_be_instantiated_with_standard_item_model
+            if ($LASTEXITCODE -ne 0) { throw "one-registration failed at iteration $_ exit=$LASTEXITCODE" }
+          }
+
+      - name: Probe double registration plus suspect x20
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          1..20 | ForEach-Object {
+            Write-Host "PROBE double-registration iteration=$_"
+            uv run --locked pytest -q tests/ui/test_font_materialization.py::test_embedded_vazirmatn_registers_in_memory_without_disk_write tests/ui/test_font_materialization.py::test_embedded_variable_vazirmatn_preserves_representative_persian_glyphs tests/ui/test_mentor_pool_model.py::test_mentor_pool_model_can_be_instantiated_with_standard_item_model
+            if ($LASTEXITCODE -ne 0) { throw "double-registration failed at iteration $_ exit=$LASTEXITCODE" }
+          }
+
+      - name: Probe one registration plus mentor sequence x3
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          1..3 | ForEach-Object {
+            Write-Host "PROBE one-registration-mentor-sequence iteration=$_"
+            uv run --locked pytest -q tests/ui/test_font_materialization.py::test_embedded_vazirmatn_registers_in_memory_without_disk_write tests/ui/test_main_window_mentor_pool_integration.py tests/ui/test_mentor_pool_dialog.py tests/ui/test_mentor_pool_model.py::test_mentor_pool_model_can_be_instantiated_with_standard_item_model
+            if ($LASTEXITCODE -ne 0) { throw "one-registration-mentor-sequence failed at iteration $_ exit=$LASTEXITCODE" }
+          }
+
+      - name: Probe double registration plus mentor sequence x3
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          1..3 | ForEach-Object {
+            Write-Host "PROBE double-registration-mentor-sequence iteration=$_"
+            uv run --locked pytest -q tests/ui/test_font_materialization.py::test_embedded_vazirmatn_registers_in_memory_without_disk_write tests/ui/test_font_materialization.py::test_embedded_variable_vazirmatn_preserves_representative_persian_glyphs tests/ui/test_main_window_mentor_pool_integration.py tests/ui/test_mentor_pool_dialog.py tests/ui/test_mentor_pool_model.py::test_mentor_pool_model_can_be_instantiated_with_standard_item_model
+            if ($LASTEXITCODE -ne 0) { throw "double-registration-mentor-sequence failed at iteration $_ exit=$LASTEXITCODE" }
+          }
+
+      - name: Probe native oracle plus suspect x10
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          1..10 | ForEach-Object {
+            Write-Host "PROBE native-oracle-suspect iteration=$_"
+            uv run --locked pytest -q tests/ui/test_font_materialization.py::test_native_windows_variable_font_oracle tests/ui/test_mentor_pool_model.py::test_mentor_pool_model_can_be_instantiated_with_standard_item_model
+            if ($LASTEXITCODE -ne 0) { throw "native-oracle-suspect failed at iteration $_ exit=$LASTEXITCODE" }
+          }
