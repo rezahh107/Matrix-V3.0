@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel, QPushButton, QTabWidget, QTextBrowser, QWidget
 
@@ -9,6 +11,7 @@ from app.ui.preferences.diagnostics_catalog import CAPABILITIES, CAPABILITY_BY_K
 from app.ui.preferences.settings_dialog import DiagnosticsGuideDialog, UnifiedSettingsDialog
 from app.ui.texts import UiTranslator
 
+ROOT = Path(__file__).resolve().parents[2]
 EXPECTED_KEYS = (
     "enable_trace_debug_sheets",
     "enable_mentor_trace_debug",
@@ -30,6 +33,12 @@ def test_catalog_preserves_all_eight_capabilities_and_semantic_groups() -> None:
         assert grouped[key] == "diagnostics"
     assert grouped["enable_qa_pool_coverage_rules"] == "advanced"
     assert grouped["use_join_buckets"] == "advanced"
+
+
+def test_all_eight_defaults_remain_false() -> None:
+    values = UserSettings().to_dict()
+    assert set(values) == set(EXPECTED_KEYS)
+    assert all(values[key] is False for key in EXPECTED_KEYS)
 
 
 def test_each_capability_has_description_impact_and_full_guide(qapp) -> None:
@@ -152,3 +161,34 @@ def test_settings_roundtrip_keeps_existing_user_settings_contract(qapp) -> None:
     dialog = UnifiedSettingsDialog(prefs, original, UiTranslator("fa"))
     assert dialog.result_user_settings == original
     dialog.close()
+
+
+def test_rule_engine_backend_and_cli_remain_intentionally_present() -> None:
+    backend = (ROOT / "app/core/rule_engine.py").read_text(encoding="utf-8")
+    cli = (ROOT / "app/infra/cli_legacy.py").read_text(encoding="utf-8")
+    assert "def rank_rule_engine_candidates" in backend
+    assert "rule-engine" in cli
+    assert "sub.add_parser" in cli or "add_parser" in cli
+
+
+def test_canonical_developer_document_inventories_all_capabilities() -> None:
+    document = (ROOT / "docs/DEVELOPER_DIAGNOSTICS.md").read_text(encoding="utf-8")
+    assert "Rule Engine GUI" in document and "RETIRED" in document
+    assert "Rule Engine backend / CLI" in document and "INTENTIONALLY PRESERVED" in document
+    for capability in CAPABILITIES:
+        assert capability.title.en in document
+        assert capability.setting_key in document
+    assert "PoolCoverageFailures" in document
+    assert "PoolDiversityReport" in document
+    assert "disabled_by_setting" in document
+    assert "ADVANCED ALGORITHMIC / PERFORMANCE OPTION" in document
+
+
+def test_agents_contract_points_future_maintainers_to_diagnostics_inventory() -> None:
+    agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    assert "docs/DEVELOPER_DIAGNOSTICS.md" in agents
+    assert "Default OFF does" in agents or "default `False` / OFF" in agents
+    assert "Rule Engine GUI: RETIRED" in agents
+    assert "Rule Engine backend / CLI: INTENTIONALLY PRESERVED" in agents
+    for key in EXPECTED_KEYS:
+        assert key in agents
