@@ -1,9 +1,9 @@
 """Matrix application font authority.
 
-Production startup registers the embedded Vazirmatn bytes directly with Qt. It
-never needs to write into the application source/install directory and it does
-not scan user Downloads folders. Filesystem helpers remain only as explicit
-compatibility/development seams.
+Production startup registers the embedded Vazirmatn variable-font bytes directly
+with Qt. It never needs to write into the application source/install directory
+and it does not scan user Downloads folders. Filesystem helpers remain only as
+explicit compatibility/development seams.
 """
 
 from __future__ import annotations
@@ -14,10 +14,7 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from app.ui.assets.font_data_vazirmatn import (
-    VAZIRMATN_REGULAR_BASE64,
-    VAZIRMATN_REGULAR_TTF_BASE64,
-)
+from app.ui.assets.font_data_vazirmatn import VAZIRMATN_VARIABLE_TTF_BASE64
 
 if TYPE_CHECKING:
     from PySide6.QtGui import QFont
@@ -34,9 +31,9 @@ _EMBEDDED_FAMILIES: tuple[str, ...] | None = None
 
 
 def _embedded_font_bytes() -> bytes:
-    """Decode the bundled Vazirmatn payload without touching the filesystem."""
+    """Decode the bundled Vazirmatn variable-font payload without filesystem I/O."""
 
-    payload = VAZIRMATN_REGULAR_TTF_BASE64 or VAZIRMATN_REGULAR_BASE64
+    payload = VAZIRMATN_VARIABLE_TTF_BASE64
     if not payload:
         return b""
     try:
@@ -84,7 +81,7 @@ def _materialize_embedded_font(target_dir: Path) -> Path | None:
     if not data:
         return None
     target_dir.mkdir(parents=True, exist_ok=True)
-    target = target_dir / "Vazirmatn-Regular.ttf"
+    target = target_dir / "Vazirmatn-Variable.ttf"
     if not target.exists() or target.stat().st_size != len(data):
         target.write_bytes(data)
     return target
