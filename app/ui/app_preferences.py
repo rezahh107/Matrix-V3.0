@@ -10,6 +10,7 @@ from PySide6.QtCore import QByteArray, QSettings
 
 from app.core.policy_loader import load_policy
 from app.ui.i18n import Language
+from app.ui.run_output import default_output_root
 from app.ui.texts import DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES
 
 __all__ = ["AppPreferences"]
@@ -96,13 +97,33 @@ class AppPreferences:
     # ------------------------------------------------------------------ مسیرهای فایل
     @property
     def last_output_dir(self) -> str:
-        """آخرین پوشه خروجی انتخاب شده."""
+        """آخرین پوشه اجرای ایجادشده/قابل استفاده برای فرمان Open output."""
 
         return self._get_string("ui/last_output_dir")
 
     @last_output_dir.setter
     def last_output_dir(self, value: str) -> None:
         self._set_string("ui/last_output_dir", value)
+
+    @property
+    def output_root_dir(self) -> str:
+        """ریشه پایدار پوشه‌های اجرای خودکار GUI."""
+
+        stored = self._get_string("ui/output_root_dir").strip()
+        return stored or str(default_output_root())
+
+    @output_root_dir.setter
+    def output_root_dir(self, value: str) -> None:
+        cleaned = (value or "").strip()
+        if not cleaned:
+            raise ValueError("Output root directory must not be empty")
+        self._set_string("ui/output_root_dir", cleaned)
+
+    def reset_output_root_dir(self) -> None:
+        """حذف override و بازگشت به QStandardPaths DocumentsLocation."""
+
+        self._settings.remove("ui/output_root_dir")
+        self._settings.sync()
 
     @property
     def last_matrix_path(self) -> str:
