@@ -214,7 +214,6 @@ def _child(args: argparse.Namespace) -> int:
     cta = {
         "build": window._btn_build,
         "allocate": window._btn_allocate,
-        "rule-engine": window._btn_rule_engine,
     }.get(args.surface)
 
     if navigation is None or diagnostics_toggle is None:
