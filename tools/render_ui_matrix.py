@@ -21,7 +21,7 @@ from app.ui.theme import apply_theme, build_theme
 THEMES = ("light", "dark")
 LANGUAGES = (Language.FA, Language.EN)
 SIZES = ((1200, 800), (960, 640))
-SURFACE_IDS = ("build", "allocate", "rule-engine", "explain", "database")
+SURFACE_IDS = ("build", "allocate", "explain", "database")
 
 
 def _head() -> str:
@@ -72,7 +72,6 @@ def _primary_cta(window: MainWindow, surface_id: str) -> QWidget | None:
     return {
         "build": window._btn_build,
         "allocate": window._btn_allocate,
-        "rule-engine": window._btn_rule_engine,
     }.get(surface_id)
 
 
@@ -248,8 +247,11 @@ def render_matrix(output_dir: Path) -> list[dict[str, object]]:
                     window.deleteLater()
                     app.processEvents()
 
-        if len(captures) != 40:
-            raise AssertionError(f"expected 40 surface captures, got {len(captures)}")
+        expected_captures = len(THEMES) * len(LANGUAGES) * len(SIZES) * len(SURFACE_IDS)
+        if len(captures) != expected_captures:
+            raise AssertionError(
+                f"expected {expected_captures} surface captures, got {len(captures)}"
+            )
 
         QSettings().clear()
         QSettings().sync()
