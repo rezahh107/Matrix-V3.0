@@ -15,19 +15,28 @@ from PySide6.QtGui import QAction, QCloseEvent, QResizeEvent
 from PySide6.QtWidgets import (
     QApplication,
     QBoxLayout,
+    QDialog,
     QFormLayout,
     QFrame,
     QGridLayout,
     QHBoxLayout,
+    QLabel,
     QPushButton,
+    QScrollArea,
     QSizePolicy,
     QSpacerItem,
     QToolButton,
     QWidget,
+    QWidgetAction,
 )
+
+from app.infra.config_flags import save_user_settings
 
 from . import main_window_presentation_base as _v1
 from .i18n import Language
+from .preferences.settings_dialog import UnifiedSettingsDialog
+from .run_output import RunOutputWorkspace, create_run_workspace
+from .widgets.combo_chevron import install_combo_chevrons
 from .widgets.file_picker import FilePicker
 
 UnknownsPreflightResult = _v1.UnknownsPreflightResult
@@ -37,6 +46,7 @@ load_policy = _v1.load_policy
 
 _DIAGNOSTICS_STATE_KEY: Final[str] = "ui/main_splitter_v2"
 _COMPACT_WORKSPACE_WIDTH: Final[int] = 1000
+_MAX_WORKING_MEASURE: Final[int] = 1280
 # Geometry-specific exception: enough width for translated row utility commands
 # without forcing the file picker column to jump between rows.
 _ROW_UTILITY_WIDTH: Final[int] = 124
@@ -74,6 +84,9 @@ class MainWindow(_v1.MainWindow):
         self._diagnostics_toggle: QToolButton | None = None
         self._diagnostics_expanded = False
         self._support_toolbar_actions: dict[str, QAction] = {}
+        self._polish_text_labels: dict[str, QLabel] = {}
+        self._output_summary_labels: dict[str, QLabel] = {}
+        self._active_run_workspace: RunOutputWorkspace | None = None
         super().__init__()
         self._splitter.installEventFilter(self)
         # The prior presentation layer used a delayed 25% default. C2 always
@@ -82,10 +95,13 @@ class MainWindow(_v1.MainWindow):
         self._install_workspace_navigation()
         self._install_compact_operational_status()
         self._install_contextual_diagnostics()
+        self._install_product_polish_surfaces()
         self._remove_decorative_motion()
         self._apply_adaptive_workspace_geometry()
         self._refresh_settings_indicators()
         self._refresh_support_action_texts()
+        self._refresh_output_summaries()
+        install_combo_chevrons(self)
 
     # ------------------------------------------------------------ C2 surfaces
     def _resolve_tab_container(self, marker: QWidget) -> QWidget | None:
@@ -210,8 +226,6 @@ class MainWindow(_v1.MainWindow):
     def _install_compact_operational_status(self) -> None:
         if self._status_bar is None:
             return
-        # Stage and progress move out of diagnostics so routine work always has
-        # a compact operational summary even when the deep panel is collapsed.
         self._stage_badge.setObjectName("stageBadge")
         self._stage_badge.setMaximumWidth(170)
         self._progress.setMaximumWidth(120)
@@ -232,9 +246,6 @@ class MainWindow(_v1.MainWindow):
         self._diagnostics_pane = pane
         self._splitter.setCollapsible(0, False)
         self._splitter.setCollapsible(1, True)
-
-        # Settings/history become global toolbar commands. Their legacy buttons
-        # are hidden to avoid duplicate first-class controls in diagnostics.
         self._btn_settings.hide()
         self._btn_history_metrics.hide()
 
@@ -250,22 +261,18 @@ class MainWindow(_v1.MainWindow):
         if self._status_bar is not None:
             self._status_bar.addPermanentWidget(toggle)
 
-        # Before a top-level show(), isVisible() is false even for children that
-        # are not explicitly hidden. Set the hidden property directly so legacy
-        # splitter state can never surface diagnostics on routine C2 startup.
         pane.hide()
         self._diagnostics_expanded = False
         self.set_diagnostics_expanded(False)
 
     def _diagnostics_label(self) -> str:
-        return "عیب‌یابی" if self._language is Language.FA else "Diagnostics"
+        return self._t("diagnostics.label", "Diagnostics")
 
     def set_diagnostics_expanded(self, expanded: bool) -> None:
         pane = self._diagnostics_pane
         if pane is None:
             return
         expanded = bool(expanded)
-
         if expanded:
             saved = QSettings().value(_DIAGNOSTICS_STATE_KEY)
             restored = (
@@ -279,19 +286,11 @@ class MainWindow(_v1.MainWindow):
                 diagnostics = max(160, round(total * 0.28))
                 self._splitter.setSizes([max(1, total - diagnostics), diagnostics])
         else:
-            # Persist only an intentionally expanded C2 geometry. Hiding first
-            # during startup must never promote legacy `ui/main_splitter` state.
             if self._diagnostics_expanded and not pane.isHidden():
-                QSettings().setValue(
-                    _DIAGNOSTICS_STATE_KEY, self._splitter.saveState()
-                )
+                QSettings().setValue(_DIAGNOSTICS_STATE_KEY, self._splitter.saveState())
             pane.hide()
-
         self._diagnostics_expanded = expanded
-        if (
-            self._diagnostics_toggle is not None
-            and self._diagnostics_toggle.isChecked() != expanded
-        ):
+        if self._diagnostics_toggle is not None and self._diagnostics_toggle.isChecked() != expanded:
             self._diagnostics_toggle.blockSignals(True)
             self._diagnostics_toggle.setChecked(expanded)
             self._diagnostics_toggle.blockSignals(False)
@@ -309,6 +308,26 @@ class MainWindow(_v1.MainWindow):
         super()._build_ribbon()
         if self._toolbar is None or self._support_toolbar_actions:
             return
+
+        # Keep workflow QAction objects and shortcuts on the window, but remove
+        # their duplicate first-class toolbar presentation. Execution remains in
+        # the fixed CTA footer; these shortcuts still execute rather than navigate.
+        for key in ("build", "allocate", "mentor_pool", "rule_engine", "prefs", "database"):
+            action = self._toolbar_actions.get(key)
+            if action is not None and action in self._toolbar.actions():
+                self._toolbar.removeAction(action)
+                self.addAction(action)
+        for action in list(self._toolbar.actions()):
+            if isinstance(action, QWidgetAction):
+                default_widget = action.defaultWidget()
+                if default_widget is not None and self._theme_selector is not None and (
+                    default_widget is self._theme_selector
+                    or default_widget.isAncestorOf(self._theme_selector)
+                ):
+                    self._toolbar.removeAction(action)
+            elif action.isSeparator():
+                self._toolbar.removeAction(action)
+
         settings_action = QAction(self)
         settings_action.setObjectName("actionPresentationSettings")
         settings_action.triggered.connect(self._open_settings_dialog)
@@ -333,38 +352,291 @@ class MainWindow(_v1.MainWindow):
             )
         history_action = self._support_toolbar_actions.get("history")
         if history_action is not None:
-            history_action.setText(
-                self._t("settings.history_metrics", "History Metrics")
-            )
+            history_action.setText(self._t("settings.history_metrics", "History Metrics"))
+
+    def _open_settings_dialog(self) -> None:
+        dialog = UnifiedSettingsDialog(self._prefs, self._user_settings, self._translator, self)
+        dialog.connect_open_last_run(self._open_last_output_folder)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        selected_language = dialog.selected_language
+        selected_theme = dialog.selected_theme
+        selected_root = dialog.selected_output_root
+        self._user_settings = dialog.result_user_settings
+        save_user_settings(self._user_settings)
+        if selected_root:
+            self._prefs.output_root_dir = selected_root
+        if selected_theme != self._prefs.theme:
+            self._set_theme_mode(selected_theme)
+        if selected_language != self._prefs.language:
+            self._apply_language(selected_language)
+        self._refresh_settings_indicators()
+        if not self._user_settings.enable_history_metrics:
+            self._reset_history_metrics()
+        self._refresh_output_summaries()
+        install_combo_chevrons(self)
 
     # ------------------------------------------------ semantic configuration
     def _refresh_settings_indicators(self) -> None:
-        if not hasattr(self, "_settings_indicators") or not hasattr(
-            self, "_user_settings"
-        ):
+        if not hasattr(self, "_settings_indicators") or not hasattr(self, "_user_settings"):
             return
         values = self._user_settings.to_dict()
         labels = self._settings_label_map()
-        on_text = "روشن" if self._language is Language.FA else "On"
-        off_text = "خاموش" if self._language is Language.FA else "Off"
+        on_text = self._t("settings.state.on", "On")
+        off_text = self._t("settings.state.off", "Off")
         for key, indicator in self._settings_indicators.items():
             enabled = bool(values.get(key, False))
-            indicator.setText(
-                f"{labels.get(key, key)}: {on_text if enabled else off_text}"
-            )
+            indicator.setText(f"{labels.get(key, key)}: {on_text if enabled else off_text}")
             indicator.setProperty("settingEnabled", enabled)
             indicator.style().unpolish(indicator)
             indicator.style().polish(indicator)
 
+    # -------------------------------------------------------- product polish
+    def _install_product_polish_surfaces(self) -> None:
+        self._replace_reference_picker(
+            self._picker_schools,
+            "reference.schools.placeholder",
+            "School reference is managed in Database.",
+            "schools",
+        )
+        self._replace_reference_picker(
+            self._picker_crosswalk,
+            "reference.groupcodes.placeholder",
+            "GroupCode reference is managed in Database.",
+            "groupcodes",
+        )
+        self._replace_primary_output_picker(self._picker_output_matrix, "build")
+        self._replace_primary_output_picker(self._picker_alloc_out, "allocate")
+        self._replace_primary_output_picker(self._picker_rule_output, "rule-engine")
+        self._install_page_guidance()
+
+    def _find_form_row(self, target: QWidget) -> tuple[QFormLayout, int, QWidget] | None:
+        for form in self.findChildren(QFormLayout):
+            for row in range(form.rowCount()):
+                item = form.itemAt(row, QFormLayout.ItemRole.FieldRole)
+                field = item.widget() if item is not None else None
+                if field is not None and (field is target or field.isAncestorOf(target)):
+                    return form, row, field
+        return None
+
+    def _replace_reference_picker(
+        self, picker: FilePicker, text_key: str, fallback: str, suffix: str
+    ) -> None:
+        located = self._find_form_row(picker)
+        if located is None:
+            return
+        form, row, old_field = located
+        label_item = form.itemAt(row, QFormLayout.ItemRole.LabelRole)
+        label_widget = label_item.widget() if label_item is not None else None
+        replacement = QWidget(form.parentWidget())
+        replacement.setObjectName(f"databaseReference_{suffix}")
+        layout = QHBoxLayout(replacement)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(self._theme.control_to_control)
+        state = QLabel(replacement)
+        state.setWordWrap(True)
+        state.setAccessibleName(self._t(text_key, fallback))
+        self._bind(state, text_key, fallback)
+        button = QPushButton(replacement)
+        button.setObjectName(f"openDatabase_{suffix}")
+        button.setProperty("variant", "secondary")
+        button.clicked.connect(lambda _checked=False: self.activate_surface("database"))
+        self._bind(button, "action.open_database", "Open Database")
+        layout.addWidget(state, 1)
+        layout.addWidget(button)
+        old_field.hide()
+        taken = form.takeRow(row)
+        if taken.fieldItem is not None:
+            if label_widget is not None:
+                form.insertRow(row, label_widget, replacement)
+            else:
+                form.insertRow(row, replacement)
+
+    def _replace_primary_output_picker(self, picker: FilePicker, run_type: str) -> None:
+        located = self._find_form_row(picker)
+        if located is None:
+            return
+        form, row, old_field = located
+        label_item = form.itemAt(row, QFormLayout.ItemRole.LabelRole)
+        label_widget = label_item.widget() if label_item is not None else None
+        summary = QLabel(form.parentWidget())
+        summary.setObjectName(f"outputWorkspaceSummary_{run_type}")
+        summary.setWordWrap(True)
+        summary.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        summary.setAccessibleName(self._t("output.automatic", "Automatic output"))
+        self._output_summary_labels[run_type] = summary
+        old_field.hide()
+        taken = form.takeRow(row)
+        if taken.fieldItem is not None:
+            if label_widget is not None:
+                form.insertRow(row, label_widget, summary)
+            else:
+                form.insertRow(row, summary)
+
+    def _add_page_guidance(self, page_name: str, key: str, fallback: str) -> None:
+        content = self.findChild(QWidget, page_name)
+        if content is None or not isinstance(content.layout(), QBoxLayout):
+            return
+        label = QLabel(content)
+        label.setObjectName(f"pageGuidance_{page_name}")
+        label.setProperty("guidanceLevel", "page")
+        label.setWordWrap(True)
+        label.setAccessibleName(self._t(key, fallback))
+        self._bind(label, key, fallback)
+        content.layout().insertWidget(1, label)
+        self._polish_text_labels[key] = label
+
+    def _add_field_help(self, picker: FilePicker, key: str, fallback: str, object_name: str) -> None:
+        located = self._find_form_row(picker)
+        if located is None:
+            return
+        form, row, _field = located
+        helper = QLabel(form.parentWidget())
+        helper.setObjectName(object_name)
+        helper.setProperty("guidanceLevel", "field")
+        helper.setWordWrap(True)
+        helper.setAccessibleName(self._t(key, fallback))
+        self._bind(helper, key, fallback)
+        form.insertRow(row + 1, helper)
+        self._polish_text_labels[key] = helper
+
+    def _install_page_guidance(self) -> None:
+        self._add_page_guidance(
+            "pageBuildContent",
+            "guidance.build.page",
+            "Build the eligibility matrix from the required Inspactor report, database-managed references, and Policy.",
+        )
+        self._add_field_help(
+            self._picker_inspactor,
+            "guidance.build.inspactor",
+            "Required mentor input for the V3 build pipeline. Select the supported Inspactor workbook before running.",
+            "fieldHelp_build_inspactor",
+        )
+        self._add_field_help(
+            self._picker_policy_build,
+            "guidance.build.policy",
+            "Policy controls the build rules; the configured default is used when you do not select another approved policy file.",
+            "fieldHelp_build_policy",
+        )
+        self._add_page_guidance(
+            "pageAllocateContent",
+            "guidance.allocate.page",
+            "Allocate students to the selected mentor pool after database School/GroupCode references are ready.",
+        )
+        self._add_field_help(
+            self._picker_students,
+            "guidance.allocate.students",
+            "Required student input. The current GUI accepts Excel or CSV input.",
+            "fieldHelp_allocate_students",
+        )
+        self._add_field_help(
+            self._picker_pool,
+            "guidance.allocate.pool",
+            "Required mentor-pool workbook used by the matrix allocation path.",
+            "fieldHelp_allocate_pool",
+        )
+        self._add_field_help(
+            self._picker_current_roster,
+            "guidance.rosters",
+            "Prior/current rosters are optional inputs for continuity and counters; use them only when that history is available.",
+            "fieldHelp_allocate_rosters",
+        )
+        self._add_page_guidance(
+            "pageRuleEngineContent",
+            "guidance.rule.page",
+            "Run Rule Engine with an existing eligibility matrix and student input; academic year is required.",
+        )
+        self._add_field_help(
+            self._picker_rule_matrix,
+            "guidance.rule.matrix",
+            "Required eligibility-matrix workbook produced by the supported Matrix build path.",
+            "fieldHelp_rule_matrix",
+        )
+        self._add_field_help(
+            self._picker_rule_students,
+            "guidance.rule.students",
+            "Required student input for Rule Engine; use the input formats accepted by the current file picker.",
+            "fieldHelp_rule_students",
+        )
+        self._add_field_help(
+            self._picker_rule_current_roster,
+            "guidance.rosters",
+            "Prior/current rosters are optional inputs for continuity and counters; use them only when that history is available.",
+            "fieldHelp_rule_rosters",
+        )
+
+    def _refresh_output_summaries(self) -> None:
+        if not hasattr(self, "_prefs"):
+            return
+        root = self._prefs.output_root_dir
+        for label in self._output_summary_labels.values():
+            automatic = self._t("output.automatic", "Automatic")
+            root_template = self._t("output.root", "Root: {path}")
+            detail = self._t(
+                "output.run_created",
+                "A dated run folder will be created when execution starts.",
+            )
+            label.setText(f"{automatic}\n{root_template.format(path=root)}\n{detail}")
+
+    # ---------------------------------------------------------- run workspace
+    def _prepare_run_workspace(
+        self,
+        run_type: str,
+        primary_picker: FilePicker,
+        sabt_picker: FilePicker | None = None,
+    ) -> RunOutputWorkspace:
+        workspace = create_run_workspace(self._prefs.output_root_dir, run_type)
+        primary_picker.setText(str(workspace.primary_output_path))
+        if sabt_picker is not None and sabt_picker.text().strip():
+            sabt_picker.setText(str(workspace.artifact_path("sabt")))
+        self._prefs.last_output_dir = str(workspace.run_dir)
+        self._active_run_workspace = workspace
+        self._update_output_folder_button_state()
+        return workspace
+
+    def _start_build(self) -> None:
+        if self._worker is not None and self._worker.isRunning():
+            return super()._start_build()
+        self._prepare_run_workspace("build", self._picker_output_matrix)
+        super()._start_build()
+
+    def _start_allocate(self) -> None:
+        if self._worker is not None and self._worker.isRunning():
+            return super()._start_allocate()
+        self._prepare_run_workspace("allocate", self._picker_alloc_out, self._picker_sabt_output_alloc)
+        super()._start_allocate()
+
+    def _start_rule_engine(self) -> None:
+        if self._worker is not None and self._worker.isRunning():
+            return super()._start_rule_engine()
+        self._prepare_run_workspace("rule-engine", self._picker_rule_output, self._picker_sabt_output_rule)
+        super()._start_rule_engine()
+
+    def _determine_last_output_path(self) -> str:
+        return self._prefs.last_output_dir or super()._determine_last_output_path()
+
+    def _refresh_last_run_badge(self) -> None:
+        super()._refresh_last_run_badge()
+        workspace = getattr(self, "_active_run_workspace", None)
+        if workspace is None or self._prefs.last_run_type != workspace.run_type:
+            return
+        if self._prefs.last_output_dir != str(workspace.run_dir):
+            return
+        if self._stage_detail is not None:
+            template = self._t("output.saved_to", "Saved to: {folder}")
+            self._stage_detail.setText(template.format(folder=workspace.run_dir.name))
+
     # ------------------------------------------------------- geometry / bidi
-    def _fixed_action_page(
-        self, content: QWidget, button: QPushButton, page_id: str
-    ) -> QWidget:
+    def _fixed_action_page(self, content: QWidget, button: QPushButton, page_id: str) -> QWidget:
         shell = super()._fixed_action_page(content, button, page_id)
         content.setProperty("workspaceContent", True)
+        content.setMaximumWidth(_MAX_WORKING_MEASURE)
         if content.layout() is not None:
             margin = self._theme.page_margin_normal
             content.layout().setContentsMargins(margin, margin, margin, margin)
+        scroll = shell.findChild(QScrollArea)
+        if scroll is not None:
+            scroll.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
         footer = shell.findChild(QFrame, "pageActionFooter")
         if footer is not None and footer.layout() is not None:
             footer.layout().setContentsMargins(
@@ -434,12 +706,7 @@ class MainWindow(_v1.MainWindow):
             if self.width() <= _COMPACT_WORKSPACE_WIDTH
             else self._theme.page_margin_normal
         )
-        for name in (
-            "pageBuildContent",
-            "pageAllocateContent",
-            "pageRuleEngineContent",
-            "pageExplain",
-        ):
+        for name in ("pageBuildContent", "pageAllocateContent", "pageRuleEngineContent", "pageExplain"):
             widget = self.findChild(QWidget, name)
             if widget is not None and widget.layout() is not None:
                 widget.layout().setContentsMargins(margin, margin, margin, margin)
@@ -454,9 +721,7 @@ class MainWindow(_v1.MainWindow):
         if self._workspace_navigation is not None:
             layout = self._workspace_navigation.layout()
             if layout is not None:
-                layout.setContentsMargins(
-                    margin, self._theme.micro, margin, self._theme.micro
-                )
+                layout.setContentsMargins(margin, self._theme.micro, margin, self._theme.micro)
         compact = self.width() <= _COMPACT_WORKSPACE_WIDTH
         self._progress_caption.setVisible(not compact)
 
@@ -470,10 +735,7 @@ class MainWindow(_v1.MainWindow):
             self._progress_caption.setGraphicsEffect(None)
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802
-        if watched is self._splitter and event.type() in (
-            QEvent.Type.Resize,
-            QEvent.Type.Move,
-        ):
+        if watched is self._splitter and event.type() in (QEvent.Type.Resize, QEvent.Type.Move):
             self._update_overlay_geometry()
         return super().eventFilter(watched, event)
 
@@ -492,11 +754,14 @@ class MainWindow(_v1.MainWindow):
             self._diagnostics_toggle.setAccessibleName(label)
         self._refresh_support_action_texts()
         self._refresh_settings_indicators()
+        self._refresh_output_summaries()
+        install_combo_chevrons(self)
 
     def _create_center_management_section(self):
-        # Preserve the established monkeypatch seam on app.ui.main_window.
         _v1.get_cached_policy = get_cached_policy
-        return super()._create_center_management_section()
+        section = super()._create_center_management_section()
+        install_combo_chevrons(section)
+        return section
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802
         if self._diagnostics_expanded and self._splitter is not None:
