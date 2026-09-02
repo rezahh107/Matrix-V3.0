@@ -33,7 +33,6 @@ from PySide6.QtWidgets import (
 from app.infra.config_flags import save_user_settings
 
 from . import main_window_presentation_base as _v1
-from .i18n import Language
 from .preferences.settings_dialog import UnifiedSettingsDialog
 from .run_output import RunOutputWorkspace, create_run_workspace
 from .widgets.combo_chevron import install_combo_chevrons
