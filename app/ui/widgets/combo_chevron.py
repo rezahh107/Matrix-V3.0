@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QEvent, QObject, QPointF, Qt
-from PySide6.QtGui import QPainter, QPen
+from PySide6.QtGui import QPainter, QPalette, QPen
 from PySide6.QtWidgets import QComboBox, QStyle, QStyleOptionComboBox, QWidget
 
 
@@ -54,12 +54,8 @@ class _ComboChevronOverlay(QWidget):
     def paintEvent(self, _event) -> None:  # noqa: N802
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        group = (
-            self._combo.palette().ColorGroup.Normal
-            if self._combo.isEnabled()
-            else self._combo.palette().ColorGroup.Disabled
-        )
-        color = self._combo.palette().color(group, self._combo.palette().ColorRole.Text)
+        group = QPalette.ColorGroup.Normal if self._combo.isEnabled() else QPalette.ColorGroup.Disabled
+        color = self._combo.palette().color(group, QPalette.ColorRole.Text)
         pen = QPen(color)
         pen.setWidthF(1.6)
         pen.setCapStyle(Qt.PenCapStyle.RoundCap)
@@ -74,7 +70,7 @@ class _ComboChevronOverlay(QWidget):
 def install_combo_chevrons(root: QWidget) -> None:
     """Attach one crisp vector chevron to each combo below ``root``."""
 
-    combos = []
+    combos: list[QComboBox] = []
     if isinstance(root, QComboBox):
         combos.append(root)
     combos.extend(root.findChildren(QComboBox))
