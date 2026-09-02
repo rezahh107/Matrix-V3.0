@@ -26,7 +26,11 @@ def test_toolbar_exposes_global_support_not_duplicate_workflow_execution(qapp) -
         assert action not in toolbar.actions()
     assert window._toolbar_actions["build"].shortcut().toString()
     assert window._toolbar_actions["allocate"].shortcut().toString()
-    assert window._toolbar_actions["rule_engine"].shortcut().toString()
+    rule_action = window._toolbar_actions["rule_engine"]
+    assert not rule_action.shortcut().toString()
+    assert not rule_action.isVisible()
+    assert not rule_action.isEnabled()
+    assert rule_action not in window.actions()
     window.close()
 
 
@@ -87,22 +91,22 @@ def test_primary_pages_have_visible_guidance_and_automatic_output_summary(qapp) 
     retained_outputs = {
         "build": window._picker_output_matrix,
         "allocate": window._picker_alloc_out,
-        "rule-engine": window._picker_rule_output,
     }
     for object_name in (
         "pageGuidance_pageBuildContent",
         "pageGuidance_pageAllocateContent",
-        "pageGuidance_pageRuleEngineContent",
         "fieldHelp_build_inspactor",
         "fieldHelp_allocate_students",
-        "fieldHelp_rule_matrix",
     ):
         label = window.findChild(QLabel, object_name)
         assert label is not None
         assert label.text().strip()
         assert label.property("guidanceLevel") in {"page", "field"}
 
-    assert window.primary_surface_ids() == ("build", "allocate", "rule-engine")
+    assert window.findChild(QLabel, "pageGuidance_pageRuleEngineContent") is None
+    assert window.findChild(QLabel, "fieldHelp_rule_matrix") is None
+    assert window.primary_surface_ids() == ("build", "allocate")
+    assert not window.activate_surface("rule-engine")
 
     window.show()
     qapp.processEvents()
@@ -121,6 +125,8 @@ def test_primary_pages_have_visible_guidance_and_automatic_output_summary(qapp) 
         assert all(retained.isHidden() for retained in retained_outputs.values())
         assert all(not retained.isVisible() for retained in retained_outputs.values())
 
+    assert window.findChild(QLabel, "outputWorkspaceSummary_rule-engine") is None
+    assert window._btn_rule_engine.isHidden()
     window.close()
 
 
@@ -158,9 +164,6 @@ def test_new_guidance_and_output_keys_exist_in_both_catalogues() -> None:
         "guidance.allocate.students",
         "guidance.allocate.pool",
         "guidance.rosters",
-        "guidance.rule.page",
-        "guidance.rule.matrix",
-        "guidance.rule.students",
         "output.automatic",
         "output.root",
         "output.run_created",
@@ -215,6 +218,7 @@ def test_auto_gui_output_uses_configured_root_and_updates_last_run_folder(
 
 def test_c2_destination_ids_remain_closed(qapp) -> None:
     window = MainWindow()
-    assert window.primary_surface_ids() == ("build", "allocate", "rule-engine")
+    assert window.primary_surface_ids() == ("build", "allocate")
     assert window.secondary_surface_ids() == ("explain", "database")
+    assert "rule-engine" not in window.workspace_surface_ids()
     window.close()
