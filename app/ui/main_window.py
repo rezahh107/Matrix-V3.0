@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from typing import Final
 
 from PySide6.QtCore import QByteArray, QEvent, QObject, QSettings, Qt
-from PySide6.QtGui import QAction, QCloseEvent, QResizeEvent
+from PySide6.QtGui import QAction, QCloseEvent, QKeySequence, QResizeEvent
 from PySide6.QtWidgets import (
     QApplication,
     QBoxLayout,
@@ -63,9 +63,6 @@ class _WorkspaceDestinationSpec:
 _DESTINATION_SPECS: Final[tuple[_WorkspaceDestinationSpec, ...]] = (
     _WorkspaceDestinationSpec("build", True, "tabs.build", "Build Matrix", "pageBuild"),
     _WorkspaceDestinationSpec("allocate", True, "tabs.allocate", "Allocate", "pageAllocate"),
-    _WorkspaceDestinationSpec(
-        "rule-engine", True, "tabs.rule_engine", "Rule Engine", "pageRuleEngine"
-    ),
     _WorkspaceDestinationSpec("explain", False, "tabs.explain", "Explain", "pageExplain"),
     _WorkspaceDestinationSpec("database", False, "tabs.database", "Database"),
 )
@@ -88,6 +85,7 @@ class MainWindow(_v1.MainWindow):
         self._active_run_workspace: RunOutputWorkspace | None = None
         self._auto_output_paths: dict[str, str] = {}
         super().__init__()
+        self._retire_rule_engine_gui()
         self._splitter.installEventFilter(self)
         # The prior presentation layer used a delayed 25% default. C2 always
         # starts collapsed, so any pending legacy callback becomes a no-op.
@@ -110,6 +108,27 @@ class MainWindow(_v1.MainWindow):
             if page is not None and (marker is page or page.isAncestorOf(marker)):
                 return page
         return None
+
+    def _retire_rule_engine_gui(self) -> None:
+        """Remove Rule Engine from the public GUI while preserving backend objects."""
+
+        marker = self.findChild(QWidget, "pageRuleEngine")
+        if marker is not None:
+            container = self._resolve_tab_container(marker)
+            if container is not None:
+                index = self._tabs.indexOf(container)
+                if index >= 0:
+                    self._tabs.removeTab(index)
+                container.hide()
+        self._btn_rule_engine.hide()
+        action = self._toolbar_actions.get("rule_engine")
+        if action is not None:
+            if self._toolbar is not None and action in self._toolbar.actions():
+                self._toolbar.removeAction(action)
+            self.removeAction(action)
+            action.setShortcut(QKeySequence())
+            action.setVisible(False)
+            action.setEnabled(False)
 
     def _discover_workspace_surfaces(self) -> dict[str, QWidget]:
         discovered: dict[str, QWidget] = {}
@@ -309,14 +328,21 @@ class MainWindow(_v1.MainWindow):
         if self._toolbar is None or self._support_toolbar_actions:
             return
 
-        # Keep workflow QAction objects and shortcuts on the window, but remove
-        # their duplicate first-class toolbar presentation. Execution remains in
-        # the fixed CTA footer; these shortcuts still execute rather than navigate.
-        for key in ("build", "allocate", "mentor_pool", "rule_engine", "prefs", "database"):
+        # Workflow actions are not duplicated in the toolbar. Rule Engine is
+        # additionally retired from the public GUI and loses its shortcut.
+        for key in ("build", "allocate", "mentor_pool", "prefs", "database"):
             action = self._toolbar_actions.get(key)
             if action is not None and action in self._toolbar.actions():
                 self._toolbar.removeAction(action)
                 self.addAction(action)
+        rule_action = self._toolbar_actions.get("rule_engine")
+        if rule_action is not None:
+            if rule_action in self._toolbar.actions():
+                self._toolbar.removeAction(rule_action)
+            self.removeAction(rule_action)
+            rule_action.setShortcut(QKeySequence())
+            rule_action.setVisible(False)
+            rule_action.setEnabled(False)
         for action in list(self._toolbar.actions()):
             if isinstance(action, QWidgetAction):
                 default_widget = action.defaultWidget()
@@ -407,7 +433,6 @@ class MainWindow(_v1.MainWindow):
         )
         self._replace_primary_output_picker(self._picker_output_matrix, "build")
         self._replace_primary_output_picker(self._picker_alloc_out, "allocate")
-        self._replace_primary_output_picker(self._picker_rule_output, "rule-engine")
         self._install_page_guidance()
 
     def _find_form_row(self, target: QWidget) -> tuple[QFormLayout, int, QWidget] | None:
@@ -551,29 +576,6 @@ class MainWindow(_v1.MainWindow):
             "Prior/current rosters are optional inputs for continuity and counters; use them only when that history is available.",
             "fieldHelp_allocate_rosters",
         )
-        self._add_page_guidance(
-            "pageRuleEngineContent",
-            "guidance.rule.page",
-            "Run Rule Engine with an existing eligibility matrix and student input; academic year is required.",
-        )
-        self._add_field_help(
-            self._picker_rule_matrix,
-            "guidance.rule.matrix",
-            "Required eligibility-matrix workbook produced by the supported Matrix build path.",
-            "fieldHelp_rule_matrix",
-        )
-        self._add_field_help(
-            self._picker_rule_students,
-            "guidance.rule.students",
-            "Required student input for Rule Engine; use the input formats accepted by the current file picker.",
-            "fieldHelp_rule_students",
-        )
-        self._add_field_help(
-            self._picker_rule_current_roster,
-            "guidance.rosters",
-            "Prior/current rosters are optional inputs for continuity and counters; use them only when that history is available.",
-            "fieldHelp_rule_rosters",
-        )
 
     def _refresh_output_summaries(self) -> None:
         if not hasattr(self, "_prefs"):
@@ -623,11 +625,6 @@ class MainWindow(_v1.MainWindow):
         if run_type == "allocate":
             self._prepare_run_workspace(
                 "allocate", self._picker_alloc_out, self._picker_sabt_output_alloc
-            )
-            return
-        if run_type == "rule-engine":
-            self._prepare_run_workspace(
-                "rule-engine", self._picker_rule_output, self._picker_sabt_output_rule
             )
             return
         super()._prepare_validated_output(run_type)
@@ -726,7 +723,7 @@ class MainWindow(_v1.MainWindow):
             if self.width() <= _COMPACT_WORKSPACE_WIDTH
             else self._theme.page_margin_normal
         )
-        for name in ("pageBuildContent", "pageAllocateContent", "pageRuleEngineContent", "pageExplain"):
+        for name in ("pageBuildContent", "pageAllocateContent", "pageExplain"):
             widget = self.findChild(QWidget, name)
             if widget is not None and widget.layout() is not None:
                 widget.layout().setContentsMargins(margin, margin, margin, margin)

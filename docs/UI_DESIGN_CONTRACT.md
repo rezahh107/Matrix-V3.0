@@ -7,7 +7,7 @@ This document is the closed workspace/visual contract for the Matrix PySide6 pre
 Presentation responsibilities are split deliberately:
 
 - `docs/UI_PRESENTATION_AUTHORITY.md` answers **who owns** each Qt control/subcontrol visual surface (`STYLED`, `NATIVE`, `HYBRID`).
-- This document answers **how the owned Matrix presentation is composed** under C2 + V2.
+- This document answers **how** the owned Matrix presentation is composed under C2 + V2.
 
 Neither document may change allocation, join, ranking, capacity, trace, persistence, CLI, Core, or Infra semantics.
 
@@ -15,12 +15,13 @@ Neither document may change allocation, join, ranking, capacity, trace, persiste
 
 Matrix uses `PRIMARY_WORKSPACE_WITH_UTILITY_SEPARATION`.
 
-- Primary destinations are registered workflow capabilities. Current set: `build`, `allocate`, `rule-engine`.
+- Primary destinations are registered workflow capabilities. Current normal end-user set: `build`, `allocate`.
+- **Rule Engine is retired from the normal GUI workspace.** Its backend and CLI remain intentionally available; GUI absence is not backend-dead-code evidence.
 - Primary navigation is generated from the registered capabilities and must not assume a fixed count.
 - `explain` and `database` are direct one-step secondary destinations. They must not read as peer workflow stages.
 - Destination identity is a stable surface ID, never a hard-coded tab index.
 - Primary workflow pages retain scrollable work content plus a fixed, always-reachable primary CTA footer.
-- Existing command shortcuts remain command semantics; navigation must not repurpose them.
+- Existing Build/Allocate command shortcuts remain command semantics; navigation must not repurpose them. No public Rule Engine QAction/shortcut is part of the current GUI contract.
 
 ## 3. Operational status and diagnostics
 
@@ -35,6 +36,14 @@ Deep diagnostics use the existing `QSplitter` capability and are **collapsed by 
 - Manual: the user may expand/collapse diagnostics directly.
 - Splitter persistence uses the versioned key `ui/main_splitter_v2`; legacy splitter state must not reopen the old permanent panel.
 - Settings and History Metrics are support/global commands, not permanent lower-shell controls. Developer/demo material may remain inside diagnostics.
+
+The unified Settings surface also owns **Diagnostics & Advanced Tools / ابزارهای خطایابی و پیشرفته** presentation for the eight intentionally retained `UserSettings` capabilities. It must use three semantic groups rather than an unexplained flat checkbox list:
+
+1. Diagnostics / Observability: Trace Debug Sheets, Mentor Pipeline Trace, Pool Governance Trace, Bucket Trace, Trace Sheet Export.
+2. Analysis: History Metrics.
+3. Advanced Validation / Execution Behavior: QA Pool Coverage Rules, Use Join Buckets.
+
+Each capability row must expose a title, ON/OFF control, short plain-language explanation, visible behavioral-impact label, and `Full Guide / راهنمای کامل`. Critical distinctions must remain visible: QA Pool Coverage **may affect validation**; Use Join Buckets is an **algorithmic/performance execution-path option**, not diagnostic-only. Full guides must expose both Persian RTL and English LTR regardless of current application language. Canonical technical guidance is `docs/DEVELOPER_DIAGNOSTICS.md`.
 
 ## 4. V2 visual direction
 

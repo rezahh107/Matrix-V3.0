@@ -1,4 +1,4 @@
-# AGENTS — Smart Student Allocation Engine (v3.4)
+# AGENTS — Smart Student Allocation Engine (v3.5)
 
 **Scope:** Coding / refactor agents working on the student→mentor allocation system  
 **Audience:** LLM-based coding agents (Codex, etc.) + human reviewers  
@@ -25,8 +25,9 @@ Presentation-only authorities inside `app/ui/**`:
 
 - `docs/UI_PRESENTATION_AUTHORITY.md` — defines **who owns** each visible Qt control/subcontrol surface (`STYLED`, `NATIVE`, `HYBRID`).
 - `docs/UI_DESIGN_CONTRACT.md` — defines **how** the owned Matrix presentation is composed under the selected C2 workspace and V2 visual direction.
+- `docs/DEVELOPER_DIAGNOSTICS.md` — canonical code-backed inventory for intentionally retained diagnostics/analysis/advanced controls and Rule Engine GUI/backend status.
 
-Both presentation documents are subordinate to LAW/Technical SSoT and domain authorities. They do not define or override domain behavior.
+These presentation/diagnostics documents are subordinate to LAW/Technical SSoT and domain authorities. They do not define or override domain behavior.
 
 Machine hint:
 
@@ -390,6 +391,34 @@ When behavior affecting QA changes:
 * update / add QA tests and snapshots,
 * do NOT weaken or remove QA checks to “make tests green”.
 
+### 6.1. Retained diagnostics / advanced controls
+
+The following eight capabilities are **intentionally retained and supported**. Their default `False` / OFF state does **not** mean dead code:
+
+1. History Metrics — `enable_history_metrics`
+2. Trace Debug Sheets — `enable_trace_debug_sheets`
+3. Mentor Pipeline Trace — `enable_mentor_trace_debug`
+4. Pool Governance Trace — `enable_pool_governance_trace`
+5. Bucket Trace — `enable_bucket_trace`
+6. QA Pool Coverage Rules — `enable_qa_pool_coverage_rules`
+7. Trace Sheet Export — `enable_trace_export`
+8. Use Join Buckets — `use_join_buckets`
+
+Before deleting, consolidating, renaming, or refactoring any of these, agents **MUST** inspect `docs/DEVELOPER_DIAGNOSTICS.md` plus current consumers/tests.
+
+Critical distinctions:
+
+- **QA Pool Coverage Rules may affect validation PASS/FAIL**; do not classify them as diagnostic-only.
+- **Use Join Buckets changes an algorithmic execution path**; do not classify it as diagnostic-only or change its default/algorithm without the appropriate domain/performance review.
+- History Metrics reporting is not the same as history-aware allocation behavior.
+- Bucket Trace observes bucketing; it does not enable Use Join Buckets.
+
+Rule Engine status for future agents:
+
+- **Rule Engine GUI: RETIRED** from the normal user workspace.
+- **Rule Engine backend / CLI: INTENTIONALLY PRESERVED**.
+- GUI absence is **not** evidence that `app/core/rule_engine.py`, CLI `rule-engine`, shared ranking/allocation/rules/loaders/QA/history infrastructure, or historical compatibility values are dead code.
+
 ---
 
 ## 7. Risk & refusal behaviour (RISK_REFUSAL)
@@ -436,7 +465,8 @@ When editing:
   * view-only orchestration and interaction;
   * do not add allocation/join/QA logic here;
   * for visual rendering or control/subcontrol styling, obey `docs/UI_PRESENTATION_AUTHORITY.md` before changing QSS, palette, fonts, or local stylesheets;
-  * for C2/V2 workspace composition, hierarchy, density, diagnostics placement, bidi/resize/DPI presentation or visual-direction changes, obey `docs/UI_DESIGN_CONTRACT.md`.
+  * for C2/V2 workspace composition, hierarchy, density, diagnostics placement, bidi/resize/DPI presentation or visual-direction changes, obey `docs/UI_DESIGN_CONTRACT.md`;
+  * for the eight retained diagnostics/analysis/advanced controls, keep GUI prose synchronized with `docs/DEVELOPER_DIAGNOSTICS.md` and do not turn presentation metadata into runtime authority.
 
 If a change blurs these boundaries, treat it as a red flag and consider **RISK_REFUSAL**.
 
@@ -453,6 +483,7 @@ This AGENTS file targets:
 * LAW v3.0 — Regulatory Coverage Map v1.0
 * UI Presentation Authority (presentation-only; subordinate to LAW/TECH)
 * UI Design Contract (C2/V2 composition-only; subordinate to LAW/TECH)
+* Developer Diagnostics inventory (code-backed diagnostics/advanced presentation documentation; subordinate to LAW/TECH)
 
 When any upstream doc changes in a way that affects code:
 
@@ -488,6 +519,11 @@ For any PR touching mentors or mentor import:
   - Health check جدید فقط با خواندن سیگنال‌های QA/History موجود یا قوانین مستند LAW/Technical SSoT مجاز است؛ business rule تازه در Health ممنوع است.
 
 ## 12. Changelog
+
+**v3.5**
+
+* Added `docs/DEVELOPER_DIAGNOSTICS.md` discoverability and an explicit retention contract for the eight supported diagnostics/analysis/advanced capabilities.
+* Recorded Rule Engine GUI as retired while preserving Rule Engine backend/CLI authority; no domain semantics changed.
 
 **v3.4**
 

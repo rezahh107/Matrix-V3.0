@@ -12,11 +12,10 @@ from typing import Final
 
 from PySide6.QtCore import QCalendar, QDateTime, QStandardPaths, Qt
 
-_RUN_TYPES: Final[tuple[str, ...]] = ("build", "allocate", "rule-engine")
+_RUN_TYPES: Final[tuple[str, ...]] = ("build", "allocate")
 _PRIMARY_OUTPUT_NAMES: Final[dict[str, str]] = {
     "build": "matrix",
     "allocate": "allocation",
-    "rule-engine": "rule_engine",
 }
 
 
