@@ -40,7 +40,7 @@ ACTIVE_TRANSLATION_MODULES = (
     ROOT / "app/ui/widgets/file_picker.py",
     ROOT / "app/ui/widgets/health_indicator.py",
 )
-_EXPECTED_SURFACES = ("build", "allocate", "rule-engine", "explain", "database")
+_EXPECTED_SURFACES = ("build", "allocate", "explain", "database")
 
 
 def _fresh_settings() -> None:
@@ -307,8 +307,10 @@ def test_ui_c2_surface_registry_is_id_based(qapp: QApplication) -> None:
     qapp.processEvents()
 
     assert window.workspace_surface_ids() == _EXPECTED_SURFACES
-    assert window.primary_surface_ids() == ("build", "allocate", "rule-engine")
+    assert window.primary_surface_ids() == ("build", "allocate")
     assert window.secondary_surface_ids() == ("explain", "database")
+    assert "rule-engine" not in window.workspace_surface_ids()
+    assert not window.activate_surface("rule-engine")
     assert window._tabs.tabBar().isHidden()
 
     for surface_id in reversed(_EXPECTED_SURFACES):
@@ -444,13 +446,15 @@ def test_ui_bidi_and_primary_actions_are_contained(
     for surface_id, button in (
         ("build", window._btn_build),
         ("allocate", window._btn_allocate),
-        ("rule-engine", window._btn_rule_engine),
     ):
         assert window.activate_surface(surface_id)
         qapp.processEvents()
         surface = window._workspace_surfaces[surface_id]
         assert button.isVisibleTo(surface)
         _assert_contained(button, surface)
+
+    assert window._btn_rule_engine.isHidden()
+    assert not window._toolbar_actions["rule_engine"].shortcut().toString()
 
     assert window.activate_surface("allocate")
     qapp.processEvents()
