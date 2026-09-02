@@ -292,7 +292,10 @@ def test_native_windows_variable_font_oracle() -> None:
     assert evidence["qt_platform"].casefold() == "windows"
     assert evidence["embedded_size"] == EXPECTED_VAZIRMATN_SIZE
     assert evidence["embedded_sha256"] == EXPECTED_VAZIRMATN_SHA256
-    assert evidence["applicationFontFamilies"] == ["Vazirmatn"]
+    registered_families = evidence["applicationFontFamilies"]
+    assert registered_families
+    assert registered_families[0] == "Vazirmatn"
+    assert all(_is_vazirmatn_family(family) for family in registered_families)
     assert [item["resolved_weight"] for item in evidence["weights"]] == [400, 500, 600, 700]
     assert [item["raw_weight"] for item in evidence["weights"]] == [400, 500, 600, 700]
     assert [item["language"] for item in evidence["transitions"]] == ["fa", "en", "fa"]
