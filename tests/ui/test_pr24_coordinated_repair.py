@@ -12,6 +12,7 @@ from app.infra.groupcode.groupcode_repository import GroupCodeRepository
 from app.infra.local_database import LocalDatabase
 from app.infra.schools.school_repository import SchoolRepository
 from app.ui.main_window import MainWindow
+from app.ui.run_output import create_run_workspace
 
 
 def _set_output_state(window: MainWindow, tmp_path: Path) -> tuple[Path, Path]:
@@ -128,36 +129,38 @@ def test_allocate_rejections_do_not_commit_automatic_workspace(
     qapp.processEvents()
 
 
-@pytest.mark.parametrize("reject_kind", ["missing_required", "missing_year", "invalid_roster"])
-def test_rule_engine_rejections_do_not_commit_automatic_workspace(
-    reject_kind: str,
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-    qapp,
+def test_rule_engine_gui_is_retired_and_automatic_workspace_is_unsupported(
+    tmp_path: Path, qapp
 ) -> None:
     window = MainWindow()
-    root, sentinel = _set_output_state(window, tmp_path)
-    _mute_warnings(monkeypatch)
-    launches: list[object] = []
-    monkeypatch.setattr(window, "_launch_cli", lambda *args, **kwargs: launches.append(args))
+    action = window._toolbar_actions["rule_engine"]
 
-    window._picker_rule_matrix.setText(str(tmp_path / "matrix.xlsx"))
-    window._picker_rule_students.setText(str(tmp_path / "students.xlsx"))
-    window._combo_rule_academic_year.setEditText("1404")
-    if reject_kind == "missing_required":
-        window._picker_rule_matrix.setText("")
-    elif reject_kind == "missing_year":
-        window._combo_rule_academic_year.setEditText("")
-    elif reject_kind == "invalid_roster":
-        window._picker_rule_current_roster.setText(str(tmp_path / "missing-current.xlsx"))
+    assert "rule-engine" not in window.workspace_surface_ids()
+    assert not window.activate_surface("rule-engine")
+    assert window._btn_rule_engine.isHidden()
+    assert not action.isVisible()
+    assert not action.isEnabled()
+    assert action.shortcut().isEmpty()
+    if window._toolbar is not None:
+        assert action not in window._toolbar.actions()
+    assert action not in window.actions()
 
-    window._start_rule_engine()
+    root = tmp_path / "automatic-output"
+    with pytest.raises(ValueError, match="unsupported run type: rule-engine"):
+        create_run_workspace(root, "rule-engine")
+    assert not root.exists()
 
-    assert _run_dirs(root) == []
-    assert window._prefs.last_output_dir == str(sentinel)
-    assert not launches
     window.close()
     qapp.processEvents()
+
+
+def test_rule_engine_backend_and_cli_registration_remain_present() -> None:
+    backend = Path("app/core/rule_engine.py")
+    cli_source = Path("app/infra/cli_legacy.py").read_text(encoding="utf-8")
+
+    assert backend.is_file()
+    assert '"rule-engine"' in cli_source
+    assert "def _run_rule_engine(" in cli_source
 
 
 def test_valid_automatic_build_commits_once_at_launch_boundary(
@@ -230,38 +233,6 @@ def test_valid_allocate_commits_before_preflight_and_reuses_same_workspace(
     report_path = Path(preflight["report_path"])
     assert report_path == run_dirs[0] / "reports" / "unknown_data_report.json"
     sabt_output = Path(str(preflight["overrides"]["sabt_output"]))
-    assert sabt_output.parent == run_dirs[0]
-    assert sabt_output.name.startswith("sabt_")
-    assert window._prefs.last_output_dir == str(run_dirs[0])
-    window.close()
-    qapp.processEvents()
-
-
-def test_valid_rule_engine_commits_one_workspace_and_run_local_sabt(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, qapp
-) -> None:
-    window = MainWindow()
-    root, _sentinel = _set_output_state(window, tmp_path)
-    window._picker_rule_matrix.setText(str(tmp_path / "matrix.xlsx"))
-    window._picker_rule_students.setText(str(tmp_path / "students.xlsx"))
-    window._combo_rule_academic_year.setEditText("1404")
-    window._picker_sabt_output_rule.setText(str(tmp_path / "requested-rule-sabt.xlsx"))
-    launches: list[tuple[list[str], dict[str, Any]]] = []
-
-    def _capture_launch(argv: list[str], _action: str, **kwargs: Any) -> None:
-        launches.append((list(argv), kwargs))
-
-    monkeypatch.setattr(window, "_launch_cli", _capture_launch)
-    window._start_rule_engine()
-
-    run_dirs = _run_dirs(root)
-    assert len(run_dirs) == 1
-    assert len(launches) == 1
-    output = Path(_output_arg(launches[0][0]))
-    assert output.parent == run_dirs[0]
-    assert output.name.startswith("rule_engine_")
-    overrides = launches[0][1]["overrides"]
-    sabt_output = Path(str(overrides["sabt_output"]))
     assert sabt_output.parent == run_dirs[0]
     assert sabt_output.name.startswith("sabt_")
     assert window._prefs.last_output_dir == str(run_dirs[0])
