@@ -318,7 +318,7 @@ def _child_probe() -> int:
             PROBE_MARKER
             + json.dumps(
                 _collect(app),
-                ensure_ascii=False,
+                ensure_ascii=True,
                 separators=(",", ":"),
                 sort_keys=True,
                 default=str,
