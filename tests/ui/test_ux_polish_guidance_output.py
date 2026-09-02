@@ -147,6 +147,34 @@ def test_combobox_authority_uses_vector_overlay_not_qss_border_triangle() -> Non
     assert "drawLine" in source
 
 
+def test_explicit_programmatic_output_path_remains_supported(tmp_path: Path, qapp) -> None:
+    window = MainWindow()
+    explicit = tmp_path / "legacy-explicit-output.xlsx"
+    window._picker_output_matrix.setText(str(explicit))
+
+    workspace = window._prepare_run_workspace("build", window._picker_output_matrix)
+
+    assert workspace is None
+    assert window._picker_output_matrix.text() == str(explicit)
+    assert window._prefs.last_output_dir == ""
+    window.close()
+
+
+def test_auto_gui_output_uses_configured_root_and_updates_last_run_folder(
+    tmp_path: Path, qapp
+) -> None:
+    window = MainWindow()
+    window._prefs.output_root_dir = str(tmp_path)
+
+    workspace = window._prepare_run_workspace("build", window._picker_output_matrix)
+
+    assert workspace is not None
+    assert workspace.run_dir.parent == tmp_path
+    assert window._picker_output_matrix.text() == str(workspace.primary_output_path)
+    assert window._prefs.last_output_dir == str(workspace.run_dir)
+    window.close()
+
+
 def test_c2_destination_ids_remain_closed(qapp) -> None:
     window = MainWindow()
     assert window.primary_surface_ids() == ("build", "allocate", "rule-engine")
