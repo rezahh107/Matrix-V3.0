@@ -334,10 +334,12 @@ def _child_probe() -> int:
 
 def test_font_runtime_resolution_probe(qapp: QApplication) -> None:
     del qapp
+    child_env = os.environ.copy()
+    child_env["QT_QPA_PLATFORM"] = "windows"
     result = subprocess.run(
         [sys.executable, str(Path(__file__).resolve()), "--child-probe"],
         cwd=Path(__file__).resolve().parents[2],
-        env=os.environ.copy(),
+        env=child_env,
         capture_output=True,
         text=True,
         encoding="utf-8",
