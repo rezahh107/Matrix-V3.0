@@ -184,9 +184,3 @@ def qtbot(qapp):
     bot = _MiniQtBot(qapp)
     yield bot
     bot._cleanup()
-
-
-def pytest_runtest_logstart(nodeid: str, location: tuple[str, int, str]) -> None:
-    """Temporary CI diagnostic: expose the active node before native Windows failures."""
-
-    print(f"MATRIX_UI_DIAG_NODE_START={nodeid}", flush=True)
