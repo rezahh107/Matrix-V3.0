@@ -87,6 +87,7 @@ class MainWindow(_v1.MainWindow):
         self._polish_text_labels: dict[str, QLabel] = {}
         self._output_summary_labels: dict[str, QLabel] = {}
         self._active_run_workspace: RunOutputWorkspace | None = None
+        self._auto_output_paths: dict[str, str] = {}
         super().__init__()
         self._splitter.installEventFilter(self)
         # The prior presentation layer used a delayed 25% default. C2 always
@@ -465,6 +466,10 @@ class MainWindow(_v1.MainWindow):
         summary.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         summary.setAccessibleName(self._t("output.automatic", "Automatic output"))
         self._output_summary_labels[run_type] = summary
+        # Historic QSettings may contain an arbitrary filename. Routine GUI use
+        # intentionally starts in automatic mode; tests/integrators can still
+        # inject an explicit path after construction and that path is preserved.
+        picker.setText("")
         old_field.hide()
         taken = form.takeRow(row)
         if taken.fieldItem is not None:
@@ -584,9 +589,20 @@ class MainWindow(_v1.MainWindow):
         run_type: str,
         primary_picker: FilePicker,
         sabt_picker: FilePicker | None = None,
-    ) -> RunOutputWorkspace:
+    ) -> RunOutputWorkspace | None:
+        current_output = primary_picker.text().strip()
+        prior_auto_output = self._auto_output_paths.get(run_type)
+        if current_output and current_output != prior_auto_output:
+            # Compatibility seam for tests/integrators that still inject an
+            # explicit GUI path. CLI/non-GUI explicit paths are untouched too.
+            self._active_run_workspace = None
+            self._prefs.last_output_dir = ""
+            return None
+
         workspace = create_run_workspace(self._prefs.output_root_dir, run_type)
-        primary_picker.setText(str(workspace.primary_output_path))
+        primary_output = str(workspace.primary_output_path)
+        primary_picker.setText(primary_output)
+        self._auto_output_paths[run_type] = primary_output
         if sabt_picker is not None and sabt_picker.text().strip():
             sabt_picker.setText(str(workspace.artifact_path("sabt")))
         self._prefs.last_output_dir = str(workspace.run_dir)
