@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import os
-import sys
 from pathlib import Path
 
 import pandas as pd
@@ -12,13 +10,6 @@ from app.ui.loaders import ExcelLoader
 from tests.ui.qt_loader_harness import (
     wait_for_loader_failure,
     wait_for_loader_success,
-)
-
-skip_on_windows_ci = sys.platform == "win32" and bool(os.environ.get("CI"))
-
-pytestmark = pytest.mark.skipif(
-    skip_on_windows_ci,
-    reason=("Qt loader UI tests flaky on headless Windows CI; " "TECH-DEBT:QT-LOADER-01"),
 )
 
 pytest.importorskip(
