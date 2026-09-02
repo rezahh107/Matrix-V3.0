@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from PySide6.QtCore import QDate, QDateTime, QSettings, QTime
 
 from app.ui.app_preferences import AppPreferences
@@ -48,18 +49,21 @@ def test_jalali_date_and_stamp_use_ascii_windows_safe_format(qapp) -> None:
     assert all(char not in run_stamp(moment) for char in ":/\\")
 
 
-def test_build_allocate_and_rule_engine_primary_names(tmp_path: Path, qapp) -> None:
+def test_build_and_allocate_primary_names(tmp_path: Path, qapp) -> None:
     moment = QDateTime(QDate(2026, 9, 2), QTime(14, 53, 27))
     build = create_run_workspace(tmp_path, "build", moment=moment)
     allocate = create_run_workspace(tmp_path, "allocate", moment=moment)
-    rule = create_run_workspace(tmp_path, "rule-engine", moment=moment)
 
     assert build.run_dir.name == "1405-06-11_145327_build"
     assert allocate.run_dir.name == "1405-06-11_145327_allocate"
-    assert rule.run_dir.name == "1405-06-11_145327_rule-engine"
     assert build.primary_output_path.name == "matrix_1405-06-11_145327.xlsx"
     assert allocate.primary_output_path.name == "allocation_1405-06-11_145327.xlsx"
-    assert rule.primary_output_path.name == "rule_engine_1405-06-11_145327.xlsx"
+
+
+def test_rule_engine_gui_workspace_is_retired(tmp_path: Path, qapp) -> None:
+    moment = QDateTime(QDate(2026, 9, 2), QTime(14, 53, 27))
+    with pytest.raises(ValueError, match="unsupported run type: rule-engine"):
+        create_run_workspace(tmp_path, "rule-engine", moment=moment)
 
 
 def test_same_second_collision_never_overwrites_existing_run(tmp_path: Path, qapp) -> None:
