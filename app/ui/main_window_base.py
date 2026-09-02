@@ -165,6 +165,7 @@ class UnknownsPreflightResult:
     exit_code: int
     summary: UnknownsReportSummary | None = None
 
+
 _EN_TEXT_DEFAULTS: dict[str, str] = {
     "app.title": "Student-Mentor Allocation",
     "status.ready": "Ready",
@@ -1766,6 +1767,11 @@ class MainWindow(QMainWindow):
             if chosen != self._prefs.language:
                 self._apply_language(chosen)
 
+    def _prepare_validated_output(self, run_type: str) -> None:
+        """Hook for presentation subclasses to resolve output after UI validation."""
+
+        return None
+
     def _start_build(self) -> None:
         """اجرای سناریوی ساخت ماتریس با فراخوانی CLI."""
 
@@ -1773,11 +1779,12 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "تسک در حال اجرا", "لطفاً تا پایان عملیات جاری صبر کنید.")
             return
 
-        required = [
-            (self._picker_inspactor, "گزارش Inspactor"),
-            (self._picker_output_matrix, "خروجی ماتریس"),
-        ]
-        if not self._ensure_filled(required):
+        required_inputs = [(self._picker_inspactor, "گزارش Inspactor")]
+        if not self._ensure_filled(required_inputs):
+            return
+
+        self._prepare_validated_output("build")
+        if not self._ensure_filled([(self._picker_output_matrix, "خروجی ماتریس")]):
             return
 
         policy_path = (
@@ -2123,12 +2130,11 @@ class MainWindow(QMainWindow):
 
         self._reset_history_metrics()
 
-        required = [
+        required_inputs = [
             (self._picker_students, "فایل دانش‌آموزان"),
             (self._picker_pool, "استخر منتورها"),
-            (self._picker_alloc_out, "خروجی تخصیص"),
         ]
-        if not self._ensure_filled(required):
+        if not self._ensure_filled(required_inputs):
             return
 
         capacity = self._edit_capacity.text().strip() or "remaining_capacity"
@@ -2137,9 +2143,8 @@ class MainWindow(QMainWindow):
             self._picker_policy_allocate.text() or self._default_policy_path or "config/policy.json"
         )
 
-        overrides = self._build_allocate_overrides()
-        overrides["history_metrics_callback"] = self._capture_history_metrics
-        academic_year = overrides.get("academic_year")
+        validation_overrides = self._build_allocate_overrides()
+        academic_year = validation_overrides.get("academic_year")
         if academic_year is None:
             QMessageBox.warning(
                 self,
@@ -2148,12 +2153,21 @@ class MainWindow(QMainWindow):
             )
             return
 
-        prior_path = str(overrides.get("prior_roster") or "").strip()
-        current_path = str(overrides.get("current_roster") or "").strip()
+        prior_path = str(validation_overrides.get("prior_roster") or "").strip()
+        current_path = str(validation_overrides.get("current_roster") or "").strip()
         for path, label in ((prior_path, "روستر سال قبل"), (current_path, "روستر سال جاری")):
             if path and not Path(path).exists():
                 QMessageBox.warning(self, "فایل یافت نشد", f"{label} قابل دسترسی نیست: {path}")
                 return
+
+        self._prepare_validated_output("allocate")
+        if not self._ensure_filled([(self._picker_alloc_out, "خروجی تخصیص")]):
+            return
+
+        # Re-read output-dependent overrides after automatic workspace commitment
+        # so optional Sabt paths resolve inside the same run directory.
+        overrides = self._build_allocate_overrides()
+        overrides["history_metrics_callback"] = self._capture_history_metrics
 
         alloc_argv = [
             "allocate",
@@ -2229,12 +2243,11 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "تسک در حال اجرا", "لطفاً تا پایان عملیات جاری صبر کنید.")
             return
 
-        required = [
+        required_inputs = [
             (self._picker_rule_matrix, "فایل ماتریس"),
             (self._picker_rule_students, "فایل دانش‌آموزان"),
-            (self._picker_rule_output, "خروجی"),
         ]
-        if not self._ensure_filled(required):
+        if not self._ensure_filled(required_inputs):
             return
 
         capacity = self._edit_rule_capacity.text().strip() or "remaining_capacity"
@@ -2243,8 +2256,8 @@ class MainWindow(QMainWindow):
             self._picker_policy_rule.text() or self._default_policy_path or "config/policy.json"
         )
 
-        overrides = self._build_rule_engine_overrides()
-        academic_year = overrides.get("academic_year")
+        validation_overrides = self._build_rule_engine_overrides()
+        academic_year = validation_overrides.get("academic_year")
         if academic_year is None:
             QMessageBox.warning(
                 self,
@@ -2253,12 +2266,20 @@ class MainWindow(QMainWindow):
             )
             return
 
-        prior_path = str(overrides.get("prior_roster") or "").strip()
-        current_path = str(overrides.get("current_roster") or "").strip()
+        prior_path = str(validation_overrides.get("prior_roster") or "").strip()
+        current_path = str(validation_overrides.get("current_roster") or "").strip()
         for path, label in ((prior_path, "روستر سال قبل"), (current_path, "روستر سال جاری")):
             if path and not Path(path).exists():
                 QMessageBox.warning(self, "فایل یافت نشد", f"{label} قابل دسترسی نیست: {path}")
                 return
+
+        self._prepare_validated_output("rule-engine")
+        if not self._ensure_filled([(self._picker_rule_output, "خروجی")]):
+            return
+
+        # Re-read output-dependent overrides after automatic workspace commitment
+        # so optional Sabt paths resolve inside the same run directory.
+        overrides = self._build_rule_engine_overrides()
 
         argv = [
             "rule-engine",
