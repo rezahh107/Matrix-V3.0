@@ -444,13 +444,16 @@ class MainWindow(_v1.MainWindow):
         self._bind(button, "action.open_database", "Open Database")
         layout.addWidget(state, 1)
         layout.addWidget(button)
-        old_field.hide()
         taken = form.takeRow(row)
         if taken.fieldItem is not None:
             if label_widget is not None:
                 form.insertRow(row, label_widget, replacement)
             else:
                 form.insertRow(row, replacement)
+        # QFormLayout.takeRow() may change visibility/parent state during the
+        # mutation. Retain the compatibility object, then enforce retirement.
+        old_field.hide()
+        picker.hide()
 
     def _replace_primary_output_picker(self, picker: FilePicker, run_type: str) -> None:
         located = self._find_form_row(picker)
@@ -469,13 +472,16 @@ class MainWindow(_v1.MainWindow):
         # intentionally starts in automatic mode; tests/integrators can still
         # inject an explicit path after construction and that path is preserved.
         picker.setText("")
-        old_field.hide()
         taken = form.takeRow(row)
         if taken.fieldItem is not None:
             if label_widget is not None:
                 form.insertRow(row, label_widget, summary)
             else:
                 form.insertRow(row, summary)
+        # Keep the original FilePicker identity as a programmatic seam, but make
+        # the automatic summary the only user-facing surface after row removal.
+        old_field.hide()
+        picker.hide()
 
     def _add_page_guidance(self, page_name: str, key: str, fallback: str) -> None:
         content = self.findChild(QWidget, page_name)
@@ -593,9 +599,8 @@ class MainWindow(_v1.MainWindow):
         prior_auto_output = self._auto_output_paths.get(run_type)
         if current_output and current_output != prior_auto_output:
             # Compatibility seam for tests/integrators that still inject an
-            # explicit GUI path. CLI/non-GUI explicit paths are untouched too.
+            # explicit GUI path. Do not mutate the prior successful run pointer.
             self._active_run_workspace = None
-            self._prefs.last_output_dir = ""
             return None
 
         workspace = create_run_workspace(self._prefs.output_root_dir, run_type)
@@ -609,23 +614,23 @@ class MainWindow(_v1.MainWindow):
         self._update_output_folder_button_state()
         return workspace
 
-    def _start_build(self) -> None:
-        if self._worker is not None and self._worker.isRunning():
-            return super()._start_build()
-        self._prepare_run_workspace("build", self._picker_output_matrix)
-        super()._start_build()
+    def _prepare_validated_output(self, run_type: str) -> None:
+        """Commit automatic output only when the base validation flow requests it."""
 
-    def _start_allocate(self) -> None:
-        if self._worker is not None and self._worker.isRunning():
-            return super()._start_allocate()
-        self._prepare_run_workspace("allocate", self._picker_alloc_out, self._picker_sabt_output_alloc)
-        super()._start_allocate()
-
-    def _start_rule_engine(self) -> None:
-        if self._worker is not None and self._worker.isRunning():
-            return super()._start_rule_engine()
-        self._prepare_run_workspace("rule-engine", self._picker_rule_output, self._picker_sabt_output_rule)
-        super()._start_rule_engine()
+        if run_type == "build":
+            self._prepare_run_workspace("build", self._picker_output_matrix)
+            return
+        if run_type == "allocate":
+            self._prepare_run_workspace(
+                "allocate", self._picker_alloc_out, self._picker_sabt_output_alloc
+            )
+            return
+        if run_type == "rule-engine":
+            self._prepare_run_workspace(
+                "rule-engine", self._picker_rule_output, self._picker_sabt_output_rule
+            )
+            return
+        super()._prepare_validated_output(run_type)
 
     def _determine_last_output_path(self) -> str:
         return self._prefs.last_output_dir or super()._determine_last_output_path()
