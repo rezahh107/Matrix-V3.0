@@ -23,10 +23,13 @@ QLineEdit:disabled, QTextEdit:disabled, QPlainTextEdit:disabled, QComboBox:disab
 QComboBox { padding-left: 30px; padding-right: 30px; }
 QComboBox QLineEdit { background-color: transparent; border: none; border-radius: 0; min-height: 0; padding: 0; }
 QComboBox::drop-down { subcontrol-origin: border; subcontrol-position: top right; width: 28px; background-color: {control_surface}; border: none; border-radius: {control_radius}px; }
+QComboBox::drop-down:right-to-left { subcontrol-position: top left; }
+QComboBox::drop-down:left-to-right { subcontrol-position: top right; }
 QComboBox::drop-down:hover { background-color: {control_hover}; }
 QComboBox::drop-down:disabled { background-color: {disabled_surface}; }
-QComboBox::down-arrow { image: none; width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 5px solid {text_secondary}; }
-QComboBox::down-arrow:disabled { border-top-color: {disabled_text}; }
+/* Arrow pixels are Matrix-owned by the vector overlay in combo_chevron.py. */
+QComboBox::down-arrow { image: none; width: 12px; height: 8px; border: none; }
+QComboBox::down-arrow:disabled { image: none; border: none; }
 QComboBox QAbstractItemView { background-color: {surface_primary}; color: {text_primary}; border: 1px solid {boundary_control}; border-radius: {control_radius}px; padding: {micro}px; outline: 0; selection-background-color: {selection}; selection-color: {text_primary}; }
 QPushButton, QToolButton { background-color: {control_surface}; color: {text_primary}; border: 1px solid {boundary_control}; border-radius: {control_radius}px; min-height: 32px; padding: 0 10px; font-size: {body_size}pt; font-weight: 400; }
 QPushButton:hover, QToolButton:hover { background-color: {control_hover}; }
