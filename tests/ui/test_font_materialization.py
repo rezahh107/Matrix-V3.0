@@ -192,7 +192,6 @@ def _native_windows_font_oracle() -> int:
     }
     assert all(glyphs.values())
 
-    current_theme = theme.build_theme("light")
     theme.apply_layout_direction(app, Language.FA)
 
     semantic = QLabel("عنوان معنایی")
