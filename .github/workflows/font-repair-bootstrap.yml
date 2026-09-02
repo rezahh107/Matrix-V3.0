@@ -1,0 +1,137 @@
+name: Temporary font repair bootstrap
+
+on:
+  push:
+    branches:
+      - fix/vazirmatn-variable-font-authority
+
+permissions:
+  contents: write
+
+jobs:
+  embed-exact-font:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout implementation branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/vazirmatn-variable-font-authority
+          fetch-depth: 0
+
+      - name: Verify authoritative TTF and generate exact embedded payload
+        shell: bash
+        run: |
+          python - <<'PY'
+          from __future__ import annotations
+          import base64
+          import hashlib
+          import struct
+          import textwrap
+          from pathlib import Path
+
+          root = Path.cwd()
+          font = root / 'app/ui/assets/fonts/Vazirmatn[wght].ttf'
+          target = root / 'app/ui/assets/font_data_vazirmatn.py'
+          expected_sha = '696249a2c74b39ffdef55de4df2809c5b639d3ff80d618d8160a095d2fd49dca'
+          expected_size = 241328
+
+          data = font.read_bytes()
+          assert len(data) == expected_size, (len(data), expected_size)
+          assert hashlib.sha256(data).hexdigest() == expected_sha
+
+          # Verify sfnt table inventory and key metadata directly from authoritative bytes.
+          num_tables = struct.unpack_from('>H', data, 4)[0]
+          tables = {}
+          pos = 12
+          for _ in range(num_tables):
+              tag_b, _checksum, offset, length = struct.unpack_from('>4sIII', data, pos)
+              tag = tag_b.decode('latin-1')
+              tables[tag] = (offset, length)
+              pos += 16
+          for required in ('fvar', 'gvar', 'HVAR', 'OS/2', 'name'):
+              assert required in tables, required
+
+          os2_off, os2_len = tables['OS/2']
+          assert os2_len >= 6
+          assert struct.unpack_from('>H', data, os2_off + 4)[0] == 400
+
+          fvar_off, fvar_len = tables['fvar']
+          major, minor, axes_offset, _reserved, axis_count, axis_size, _inst_count, _inst_size = struct.unpack_from(
+              '>HHHHHHHH', data, fvar_off
+          )
+          assert (major, minor) == (1, 0)
+          assert axis_count >= 1 and axis_size >= 20
+          axis = fvar_off + axes_offset
+          tag, min_raw, default_raw, max_raw, _flags, _name_id = struct.unpack_from('>4slllHH', data, axis)
+          def fixed_16_16(v: int) -> float:
+              return v / 65536.0
+          assert tag == b'wght'
+          assert fixed_16_16(min_raw) == 100.0
+          assert fixed_16_16(default_raw) == 400.0
+          assert fixed_16_16(max_raw) == 900.0
+
+          name_off, name_len = tables['name']
+          _fmt, count, string_offset = struct.unpack_from('>HHH', data, name_off)
+          strings_base = name_off + string_offset
+          wanted = {1: 'Vazirmatn', 2: 'Regular', 4: 'Vazirmatn Regular', 5: 'Version 33.003', 6: 'Vazirmatn-Regular'}
+          found = {k: set() for k in wanted}
+          for i in range(count):
+              rec = name_off + 6 + i * 12
+              platform_id, encoding_id, language_id, name_id, nlen, noff = struct.unpack_from('>HHHHHH', data, rec)
+              if name_id not in wanted:
+                  continue
+              raw = data[strings_base + noff: strings_base + noff + nlen]
+              try:
+                  text = raw.decode('utf-16-be' if platform_id in (0, 3) else 'mac_roman').strip('\x00 ')
+              except Exception:
+                  continue
+              found[name_id].add(text)
+          for name_id, expected in wanted.items():
+              assert expected in found[name_id], (name_id, expected, sorted(found[name_id]))
+
+          encoded = base64.b64encode(data).decode('ascii')
+          wrapped = '\n'.join(textwrap.wrap(encoded, 76))
+          source = (
+              '"""Deterministic embedded Vazirmatn variable-font payload.\n\n'
+              'The canonical Base64 payload decodes exactly to the pinned repair artifact.\n'
+              'Compatibility names remain aliases and do not duplicate the payload.\n'
+              '"""\n\n'
+              'from __future__ import annotations\n\n'
+              'VAZIRMATN_VARIABLE_TTF_BASE64 = """\n'
+              + wrapped
+              + '\n"""\n\n'
+              'VAZIRMATN_REGULAR_TTF_BASE64 = VAZIRMATN_VARIABLE_TTF_BASE64\n'
+              'VAZIRMATN_REGULAR_BASE64 = VAZIRMATN_VARIABLE_TTF_BASE64\n'
+          )
+          target.write_text(source, encoding='utf-8', newline='\n')
+
+          # Independent source round-trip from the generated repository module text.
+          namespace = {}
+          exec(compile(target.read_text(encoding='utf-8'), str(target), 'exec'), namespace)
+          decoded = base64.b64decode(namespace['VAZIRMATN_VARIABLE_TTF_BASE64'])
+          assert decoded == data
+          assert len(decoded) == expected_size
+          assert hashlib.sha256(decoded).hexdigest() == expected_sha
+          assert namespace['VAZIRMATN_REGULAR_TTF_BASE64'] is namespace['VAZIRMATN_VARIABLE_TTF_BASE64']
+          assert namespace['VAZIRMATN_REGULAR_BASE64'] is namespace['VAZIRMATN_VARIABLE_TTF_BASE64']
+          print('SOURCE_ARTIFACT_IDENTITY_PASS')
+          print('EMBEDDED_ROUNDTRIP_PASS', len(decoded), hashlib.sha256(decoded).hexdigest())
+          PY
+
+      - name: Remove repair-input TTF and temporary workflow
+        shell: bash
+        run: |
+          rm -f 'app/ui/assets/fonts/Vazirmatn[wght].ttf'
+          rm -f '.github/workflows/font-repair-bootstrap.yml'
+
+      - name: Commit exact embedded asset
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/ui/assets/font_data_vazirmatn.py 'app/ui/assets/fonts/Vazirmatn[wght].ttf' .github/workflows/font-repair-bootstrap.yml
+          git diff --cached --check
+          git commit -m 'fix(ui): embed exact Vazirmatn variable font asset'
+          git push origin HEAD:fix/vazirmatn-variable-font-authority
