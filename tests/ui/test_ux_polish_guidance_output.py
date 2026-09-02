@@ -84,11 +84,11 @@ def test_database_references_are_presented_as_database_managed_rows(qapp) -> Non
 
 def test_primary_pages_have_visible_guidance_and_automatic_output_summary(qapp) -> None:
     window = MainWindow()
-    retained_outputs = (
-        window._picker_output_matrix,
-        window._picker_alloc_out,
-        window._picker_rule_output,
-    )
+    retained_outputs = {
+        "build": window._picker_output_matrix,
+        "allocate": window._picker_alloc_out,
+        "rule-engine": window._picker_rule_output,
+    }
     for object_name in (
         "pageGuidance_pageBuildContent",
         "pageGuidance_pageAllocateContent",
@@ -102,20 +102,25 @@ def test_primary_pages_have_visible_guidance_and_automatic_output_summary(qapp) 
         assert label.text().strip()
         assert label.property("guidanceLevel") in {"page", "field"}
 
-    summaries: list[QLabel] = []
-    for run_type in ("build", "allocate", "rule-engine"):
-        label = window.findChild(QLabel, f"outputWorkspaceSummary_{run_type}")
-        assert label is not None
-        assert window._prefs.output_root_dir in label.text()
-        summaries.append(label)
+    assert window.primary_surface_ids() == ("build", "allocate", "rule-engine")
 
     window.show()
     qapp.processEvents()
 
-    for picker in retained_outputs:
+    for run_type, picker in retained_outputs.items():
+        label = window.findChild(QLabel, f"outputWorkspaceSummary_{run_type}")
+        assert label is not None
+        assert window.activate_surface(run_type)
+        qapp.processEvents()
+
+        assert window.current_surface_id() == run_type
+        assert label.isVisible()
+        assert window._prefs.output_root_dir in label.text()
         assert picker.isHidden()
         assert not picker.isVisible()
-    assert all(label.isVisible() for label in summaries)
+        assert all(retained.isHidden() for retained in retained_outputs.values())
+        assert all(not retained.isVisible() for retained in retained_outputs.values())
+
     window.close()
 
 
