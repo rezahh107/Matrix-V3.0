@@ -1,446 +1,314 @@
-"""ابزارک‌های فونت برای بارگذاری و اعمال وزیر به صورت متمرکز.
+"""Matrix application font authority.
 
-این ماژول تلاش می‌کند فونت «وزیر» را از مسیر محلی ``app/ui/fonts/``
-بارگذاری کند و در صورت نبود، روی ویندوز از مسیرهای رایج توسعه‌دهنده
-کپی می‌کند. خروجی نهایی یک ``QFont`` سراسری Regular است که در صورت نبود
-وزیر روی تاهوما بازمی‌گردد؛ تأکیدهای معنایی در لایهٔ QSS/ویجت اعمال می‌شوند.
+Production startup registers the embedded Vazirmatn bytes directly with Qt. It
+never needs to write into the application source/install directory and it does
+not scan user Downloads folders. Filesystem helpers remain only as explicit
+compatibility/development seams.
 """
 
 from __future__ import annotations
 
 import base64
-import binascii
 import logging
 import os
-import shutil
-from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from app.ui.assets.font_data_vazirmatn import VAZIRMATN_REGULAR_BASE64, VAZIRMATN_REGULAR_TTF_BASE64
+from app.ui.assets.font_data_vazirmatn import (
+    VAZIRMATN_REGULAR_BASE64,
+    VAZIRMATN_REGULAR_TTF_BASE64,
+)
 
-if TYPE_CHECKING:  # pragma: no cover
-    from PySide6.QtGui import QFont, QFontDatabase
+if TYPE_CHECKING:
+    from PySide6.QtGui import QFont
     from PySide6.QtWidgets import QApplication
 
-__all__ = [
-    "FONTS_DIR",
-    "ensure_vazir_local_fonts",
-    "load_vazir_font",
-    "create_app_font",
-    "has_prefer_full_hinting",
-    "get_app_font",
-    "get_heading_font",
-    "prepare_default_font",
-    "apply_default_font",
-    "collect_font_diagnostics",
-    "resolve_vazir_family_name",
-]
-
 LOGGER = logging.getLogger(__name__)
-
-FONTS_DIR: Path = Path(__file__).resolve().parent / "fonts"
+FONTS_DIR = Path(__file__).resolve().parent / "fonts"
 FALLBACK_FAMILY = "Tahoma"
-DEFAULT_POINT_SIZE = 9
-
-# وزن پایهٔ برنامه باید خنثی باشد؛ QSS/heading helpers تأکید معنایی را تعیین می‌کنند.
+DEFAULT_POINT_SIZE = 10
 DEFAULT_WEIGHT = "normal"
-DEBUG_LOG_ENV = "MATRIX_FONT_LOG"
+DEBUG_LOG_ENV = "MATRIX_FONT_DEBUG_LOG"
 
-_FONT_DEBUG_HANDLER: logging.Handler | None = None
+_EMBEDDED_FAMILIES: tuple[str, ...] | None = None
 
 
-def _init_font_debug_log() -> None:
-    """فعال‌سازی لاگ فایل در صورت ست شدن متغیر محیطی.
+def _embedded_font_bytes() -> bytes:
+    """Decode the bundled Vazirmatn payload without touching the filesystem."""
 
-    مسیر از متغیر ``MATRIX_FONT_LOG`` خوانده می‌شود و در صورت موفقیت،
-    سطح لاگ روی DEBUG برای این ماژول تنظیم می‌شود.
-    """
-
-    global _FONT_DEBUG_HANDLER
-    if _FONT_DEBUG_HANDLER is not None:
-        return
-
-    log_path = os.environ.get(DEBUG_LOG_ENV)
-    if not log_path:
-        return
-
-    path = Path(log_path).expanduser()
+    payload = VAZIRMATN_REGULAR_TTF_BASE64 or VAZIRMATN_REGULAR_BASE64
+    if not payload:
+        return b""
     try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        handler = logging.FileHandler(path, encoding="utf-8")
-    except OSError as exc:  # pragma: no cover - وابسته به سیستم فایل
-        LOGGER.error("راه‌اندازی لاگ فونت ناموفق بود: %s", exc)
-        return
-
-    formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
-    handler.setFormatter(formatter)
-    handler.setLevel(logging.DEBUG)
-    LOGGER.addHandler(handler)
-    LOGGER.setLevel(logging.DEBUG)
-    _FONT_DEBUG_HANDLER = handler
-    LOGGER.debug("لاگ فونت در مسیر %s فعال شد", path)
+        return base64.b64decode(payload)
+    except (ValueError, TypeError):
+        LOGGER.exception("Unable to decode embedded Vazirmatn payload")
+        return b""
 
 
-_init_font_debug_log()
+def _register_embedded_vazirmatn() -> tuple[str, ...]:
+    """Register the embedded font in Qt and cache the resolved family names."""
 
+    global _EMBEDDED_FAMILIES
+    if _EMBEDDED_FAMILIES is not None:
+        return _EMBEDDED_FAMILIES
 
-def _teardown_font_debug_log() -> None:
-    """حذف هندلر لاگ فایل (برای تست‌ها)."""
+    data = _embedded_font_bytes()
+    if not data:
+        _EMBEDDED_FAMILIES = ()
+        return _EMBEDDED_FAMILIES
 
-    global _FONT_DEBUG_HANDLER
-    if _FONT_DEBUG_HANDLER is None:
-        return
-    LOGGER.removeHandler(_FONT_DEBUG_HANDLER)
     try:
-        _FONT_DEBUG_HANDLER.close()
-    finally:
-        _FONT_DEBUG_HANDLER = None
+        from PySide6.QtCore import QByteArray
+        from PySide6.QtGui import QFontDatabase
 
-
-def ensure_vazir_local_fonts() -> Path:
-    """اطمینان از وجود فایل‌های وزیر/وزیرمتن در مسیر محلی برنامه.
-
-    مسیر ``app/ui/fonts`` همیشه ساخته می‌شود. ابتدا اگر فونت‌های محلی
-    موجود باشند بدون اقدام اضافی بازگردانده می‌شود. در غیر این صورت
-    تلاش می‌شود فونت تعبیه‌شدهٔ «وزیرمتن Regular» روی دیسک نوشته شود؛
-    اگر ناکام بود و سیستم ویندوز بود از مسیرهای رایج توسعه‌دهنده کپی
-    می‌شود. نتیجهٔ نهایی مسیر پوشهٔ فونت است.
-    """
-
-    FONTS_DIR.mkdir(parents=True, exist_ok=True)
-    LOGGER.debug("بررسی فونت در مسیر %s", FONTS_DIR)
-
-    if _has_vazir_files(FONTS_DIR.glob("*.ttf")):
-        LOGGER.debug("فایل وزیر موجود است؛ بدون اقدام اضافی")
-        return FONTS_DIR
-
-    materialized = _materialize_embedded_font(FONTS_DIR)
-    if materialized is not None:
-        LOGGER.debug("فونت تعبیه‌شده استخراج شد: %s", materialized.name)
-        return FONTS_DIR
-
-    if os.name != "nt":
-        LOGGER.debug("سیستم ویندوز نیست؛ عبور بدون کپی")
-        return FONTS_DIR
-
-    for source in _iter_windows_sources():
-        for path in source:
-            LOGGER.debug("تلاش برای کپی فونت از %s", path)
-            _safe_copy_font(path, FONTS_DIR / path.name)
-
-    return FONTS_DIR
-
-
-def _iter_windows_sources() -> Iterable[list[Path]]:
-    for candidate in _windows_candidates():
-        if not candidate.exists():
-            LOGGER.debug("مسیر فونت یافت نشد: %s", candidate)
-            continue
-        if candidate.is_file():
-            yield [candidate]
-        else:
-            fonts = sorted(candidate.rglob("Vazir*.ttf"))
-            if fonts:
-                LOGGER.debug("%d فایل فونت در %s یافت شد", len(fonts), candidate)
-                yield fonts
-
-
-def _windows_candidates() -> list[Path]:
-    candidates: list[Path] = []
-
-    env_paths = os.environ.get("VAZIR_FONT_PATHS")
-    if env_paths:
-        for raw in env_paths.split(os.pathsep):
-            if raw:
-                candidates.append(Path(raw).expanduser())
-
-    local_appdata = os.environ.get("LOCALAPPDATA")
-    if local_appdata:
-        candidates.append(Path(local_appdata) / "Microsoft" / "Windows" / "Fonts")
-
-    candidates.append(Path.home() / "Downloads")
-
-    return candidates
-
-
-def _safe_copy_font(src: Path, dst: Path) -> None:
-    try:
-        if not dst.exists():
-            shutil.copy2(src, dst)
-            LOGGER.debug("کپی فونت به %s انجام شد", dst)
-    except OSError as exc:  # pragma: no cover - خطای سیستم فایل
-        LOGGER.debug("کپی فونت وزیر ناموفق بود: %s", exc)
-
-
-def _has_vazir_files(paths: Iterable[Path]) -> bool:
-    for path in paths:
-        name = path.name.lower()
-        if name.startswith("vazir") and path.suffix.lower() == ".ttf":
-            LOGGER.debug("فایل وزیر یافت شد: %s", path)
-            return True
-    return False
+        font_id = QFontDatabase.addApplicationFontFromData(QByteArray(data))
+        if font_id < 0:
+            LOGGER.warning("Qt rejected the embedded Vazirmatn font data")
+            _EMBEDDED_FAMILIES = ()
+            return _EMBEDDED_FAMILIES
+        families = tuple(QFontDatabase.applicationFontFamilies(font_id))
+        _EMBEDDED_FAMILIES = families
+        LOGGER.debug("Embedded Vazirmatn registered: %s", families)
+        return families
+    except Exception:
+        LOGGER.exception("Unable to register embedded Vazirmatn with Qt")
+        _EMBEDDED_FAMILIES = ()
+        return _EMBEDDED_FAMILIES
 
 
 def _materialize_embedded_font(target_dir: Path) -> Path | None:
-    """استخراج فونت وزیرمتن از دادهٔ base64 در صورت نبود فایل محلی."""
+    """Explicit development/test helper; production startup never calls this."""
 
+    data = _embedded_font_bytes()
+    if not data:
+        return None
+    target_dir.mkdir(parents=True, exist_ok=True)
     target = target_dir / "Vazirmatn-Regular.ttf"
-    if target.exists():
-        return target
-
-    try:
-        base64_data = VAZIRMATN_REGULAR_TTF_BASE64 or VAZIRMATN_REGULAR_BASE64
-        data = base64.b64decode(base64_data)
-    except (binascii.Error, ValueError) as exc:  # pragma: no cover - دادهٔ تعبیه‌شده ثابت است
-        LOGGER.warning("دادهٔ فونت وزیرمتن نامعتبر بود: %s", exc)
-        return None
-
-    try:
+    if not target.exists() or target.stat().st_size != len(data):
         target.write_bytes(data)
-    except OSError as exc:  # pragma: no cover - خطای سیستم فایل
-        LOGGER.debug("نوشتن فونت تعبیه‌شده ناموفق بود: %s", exc)
-        return None
-
     return target
 
 
+def ensure_vazir_local_fonts() -> Path:
+    """Compatibility helper that only ensures the explicitly requested directory exists.
+
+    It intentionally does not materialize the bundled font. Call
+    ``_materialize_embedded_font`` with an explicit writable directory when a
+    development/test file is actually required.
+    """
+
+    FONTS_DIR.mkdir(parents=True, exist_ok=True)
+    return FONTS_DIR
+
+
+def _windows_candidates() -> list[Path]:
+    """Return only explicitly opted-in development font paths.
+
+    Normal startup does not inspect Downloads, LocalAppData or globally installed
+    font directories. ``VAZIR_FONT_PATHS`` is an explicit development fallback.
+    """
+
+    raw = os.environ.get("VAZIR_FONT_PATHS", "")
+    return [Path(item).expanduser() for item in raw.split(os.pathsep) if item.strip()]
+
+
 def _install_fonts_from_directory(directory: Path) -> list[str]:
-    from PySide6.QtGui import QFontDatabase
+    """Register existing TTF files from an explicitly supplied directory."""
+
+    try:
+        from PySide6.QtGui import QFontDatabase
+    except Exception:
+        return []
 
     families: list[str] = []
+    if not directory.exists():
+        return families
     for ttf in sorted(directory.glob("*.ttf")):
         font_id = QFontDatabase.addApplicationFont(str(ttf))
-        if font_id == -1:
-            LOGGER.debug("ثبت فونت %s ناموفق بود", ttf)
+        if font_id < 0:
             continue
         families.extend(QFontDatabase.applicationFontFamilies(font_id))
-        LOGGER.debug("فونت %s ثبت شد با خانواده‌ها: %s", ttf, families)
-    if families:
-        resolved = resolve_vazir_family_name(QFontDatabase, candidates=families)
-        if resolved:
-            LOGGER.debug("خانوادهٔ اصلی وزیر تشخیص داده شد: %s", resolved)
     return families
 
 
 def _load_vazir_font_family_names() -> list[str]:
-    """بارگذاری فونت وزیر و برگرداندن نام خانواده‌های ثبت‌شده."""
+    """Load Vazirmatn from the embedded payload, with explicit dev paths as fallback."""
 
-    ensure_vazir_local_fonts()
-    families = _install_fonts_from_directory(FONTS_DIR)
-    from PySide6.QtGui import QFontDatabase
-
-    all_families = list(QFontDatabase.families()) + families
-    vazir_like = [fam for fam in all_families if "vazir" in fam.casefold() or "وزیر" in fam]
-    unique_sorted = sorted(dict.fromkeys(vazir_like), key=str.casefold)
-    LOGGER.debug("خانواده‌های ثبت‌شده: %s", unique_sorted)
-    return unique_sorted
+    families = list(_register_embedded_vazirmatn())
+    if not families and FONTS_DIR.exists():
+        families.extend(_install_fonts_from_directory(FONTS_DIR))
+    if not families:
+        for candidate in _windows_candidates():
+            directory = candidate if candidate.is_dir() else candidate.parent
+            families.extend(_install_fonts_from_directory(directory))
+    return [name for name in families if "vazir" in name.casefold() or "وزیر" in name]
 
 
 def resolve_vazir_family_name(
-    db: QFontDatabase | type[QFontDatabase], *, candidates: Sequence[str] | None = None
+    font_database: object | None = None,
+    *,
+    candidates: list[str] | tuple[str, ...] | None = None,
 ) -> str | None:
-    """انتخاب نام خانوادهٔ اصلی وزیر/وزیرمتن از میان خانواده‌های موجود."""
+    """Resolve the first registered Vazir/Vazirmatn family name."""
 
-    pool: list[str] = []
-    if candidates:
-        pool.extend(candidates)
-    pool.extend(db.families())
+    if candidates is None:
+        try:
+            from PySide6.QtGui import QFontDatabase
 
-    ordered_unique = sorted(dict.fromkeys(pool), key=str.casefold)
-    needles = ("vazirmatn", "vazir", "وزیر")
-    for needle in needles:
-        for family in ordered_unique:
-            if needle in family.casefold() or (needle == "وزیر" and "وزیر" in family):
-                return family
+            database = font_database or QFontDatabase
+            candidates = list(database.families())  # type: ignore[attr-defined]
+        except Exception:
+            candidates = []
+    for family in candidates:
+        normalized = str(family).casefold()
+        if "vazirmatn" in normalized or normalized.startswith("vazir") or "وزیر" in family:
+            return str(family)
     return None
 
 
 def load_vazir_font(point_size: int | None = None) -> QFont | None:
-    """در صورت دسترسی به وزیر، نمونهٔ فونت آن را می‌سازد."""
+    """Return the embedded Vazirmatn application font when Qt accepts it."""
 
     from PySide6.QtGui import QFont, QFontDatabase
 
     families = _load_vazir_font_family_names()
     family = resolve_vazir_family_name(QFontDatabase, candidates=families)
     if not family:
-        LOGGER.debug("هیچ خانوادهٔ وزیر ثبت نشد")
         return None
-    size = point_size or DEFAULT_POINT_SIZE
-    LOGGER.debug("فونت وزیر با خانوادهٔ %s و اندازهٔ %s ساخته شد", family, size)
-    return QFont(family, size)
+    return QFont(family, point_size or DEFAULT_POINT_SIZE)
 
 
 def create_app_font(
     point_size: int | None = None,
     *,
     fallback_family: str | None = None,
+    prefer_vazir: bool = True,
 ) -> QFont:
-    """ساخت فونت سراسری برنامه با اولویت وزیر سپس تاهوما.
-
-    Args:
-        point_size: اندازهٔ فونت؛ در صورت None از مقدار پیش‌فرض استفاده می‌شود.
-        fallback_family: در صورت نیاز، خانوادهٔ فونت fallback سفارشی.
-
-    مثال::
-        >>> font = create_app_font(point_size=10, fallback_family="Arial")  # doctest: +SKIP
-        >>> bool(font.family())  # doctest: +SKIP
-        True
-
-    فونت پایه عمداً Regular/Normal است. وزن‌های DemiBold/Bold باید فقط برای
-    نقش‌های معنایی مانند عنوان یا CTA اعمال شوند.
-    """
+    """Create a low-level semantic base font without selecting application language."""
 
     from PySide6.QtGui import QFont
 
     size = point_size or DEFAULT_POINT_SIZE
-    vazir_font = load_vazir_font(size)
+    vazir_font = load_vazir_font(size) if prefer_vazir else None
     if vazir_font is not None:
         vazir_font.setPointSize(size)
         vazir_font.setWeight(_resolve_weight())
         return _with_antialias(vazir_font)
 
     family = _select_fallback_family(fallback_family)
-    LOGGER.debug("استفاده از فونت جایگزین %s", family)
     fallback = QFont(family, size)
     fallback.setWeight(_resolve_weight())
     return _with_antialias(fallback)
 
 
 def _select_fallback_family(preferred: str | None) -> str:
-    """انتخاب خانوادهٔ جایگزین به‌صورت قابل پیش‌بینی و سازگار.
-
-    پارامترها:
-        preferred: نام خانوادهٔ پیشنهادی که توسط Caller ارسال شده است.
-
-    بازگشت:
-        اولین خانوادهٔ موجود از میان گزینه‌های ارائه‌شده؛ در صورت عدم دسترسی
-        به PySide6 یا بانک فونت، همان مقدار پیشنهادی یا ``FALLBACK_FAMILY``
-        بازگردانده می‌شود.
-
-    مثال::
-        >>> _select_fallback_family("Segoe UI")  # doctest: +SKIP
-        'Segoe UI'
-    """
-
-    candidates: list[str] = []
-    if preferred:
-        preferred = preferred.strip()
-        if preferred:
-            candidates.append(preferred)
-    candidates.extend([FALLBACK_FAMILY, "Segoe UI", "Arial"])
-
+    candidates = [name for name in (preferred, "Segoe UI", FALLBACK_FAMILY, "Arial") if name]
     try:
         from PySide6.QtGui import QFontDatabase
 
-        families = set(QFontDatabase.families())
+        installed = set(QFontDatabase.families())
         for name in candidates:
-            if name in families:
-                return name
+            if name in installed:
+                return str(name)
     except Exception:
-        LOGGER.debug("عدم دسترسی به QFontDatabase برای انتخاب fallback")
-
-    for name in candidates:
-        if name:
-            return name
-    return FALLBACK_FAMILY
+        pass
+    return str(candidates[0] if candidates else FALLBACK_FAMILY)
 
 
 def get_app_font(point_size: int | None = None) -> QFont:
-    """دریافت نسخهٔ کپی‌شده از فونت سراسری برنامه با اندازهٔ دلخواه."""
+    """Return a compatibility font without becoming a base-family authority.
 
+    With no semantic size request this returns an unresolved ``QFont`` so legacy
+    ``setFont(get_app_font())`` calls keep Qt/QApplication inheritance instead of
+    snapshotting the current FA/EN family. When a semantic size is requested, a
+    copy of the active application font is used and only that size is changed.
+    """
+
+    from PySide6.QtGui import QFont
+    from PySide6.QtWidgets import QApplication
+
+    if point_size is None:
+        return QFont()
+
+    app = QApplication.instance()
+    if isinstance(app, QApplication):
+        font = QFont(app.font())
+        font.setPointSize(point_size)
+        return font
     return create_app_font(point_size=point_size)
 
 
 def get_heading_font() -> QFont:
-    """فونت عنوان با اندازهٔ بزرگ‌تر و تأکید DemiBold."""
-
     from PySide6.QtGui import QFont
 
-    heading = create_app_font()
-    heading.setPointSize(11)
+    heading = get_app_font(point_size=11)
     heading.setWeight(QFont.Weight.DemiBold)
     return heading
 
 
 def collect_font_diagnostics() -> dict[str, object]:
-    """بازگرداندن وضعیت فعلی فونت و ثبت آن در لاگ (در صورت فعال بودن)."""
+    """Return deterministic diagnostics without probing arbitrary user directories."""
 
-    info: dict[str, object] = {
+    return {
+        "embedded_bytes": len(_embedded_font_bytes()),
+        "embedded_families": list(_register_embedded_vazirmatn()),
+        "explicit_dev_paths": [str(path) for path in _windows_candidates()],
         "fonts_dir": str(FONTS_DIR),
-        "fonts_present": sorted(path.name for path in FONTS_DIR.glob("*.ttf")),
-        "platform": os.name,
-        "env_paths": os.environ.get("VAZIR_FONT_PATHS", ""),
-        "windows_candidates": [str(path) for path in _windows_candidates()],
-        "debug_log_env": os.environ.get(DEBUG_LOG_ENV) or "",
+        "fonts_dir_exists": FONTS_DIR.exists(),
+        "debug_log_env": os.environ.get(DEBUG_LOG_ENV, ""),
     }
-
-    try:
-        from importlib import util
-
-        info["pyside_available"] = util.find_spec("PySide6") is not None
-    except Exception:  # pragma: no cover - فقط برای گزارش
-        info["pyside_available"] = False
-
-    LOGGER.debug("گزارش عیب‌یابی فونت: %s", info)
-    return info
 
 
 def prepare_default_font(*, point_size: int | None = None) -> QFont:
-    """سازگار برای کدهای قدیمی؛ معادل ``create_app_font``."""
-
     return create_app_font(point_size=point_size)
 
 
 def apply_default_font(
-    app: QApplication, *, point_size: int | None = None, family_override: str | None = None
+    app: QApplication,
+    *,
+    point_size: int | None = None,
+    family_override: str | None = None,
 ) -> QFont:
-    """اعمال فونت سراسری (وزیر یا تاهوما) روی QApplication با امکان override.
+    """Compatibility API; production application authority lives in app.ui.theme."""
 
-    Args:
-        app: نمونهٔ Qt برای اعمال فونت.
-        point_size: اندازهٔ فونت؛ در صورت None از مقدار پیش‌فرض استفاده می‌شود.
-        family_override: در صورت نیاز، خانوادهٔ فونت fallback سفارشی.
-    """
+    from PySide6.QtCore import Qt
 
-    font = create_app_font(point_size=point_size, fallback_family=family_override)
+    is_rtl = app.layoutDirection() == Qt.LayoutDirection.RightToLeft
+    preferred = family_override or (FALLBACK_FAMILY if is_rtl else "Segoe UI")
+    font = create_app_font(
+        point_size=point_size,
+        fallback_family=preferred,
+        prefer_vazir=is_rtl,
+    )
     app.setFont(font)
     return font
 
 
 def _with_antialias(font: QFont) -> QFont:
-    """اعمال آنتی‌الیاس و کیفیت بالای رندر به‌صورت صریح و پایدار."""
-
     from PySide6.QtGui import QFont
 
     strategy = QFont.StyleStrategy(font.styleStrategy())
     strategy |= QFont.StyleStrategy.PreferAntialias
     strategy |= QFont.StyleStrategy.PreferQuality
     font.setStyleStrategy(strategy)
-
     if has_prefer_full_hinting():
         font.setHintingPreference(QFont.HintingPreference.PreferFullHinting)
-
     font.setKerning(True)
     return font
 
 
 def has_prefer_full_hinting() -> bool:
-    """Detect availability of full hinting preference in the Qt build."""
-
     try:
         from PySide6.QtGui import QFont
     except Exception:
         return False
-
     return hasattr(QFont, "HintingPreference") and hasattr(
         QFont.HintingPreference, "PreferFullHinting"
     )
 
 
 def _resolve_weight() -> QFont.Weight:
-    """تبدیل وزن پیش‌فرض متنی به مقدار مناسب QFont."""
-
     from PySide6.QtGui import QFont
 
     mapping = {

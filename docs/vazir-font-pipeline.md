@@ -1,29 +1,89 @@
-# مسیر بارگذاری و استفاده از فونت «وزیر/وزیرمتن» در Matrix2
+# مسیر فونت C2/V2 در Matrix-V3.0
 
-> **منبع حقیقت قوانین تخصیص (LAW v3.0 / Technical SSoT v3.0):** این سند راهنما/تاریخچه است؛ تمام قواعد ثابت (کلیدهای join، رتبه‌بندی، انواع منتور/دانش‌آموز، گیت ظرفیت، trace و ...) فقط در `docs/LAW_Smart_Student_Allocation_v3.0.md` و `docs/Technical_SSoT_Smart_Student_Allocation_v3.0-TECH.md` معتبرند. در صورت هر تعارض، محتوای این دو فایل حاکم است و نکات قدیمی این سند به‌عنوان LEGACY خوانده شوند.
-این سند خلاصه می‌کند که فونت وزیر در UI/خروجی‌ها چگونه تأمین و اعمال می‌شود تا بتوان مشکل «عدم نمایش فونت وزیر» را ریشه‌یابی کرد.
+> **جایگاه این سند:** این فایل راهنمای عملیاتی/فنی فونت UI است. قواعد دامنه همچنان فقط از `docs/LAW_Smart_Student_Allocation_v3.0.md` و `docs/Technical_SSoT_Smart_Student_Allocation_v3.0-TECH.md` می‌آیند. برای composition و typography در presentation، `docs/UI_DESIGN_CONTRACT.md` مرجع C2/V2 است. این سند هیچ authority مستقل جدیدی ایجاد نمی‌کند.
 
-## 1) تأمین فونت در لایهٔ UI (PySide6)
-- **باندل تعبیه‌شده:** فایل TTF اصلی به‌صورت base64 در `app/ui/assets/font_data_vazirmatn.py` نگه‌داری می‌شود و نیاز به فایل باینری مجزا در مخزن نیست.
-- **مادی‌سازی روی دیسک:** `ensure_vazir_local_fonts()` پوشهٔ `app/ui/fonts/` را می‌سازد، اگر TTFی با پیشوند `Vazir` نباشد ابتدا فونت تعبیه‌شده را روی دیسک می‌نویسد و در ویندوز در صورت نیاز از مسیرهای توسعه‌دهنده (`LOCALAPPDATA/Microsoft/Windows/Fonts`، `~/Downloads` یا متغیر محیطی `VAZIR_FONT_PATHS`) کپی می‌کند.
-- **ثبت در Qt:** `_install_fonts_from_directory()` همهٔ فایل‌های `*.ttf` موجود را با `QFontDatabase.addApplicationFont` ثبت می‌کند و `_load_vazir_font_family_names()` فقط خانواده‌هایی که «vazir/وزیر» در نام دارند را برمی‌گرداند.
-- **ایجاد فونت برنامه:** `create_app_font()` ابتدا وزیر را با اندازهٔ پیش‌فرض ۹pt می‌سازد؛ اگر در سیستم یافت نشود، به فونت `Tahoma` (یا مقدار `fallback_family`) برمی‌گردد و در `apply_default_font()` روی `QApplication` اعمال می‌شود.
+## 1) authority فونت در سطح برنامه
 
-## 2) تم و استک تایپوگرافی
-- فایل `app/ui/theme.py` استک فارسی `Vazirmatn, IRANSansX, Tahoma, sans-serif` را تعریف می‌کند و در `apply_global_font()` از `create_app_font()` برای اعمال فونت در سطح اپ استفاده می‌شود. این یعنی در نبود وزیر، تاهوما به عنوان fallback استفاده می‌شود.
+authority جهت و خانوادهٔ فونت در سطح `QApplication` قرار دارد:
 
-## 3) خروجی‌های Excel
-- ماژول `app/infra/excel/styles.py` فونت خروجی را با `build_font_config()` می‌سازد؛ اگر نام فونت شامل «vazir/vazirmatn» باشد اندازهٔ پیش‌فرض را ۸pt می‌گذارد.
-- `ensure_xlsxwriter_format()` و `ensure_openpyxl_named_style()` این پیکربندی را به استایل مشترک اعمال می‌کنند تا جدول‌ها در هر دو موتور xlsxwriter/openpyxl با همان فونت رندر شوند.
-- `apply_workbook_formatting()` در `app/infra/excel/exporter.py` این استایل را به هر شیت اعمال می‌کند و هشدار می‌دهد که فونت در فایل Excel جاسازی نمی‌شود؛ برای اشتراک امن باید خروجی را به PDF تبدیل کرد.
+- `app/ui/theme.py::apply_layout_direction()` ابتدا جهت FA/RTL یا EN/LTR را اعمال می‌کند و سپس `apply_global_font()` را فراخوانی می‌کند.
+- `app/ui/theme.py::apply_global_font()` تنها enforcement boundary خانوادهٔ پایه است: family هدف را با همان منطق جهت‌دار و `create_app_font()` resolve می‌کند، آن را روی `QApplication` می‌گذارد و widgetهای موجودِ واجد شرایط را به‌صورت مرکزی به family جدید rebind می‌کند.
+- widgetهای ordinary/base-text خانوادهٔ FA/EN مستقلی انتخاب نمی‌کنند؛ widgetهای جدید از font پایهٔ فعال `QApplication` استفاده می‌کنند.
+- اگر یک widget به نقش semantic متفاوتی مانند اندازه یا weight بزرگ‌تر نیاز داشته باشد، آن تغییر باید از font فعلی application/inherited مشتق شود و family فعال را حفظ کند.
 
-## 4) تست‌ها و ممیزی
-- تست `tests/ui/test_font_materialization.py` انتظار دارد در پوشهٔ فونت‌ها فایل‌هایی با پیشوند `Vazir` ساخته شود و صحت مادی‌سازی را پوشش می‌دهد.
-- تست `tests/ui/test_theme_and_fonts.py` اطمینان می‌دهد که `QFont("Vazir", 11)` بدون خطا ساخته می‌شود و `create_app_font()` اندازهٔ سفارشی را اعمال می‌کند.
-- تست‌های Excel (`tests/infra/excel/test_persian_excel_roundtrip.py` و `tests/infra/test_excel_export_formatting.py`) بررسی می‌کنند که فرمت‌های xlsxwriter/openpyxl، نام فونت `Vazirmatn` را در سلول‌ها ثبت کنند.
+رفتار جهت‌دار C2/V2:
 
-## 5) چک‌لیست عیب‌یابی عدم نمایش وزیر
-1. اطمینان از اینکه در زمان اجرا مسیر `app/ui/fonts` حاوی `Vazirmatn-Regular.ttf` است (در صورت نبود، `_materialize_embedded_font` را در لاگ بررسی کنید).
-2. در ویندوز، متغیر محیطی `VAZIR_FONT_PATHS` و مسیرهای پیش‌فرض (`LOCALAPPDATA/Microsoft/Windows/Fonts`، `~/Downloads`) باید دسترسی‌پذیر باشند تا کپی فونت ممکن شود.
-3. اگر Qt وزیر را لود نمی‌کند، خروجی `_load_vazir_font_family_names()` را لاگ بگیرید تا ببینید آیا `QFontDatabase` خانواده‌ای با کلید «vazir» ثبت کرده است یا خیر.
-4. برای خروجی Excel، چون فونت جاسازی نمی‌شود، باید اطمینان داشت که فونت روی سیستم مقصد نصب است یا فایل به PDF تبدیل شود تا نمایش صحیح تضمین گردد.
+- **FA / RTL:** ابتدا `Vazirmatn`/`Vazir` تعبیه‌شده؛ در صورت عدم دسترسی، fallback امن فارسی از زنجیرهٔ موجود استفاده می‌شود.
+- **EN / LTR:** ابتدا `Segoe UI` و سپس fallbackهای امن موجود.
+- اندازهٔ پایهٔ فعلی UI برابر `10pt` و weight پایه `Regular / 400` است.
+
+`create_app_font()` یک factory سطح پایین/compatibility است؛ این helper به‌تنهایی language authority برنامه نیست. `get_app_font()` نیز برای compatibility/semantic sizing است و نباید توسط widgetهای ordinary به‌عنوان انتخاب‌کنندهٔ مستقل family استفاده شود.
+
+## 2) ثبت Vazirmatn در حافظهٔ Qt
+
+فونت اصلی به‌صورت base64 در `app/ui/assets/font_data_vazirmatn.py` نگه‌داری می‌شود. production startup مسیر زیر را استفاده می‌کند:
+
+1. `_embedded_font_bytes()` payload تعبیه‌شده را decode می‌کند.
+2. `_register_embedded_vazirmatn()` با `QFontDatabase.addApplicationFontFromData()` bytes را مستقیماً در حافظهٔ Qt ثبت می‌کند.
+3. `resolve_vazir_family_name()` family ثبت‌شده را resolve می‌کند.
+4. در مسیر FA/RTL، `apply_global_font()` همان family را در سطح `QApplication` فعال می‌کند.
+
+production startup برای این کار **هیچ TTFای داخل source/install directory نمی‌نویسد**.
+
+## 3) materialization و مسیرهای development
+
+Disk materialization یک seam صریح development/test است، نه رفتار production:
+
+- `ensure_vazir_local_fonts()` فقط directory صریح `FONTS_DIR` را ایجاد می‌کند و TTF تعبیه‌شده را خودکار materialize نمی‌کند.
+- `_materialize_embedded_font(target_dir)` فقط وقتی caller صریحاً یک directory writable می‌دهد، `Vazirmatn-Regular.ttf` را برای development/test می‌سازد.
+- `_windows_candidates()` فقط مسیرهایی را می‌خواند که صریحاً از طریق `VAZIR_FONT_PATHS` opt-in شده‌اند.
+- production مسیرهای `Downloads` یا `LocalAppData` را به‌طور خودکار scan یا copy نمی‌کند.
+
+وجود فایل قدیمی یا دستی در `app/ui/fonts/` authority production نیست. منبع اصلی production همان embedded bytes ثبت‌شده در حافظهٔ Qt است.
+
+## 4) propagation در widgetهای موجود
+
+قاعدهٔ C2/V2 این است که ordinary text controls خانوادهٔ فونت مستقل نگه ندارند و تغییر زبان بدون reconstruction انجام شود. با این حال، یک تغییر صرف در default font سطح `QApplication` یا یک `QFont()` بدون family override **به‌تنهایی تضمین نمی‌کند** که تمام widgetهای از قبل ساخته‌شده family resolve‌شدهٔ خود را در همهٔ مسیرهای Qt/QSS فوراً عوض کنند.
+
+مدل runtime فعلی به‌صورت مرکزی داخل `apply_global_font()` این مسئله را می‌بندد:
+
+1. قبل از تغییر font برنامه، family فعلی `QApplication` ثبت می‌شود.
+2. population موجود widgetها از `QApplication.allWidgets()` snapshot می‌شود و برای هر widget یک `captured QFont` از وضعیت پیش از mutation نگه‌داری می‌شود.
+3. family هدف با همان authority جهت‌دار موجود resolve می‌شود و `QApplication` به font جدید تغییر می‌کند.
+4. فقط widgetهایی eligible هستند که family موجود در `captured QFont` آن‌ها با family قبلی application برابر بوده باشد.
+5. برای هر widget واجد شرایط، از همان `captured QFont` یک copy ساخته می‌شود و فقط family آن با `setFamily()` به family هدف تغییر می‌کند.
+
+این روش عمداً کل `QApplication.font()` را روی همهٔ widgetها overwrite نمی‌کند؛ بنابراین `pointSize`، `weight`، italic/style و سایر تفاوت‌های semantic موجود حفظ می‌شوند. widgetهایی که family متفاوت و مستقل داشته‌اند نیز با این predicate دست‌کاری نمی‌شوند.
+
+برای compatibility با بخش‌های قدیمی، `get_app_font()` در فراخوانی بدون semantic size همچنان یک `QFont` بدون family override برمی‌گرداند و دو call قدیمی `setFont(get_app_font())` حفظ شده‌اند. صحت تغییر family این seam به inheritance پویا و تضمین‌نشدهٔ `QFont()` متکی نیست؛ همان central previous-family → target-family rebind آن را پوشش می‌دهد.
+
+widgetهای جدیدی که پس از transition ساخته می‌شوند، font پایهٔ جاری `QApplication` را به‌طور عادی دریافت می‌کنند. هیچ widget به‌صورت مستقل تصمیم نمی‌گیرد که برای FA یا EN چه familyای انتخاب شود.
+
+نقش‌های semantic مانند heading می‌توانند copy فونت فعال application را بگیرند و فقط `pointSize`، `weight` یا style لازم را تغییر دهند؛ family نباید دوباره در سطح widget انتخاب شود.
+
+## 5) تست و evidence
+
+پوشش فعال باید این موارد را اثبات کند:
+
+- `tests/unit/test_ui_fonts.py`: factory/compatibility helperها دیگر EN authority را با legacy `Tahoma` یکی نمی‌گیرند.
+- `tests/ui/test_theme_and_fonts.py`: رفتار FA/RTL و EN/LTR، transition واقعی FA → EN → FA روی widgetهای موجود، و حفظ semantic point-size/weight/style هنگام family rebinding.
+- `tests/ui/test_font_materialization.py`: registration در حافظه بدون disk write، materialization صریح development/test و نبود scan خودکار Downloads/LocalAppData.
+- `tools/render_ui_matrix.py`: evidence تصویری C2/V2 روی exact Head.
+- `tools/validate_ui_dpi.py`: evidence High-DPI روی exact Head.
+
+CI باید exact checkout را حفظ کند و Core/UI/render/DPI را از workflow موجود اجرا کند.
+
+## 6) عیب‌یابی
+
+برای بررسی font runtime:
+
+1. `QApplication.font().family()` و `QApplication.layoutDirection()` را با زبان فعال مقایسه کنید.
+2. در FA/RTL انتظار family از خانوادهٔ `Vazirmatn`/`Vazir` است؛ در EN/LTR روی Windows مسیر پشتیبانی‌شده انتظار `Segoe UI` است.
+3. برای widget موجود، family قبل و بعد از transition را همراه با `pointSize` و `weight` بررسی کنید؛ widget واجد شرایط باید family جدید را بگیرد و semantic properties خود را حفظ کند.
+4. `collect_font_diagnostics()` را برای `embedded_bytes`، `embedded_families` و `explicit_dev_paths` بررسی کنید.
+5. نبود `Vazirmatn-Regular.ttf` در `app/ui/fonts/` به‌تنهایی خطا نیست؛ production برای بارگذاری font به materialization روی دیسک وابسته نیست.
+6. اگر development به font file واقعی نیاز دارد، `_materialize_embedded_font()` را فقط با directory صریح test/dev استفاده کنید یا `VAZIR_FONT_PATHS` را صریحاً تنظیم کنید.
+
+## 7) خروجی Excel
+
+فونت Excel موضوع جداگانهٔ Infra است و این C2/V2 font-authority migration آن را تغییر نمی‌دهد. فایل Excel خود font را embed نمی‌کند؛ رفتار formatting/export باید با تست‌های Infra مربوط به خودش ارزیابی شود.

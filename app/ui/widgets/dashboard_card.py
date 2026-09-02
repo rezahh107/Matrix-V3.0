@@ -1,12 +1,10 @@
-"""ویجت کارت داشبورد با هدر و بدنه انعطاف‌پذیر."""
+"""Compact dashboard surface aligned with the V2 no-routine-shadow contract."""
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Iterable
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QPaintEvent
 from PySide6.QtWidgets import (
     QFrame,
     QLabel,
@@ -16,14 +14,13 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.ui.theme import Theme, apply_card_shadow
+from app.ui.theme import Theme
 
 __all__ = ["DashboardCard"]
-LOGGER = logging.getLogger(__name__)
 
 
 class DashboardCard(QFrame):
-    """کارت داشبورد با عنوان، توضیح و محتوای سفارشی."""
+    """Reusable flat content group; hierarchy comes from type and spacing."""
 
     def __init__(
         self,
@@ -43,8 +40,14 @@ class DashboardCard(QFrame):
             self.setMaximumHeight(max_height)
         self.setSizePolicy(policy)
         self._layout = QVBoxLayout(self)
-        self._layout.setContentsMargins(14, 12, 14, 12)
-        self._layout.setSpacing(8)
+        self._layout.setContentsMargins(
+            self._theme.panel_padding,
+            self._theme.panel_padding,
+            self._theme.panel_padding,
+            self._theme.panel_padding,
+        )
+        self._layout.setSpacing(self._theme.label_to_control)
+
         self._body_container = QScrollArea(self)
         self._body_container.setWidgetResizable(True)
         self._body_container.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -53,11 +56,11 @@ class DashboardCard(QFrame):
         self._body_widget = QWidget(self._body_container)
         self._body = QVBoxLayout(self._body_widget)
         self._body.setContentsMargins(0, 0, 0, 0)
-        self._body.setSpacing(4)
+        self._body.setSpacing(self._theme.micro)
         self._body_container.setWidget(self._body_widget)
 
         header = QVBoxLayout()
-        header.setSpacing(2)
+        header.setSpacing(self._theme.micro)
         self._title_label = QLabel(title)
         self._title_label.setObjectName("dashboardCardTitle")
         self._description_label = QLabel(description)
@@ -67,8 +70,6 @@ class DashboardCard(QFrame):
         header.addWidget(self._description_label)
         self._layout.addLayout(header)
         self._layout.addWidget(self._body_container)
-
-        apply_card_shadow(self)
         self.apply_theme(self._theme)
 
     def body_layout(self) -> QVBoxLayout:
@@ -90,26 +91,18 @@ class DashboardCard(QFrame):
         self._description_label.setText(description)
 
     def apply_theme(self, theme: Theme) -> None:
-        """فقط spacing/state را به‌روزرسانی می‌کند؛ styles.qss visual authority است."""
-
         self._theme = theme
+        self.setGraphicsEffect(None)
         self._layout.setContentsMargins(
-            theme.spacing_md,
-            theme.spacing_md,
-            theme.spacing_md,
-            theme.spacing_md,
+            theme.panel_padding,
+            theme.panel_padding,
+            theme.panel_padding,
+            theme.panel_padding,
         )
-        self._layout.setSpacing(theme.spacing_sm)
-        self._body.setSpacing(theme.spacing_xs + 2)
+        self._layout.setSpacing(theme.label_to_control)
+        self._body.setSpacing(theme.micro)
 
     def _apply_shadow(self, spec: object | None) -> None:
-        apply_card_shadow(self)
+        """Compatibility method: V2 does not apply a routine same-plane shadow."""
 
-    def paintEvent(self, event: QPaintEvent) -> None:  # noqa: N802 - امضای Qt
-        LOGGER.debug(
-            "DashboardCard.paintEvent | widget=%s effect=%s rect=%s",
-            self,
-            self.graphicsEffect(),
-            event.rect(),
-        )
-        super().paintEvent(event)
+        self.setGraphicsEffect(None)

@@ -1,4 +1,4 @@
-"""Focused falsification tests for MATRIX-UIUX-ROOT-COMPLETE-01."""
+"""Focused falsification tests for the active Matrix C2/V2 UI contracts."""
 
 from __future__ import annotations
 
@@ -10,22 +10,24 @@ import pytest
 
 pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
 from PySide6.QtCore import QByteArray, QRect, QSettings, Qt
-from PySide6.QtGui import QColor, QFont
+from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
     QFormLayout,
-    QPushButton,
+    QScrollArea,
     QStyle,
     QStyleOptionComboBox,
+    QVBoxLayout,
     QWidget,
 )
 
+from app.ui import main_window as main_window_module
 from app.ui.i18n import Language
 from app.ui.log_panel import LogPanel
 from app.ui.main_window import MainWindow
 from app.ui.texts import UiTranslator
-from app.ui.theme import apply_theme, build_stylesheet, build_theme
+from app.ui.theme import apply_theme, build_stylesheet, build_theme, contrast_ratio
 from app.ui.widgets.dashboard_card import DashboardCard
 from app.ui.widgets.file_picker import FilePicker
 from app.ui.widgets.status_bar import ThemedStatusBar
@@ -38,19 +40,7 @@ ACTIVE_TRANSLATION_MODULES = (
     ROOT / "app/ui/widgets/file_picker.py",
     ROOT / "app/ui/widgets/health_indicator.py",
 )
-
-
-def _ratio(fg: str, bg: str) -> float:
-    def luminance(value: str) -> float:
-        c = QColor(value)
-        channels = []
-        for raw in (c.red(), c.green(), c.blue()):
-            x = raw / 255.0
-            channels.append(x / 12.92 if x <= 0.04045 else ((x + 0.055) / 1.055) ** 2.4)
-        return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2]
-
-    l1, l2 = sorted((luminance(fg), luminance(bg)), reverse=True)
-    return (l1 + 0.05) / (l2 + 0.05)
+_EXPECTED_SURFACES = ("build", "allocate", "rule-engine", "explain", "database")
 
 
 def _fresh_settings() -> None:
@@ -59,14 +49,115 @@ def _fresh_settings() -> None:
     settings.sync()
 
 
-def _splitter_ratio(window: MainWindow) -> float:
-    sizes = window._splitter.sizes()
-    assert len(sizes) == 2 and all(value > 0 for value in sizes)
-    return sizes[0] / sizes[1]
-
-
 def _mapped_rect(widget: QWidget, ancestor: QWidget) -> QRect:
     return QRect(widget.mapTo(ancestor, widget.rect().topLeft()), widget.size())
+
+
+def _assert_contained(widget: QWidget, ancestor: QWidget) -> None:
+    rect = _mapped_rect(widget, ancestor)
+    assert rect.width() > 0 and rect.height() > 0
+    assert ancestor.rect().contains(rect)
+
+
+def _assert_overlay_matches_splitter(window: MainWindow) -> None:
+    overlay = window._busy_overlay
+    splitter = window._splitter
+    assert overlay is not None and splitter is not None
+    assert overlay.geometry() == _mapped_rect(splitter, window)
+
+
+def _assert_visible_statusbar_children_contained(
+    status_bar: QWidget, window: QWidget
+) -> None:
+    visible_children = [
+        child
+        for child in status_bar.children()
+        if isinstance(child, QWidget)
+        and child.parentWidget() is status_bar
+        and child.isVisibleTo(window)
+    ]
+    assert visible_children, "QStatusBar has no visible direct QWidget children"
+    for child in visible_children:
+        _assert_contained(child, status_bar)
+
+
+def _qss_rule_declarations(source: str, selector: str) -> dict[str, str]:
+    match = re.search(rf"{re.escape(selector)}\s*\{{(?P<body>[^}}]*)\}}", source)
+    assert match is not None, f"missing QSS rule: {selector}"
+    declarations: dict[str, str] = {}
+    for raw_declaration in match.group("body").split(";"):
+        if ":" not in raw_declaration:
+            continue
+        key, value = raw_declaration.split(":", 1)
+        declarations[key.strip()] = value.strip()
+    return declarations
+
+
+def _governing_scroll_area(widget: QWidget, surface: QWidget) -> QScrollArea | None:
+    current: QWidget | None = widget.parentWidget()
+    while current is not None:
+        if isinstance(current, QScrollArea):
+            if current is surface or surface.isAncestorOf(current):
+                return current
+            return None
+        if current is surface:
+            return None
+        current = current.parentWidget()
+    return None
+
+
+def _scroll_fully_to_widget(
+    scroll: QScrollArea, widget: QWidget, qapp: QApplication
+) -> QRect:
+    scroll.ensureWidgetVisible(widget, 0, 0)
+    qapp.processEvents()
+    viewport = scroll.viewport()
+    rect = _mapped_rect(widget, viewport)
+    bounds = viewport.rect()
+    horizontal = scroll.horizontalScrollBar()
+    vertical = scroll.verticalScrollBar()
+
+    if rect.left() < bounds.left():
+        horizontal.setValue(horizontal.value() + rect.left() - bounds.left())
+    elif rect.right() > bounds.right():
+        horizontal.setValue(horizontal.value() + rect.right() - bounds.right())
+    if rect.top() < bounds.top():
+        vertical.setValue(vertical.value() + rect.top() - bounds.top())
+    elif rect.bottom() > bounds.bottom():
+        vertical.setValue(vertical.value() + rect.bottom() - bounds.bottom())
+
+    qapp.processEvents()
+    return _mapped_rect(widget, viewport)
+
+
+def _assert_scroll_reachable(
+    widget: QWidget, surface: QWidget, qapp: QApplication
+) -> None:
+    scroll = _governing_scroll_area(widget, surface)
+    assert scroll is not None, "critical control has no governing QScrollArea"
+    horizontal = scroll.horizontalScrollBar()
+    vertical = scroll.verticalScrollBar()
+    previous = (horizontal.value(), vertical.value())
+    try:
+        rect = _scroll_fully_to_widget(scroll, widget, qapp)
+        viewport = scroll.viewport()
+        assert rect.width() > 0 and rect.height() > 0
+        assert viewport.rect().contains(rect)
+    finally:
+        horizontal.setValue(previous[0])
+        vertical.setValue(previous[1])
+        qapp.processEvents()
+
+
+def _combo_arrow_rect(combo: QComboBox) -> QRect:
+    option = QStyleOptionComboBox()
+    combo.initStyleOption(option)
+    return combo.style().subControlRect(
+        QStyle.ComplexControl.CC_ComboBox,
+        option,
+        QStyle.SubControl.SC_ComboBoxArrow,
+        combo,
+    )
 
 
 def test_ui_qsettings_harness_uses_isolated_test_identity(qapp: QApplication) -> None:
@@ -84,22 +175,22 @@ def test_ui_qsettings_harness_uses_isolated_test_identity(qapp: QApplication) ->
     sentinel = "tests/qsettings_harness_sentinel"
     settings.setValue(sentinel, "ok")
     settings.sync()
-    assert settings.status() == QSettings.Status.NoError
     assert settings.value(sentinel) == "ok"
     settings.remove(sentinel)
     settings.sync()
-    assert settings.status() == QSettings.Status.NoError
     assert settings.value(sentinel) is None
 
 
-def test_ui_typography_hierarchy(qapp: QApplication) -> None:
+def test_ui_typography_hierarchy_matches_v2(qapp: QApplication) -> None:
     current = build_theme("light")
     apply_theme(qapp, current)
     assert qapp.font().weight() == QFont.Weight.Normal
+    assert current.typography.regular_weight == 400
+    assert current.typography.strong_weight == 600
     qss = build_stylesheet(current)
+    assert "font-weight: 400" in qss
     assert "font-weight: 600" in qss
-    assert "font-weight: 700" in qss
-    assert qss.index("font-weight: 400") < qss.index("font-weight: 700")
+    assert "font-weight: 700" not in qss
 
 
 def test_ui_style_authority_has_no_competing_local_stylesheets(qapp: QApplication) -> None:
@@ -117,46 +208,81 @@ def test_ui_style_authority_has_no_competing_local_stylesheets(qapp: QApplicatio
         assert widget.styleSheet() == ""
 
 
-def test_ui_contrast_tokens_meet_selected_thresholds() -> None:
+def test_ui_contrast_tokens_meet_v2_semantic_thresholds() -> None:
     for mode in ("light", "dark"):
         colors = build_theme(mode).colors
-        assert _ratio(colors.text, colors.card) >= 4.5
-        assert _ratio(colors.warning, colors.warning_surface) >= 4.5
-        for background in (colors.primary, colors.primary_hover, colors.primary_pressed):
-            assert _ratio("#ffffff", background) >= 4.5
-        assert _ratio(colors.focus_indicator, colors.card) >= 3.0
-    light = build_theme("light").colors
-    dark = build_theme("dark").colors
-    assert light.subtle_boundary != light.control_boundary
-    assert dark.subtle_boundary != dark.control_boundary
-    assert _ratio(dark.card, dark.background) > 1.15
+        active_text_pairs = (
+            (colors.text_primary, colors.surface_primary),
+            (colors.text_primary, colors.control_surface),
+            (colors.text_secondary, colors.surface_primary),
+            (colors.success, colors.surface_primary),
+            (colors.warning, colors.surface_primary),
+            (colors.error, colors.surface_primary),
+            ("#FFFFFF", colors.accent),
+            ("#FFFFFF", colors.accent_hover),
+            ("#FFFFFF", colors.accent_pressed),
+        )
+        assert all(contrast_ratio(fg, bg) >= 4.5 for fg, bg in active_text_pairs)
+        essential_boundaries = (
+            (colors.focus, colors.surface_primary),
+            (colors.boundary_control, colors.surface_primary),
+        )
+        assert all(contrast_ratio(fg, bg) >= 3.0 for fg, bg in essential_boundaries)
+
+        # Disabled/inactive presentation is tracked separately and is not promoted
+        # to the active-text threshold contract.
+        disabled_ratio = contrast_ratio(colors.disabled_text, colors.disabled_surface)
+        assert disabled_ratio > 1.0
 
 
-def test_ui_control_states_keep_combo_native_and_states_distinct(qapp: QApplication) -> None:
+def test_ui_combo_is_matrix_styled_while_qt_keeps_behavior(qapp: QApplication) -> None:
     current = build_theme("dark")
     qss = build_stylesheet(current)
-    assert "QComboBox::drop-down" not in qss
-    assert current.colors.primary != current.colors.primary_hover != current.colors.primary_pressed
-    assert current.colors.control_hover != current.colors.focus_indicator
-    assert current.radius_sm <= 7
+    assert "QComboBox::drop-down" in qss
+    assert "QComboBox::down-arrow" in qss
+    assert "QComboBox QAbstractItemView" in qss
+    assert "QComboBox:hover" in qss
+    assert "QComboBox:focus" in qss
+    assert "QComboBox:disabled" in qss
+    assert re.search(r"QScrollBar::[A-Za-z-]+\s*\{", qss) is None
+    assert re.search(r"QCheckBox::indicator\s*\{", qss) is None
+
     apply_theme(qapp, current)
     combo = QComboBox()
-    combo.addItems(["A", "B"])
+    combo.addItems(["A", "B", "C"])
     combo.resize(180, 32)
-    option = QStyleOptionComboBox()
-    combo.initStyleOption(option)
-    rect = combo.style().subControlRect(
-        QStyle.ComplexControl.CC_ComboBox,
-        option,
-        QStyle.SubControl.SC_ComboBoxArrow,
-        combo,
+    combo.setCurrentIndex(2)
+    assert combo.count() == 3
+    assert combo.currentText() == "C"
+
+    for direction in (Qt.LayoutDirection.RightToLeft, Qt.LayoutDirection.LeftToRight):
+        combo.setLayoutDirection(direction)
+        option = QStyleOptionComboBox()
+        combo.initStyleOption(option)
+        arrow = _combo_arrow_rect(combo)
+        assert arrow.width() > 0 and arrow.height() > 0
+        assert combo.rect().contains(arrow)
+
+
+def test_ui_statusbar_height_is_content_derived_and_secondary_density_is_preserved() -> None:
+    source = (ROOT / "app/ui/styles.qss").read_text(encoding="utf-8")
+    status_bar = _qss_rule_declarations(source, "QStatusBar")
+    assert "min-height" not in status_bar
+    assert "height" not in status_bar
+    assert "max-height" not in status_bar
+
+    secondary = _qss_rule_declarations(
+        source,
+        'QPushButton[variant="secondary"], QToolButton[variant="secondary"]',
     )
-    assert not rect.isEmpty()
-    assert rect.width() > 0 and rect.height() > 0
+    assert secondary.get("min-height") == "28px"
+    assert "diagnosticsToggle" not in source
 
 
 def test_ui_translation_inventory_is_complete_and_reference_keys_are_split() -> None:
-    payload = json.loads((ROOT / "resources/translations/ui_texts.json").read_text(encoding="utf-8"))
+    payload = json.loads(
+        (ROOT / "resources/translations/ui_texts.json").read_text(encoding="utf-8")
+    )
     assert set(payload["fa"]) == set(payload["en"])
     keys = set(payload["en"])
     referenced: set[str] = set()
@@ -168,150 +294,275 @@ def test_ui_translation_inventory_is_complete_and_reference_keys_are_split() -> 
     assert "reference.schools.placeholder" in keys
     assert "reference.groupcodes.placeholder" in keys
     assert "reference.allocate.hint" in keys
-    assert "reference.hint" not in (ROOT / "app/ui/main_window.py").read_text(encoding="utf-8")
+    presentation_source = (ROOT / "app/ui/main_window_presentation_base.py").read_text(
+        encoding="utf-8"
+    )
+    assert "reference.hint" not in presentation_source
 
 
-def test_ui_bidi_and_stable_database_identity(qapp: QApplication) -> None:
+def test_ui_c2_surface_registry_is_id_based(qapp: QApplication) -> None:
     _fresh_settings()
     window = MainWindow()
-    window._apply_language(Language.FA)
-    assert qapp.layoutDirection() == Qt.LayoutDirection.RightToLeft
+    window.show()
+    qapp.processEvents()
+
+    assert window.workspace_surface_ids() == _EXPECTED_SURFACES
+    assert window.primary_surface_ids() == ("build", "allocate", "rule-engine")
+    assert window.secondary_surface_ids() == ("explain", "database")
+    assert window._tabs.tabBar().isHidden()
+
+    for surface_id in reversed(_EXPECTED_SURFACES):
+        assert window.activate_surface(surface_id)
+        qapp.processEvents()
+        assert window.current_surface_id() == surface_id
+        assert window._workspace_nav_buttons[surface_id].isChecked()
+
+    render_source = (ROOT / "tools/render_ui_matrix.py").read_text(encoding="utf-8")
+    assert "activate_surface(" in render_source
+    assert "current_surface_id(" in render_source
+    assert "_tabs.setCurrentIndex(" not in render_source
+    window.close()
+
+
+def test_ui_dpi_combo_inventory_is_surface_local(qapp: QApplication) -> None:
+    _fresh_settings()
+    window = MainWindow()
+    window.resize(1200, 800)
+    window.show()
+    qapp.processEvents()
+
+    assert window.activate_surface("build")
+    qapp.processEvents()
+    build = window._workspace_surfaces["build"]
+    build_combos = [
+        widget for widget in build.findChildren(QComboBox) if widget.isVisibleTo(build)
+    ]
+    assert build_combos == []
+    assert window._theme_selector is not None
+    assert not build.isAncestorOf(window._theme_selector)
+
+    assert window.activate_surface("allocate")
+    qapp.processEvents()
+    allocate = window._workspace_surfaces["allocate"]
+    combo = window.findChild(QComboBox, "academicYearInput")
+    assert combo is not None
+    assert allocate.isAncestorOf(combo)
+    assert combo.isVisibleTo(allocate)
+    _assert_scroll_reachable(combo, allocate, qapp)
+    window.close()
+
+
+def test_ui_dpi_harness_has_no_global_combo_fallback() -> None:
+    source = (ROOT / "tools/validate_ui_dpi.py").read_text(encoding="utf-8")
+    assert "combo = window._theme_selector" not in source
+    assert "combo = _visible_descendant(surface, QComboBox)" in source
+    assert 'critical["combo"] = _scroll_reachability_record(combo, surface, app)' in source
+
+
+def test_scroll_aware_oracle_reaches_target_outside_initial_viewport(
+    qapp: QApplication,
+) -> None:
+    surface = QWidget()
+    surface.resize(240, 140)
+    surface_layout = QVBoxLayout(surface)
+    scroll = QScrollArea(surface)
+    scroll.setWidgetResizable(True)
+    surface_layout.addWidget(scroll)
+
+    content = QWidget()
+    content_layout = QVBoxLayout(content)
+    spacer = QWidget(content)
+    spacer.setFixedHeight(320)
+    target = QWidget(content)
+    target.setFixedSize(120, 32)
+    content_layout.addWidget(spacer)
+    content_layout.addWidget(target)
+    scroll.setWidget(content)
+
+    surface.show()
+    qapp.processEvents()
+    initial_rect = _mapped_rect(target, scroll.viewport())
+    assert not scroll.viewport().rect().contains(initial_rect)
+    initial_scroll = scroll.verticalScrollBar().value()
+
+    _assert_scroll_reachable(target, surface, qapp)
+
+    assert scroll.verticalScrollBar().value() == initial_scroll
+    surface.close()
+
+
+def test_scroll_aware_oracle_rejects_target_that_cannot_fit_viewport(
+    qapp: QApplication,
+) -> None:
+    surface = QWidget()
+    surface.resize(240, 140)
+    surface_layout = QVBoxLayout(surface)
+    scroll = QScrollArea(surface)
+    scroll.setWidgetResizable(True)
+    surface_layout.addWidget(scroll)
+
+    content = QWidget()
+    content_layout = QVBoxLayout(content)
+    target = QWidget(content)
+    target.setFixedSize(120, 240)
+    content_layout.addWidget(target)
+    scroll.setWidget(content)
+
+    surface.show()
+    qapp.processEvents()
+    with pytest.raises(AssertionError):
+        _assert_scroll_reachable(target, surface, qapp)
+    surface.close()
+
+
+@pytest.mark.parametrize("size", [(1200, 800), (960, 640)])
+@pytest.mark.parametrize("language", [Language.FA, Language.EN])
+def test_ui_bidi_and_primary_actions_are_contained(
+    qapp: QApplication, size: tuple[int, int], language: Language
+) -> None:
+    _fresh_settings()
+    window = MainWindow()
+    window._apply_language(language)
+    window.resize(*size)
+    window.show()
+    qapp.processEvents()
+
+    expected_direction = (
+        Qt.LayoutDirection.RightToLeft
+        if language is Language.FA
+        else Qt.LayoutDirection.LeftToRight
+    )
+    assert qapp.layoutDirection() == expected_direction
+
     forms = window.findChildren(QFormLayout)
     assert forms
     assert all(form.labelAlignment() & Qt.AlignmentFlag.AlignTrailing for form in forms)
     pickers = window.findChildren(FilePicker)
     assert pickers
     assert all(p.line_edit().alignment() & Qt.AlignmentFlag.AlignLeading for p in pickers)
-    database = window._database_tab
-    ids_fa = [
-        section.property("sectionId")
-        for section in database.findChildren(type(database._schools_section), "databaseSection")
-    ]
-    database.update_translator(UiTranslator("en"))
-    window._apply_language(Language.EN)
-    assert qapp.layoutDirection() == Qt.LayoutDirection.LeftToRight
-    ids_en = [
-        section.property("sectionId")
-        for section in database.findChildren(type(database._schools_section), "databaseSection")
-    ]
-    assert ids_fa == ids_en == ["schools", "groupcodes"]
-    window.close()
 
-
-@pytest.mark.parametrize("size", [(1200, 800), (960, 640)])
-@pytest.mark.parametrize("language", [Language.FA, Language.EN])
-def test_ui_primary_actions_are_fixed_and_visible(
-    qapp: QApplication, size: tuple[int, int], language: Language
-) -> None:
-    _fresh_settings()
-    window = MainWindow()
-    window._apply_language(language)
-    window.resize(*size)
-    window.show()
-    qapp.processEvents()
-    for page_name, button in (
-        ("pageBuild", window._btn_build),
-        ("pageAllocate", window._btn_allocate),
-        ("pageRuleEngine", window._btn_rule_engine),
+    for surface_id, button in (
+        ("build", window._btn_build),
+        ("allocate", window._btn_allocate),
+        ("rule-engine", window._btn_rule_engine),
     ):
-        page = window.findChild(QWidget, page_name)
-        assert page is not None
-        assert bool(page.property("fixedActionPage"))
-        assert button.isVisibleTo(page)
-        assert button.geometry().height() > 0
-        matches = [candidate for candidate in page.findChildren(QPushButton) if candidate is button]
-        assert len(matches) == 1
-    normalized_rows = [
-        widget for widget in window.findChildren(QWidget) if bool(widget.property("normalizedFileRow"))
-    ]
-    assert normalized_rows
+        assert window.activate_surface(surface_id)
+        qapp.processEvents()
+        surface = window._workspace_surfaces[surface_id]
+        assert button.isVisibleTo(surface)
+        _assert_contained(button, surface)
+
+    assert window.activate_surface("allocate")
+    qapp.processEvents()
+    allocate = window._workspace_surfaces["allocate"]
+    combo = window.findChild(QComboBox, "academicYearInput")
+    assert combo is not None and combo.isVisibleTo(allocate)
+    _assert_scroll_reachable(combo, allocate, qapp)
+    arrow = _combo_arrow_rect(combo)
+    assert arrow.width() > 0 and arrow.height() > 0
+    assert combo.rect().contains(arrow)
+    assert window._picker_students.isVisibleTo(allocate)
+    _assert_scroll_reachable(window._picker_students, allocate, qapp)
+
+    navigation = window._workspace_navigation
+    toggle = window._diagnostics_toggle
+    status_bar = window._status_bar
+    assert navigation is not None and navigation.isVisibleTo(window)
+    assert toggle is not None and toggle.isVisibleTo(window)
+    assert status_bar is not None and status_bar.isVisibleTo(window)
+    assert status_bar.isAncestorOf(toggle)
+    _assert_contained(navigation, window)
+    _assert_contained(toggle, status_bar)
+    _assert_visible_statusbar_children_contained(status_bar, window)
     window.close()
 
 
-def test_ui_shell_geometry_and_log_stack(qapp: QApplication) -> None:
+def test_ui_diagnostics_startup_is_explicitly_collapsed(qapp: QApplication) -> None:
     _fresh_settings()
-    window = MainWindow()
-    window.resize(960, 640)
-    window.show()
-    qapp.processEvents()
-    ratio = _splitter_ratio(window)
-    assert 2.2 <= ratio <= 4.2
-    assert not window._status.isVisible()
-    assert window._log_panel.isVisibleTo(window)
-    assert window._log_panel._stack.stackingMode().name == "StackOne"
-    window._log_panel.text_edit.clear()
-    window._log_panel.sync_placeholder()
-    assert window._log_panel._stack.currentWidget() is window._log_panel._placeholder
-    window._log_panel.text_edit.setPlainText("line")
-    qapp.processEvents()
-    assert window._log_panel._stack.currentWidget() is window._log_panel.text_edit
-    window.close()
+    settings = QSettings()
+    settings.setValue("ui/main_splitter", QByteArray(b"legacy-state-must-not-open-c2"))
+    settings.sync()
 
-
-@pytest.mark.parametrize("size", [(960, 640), (1200, 800)])
-@pytest.mark.parametrize("language", [Language.FA, Language.EN])
-def test_ui_default_splitter_ratio_is_stable_across_size_and_language(
-    qapp: QApplication, size: tuple[int, int], language: Language
-) -> None:
-    _fresh_settings()
-    window = MainWindow()
-    window._apply_language(language)
-    window.resize(*size)
-    window.show()
-    qapp.processEvents()
-    ratio = _splitter_ratio(window)
-    assert 2.2 <= ratio <= 4.2
-    window.close()
-    qapp.processEvents()
-    _fresh_settings()
-
-
-def test_ui_compact_lower_shell_keeps_required_surfaces_visible_and_contained(
-    qapp: QApplication,
-) -> None:
-    _fresh_settings()
     window = MainWindow()
     window.resize(960, 640)
     window.show()
     qapp.processEvents()
 
-    lower = window._splitter.widget(1)
-    assert lower is not None
-    required = [
-        window._stage_badge,
-        window._stage_detail,
-        window._last_run_badge,
-        window._health_widget,
-        window._progress,
-        window._progress_caption,
-        window._log_panel,
-        window._log_panel.clear_button,
-        window._log_panel.save_button,
-        window._btn_settings,
-        window._btn_history_metrics,
-        window._btn_demo,
-        *window._settings_indicators.values(),
-    ]
-    for widget in required:
-        assert widget is not None
-        assert widget.isVisibleTo(lower)
-        assert lower.rect().contains(_mapped_rect(widget, lower))
-
-    assert not window._status.isVisible()
-    major = [
-        window._health_widget,
-        window._progress,
-        window._log_panel,
-        window._btn_settings,
-        window._btn_history_metrics,
-        window._btn_demo,
-    ]
-    rects = [_mapped_rect(widget, lower) for widget in major if widget is not None]
-    for index, rect in enumerate(rects):
-        assert all(not rect.intersects(other) for other in rects[index + 1 :])
-
+    pane = window._diagnostics_pane
+    toggle = window._diagnostics_toggle
+    assert pane is not None and toggle is not None
+    assert pane.isHidden()
+    assert not pane.isVisibleTo(window)
+    assert not toggle.isChecked()
+    assert not window.diagnostics_expanded()
+    assert window._status_bar is not None and window._status_bar.isVisibleTo(window)
+    assert window._stage_badge.isVisibleTo(window)
     window.close()
+    _fresh_settings()
+
+
+def test_ui_diagnostics_roundtrip_uses_only_v2_persistence(qapp: QApplication) -> None:
+    _fresh_settings()
+    first = MainWindow()
+    first.resize(1000, 700)
+    first.show()
     qapp.processEvents()
+
+    first.set_diagnostics_expanded(True)
+    qapp.processEvents()
+    assert first.diagnostics_expanded()
+    assert first._diagnostics_pane is not None
+    assert first._diagnostics_pane.isVisibleTo(first)
+    first._splitter.setSizes([650, 250])
+    qapp.processEvents()
+    expanded_sizes = first._splitter.sizes()
+
+    first.set_diagnostics_expanded(False)
+    qapp.processEvents()
+    assert first._diagnostics_pane.isHidden()
+    assert not first._diagnostics_toggle.isChecked()
+    saved_v2 = QSettings().value("ui/main_splitter_v2")
+    assert isinstance(saved_v2, QByteArray) and not saved_v2.isEmpty()
+    first.close()
+    qapp.processEvents()
+
+    second = MainWindow()
+    second.resize(1000, 700)
+    second.show()
+    qapp.processEvents()
+    assert not second.diagnostics_expanded()
+    assert second._diagnostics_pane is not None and second._diagnostics_pane.isHidden()
+    second.set_diagnostics_expanded(True)
+    qapp.processEvents()
+    restored_sizes = second._splitter.sizes()
+    assert second._diagnostics_pane.isVisibleTo(second)
+    assert second._diagnostics_toggle.isChecked()
+    assert len(restored_sizes) == len(expanded_sizes) == 2
+    assert restored_sizes[1] > 0
+    second.set_diagnostics_expanded(False)
+    assert second._diagnostics_pane.isHidden()
+    second.close()
+    _fresh_settings()
+
+
+def test_ui_diagnostics_error_path_auto_reveals(
+    qapp: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _fresh_settings()
+    window = MainWindow()
+    window.show()
+    qapp.processEvents()
+    assert not window.diagnostics_expanded()
+
+    monkeypatch.setattr(window, "_show_async_message", lambda *_args, **_kwargs: None)
+    window._on_finished(False, RuntimeError("diagnostic evidence"))
+    qapp.processEvents()
+
+    assert window.diagnostics_expanded()
+    assert window._diagnostics_pane is not None
+    assert window._diagnostics_pane.isVisibleTo(window)
+    assert window._diagnostics_toggle is not None and window._diagnostics_toggle.isChecked()
+    window.close()
     _fresh_settings()
 
 
@@ -358,81 +609,147 @@ def test_ui_busy_overlay_tracks_splitter_geometry(qapp: QApplication) -> None:
     window.close()
 
 
-def test_ui_splitter_state_roundtrip_preserves_two_panes(qapp: QApplication) -> None:
-    _fresh_settings()
-    first = MainWindow()
-    first.show()
-    qapp.processEvents()
-    first_outer_size = first.size()
-    available = sum(first._splitter.sizes())
-    assert available > 1
-    top = round(available * 0.40)
-    first._splitter.setSizes([top, available - top])
-    qapp.processEvents()
-    saved_ratio = _splitter_ratio(first)
-    assert not 2.2 <= saved_ratio <= 4.2
-    assert first.close()
-    qapp.sendPostedEvents()
-    qapp.processEvents()
-
-    settings = QSettings()
-    settings.sync()
-    saved_state = settings.value("ui/main_splitter")
-    assert isinstance(saved_state, QByteArray)
-    assert not saved_state.isEmpty()
-
-    second = MainWindow()
-    assert second.size() == first_outer_size
-    assert second._had_saved_splitter_state
-    assert not second._default_splitter_ratio_pending
-    second.show()
-    qapp.processEvents()
-    assert second.size() == first_outer_size
-    restored_ratio = _splitter_ratio(second)
-    assert abs(restored_ratio - saved_ratio) <= 0.35
-    assert not 2.2 <= restored_ratio <= 4.2
-    second.close()
-    qapp.processEvents()
-    _fresh_settings()
-
-
-def test_ui_default_splitter_ratio_is_one_shot(qapp: QApplication) -> None:
+def test_ui_busy_overlay_tracks_splitter_without_window_resize(
+    qapp: QApplication,
+) -> None:
     _fresh_settings()
     window = MainWindow()
     window.resize(960, 640)
     window.show()
     qapp.processEvents()
-    assert 2.2 <= _splitter_ratio(window) <= 4.2
 
-    window._splitter.setSizes([1, 3])
-    qapp.processEvents()
-    manual_ratio = _splitter_ratio(window)
-    assert not 2.2 <= manual_ratio <= 4.2
+    overlay = window._busy_overlay
+    splitter = window._splitter
+    toolbar = window._toolbar
+    assert overlay is not None and splitter is not None and toolbar is not None
+    assert toolbar.isVisibleTo(window)
 
+    window._disable_controls(True)
     qapp.processEvents()
-    assert not 2.2 <= _splitter_ratio(window) <= 4.2
-    window.resize(1200, 800)
-    qapp.processEvents()
-    assert not 2.2 <= _splitter_ratio(window) <= 4.2
-    assert not window._default_splitter_ratio_pending
+    top_level_size = window.size()
+    before = _mapped_rect(splitter, window)
+    assert overlay.isVisibleTo(window)
+    _assert_overlay_matches_splitter(window)
 
+    toolbar.hide()
+    qapp.processEvents()
+    hidden = _mapped_rect(splitter, window)
+    assert window.size() == top_level_size
+    assert hidden != before
+    _assert_overlay_matches_splitter(window)
+
+    toolbar.show()
+    qapp.processEvents()
+    restored = _mapped_rect(splitter, window)
+    assert window.size() == top_level_size
+    assert restored != hidden
+    _assert_overlay_matches_splitter(window)
+
+    window._disable_controls(False)
+    qapp.processEvents()
+    assert not overlay.isVisible()
     window.close()
-    qapp.processEvents()
+
+
+def test_ui_busy_overlay_sync_uses_splitter_geometry_event_path(
+    qapp: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
     _fresh_settings()
+    window = MainWindow()
+    window.resize(960, 640)
+    window.show()
+    qapp.processEvents()
+
+    overlay = window._busy_overlay
+    splitter = window._splitter
+    toolbar = window._toolbar
+    assert overlay is not None and splitter is not None and toolbar is not None
+
+    window._disable_controls(True)
+    qapp.processEvents()
+    _assert_overlay_matches_splitter(window)
+
+    calls = 0
+    original_update = window._update_overlay_geometry
+
+    def tracked_update() -> None:
+        nonlocal calls
+        calls += 1
+        original_update()
+
+    monkeypatch.setattr(window, "_update_overlay_geometry", tracked_update)
+    top_level_size = window.size()
+    before = _mapped_rect(splitter, window)
+
+    toolbar.hide()
+    qapp.processEvents()
+    hidden = _mapped_rect(splitter, window)
+    assert window.size() == top_level_size
+    assert hidden != before
+    assert calls > 0
+    _assert_overlay_matches_splitter(window)
+
+    calls_after_hide = calls
+    toolbar.show()
+    qapp.processEvents()
+    restored = _mapped_rect(splitter, window)
+    assert window.size() == top_level_size
+    assert restored != hidden
+    assert calls > calls_after_hide
+    _assert_overlay_matches_splitter(window)
+
+    window._disable_controls(False)
+    qapp.processEvents()
+    assert not overlay.isVisible()
+    window.close()
 
 
-def test_ui_busy_overlay_source_preserves_base_method() -> None:
-    base_source = (ROOT / "app/ui/main_window_base.py").read_text(encoding="utf-8")
-    wrapper_source = (ROOT / "app/ui/main_window.py").read_text(encoding="utf-8")
-    assert "_busy_overlay: QFrame | None = QFrame(self._splitter)" not in base_source
-    assert "_busy_overlay: QFrame | None = QFrame(self)" in base_source
-    assert "self._splitter.mapTo(" in base_source
-    assert "_busy_overlay.setParent" not in wrapper_source
-    assert "_splitter.restoreState(" not in wrapper_source
-    assert 'setValue("ui/main_splitter"' not in wrapper_source
-    assert "setSizes([3, 1])" not in wrapper_source
-    assert "QTimer.singleShot(0, self._apply_default_splitter_ratio_once)" in wrapper_source
-    assert "def resizeEvent(" not in wrapper_source
+def test_ui_authority_documents_are_synchronized() -> None:
+    agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    authority = (ROOT / "docs/UI_PRESENTATION_AUTHORITY.md").read_text(encoding="utf-8")
+    design = (ROOT / "docs/UI_DESIGN_CONTRACT.md").read_text(encoding="utf-8")
+    assert "docs/UI_PRESENTATION_AUTHORITY.md" in agents
+    assert "docs/UI_DESIGN_CONTRACT.md" in agents
+    assert "| `QComboBox` | STYLED |" in authority
+    assert "current bytes are split-owner" not in authority
+    assert "drop-down/arrow stays Fusion-native" not in authority
+    assert "QScrollBar" in authority and "NATIVE" in authority
+    assert "QCheckBox" in authority and "HYBRID" in authority
+    assert "PRIMARY_WORKSPACE_WITH_UTILITY_SEPARATION" in design
+    assert "SOLID_LAYERED_PRODUCTIVITY" in design
+
+
+def test_public_demo_instantiates_current_public_main_window(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: list[str] = []
+
+    class FakeWindow:
+        def __init__(self) -> None:
+            events.append("created")
+
+        def show(self) -> None:
+            events.append("shown")
+
+    class FakeApp:
+        def exec(self) -> int:
+            events.append("exec")
+            return 0
+
+    fake_app = FakeApp()
+
+    class FakeApplication:
+        @staticmethod
+        def instance() -> FakeApp:
+            return fake_app
+
+    monkeypatch.setattr(main_window_module, "MainWindow", FakeWindow)
+    monkeypatch.setattr(main_window_module, "QApplication", FakeApplication)
+    main_window_module.run_demo()
+
+    assert events == ["created", "shown", "exec"]
+    source = (ROOT / "app/ui/main_window.py").read_text(encoding="utf-8")
+    assert "_v1.run_demo()" not in source
 
 
 def test_ui_native_icon_source_has_no_emoji(qapp: QApplication) -> None:

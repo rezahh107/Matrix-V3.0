@@ -1,348 +1,379 @@
-"""Public MainWindow entrypoint with the bounded UI/UX composition pass.
+"""C2 workspace composition over the preserved Matrix execution/presentation base.
 
-The pre-existing execution implementation is retained verbatim in
-``main_window_base``.  This module changes presentation composition only: layout,
-localization bindings, shell geometry and semantic visual state.  All execution
-slots and domain/Infra calls continue to resolve to the preserved base methods.
+This module changes only presentation ownership and composition. Runtime/domain
+slots remain implemented by ``main_window_base`` through the preserved prior
+presentation layer in ``main_window_presentation_base``.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Final
 
-from PySide6.QtCore import QByteArray, QSettings, Qt, QTimer
-from PySide6.QtGui import QShowEvent
+from PySide6.QtCore import QByteArray, QEvent, QObject, QSettings, Qt
+from PySide6.QtGui import QAction, QCloseEvent, QResizeEvent
 from PySide6.QtWidgets import (
+    QApplication,
     QBoxLayout,
-    QCheckBox,
-    QDialog,
-    QDialogButtonBox,
     QFormLayout,
     QFrame,
     QGridLayout,
-    QGroupBox,
     QHBoxLayout,
-    QLabel,
-    QLayout,
-    QLineEdit,
     QPushButton,
-    QScrollArea,
     QSizePolicy,
     QSpacerItem,
-    QVBoxLayout,
+    QToolButton,
     QWidget,
 )
 
-from app.infra.config_flags import UserSettings, save_user_settings
-from app.ui.texts import UiTranslator
-from app.ui.widgets.file_picker import FilePicker
+from . import main_window_presentation_base as _v1
+from .i18n import Language
+from .widgets.file_picker import FilePicker
 
-from . import main_window_base as _base
+UnknownsPreflightResult = _v1.UnknownsPreflightResult
+AccentSplitter = _v1.AccentSplitter
+get_cached_policy = _v1.get_cached_policy
+load_policy = _v1.load_policy
 
-UnknownsPreflightResult = _base.UnknownsPreflightResult
-AccentSplitter = _base.AccentSplitter
-run_demo = _base.run_demo
-get_cached_policy = _base.get_cached_policy
-load_policy = _base.load_policy
-
-__all__ = ["MainWindow", "run_demo", "FilePicker", "UnknownsPreflightResult"]
+_DIAGNOSTICS_STATE_KEY: Final[str] = "ui/main_splitter_v2"
+_COMPACT_WORKSPACE_WIDTH: Final[int] = 1000
+# Geometry-specific exception: enough width for translated row utility commands
+# without forcing the file picker column to jump between rows.
+_ROW_UTILITY_WIDTH: Final[int] = 124
 
 
-@dataclass
-class _TextBinding:
-    target: object
-    key: str
+@dataclass(frozen=True)
+class _WorkspaceDestinationSpec:
+    surface_id: str
+    primary: bool
+    text_key: str
     fallback: str
-    kind: str = "text"
+    marker_object_name: str | None = None
 
 
-# Existing literals are converted immediately into catalogue bindings.  The
-# mapping is intentionally bounded to the reviewed active pages in this work unit.
-_LITERAL_BINDINGS: dict[str, tuple[str, str]] = {
-    "ورودی‌ها": ("group.inputs", "Inputs"),
-    "ورودی‌های تخصیص": ("group.allocate_inputs", "Allocation inputs"),
-    "سیاست": ("group.policy", "Policy"),
-    "خروجی": ("group.outputs", "Output"),
-    "تنظیمات پیشرفته": ("group.advanced", "Advanced settings"),
-    "شناسهٔ ثبت‌نام": ("group.registration", "Registration ID"),
-    "خروجی Sabt (ImportToSabt)": ("group.sabt_allocate", "Sabt output (ImportToSabt)"),
-    "مدیریت مراکز": ("group.center_management", "Center management"),
-    "گزارش Inspactor": ("files.inspactor", "Inspactor report"),
-    "Schools (Database reference)": ("files.schools", "Schools (Database reference)"),
-    "Crosswalk (Database reference)": ("files.crosswalk", "Crosswalk (Database reference)"),
-    "خروجی ماتریس": ("files.matrix_output", "Matrix output"),
-    "فایل دانش‌آموزان": ("files.students", "Students file"),
-    "استخر منتورها": ("files.pool", "Mentor pool"),
-    "ستون ظرفیت": ("files.capacity_column", "Capacity column"),
-    "سال تحصیلی": ("files.registration_year", "Academic year"),
-    "روستر سال قبل": ("files.prior_roster", "Prior roster"),
-    "روستر سال جاری": ("files.current_roster", "Current roster"),
-    "خروجی تخصیص": ("files.alloc_output", "Allocation output"),
-    "فایل خروجی": ("files.sabt_output", "Output file"),
-    "فایل تنظیمات": ("files.sabt_config", "Configuration file"),
-    "فایل قالب": ("files.sabt_template", "Template file"),
-    "فایل ماتریس": ("files.rule_matrix", "Matrix file"),
-    "پیشنهاد خودکار": ("action.autodetect", "Auto-detect"),
-    "بازنشانی به پیش‌فرض": ("action.reset_default", "Reset to default"),
-    "بارگذاری مجدد مدیران": ("action.refresh", "Reload managers"),
-    "حاکمیت استخر": ("action.pool_governance", "Pool governance"),
-    "ساخت ماتریس": ("action.build", "Build Matrix"),
-    "تخصیص": ("action.allocate", "Allocate"),
-    "اجرای موتور قواعد": ("action.rule_engine", "Run Rule Engine"),
-    "گزارش Explain": ("hero.explain.title", "Explain Report"),
-    "ضمیمه": ("hero.explain.badge", "Appendix"),
-    "Inspactor report": ("files.inspactor", "Inspactor report"),
-    "Policy": ("group.policy", "Policy"),
-    "Output": ("group.outputs", "Output"),
-    "Allocate": ("action.allocate", "Allocate"),
-    "Build Matrix": ("action.build", "Build Matrix"),
-    "Rule Engine": ("hero.rule.title", "Rule Engine"),
-}
+_DESTINATION_SPECS: Final[tuple[_WorkspaceDestinationSpec, ...]] = (
+    _WorkspaceDestinationSpec("build", True, "tabs.build", "Build Matrix", "pageBuild"),
+    _WorkspaceDestinationSpec("allocate", True, "tabs.allocate", "Allocate", "pageAllocate"),
+    _WorkspaceDestinationSpec(
+        "rule-engine", True, "tabs.rule_engine", "Rule Engine", "pageRuleEngine"
+    ),
+    _WorkspaceDestinationSpec("explain", False, "tabs.explain", "Explain", "pageExplain"),
+    _WorkspaceDestinationSpec("database", False, "tabs.database", "Database"),
+)
 
 
-class SettingsDialog(QDialog):
-    """Localized presentation for the unchanged UserSettings contract."""
-
-    def __init__(
-        self,
-        settings: UserSettings,
-        translator: UiTranslator,
-        parent: QWidget | None = None,
-    ) -> None:
-        super().__init__(parent)
-        self._translator = translator
-        self.setWindowTitle(self._t("settings.title", "Settings"))
-        self._history_checkbox = self._check(
-            "settings.history_metrics", "History Metrics", settings.enable_history_metrics
-        )
-        self._debug_checkbox = self._check(
-            "settings.trace_debug_sheets", "Trace Debug Sheets", settings.enable_trace_debug_sheets
-        )
-        self._mentor_trace_checkbox = self._check(
-            "settings.mentor_trace", "Mentor Pipeline Trace", settings.enable_mentor_trace_debug
-        )
-        self._pool_governance_checkbox = self._check(
-            "settings.pool_trace", "Pool Governance Trace", settings.enable_pool_governance_trace
-        )
-        self._bucket_trace_checkbox = self._check(
-            "settings.bucket_trace", "Bucket Trace", settings.enable_bucket_trace
-        )
-        self._qa_pool_coverage_checkbox = self._check(
-            "settings.qa_coverage", "QA Pool Coverage Rules", settings.enable_qa_pool_coverage_rules
-        )
-        self._join_bucket_checkbox = self._check(
-            "settings.join_buckets", "Use Join Buckets", settings.use_join_buckets
-        )
-        self._trace_checkbox = self._check(
-            "settings.trace_export", "Trace Sheet Export", settings.enable_trace_export
-        )
-
-        layout = QVBoxLayout(self)
-        layout.addWidget(QLabel(self._t("settings.description", "Toggle optional diagnostics and exports"), self))
-        for checkbox in (
-            self._history_checkbox,
-            self._debug_checkbox,
-            self._mentor_trace_checkbox,
-            self._pool_governance_checkbox,
-            self._bucket_trace_checkbox,
-            self._qa_pool_coverage_checkbox,
-            self._join_bucket_checkbox,
-            self._trace_checkbox,
-        ):
-            layout.addWidget(checkbox)
-        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self)
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
-
-    def _check(self, key: str, fallback: str, checked: bool) -> QCheckBox:
-        widget = QCheckBox(self._t(key, fallback), self)
-        widget.setChecked(checked)
-        return widget
-
-    @property
-    def result_settings(self) -> UserSettings:
-        return UserSettings(
-            enable_history_metrics=self._history_checkbox.isChecked(),
-            enable_trace_debug_sheets=self._debug_checkbox.isChecked(),
-            enable_trace_export=self._trace_checkbox.isChecked(),
-            enable_mentor_trace_debug=self._mentor_trace_checkbox.isChecked(),
-            enable_bucket_trace=self._bucket_trace_checkbox.isChecked(),
-            enable_pool_governance_trace=self._pool_governance_checkbox.isChecked(),
-            enable_qa_pool_coverage_rules=self._qa_pool_coverage_checkbox.isChecked(),
-            use_join_buckets=self._join_bucket_checkbox.isChecked(),
-        )
-
-    def _t(self, key: str, fallback: str) -> str:
-        return self._translator.text(key, fallback)
-
-
-class MainWindow(_base.MainWindow):
-    """Presentation-only composition over the preserved execution MainWindow."""
+class MainWindow(_v1.MainWindow):
+    """C2 primary-workspace shell with V2 presentation behavior."""
 
     def __init__(self) -> None:
-        self._ui_text_bindings: list[_TextBinding] = []
-        self._formatted_center_labels: list[tuple[QLabel, str]] = []
-        stored_splitter = QSettings().value("ui/main_splitter")
-        self._had_saved_splitter_state = isinstance(stored_splitter, QByteArray) and not stored_splitter.isEmpty()
-        self._default_splitter_ratio_pending = not self._had_saved_splitter_state
-        self._default_splitter_ratio_scheduled = False
+        self._workspace_surfaces: dict[str, QWidget] = {}
+        self._workspace_nav_buttons: dict[str, QToolButton] = {}
+        self._workspace_specs: dict[str, _WorkspaceDestinationSpec] = {}
+        self._workspace_navigation: QFrame | None = None
+        self._diagnostics_pane: QWidget | None = None
+        self._diagnostics_toggle: QToolButton | None = None
+        self._diagnostics_expanded = False
+        self._support_toolbar_actions: dict[str, QAction] = {}
         super().__init__()
-        self._register_shell_bindings()
-        self._refresh_reviewed_surface_texts()
-
-    def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 - Qt signature
-        super().showEvent(event)
-        if self._default_splitter_ratio_pending and not self._default_splitter_ratio_scheduled:
-            self._default_splitter_ratio_scheduled = True
-            QTimer.singleShot(0, self._apply_default_splitter_ratio_once)
-
-    def _apply_default_splitter_ratio_once(self) -> None:
-        if not self._default_splitter_ratio_pending:
-            return
+        self._splitter.installEventFilter(self)
+        # The prior presentation layer used a delayed 25% default. C2 always
+        # starts collapsed, so any pending legacy callback becomes a no-op.
         self._default_splitter_ratio_pending = False
-        splitter = self._splitter
-        if splitter is None or splitter.count() != 2:
+        self._install_workspace_navigation()
+        self._install_compact_operational_status()
+        self._install_contextual_diagnostics()
+        self._remove_decorative_motion()
+        self._apply_adaptive_workspace_geometry()
+        self._refresh_settings_indicators()
+        self._refresh_support_action_texts()
+
+    # ------------------------------------------------------------ C2 surfaces
+    def _resolve_tab_container(self, marker: QWidget) -> QWidget | None:
+        for index in range(self._tabs.count()):
+            page = self._tabs.widget(index)
+            if page is not None and (marker is page or page.isAncestorOf(marker)):
+                return page
+        return None
+
+    def _discover_workspace_surfaces(self) -> dict[str, QWidget]:
+        discovered: dict[str, QWidget] = {}
+        for spec in _DESTINATION_SPECS:
+            container: QWidget | None = None
+            if spec.surface_id == "database":
+                container = self._database_tab_container
+            elif spec.marker_object_name:
+                marker = self.findChild(QWidget, spec.marker_object_name)
+                if marker is not None:
+                    container = self._resolve_tab_container(marker)
+            if container is not None and self._tabs.indexOf(container) >= 0:
+                discovered[spec.surface_id] = container
+        return discovered
+
+    def _install_workspace_navigation(self) -> None:
+        self._workspace_surfaces = self._discover_workspace_surfaces()
+        self._workspace_specs = {
+            spec.surface_id: spec
+            for spec in _DESTINATION_SPECS
+            if spec.surface_id in self._workspace_surfaces
+        }
+        self._tabs.setObjectName("workspaceStack")
+        self._tabs.tabBar().hide()
+
+        host = QFrame(self)
+        host.setObjectName("workspaceNavigation")
+        nav = QHBoxLayout(host)
+        nav.setContentsMargins(
+            self._theme.page_margin_normal,
+            self._theme.micro,
+            self._theme.page_margin_normal,
+            self._theme.micro,
+        )
+        nav.setSpacing(self._theme.micro)
+
+        for spec in self._workspace_specs.values():
+            if not spec.primary:
+                continue
+            nav.addWidget(self._make_navigation_button(spec))
+        nav.addStretch(1)
+        for spec in self._workspace_specs.values():
+            if spec.primary:
+                continue
+            nav.addWidget(self._make_navigation_button(spec))
+
+        parent = self._tabs.parentWidget()
+        layout = parent.layout() if parent is not None else None
+        if isinstance(layout, QBoxLayout):
+            index = layout.indexOf(self._tabs)
+            layout.insertWidget(max(0, index), host, 0)
+        self._workspace_navigation = host
+        self._tabs.currentChanged.connect(self._sync_navigation_selection)
+        self._sync_navigation_selection(self._tabs.currentIndex())
+
+    def _make_navigation_button(self, spec: _WorkspaceDestinationSpec) -> QToolButton:
+        button = QToolButton(self)
+        button.setObjectName(f"workspaceNav_{spec.surface_id}")
+        button.setProperty("navRole", "primary" if spec.primary else "secondary")
+        button.setCheckable(True)
+        button.setAutoExclusive(True)
+        button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+        button.setText(self._t(spec.text_key, spec.fallback))
+        button.setAccessibleName(button.text())
+        button.clicked.connect(
+            lambda _checked=False, sid=spec.surface_id: self.activate_surface(sid)
+        )
+        self._workspace_nav_buttons[spec.surface_id] = button
+        return button
+
+    def workspace_surface_ids(self) -> tuple[str, ...]:
+        return tuple(self._workspace_surfaces)
+
+    def primary_surface_ids(self) -> tuple[str, ...]:
+        return tuple(sid for sid, spec in self._workspace_specs.items() if spec.primary)
+
+    def secondary_surface_ids(self) -> tuple[str, ...]:
+        return tuple(sid for sid, spec in self._workspace_specs.items() if not spec.primary)
+
+    def activate_surface(self, surface_id: str) -> bool:
+        target = self._workspace_surfaces.get(surface_id)
+        if target is None:
+            return False
+        index = self._tabs.indexOf(target)
+        if index < 0:
+            return False
+        self._tabs.setCurrentIndex(index)
+        self._sync_navigation_selection(index)
+        return True
+
+    def current_surface_id(self) -> str | None:
+        current = self._tabs.currentWidget()
+        for surface_id, widget in self._workspace_surfaces.items():
+            if widget is current:
+                return surface_id
+        return None
+
+    def _sync_navigation_selection(self, _index: int) -> None:
+        active = self.current_surface_id()
+        for surface_id, button in self._workspace_nav_buttons.items():
+            checked = surface_id == active
+            if button.isChecked() != checked:
+                button.blockSignals(True)
+                button.setChecked(checked)
+                button.blockSignals(False)
+
+    def _refresh_workspace_navigation_texts(self) -> None:
+        for surface_id, button in self._workspace_nav_buttons.items():
+            spec = self._workspace_specs[surface_id]
+            button.setText(self._t(spec.text_key, spec.fallback))
+            button.setAccessibleName(button.text())
+
+    # ------------------------------------------------------- compact status C2
+    def _install_compact_operational_status(self) -> None:
+        if self._status_bar is None:
             return
-        sizes = splitter.sizes()
-        available = sum(sizes)
-        if available <= 1:
+        # Stage and progress move out of diagnostics so routine work always has
+        # a compact operational summary even when the deep panel is collapsed.
+        self._stage_badge.setObjectName("stageBadge")
+        self._stage_badge.setMaximumWidth(170)
+        self._progress.setMaximumWidth(120)
+        self._progress_caption.setObjectName("progressCaption")
+        self._progress_caption.setMaximumWidth(220)
+        self._status_bar.insertWidget(0, self._stage_badge, 0)
+        self._status_bar.insertWidget(1, self._progress, 0)
+        self._status_bar.insertWidget(2, self._progress_caption, 1)
+        if self._database_status is not None:
+            self._database_status.setMaximumWidth(260)
+
+    # ------------------------------------------------------- diagnostics C2
+    def _install_contextual_diagnostics(self) -> None:
+        pane = self._splitter.widget(1)
+        if pane is None:
             return
-        bottom = max(1, round(available * 0.25))
-        splitter.setSizes([available - bottom, bottom])
+        pane.setObjectName("diagnosticsPane")
+        self._diagnostics_pane = pane
+        self._splitter.setCollapsible(0, False)
+        self._splitter.setCollapsible(1, True)
 
-    # ---------------------------------------------------------- page composition
-    def _build_build_page(self) -> QWidget:
-        content = super()._build_build_page()
-        self._bind_hero(content, "build")
-        self._bind_existing_literals(content)
-        self._bind_picker(
-            self._picker_schools,
-            "reference.schools.placeholder",
-            "School reference is managed in the Database tab.",
-        )
-        self._bind(self._picker_schools, "reference.schools.tooltip", "School reference is database-backed; update it from the Database tab.", "tooltip")
-        self._bind_picker(
-            self._picker_crosswalk,
-            "reference.groupcodes.placeholder",
-            "GroupCode reference is managed in the Database tab.",
-        )
-        self._bind(self._picker_crosswalk, "reference.groupcodes.tooltip", "GroupCode reference is database-backed; update it from the Database tab.", "tooltip")
-        self._bind_picker(self._picker_policy_build, "placeholder.policy", "Default: config/policy.json")
-        self._bind_picker(self._picker_output_matrix, "placeholder.matrix_output", "Matrix output (*.xlsx)")
-        self._bind(self._btn_matrix_mentor_pool, "action.pool_governance", "Pool governance")
-        self._prepare_form_geometry(
-            content,
-            {self._picker_inspactor: self._btn_matrix_mentor_pool},
-        )
-        return self._fixed_action_page(content, self._btn_build, "Build")
+        # Settings/history become global toolbar commands. Their legacy buttons
+        # are hidden to avoid duplicate first-class controls in diagnostics.
+        self._btn_settings.hide()
+        self._btn_history_metrics.hide()
 
-    def _build_allocate_page(self) -> QWidget:
-        content = super()._build_allocate_page()
-        self._bind_hero(content, "allocate")
-        self._bind_existing_literals(content)
-        self._bind_picker(self._picker_students, "placeholder.students", "Students (*.xlsx or *.csv)")
-        self._bind_picker(self._picker_pool, "placeholder.pool", "Mentor pool (*.xlsx)")
-        self._bind_picker(self._picker_policy_allocate, "placeholder.policy", "Default: config/policy.json")
-        self._bind_picker(self._picker_alloc_out, "placeholder.alloc_output", "Allocation output (*.xlsx)")
-        self._bind_picker(self._picker_prior_roster, "placeholder.prior_roster", "Prior roster (optional)")
-        self._bind_picker(self._picker_current_roster, "placeholder.current_roster", "Current roster / counters")
-        self._bind_picker(self._picker_sabt_output_alloc, "placeholder.sabt_output", "Sabt output (*.xlsx)")
-        self._bind_picker(self._picker_sabt_config_alloc, "placeholder.sabt_config", "SmartAlloc_Exporter_Config_v1.json")
-        self._bind_picker(self._picker_sabt_template_alloc, "placeholder.sabt_template", "Optional ImportToSabt template")
-        self._bind(self._btn_mentor_pool, "action.pool_governance", "Pool governance")
-        self._bind(self._btn_update_schools, "reference.update.schools", "Update schools")
-        self._bind(self._btn_update_groupcodes, "reference.update.groupcodes", "Update group codes")
-        self._bind(self._btn_autodetect, "action.autodetect", "Auto-detect")
-        self._bind_line_placeholder(self._combo_academic_year.lineEdit(), "placeholder.year", "e.g. 1404")
-        self._bind_first_spanning_label(content, "reference.allocate.hint", "Allocation uses database-backed references; update them from Excel only when needed.")
-        self._prepare_form_geometry(
-            content,
-            {self._picker_pool: self._btn_mentor_pool},
-        )
-        return self._fixed_action_page(content, self._btn_allocate, "Allocate")
+        toggle = QToolButton(self)
+        toggle.setObjectName("diagnosticsToggle")
+        toggle.setProperty("variant", "secondary")
+        toggle.setCheckable(True)
+        toggle.setChecked(False)
+        toggle.setAccessibleName(self._diagnostics_label())
+        toggle.setText(self._diagnostics_label())
+        toggle.toggled.connect(self.set_diagnostics_expanded)
+        self._diagnostics_toggle = toggle
+        if self._status_bar is not None:
+            self._status_bar.addPermanentWidget(toggle)
 
-    def _build_rule_engine_page(self) -> QWidget:
-        content = super()._build_rule_engine_page()
-        self._bind_hero(content, "rule")
-        self._bind_existing_literals(content)
-        self._bind_picker(self._picker_rule_matrix, "placeholder.rule_matrix", "Eligibility matrix (*.xlsx)")
-        self._bind_picker(self._picker_rule_students, "placeholder.rule_students", "Students for Rule Engine")
-        self._bind_picker(self._picker_policy_rule, "placeholder.policy", "Default: config/policy.json")
-        self._bind_picker(self._picker_rule_output, "placeholder.rule_output", "Rule Engine output (*.xlsx)")
-        self._bind_picker(self._picker_rule_prior_roster, "placeholder.prior_roster", "Prior roster (optional)")
-        self._bind_picker(self._picker_rule_current_roster, "placeholder.current_roster", "Current roster / counters")
-        self._bind_picker(self._picker_sabt_output_rule, "placeholder.sabt_output", "Sabt output (*.xlsx)")
-        self._bind_picker(self._picker_sabt_config_rule, "placeholder.sabt_config", "SmartAlloc_Exporter_Config_v1.json")
-        self._bind_picker(self._picker_sabt_template_rule, "placeholder.sabt_template", "Optional ImportToSabt template")
-        self._bind(self._btn_rule_autodetect, "action.autodetect", "Auto-detect")
-        self._bind_line_placeholder(self._combo_rule_academic_year.lineEdit(), "placeholder.year", "e.g. 1404")
-        self._prepare_form_geometry(content, {})
-        return self._fixed_action_page(content, self._btn_rule_engine, "RuleEngine")
+        # Before a top-level show(), isVisible() is false even for children that
+        # are not explicitly hidden. Set the hidden property directly so legacy
+        # splitter state can never surface diagnostics on routine C2 startup.
+        pane.hide()
+        self._diagnostics_expanded = False
+        self.set_diagnostics_expanded(False)
 
-    def _build_explain_page(self) -> QWidget:
-        page = super()._build_explain_page()
-        self._bind_hero(page, "explain")
-        self._bind_existing_literals(page)
-        direct_labels = [
-            label
-            for label in page.findChildren(QLabel, options=Qt.FindChildOption.FindDirectChildrenOnly)
-            if label.objectName() not in {"heroTitle", "heroSubtitle", "heroBadge"}
-        ]
-        if direct_labels:
-            self._bind(direct_labels[0], "explain.summary", "Explain rows are stored in a separate Excel sheet so each decision remains traceable.")
-        if len(direct_labels) > 1:
-            self._bind(direct_labels[1], "explain.columns_hint", "Each Explain row contains student, selected mentor, active rule and the corresponding reason.")
-        return page
+    def _diagnostics_label(self) -> str:
+        return "عیب‌یابی" if self._language is Language.FA else "Diagnostics"
 
-    def _wrap_page(self, page: QWidget) -> QWidget:
-        if bool(page.property("fixedActionPage")):
-            return page
-        return super()._wrap_page(page)
+    def set_diagnostics_expanded(self, expanded: bool) -> None:
+        pane = self._diagnostics_pane
+        if pane is None:
+            return
+        expanded = bool(expanded)
 
-    def _fixed_action_page(self, content: QWidget, button: QPushButton, page_id: str) -> QWidget:
-        shell = QWidget(self)
-        shell.setObjectName(f"page{page_id}")
-        shell.setProperty("fixedActionPage", True)
-        layout = QVBoxLayout(shell)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
+        if expanded:
+            saved = QSettings().value(_DIAGNOSTICS_STATE_KEY)
+            restored = (
+                isinstance(saved, QByteArray)
+                and not saved.isEmpty()
+                and self._splitter.restoreState(saved)
+            )
+            pane.show()
+            if not restored:
+                total = max(2, sum(self._splitter.sizes()))
+                diagnostics = max(160, round(total * 0.28))
+                self._splitter.setSizes([max(1, total - diagnostics), diagnostics])
+        else:
+            # Persist only an intentionally expanded C2 geometry. Hiding first
+            # during startup must never promote legacy `ui/main_splitter` state.
+            if self._diagnostics_expanded and not pane.isHidden():
+                QSettings().setValue(
+                    _DIAGNOSTICS_STATE_KEY, self._splitter.saveState()
+                )
+            pane.hide()
 
-        scroll = QScrollArea(shell)
-        scroll.setObjectName(f"scroll{page_id}")
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        content.setObjectName(f"page{page_id}Content")
-        scroll.setWidget(content)
-        layout.addWidget(scroll, 1)
+        self._diagnostics_expanded = expanded
+        if (
+            self._diagnostics_toggle is not None
+            and self._diagnostics_toggle.isChecked() != expanded
+        ):
+            self._diagnostics_toggle.blockSignals(True)
+            self._diagnostics_toggle.setChecked(expanded)
+            self._diagnostics_toggle.blockSignals(False)
 
-        footer = QFrame(shell)
-        footer.setObjectName("pageActionFooter")
-        footer_layout = QHBoxLayout(footer)
-        footer_layout.setContentsMargins(24, 8, 24, 10)
-        footer_layout.addStretch(1)
-        button.setProperty("variant", "primary")
-        footer_layout.addWidget(button)
-        layout.addWidget(footer, 0)
+    def diagnostics_expanded(self) -> bool:
+        return self._diagnostics_expanded
+
+    def _on_finished(self, success: bool, error: object | None) -> None:
+        super()._on_finished(success, error)
+        if error is not None:
+            self.set_diagnostics_expanded(True)
+
+    # ----------------------------------------------------------- support tools
+    def _build_ribbon(self) -> None:
+        super()._build_ribbon()
+        if self._toolbar is None or self._support_toolbar_actions:
+            return
+        settings_action = QAction(self)
+        settings_action.setObjectName("actionPresentationSettings")
+        settings_action.triggered.connect(self._open_settings_dialog)
+        history_action = QAction(self)
+        history_action.setObjectName("actionHistoryMetrics")
+        history_action.triggered.connect(self._show_history_metrics)
+        self._toolbar.addSeparator()
+        self._toolbar.addAction(settings_action)
+        self._toolbar.addAction(history_action)
+        self._support_toolbar_actions = {
+            "settings": settings_action,
+            "history": history_action,
+        }
+        self._refresh_support_action_texts()
+
+    def _refresh_support_action_texts(self) -> None:
+        settings_action = self._support_toolbar_actions.get("settings")
+        if settings_action is not None:
+            settings_action.setText(self._t("settings.title", "Settings"))
+            settings_action.setToolTip(
+                self._t("tooltip.preferences", "Change appearance and language")
+            )
+        history_action = self._support_toolbar_actions.get("history")
+        if history_action is not None:
+            history_action.setText(
+                self._t("settings.history_metrics", "History Metrics")
+            )
+
+    # ------------------------------------------------ semantic configuration
+    def _refresh_settings_indicators(self) -> None:
+        if not hasattr(self, "_settings_indicators") or not hasattr(
+            self, "_user_settings"
+        ):
+            return
+        values = self._user_settings.to_dict()
+        labels = self._settings_label_map()
+        on_text = "روشن" if self._language is Language.FA else "On"
+        off_text = "خاموش" if self._language is Language.FA else "Off"
+        for key, indicator in self._settings_indicators.items():
+            enabled = bool(values.get(key, False))
+            indicator.setText(
+                f"{labels.get(key, key)}: {on_text if enabled else off_text}"
+            )
+            indicator.setProperty("settingEnabled", enabled)
+            indicator.style().unpolish(indicator)
+            indicator.style().polish(indicator)
+
+    # ------------------------------------------------------- geometry / bidi
+    def _fixed_action_page(
+        self, content: QWidget, button: QPushButton, page_id: str
+    ) -> QWidget:
+        shell = super()._fixed_action_page(content, button, page_id)
+        content.setProperty("workspaceContent", True)
+        if content.layout() is not None:
+            margin = self._theme.page_margin_normal
+            content.layout().setContentsMargins(margin, margin, margin, margin)
+        footer = shell.findChild(QFrame, "pageActionFooter")
+        if footer is not None and footer.layout() is not None:
+            footer.layout().setContentsMargins(
+                self._theme.page_margin_normal,
+                self._theme.label_to_control,
+                self._theme.page_margin_normal,
+                self._theme.within_group,
+            )
         return shell
-
-    # -------------------------------------------------------------- geometry/bidi
-    def _prepare_form_geometry(
-        self,
-        root: QWidget,
-        utilities: dict[FilePicker, QPushButton],
-    ) -> None:
-        forms: list[QFormLayout] = []
-        for group in root.findChildren(QGroupBox):
-            layout = group.layout()
-            if isinstance(layout, QFormLayout):
-                forms.append(layout)
-        for form in forms:
-            form.setLabelAlignment(Qt.AlignmentFlag.AlignTrailing | Qt.AlignmentFlag.AlignVCenter)
-            form.setFormAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeading)
-            self._normalize_file_columns(form, utilities)
-            self._convert_empty_label_rows(form)
 
     def _normalize_file_columns(
         self,
@@ -356,13 +387,10 @@ class MainWindow(_base.MainWindow):
             if field is None:
                 continue
             picker = field if isinstance(field, FilePicker) else field.findChild(FilePicker)
-            if picker is None:
-                continue
-            rows.append((row, field, picker, utilities.get(picker)))
+            if picker is not None:
+                rows.append((row, field, picker, utilities.get(picker)))
         if not rows or not any(utility is not None for _, _, _, utility in rows):
             return
-
-        utility_width = 124
         for row, old_field, picker, utility in reversed(rows):
             label_item = form.itemAt(row, QFormLayout.ItemRole.LabelRole)
             label_widget = label_item.widget() if label_item is not None else None
@@ -373,18 +401,23 @@ class MainWindow(_base.MainWindow):
             row_widget.setProperty("normalizedFileRow", True)
             grid = QGridLayout(row_widget)
             grid.setContentsMargins(0, 0, 0, 0)
-            grid.setHorizontalSpacing(8)
+            grid.setHorizontalSpacing(self._theme.control_to_control)
             picker.setParent(row_widget)
             grid.addWidget(picker, 0, 0)
             grid.setColumnStretch(0, 1)
             if utility is not None:
                 utility.setParent(row_widget)
                 utility.setProperty("rowUtility", True)
-                utility.setMinimumWidth(utility_width)
+                utility.setMinimumWidth(_ROW_UTILITY_WIDTH)
                 grid.addWidget(utility, 0, 1)
             else:
                 grid.addItem(
-                    QSpacerItem(utility_width, 1, QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Minimum),
+                    QSpacerItem(
+                        _ROW_UTILITY_WIDTH,
+                        1,
+                        QSizePolicy.Policy.Fixed,
+                        QSizePolicy.Policy.Minimum,
+                    ),
                     0,
                     1,
                 )
@@ -395,283 +428,90 @@ class MainWindow(_base.MainWindow):
             else:
                 form.insertRow(row, row_widget)
 
-    def _convert_empty_label_rows(self, form: QFormLayout) -> None:
-        for row in reversed(range(form.rowCount())):
-            label_item = form.itemAt(row, QFormLayout.ItemRole.LabelRole)
-            field_item = form.itemAt(row, QFormLayout.ItemRole.FieldRole)
-            label = label_item.widget() if label_item is not None else None
-            field = field_item.widget() if field_item is not None else None
-            if not isinstance(label, QLabel) or label.text().strip() or field is None:
-                continue
-            form.takeRow(row)
-            label.deleteLater()
-            form.insertRow(row, field)
+    def _apply_adaptive_workspace_geometry(self) -> None:
+        margin = (
+            self._theme.page_margin_compact
+            if self.width() <= _COMPACT_WORKSPACE_WIDTH
+            else self._theme.page_margin_normal
+        )
+        for name in (
+            "pageBuildContent",
+            "pageAllocateContent",
+            "pageRuleEngineContent",
+            "pageExplain",
+        ):
+            widget = self.findChild(QWidget, name)
+            if widget is not None and widget.layout() is not None:
+                widget.layout().setContentsMargins(margin, margin, margin, margin)
+        for footer in self.findChildren(QFrame, "pageActionFooter"):
+            if footer.layout() is not None:
+                footer.layout().setContentsMargins(
+                    margin,
+                    self._theme.label_to_control,
+                    margin,
+                    self._theme.within_group,
+                )
+        if self._workspace_navigation is not None:
+            layout = self._workspace_navigation.layout()
+            if layout is not None:
+                layout.setContentsMargins(
+                    margin, self._theme.micro, margin, self._theme.micro
+                )
+        compact = self.width() <= _COMPACT_WORKSPACE_WIDTH
+        self._progress_caption.setVisible(not compact)
 
-    # --------------------------------------------------------------- localization
-    def _bind(self, target: object, key: str, fallback: str, kind: str = "text") -> None:
-        if target is None:
-            return
-        marker = (id(target), key, kind)
-        if any((id(item.target), item.key, item.kind) == marker for item in self._ui_text_bindings):
-            return
-        binding = _TextBinding(target, key, fallback, kind)
-        self._ui_text_bindings.append(binding)
-        self._apply_binding(binding)
+    def _remove_decorative_motion(self) -> None:
+        pulse = getattr(self, "_progress_pulse", None)
+        if pulse is not None:
+            pulse.stop()
+            pulse.deleteLater()
+        self._progress_pulse = None
+        if self._progress_caption.graphicsEffect() is not None:
+            self._progress_caption.setGraphicsEffect(None)
 
-    def _apply_binding(self, binding: _TextBinding) -> None:
-        text = self._translator.text(binding.key, binding.fallback)
-        target = binding.target
-        if binding.kind == "text" and hasattr(target, "setText"):
-            target.setText(text)
-        elif binding.kind == "title" and hasattr(target, "setTitle"):
-            target.setTitle(text)
-        elif binding.kind == "placeholder" and hasattr(target, "setPlaceholderText"):
-            target.setPlaceholderText(text)
-        elif binding.kind == "picker_placeholder" and hasattr(target, "set_placeholder_text"):
-            target.set_placeholder_text(text)
-        elif binding.kind == "tooltip" and hasattr(target, "setToolTip"):
-            target.setToolTip(text)
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802
+        if watched is self._splitter and event.type() in (
+            QEvent.Type.Resize,
+            QEvent.Type.Move,
+        ):
+            self._update_overlay_geometry()
+        return super().eventFilter(watched, event)
 
-    def _bind_picker(self, picker: FilePicker, key: str, fallback: str) -> None:
-        picker.update_translator(self._translator)
-        self._bind(picker, key, fallback, "picker_placeholder")
-
-    def _bind_line_placeholder(self, edit: QLineEdit | None, key: str, fallback: str) -> None:
-        if edit is not None:
-            edit.setAlignment(Qt.AlignmentFlag.AlignLeading | Qt.AlignmentFlag.AlignVCenter)
-            self._bind(edit, key, fallback, "placeholder")
-
-    def _bind_hero(self, root: QWidget, scenario: str) -> None:
-        title = root.findChild(QLabel, "heroTitle")
-        subtitle = root.findChild(QLabel, "heroSubtitle")
-        badge = root.findChild(QLabel, "heroBadge")
-        names = {
-            "build": ("Build Matrix", "Select inputs and build the eligibility matrix.", "Step 1 of 3"),
-            "allocate": ("Allocate", "Pick student and mentor pools for allocation and Sabt exports.", "Step 2 of 3"),
-            "rule": ("Rule Engine", "Run the Rule Engine on the built matrix to review policy and counters.", "Step 3 of 3"),
-            "explain": ("Explain Report", "Quick access to decision explainability for audits and training.", "Appendix"),
-        }
-        fallback_title, fallback_subtitle, fallback_badge = names[scenario]
-        self._bind(title, f"hero.{scenario}.title", fallback_title)
-        self._bind(subtitle, f"hero.{scenario}.subtitle", fallback_subtitle)
-        self._bind(badge, f"hero.{scenario}.badge", fallback_badge)
-
-    def _bind_existing_literals(self, root: QWidget) -> None:
-        for group in root.findChildren(QGroupBox):
-            mapping = _LITERAL_BINDINGS.get(group.title())
-            if mapping is not None:
-                self._bind(group, mapping[0], mapping[1], "title")
-        for label in root.findChildren(QLabel):
-            mapping = _LITERAL_BINDINGS.get(label.text())
-            if mapping is not None:
-                self._bind(label, mapping[0], mapping[1])
-        for button in root.findChildren(QPushButton):
-            mapping = _LITERAL_BINDINGS.get(button.text())
-            if mapping is not None:
-                self._bind(button, mapping[0], mapping[1])
-        for picker in root.findChildren(FilePicker):
-            picker.update_translator(self._translator)
-
-    def _bind_first_spanning_label(self, root: QWidget, key: str, fallback: str) -> None:
-        for group in root.findChildren(QGroupBox):
-            form = group.layout()
-            if not isinstance(form, QFormLayout):
-                continue
-            for row in range(form.rowCount()):
-                spanning = form.itemAt(row, QFormLayout.ItemRole.SpanningRole)
-                widget = spanning.widget() if spanning is not None else None
-                if isinstance(widget, QLabel) and widget.text().strip():
-                    self._bind(widget, key, fallback)
-                    return
-
-    def _refresh_reviewed_surface_texts(self) -> None:
-        for binding in self._ui_text_bindings:
-            self._apply_binding(binding)
-        for label, center_name in self._formatted_center_labels:
-            template = self._translator.text("center.manager_label", "Manager {center}:")
-            label.setText(template.format(center=center_name))
-        for picker in self.findChildren(FilePicker):
-            picker.update_translator(self._translator)
-        if self._health_widget is not None:
-            self._health_widget.update_translator(self._translator)
-        if self._database_tab is not None:
-            self._database_tab.update_translator(self._translator)
-        self._refresh_settings_indicators()
-
-    def _register_shell_bindings(self) -> None:
-        self._bind(self._btn_settings, "settings.title", "Settings")
-        self._bind(self._btn_history_metrics, "settings.history_metrics", "History Metrics")
+    def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802
+        super().resizeEvent(event)
+        if hasattr(self, "_theme"):
+            self._apply_adaptive_workspace_geometry()
 
     def _apply_language(self, language: object) -> None:
         super()._apply_language(language)
-        self._refresh_reviewed_surface_texts()
+        if self._workspace_nav_buttons:
+            self._refresh_workspace_navigation_texts()
+        if self._diagnostics_toggle is not None:
+            label = self._diagnostics_label()
+            self._diagnostics_toggle.setText(label)
+            self._diagnostics_toggle.setAccessibleName(label)
+        self._refresh_support_action_texts()
+        self._refresh_settings_indicators()
 
-    # ------------------------------------------------------------- toolbar/status
-    def _build_ribbon(self) -> None:
-        super()._build_ribbon()
-        self._refresh_action_texts()
-
-    def _refresh_action_texts(self) -> None:
-        mapping = {
-            "build": ("action.run_build", "Run Build", "tooltip.build", "Run the full matrix build pipeline"),
-            "allocate": ("action.run_allocate", "Run Allocation", "tooltip.allocate", "Allocate students to mentors"),
-            "mentor_pool": ("action.pool_governance", "Pool governance", "tooltip.pool_governance", "Review mentor and manager availability for this run"),
-            "rule_engine": ("action.run_rule_engine", "Run Rule Engine", "tooltip.rule_engine", "Execute the rule engine for policy testing"),
-            "output": ("dashboard.button.output", "Output Folder", "tooltip.output_folder", "Open the last generated output folder"),
-            "prefs": ("action.preferences", "Preferences", "tooltip.preferences", "Change appearance and language"),
-            "database": ("action.database", "Database", "tooltip.database", "Open database management"),
-        }
-        for name, (text_key, text_fallback, tip_key, tip_fallback) in mapping.items():
-            action = self._toolbar_actions.get(name)
-            if action is None:
-                continue
-            action.setText(self._translator.text(text_key, text_fallback))
-            action.setToolTip(self._translator.text(tip_key, tip_fallback))
-        if self._toolbar_theme_label is not None:
-            self._toolbar_theme_label.setText(self._t("theme.label", "Theme"))
-        if self._theme_selector is not None:
-            self._theme_selector.setItemText(0, self._t("theme.light", "Light"))
-            self._theme_selector.setItemText(1, self._t("theme.dark", "Dark"))
-
-    def _build_status_bar(self) -> None:
-        super()._build_status_bar()
-        self._compact_persistent_shell()
-        self._update_status_bar_state("ready")
-
-    def _update_status_bar_state(self, key: str) -> None:
-        if not hasattr(self, "_status_bar_state"):
-            return
-        mapping = {
-            "ready": self._t("statusbar.ready", "Status: Ready"),
-            "running": self._t("statusbar.running", "Status: Running"),
-            "error": self._t("statusbar.error", "Status: Error"),
-        }
-        state = key if key in mapping else "ready"
-        self._status_bar_state.setText(mapping[state])
-        self._status_bar_state.setProperty("state", state)
-        self._status_bar_state.style().unpolish(self._status_bar_state)
-        self._status_bar_state.style().polish(self._status_bar_state)
-
-    def _settings_label_map(self) -> dict[str, str]:
-        return {
-            "enable_history_metrics": self._t("settings.short.history", "History"),
-            "enable_trace_debug_sheets": self._t("settings.short.debug_sheets", "Debug Sheets"),
-            "enable_trace_export": self._t("settings.short.trace", "Trace"),
-            "enable_mentor_trace_debug": self._t("settings.short.mentor_trace", "Mentor Trace"),
-            "enable_pool_governance_trace": self._t("settings.short.pool_trace", "Pool Trace"),
-            "enable_bucket_trace": self._t("settings.short.bucket_trace", "Bucket Trace"),
-            "enable_qa_pool_coverage_rules": self._t("settings.short.qa_coverage", "QA Coverage"),
-            "use_join_buckets": self._t("settings.short.join_buckets", "Join Buckets"),
-        }
-
-    def _open_settings_dialog(self) -> None:
-        dialog = SettingsDialog(self._user_settings, self._translator, self)
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            self._user_settings = dialog.result_settings
-            save_user_settings(self._user_settings)
-            self._refresh_settings_indicators()
-            if not self._user_settings.enable_history_metrics:
-                self._reset_history_metrics()
-
-    # --------------------------------------------------------------- shell balance
-    def _compact_persistent_shell(self) -> None:
-        # Keep _status alive because execution code uses its value as internal state,
-        # but remove its duplicated user-visible presentation.
-        self._status.hide()
-        self._stage_detail.setMaximumHeight(36)
-        self._last_run_badge.setMaximumHeight(36)
-        self._progress_caption.setAlignment(Qt.AlignmentFlag.AlignTrailing | Qt.AlignmentFlag.AlignVCenter)
-        self._progress_caption.setMaximumWidth(220)
-        self._log_panel.setMinimumHeight(84)
-
-        progress_layout = self._find_layout_containing(self._progress.parentWidget().layout(), self._progress)
-        if isinstance(progress_layout, QBoxLayout):
-            progress_layout.setDirection(QBoxLayout.Direction.LeftToRight)
-            progress_layout.setSpacing(6)
-
-        lower = self._log_panel.parentWidget()
-        lower_layout = lower.layout() if lower is not None else None
-        if not isinstance(lower_layout, QBoxLayout):
-            return
-        lower_layout.setDirection(QBoxLayout.Direction.LeftToRight)
-        lower_layout.setContentsMargins(12, 4, 12, 8)
-        lower_layout.setSpacing(8)
-        lower_layout.setStretch(0, 2)
-        lower_layout.setStretch(1, 4)
-        lower_layout.setStretch(2, 0)
-
-        controls_item = lower_layout.itemAt(2)
-        controls_layout = controls_item.layout() if controls_item is not None else None
-        if not isinstance(controls_layout, QBoxLayout):
-            return
-        if controls_layout.count() and controls_layout.itemAt(0).spacerItem() is not None:
-            controls_layout.takeAt(0)
-        controls_layout.setDirection(QBoxLayout.Direction.TopToBottom)
-        controls_layout.setContentsMargins(0, 0, 0, 0)
-        controls_layout.setSpacing(4)
-        controls_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
-        self._compact_settings_indicator_grid(controls_layout)
-
-    def _compact_settings_indicator_grid(self, controls_layout: QBoxLayout) -> None:
-        indicators = list(self._settings_indicators.values())
-        for index in range(controls_layout.count()):
-            child_layout = controls_layout.itemAt(index).layout()
-            if child_layout is None or not any(child_layout.indexOf(item) >= 0 for item in indicators):
-                continue
-            controls_layout.takeAt(index)
-            while child_layout.count():
-                child_layout.takeAt(0)
-            grid = QGridLayout()
-            grid.setContentsMargins(0, 0, 0, 0)
-            grid.setHorizontalSpacing(4)
-            grid.setVerticalSpacing(2)
-            for item_index, indicator in enumerate(indicators):
-                grid.addWidget(indicator, item_index // 4, item_index % 4)
-            controls_layout.insertLayout(index, grid)
-            child_layout.deleteLater()
-            return
-
-    def _find_layout_containing(self, layout: QLayout | None, widget: QWidget) -> QLayout | None:
-        if layout is None:
-            return None
-        for index in range(layout.count()):
-            item = layout.itemAt(index)
-            if item.widget() is widget:
-                return layout
-            child_layout = item.layout()
-            found = self._find_layout_containing(child_layout, widget)
-            if found is not None:
-                return found
-        return None
-
-    # -------------------------------------------------- compatibility/test seams
-    def _create_center_management_section(self) -> QGroupBox:
+    def _create_center_management_section(self):
         # Preserve the established monkeypatch seam on app.ui.main_window.
-        _base.get_cached_policy = get_cached_policy
-        group = _base.MainWindow._create_center_management_section(self)
-        self._bind(group, "group.center_management", "Center management", "title")
-        buttons = group.findChildren(QPushButton)
-        if buttons:
-            self._bind(buttons[0], "action.reset_default", "Reset to default")
-        if len(buttons) > 1:
-            self._bind(buttons[1], "action.refresh", "Reload managers")
-        for label in group.findChildren(QLabel):
-            text = label.text().strip()
-            if text.startswith("مدیر ") and text.endswith(":"):
-                center_name = text.removeprefix("مدیر ").removesuffix(":")
-                self._formatted_center_labels.append((label, center_name))
-        return group
+        _v1.get_cached_policy = get_cached_policy
+        return super()._create_center_management_section()
 
-    def _create_manager_combo(self, parent: QWidget):
-        combo = _base.MainWindow._create_manager_combo(self, parent)
-        self._bind(combo, "center.manager_tooltip", "Select or enter the center manager", "tooltip")
-        edit = combo.lineEdit()
-        if edit is not None:
-            edit.setAlignment(Qt.AlignmentFlag.AlignLeading | Qt.AlignmentFlag.AlignVCenter)
-        return combo
+    def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802
+        if self._diagnostics_expanded and self._splitter is not None:
+            QSettings().setValue(_DIAGNOSTICS_STATE_KEY, self._splitter.saveState())
+        super().closeEvent(event)
+
+
+def run_demo() -> None:  # pragma: no cover - manual public C2 demo
+    """Run the current public C2 MainWindow rather than the preserved base seam."""
+
+    app = QApplication.instance() or QApplication([])
+    window = MainWindow()
+    window.show()
+    app.exec()
 
 
 def __getattr__(name: str) -> object:
-    """Delegate compatibility attributes to the preserved implementation module."""
-
-    return getattr(_base, name)
+    return getattr(_v1, name)
