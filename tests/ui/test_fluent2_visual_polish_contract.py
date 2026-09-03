@@ -21,7 +21,14 @@ import pytest
 pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
 from PySide6.QtCore import QRect, QSettings, Qt
 from PySide6.QtGui import QColor, QFont
-from PySide6.QtWidgets import QApplication, QComboBox, QLabel, QLineEdit, QWidget
+from PySide6.QtWidgets import (
+    QApplication,
+    QComboBox,
+    QLabel,
+    QLineEdit,
+    QScrollArea,
+    QWidget,
+)
 
 from app.ui import fonts
 from app.ui.i18n import Language
@@ -48,6 +55,20 @@ def _fresh_settings() -> None:
     settings = QSettings()
     settings.clear()
     settings.sync()
+
+
+def _destroy(window: MainWindow, qapp: QApplication) -> None:
+    """Tear a workspace window down completely.
+
+    The application font authority walks ``QApplication.allWidgets()`` on every
+    language switch, so windows left alive by ``close()`` alone make each later
+    case in the session quadratically slower.
+    """
+
+    window.close()
+    window.deleteLater()
+    qapp.processEvents()
+    _fresh_settings()
 
 
 def _channels(value: str) -> tuple[int, int, int]:
@@ -332,79 +353,93 @@ def test_shared_working_column_tokens_are_semantic() -> None:
     assert "self._theme.field_measure" in main_source
 
 
-@pytest.mark.parametrize("size", [(960, 640), (1200, 800), (1680, 900)])
 @pytest.mark.parametrize("language", [Language.FA, Language.EN])
 def test_footer_cta_shares_the_content_working_column(
-    qapp: QApplication, size: tuple[int, int], language: Language
+    qapp: QApplication, language: Language
 ) -> None:
     _fresh_settings()
     window = MainWindow()
     window._apply_language(language)
-    window.resize(*size)
     window.show()
-    qapp.processEvents()
 
-    # A scroll area reserves its scrollbar extent outside the viewport, so the
-    # work column and the footer column may differ by at most that reservation.
-    tolerance = window._theme.scrollbar_thickness + window._theme.micro
-    for surface_id, button in (
-        ("build", window._btn_build),
-        ("allocate", window._btn_allocate),
-    ):
-        assert window.activate_surface(surface_id)
-        qapp.processEvents()
-        surface = window._workspace_surfaces[surface_id]
-        content = window.findChild(QWidget, f"page{surface_id.capitalize()}Content")
-        column = button.parentWidget()
-        assert content is not None and column is not None
-        assert column.objectName() == "pageActionFooterColumn"
+    try:
+        # A scroll area reserves its scrollbar extent outside the viewport, so the
+        # work column and the footer column may differ by at most that reservation.
+        tolerance = window._theme.scrollbar_thickness + window._theme.micro
+        for size in ((960, 640), (1200, 800), (1680, 900)):
+            window.resize(*size)
+            qapp.processEvents()
+            for surface_id, button in (
+                ("build", window._btn_build),
+                ("allocate", window._btn_allocate),
+            ):
+                assert window.activate_surface(surface_id)
+                qapp.processEvents()
+                surface = window._workspace_surfaces[surface_id]
+                content = window.findChild(
+                    QWidget, f"page{surface_id.capitalize()}Content"
+                )
+                column = button.parentWidget()
+                assert content is not None and column is not None
+                assert column.objectName() == "pageActionFooterColumn"
 
-        content_rect = _mapped_rect(content, window)
-        column_rect = _mapped_rect(column, window)
-        assert content.width() <= window._theme.working_measure
-        assert column.width() <= window._theme.working_measure
-        # The CTA column and the work content must occupy the same logical column.
-        assert abs(content_rect.center().x() - column_rect.center().x()) <= tolerance
-        assert abs(content_rect.width() - column_rect.width()) <= tolerance
+                content_rect = _mapped_rect(content, window)
+                column_rect = _mapped_rect(column, window)
+                assert content.width() <= window._theme.working_measure
+                assert column.width() <= window._theme.working_measure
+                # The CTA column and the work content share one logical column.
+                assert (
+                    abs(content_rect.center().x() - column_rect.center().x())
+                    <= tolerance
+                ), f"{size} {surface_id}: CTA column is not centred on the content"
+                assert abs(content_rect.width() - column_rect.width()) <= tolerance
 
-        # The CTA must sit on the trailing edge of the same column as the form,
-        # never on a distant window edge.
-        margins = content.layout().contentsMargins()
-        inner = content_rect.adjusted(margins.left(), 0, -margins.right(), 0)
-        button_rect = _mapped_rect(button, window)
-        if language is Language.FA:
-            assert abs(button_rect.left() - inner.left()) <= tolerance
-        else:
-            assert abs(button_rect.right() - inner.right()) <= tolerance
-        assert button.isVisibleTo(surface)
-        assert surface.rect().contains(_mapped_rect(button, surface))
+                # The CTA sits on the trailing edge of the form's own column,
+                # never on a distant window edge.
+                margins = content.layout().contentsMargins()
+                inner = content_rect.adjusted(margins.left(), 0, -margins.right(), 0)
+                button_rect = _mapped_rect(button, window)
+                drift = (
+                    abs(button_rect.left() - inner.left())
+                    if language is Language.FA
+                    else abs(button_rect.right() - inner.right())
+                )
+                assert drift <= tolerance, f"{size} {surface_id}: CTA drift={drift}px"
+                assert button.isVisibleTo(surface)
+                assert surface.rect().contains(_mapped_rect(button, surface))
 
-    window.close()
-    _fresh_settings()
+                # Bounding the working column must not add a horizontal page scroll.
+                scroll = surface.findChild(QScrollArea)
+                assert scroll is not None
+                assert (
+                    scroll.horizontalScrollBarPolicy()
+                    == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+                )
+                assert not scroll.horizontalScrollBar().isVisibleTo(surface)
+    finally:
+        _destroy(window, qapp)
 
 
-@pytest.mark.parametrize("size", [(960, 640), (1680, 900)])
-def test_form_fields_stay_within_the_bounded_field_measure(
-    qapp: QApplication, size: tuple[int, int]
-) -> None:
+def test_form_fields_stay_within_the_bounded_field_measure(qapp: QApplication) -> None:
     _fresh_settings()
     window = MainWindow()
-    window.resize(*size)
     window.show()
-    qapp.processEvents()
-    assert window.activate_surface("allocate")
-    qapp.processEvents()
 
-    measure = window._theme.field_measure
-    students = window._picker_students
-    assert students.width() <= measure + 1
-    combo = window.findChild(QComboBox, "academicYearInput")
-    assert combo is not None and combo.width() <= measure + 1
-    capacity = window.findChild(QLineEdit, "editCapacityCol")
-    assert capacity is not None and capacity.width() <= measure + 1
+    try:
+        measure = window._theme.field_measure
+        for size in ((960, 640), (1680, 900)):
+            window.resize(*size)
+            qapp.processEvents()
+            assert window.activate_surface("allocate")
+            qapp.processEvents()
 
-    window.close()
-    _fresh_settings()
+            assert window._picker_students.width() <= measure + 1
+            combo = window.findChild(QComboBox, "academicYearInput")
+            assert combo is not None and combo.width() <= measure + 1
+            capacity = window.findChild(QLineEdit, "editCapacityCol")
+            assert capacity is not None and capacity.width() <= measure + 1
+    finally:
+        _destroy(window, qapp)
 
 
 # ----------------------------------------------------------------- CL-UI-I18N-01
@@ -479,5 +514,4 @@ def test_reviewed_allocate_surface_does_not_leak_the_other_language(
     assert "remaining_capacity" in capacity_help.text()
     assert "remaining_capacity" in capacity.toolTip()
 
-    window.close()
-    _fresh_settings()
+    _destroy(window, qapp)
