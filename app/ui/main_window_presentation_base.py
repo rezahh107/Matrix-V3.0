@@ -255,7 +255,18 @@ class MainWindow(_base.MainWindow):
         self._bind(self._btn_update_groupcodes, "reference.update.groupcodes", "Update group codes")
         self._bind(self._btn_autodetect, "action.autodetect", "Auto-detect")
         self._bind_line_placeholder(self._combo_academic_year.lineEdit(), "placeholder.year", "e.g. 1404")
-        self._bind_first_spanning_label(content, "reference.allocate.hint", "Allocation uses database-backed references; update them from Excel only when needed.")
+        self._bind_semantic_label(
+            content,
+            "allocateReferenceHint",
+            "reference.allocate.hint",
+            "Allocation uses database-backed references; update them from Excel only when needed.",
+        )
+        self._bind(
+            self._edit_capacity,
+            "files.capacity_column.tooltip",
+            "Input column identifier for remaining mentor capacity. Default: remaining_capacity",
+            "tooltip",
+        )
         self._prepare_form_geometry(
             content,
             {self._picker_pool: self._btn_mentor_pool},
@@ -320,10 +331,18 @@ class MainWindow(_base.MainWindow):
         footer = QFrame(shell)
         footer.setObjectName("pageActionFooter")
         footer_layout = QHBoxLayout(footer)
-        footer_layout.setContentsMargins(24, 8, 24, 10)
-        footer_layout.addStretch(1)
+        footer_layout.setContentsMargins(0, 0, 0, 0)
+        footer_layout.setSpacing(0)
+        # The CTA lives in a working column that mirrors the scrollable content
+        # column, so the primary action can never drift to a distant window edge.
+        column = QWidget(footer)
+        column.setObjectName("pageActionFooterColumn")
+        column_layout = QHBoxLayout(column)
+        column_layout.setContentsMargins(24, 8, 24, 10)
+        column_layout.addStretch(1)
         button.setProperty("variant", "primary")
-        footer_layout.addWidget(button)
+        column_layout.addWidget(button)
+        footer_layout.addWidget(column, 1)
         layout.addWidget(footer, 0)
         return shell
 
@@ -472,17 +491,19 @@ class MainWindow(_base.MainWindow):
         for picker in root.findChildren(FilePicker):
             picker.update_translator(self._translator)
 
-    def _bind_first_spanning_label(self, root: QWidget, key: str, fallback: str) -> None:
-        for group in root.findChildren(QGroupBox):
-            form = group.layout()
-            if not isinstance(form, QFormLayout):
-                continue
-            for row in range(form.rowCount()):
-                spanning = form.itemAt(row, QFormLayout.ItemRole.SpanningRole)
-                widget = spanning.widget() if spanning is not None else None
-                if isinstance(widget, QLabel) and widget.text().strip():
-                    self._bind(widget, key, fallback)
-                    return
+    def _bind_semantic_label(
+        self, root: QWidget, object_name: str, key: str, fallback: str
+    ) -> None:
+        """Bind one catalogue key to one stable, semantically identified label.
+
+        Layout-position heuristics (for example "the first spanning label in the
+        form") silently stop binding when a row is normalized or replaced, which
+        is how the reviewed Persian surface fell back to English copy.
+        """
+
+        label = root.findChild(QLabel, object_name)
+        if label is not None:
+            self._bind(label, key, fallback)
 
     def _refresh_reviewed_surface_texts(self) -> None:
         for binding in self._ui_text_bindings:

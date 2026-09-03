@@ -244,7 +244,9 @@ def test_ui_combo_is_matrix_styled_while_qt_keeps_behavior(qapp: QApplication) -
     assert "QComboBox:hover" in qss
     assert "QComboBox:focus" in qss
     assert "QComboBox:disabled" in qss
-    assert re.search(r"QScrollBar::[A-Za-z-]+\s*\{", qss) is None
+    # QScrollBar is STYLED after the Fluent-2 polish pass; completeness of that
+    # family is proven by tests/ui/test_fluent2_visual_polish_contract.py.
+    assert re.search(r"QScrollBar::handle:vertical\s*\{", qss) is not None
     assert re.search(r"QCheckBox::indicator\s*\{", qss) is None
 
     apply_theme(qapp, current)
@@ -717,7 +719,8 @@ def test_ui_authority_documents_are_synchronized() -> None:
     assert "| `QComboBox` | STYLED |" in authority
     assert "current bytes are split-owner" not in authority
     assert "drop-down/arrow stays Fusion-native" not in authority
-    assert "QScrollBar" in authority and "NATIVE" in authority
+    assert "| `QScrollBar` (including scroll-area/item-view children) | STYLED |" in authority
+    assert "QScrollBar` is `STYLED`" in design
     assert "QCheckBox" in authority and "HYBRID" in authority
     assert "PRIMARY_WORKSPACE_WITH_UTILITY_SEPARATION" in design
     assert "SOLID_LAYERED_PRODUCTIVITY" in design

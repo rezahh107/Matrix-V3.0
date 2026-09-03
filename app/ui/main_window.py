@@ -45,7 +45,6 @@ load_policy = _v1.load_policy
 
 _DIAGNOSTICS_STATE_KEY: Final[str] = "ui/main_splitter_v2"
 _COMPACT_WORKSPACE_WIDTH: Final[int] = 1000
-_MAX_WORKING_MEASURE: Final[int] = 1280
 # Geometry-specific exception: enough width for translated row utility commands
 # without forcing the file picker column to jump between rows.
 _ROW_UTILITY_WIDTH: Final[int] = 124
@@ -95,6 +94,7 @@ class MainWindow(_v1.MainWindow):
         self._install_contextual_diagnostics()
         self._install_product_polish_surfaces()
         self._remove_decorative_motion()
+        self._apply_field_working_measure()
         self._apply_adaptive_workspace_geometry()
         self._refresh_settings_indicators()
         self._refresh_support_action_texts()
@@ -521,7 +521,7 @@ class MainWindow(_v1.MainWindow):
         content.layout().insertWidget(1, label)
         self._polish_text_labels[key] = label
 
-    def _add_field_help(self, picker: FilePicker, key: str, fallback: str, object_name: str) -> None:
+    def _add_field_help(self, picker: QWidget, key: str, fallback: str, object_name: str) -> None:
         located = self._find_form_row(picker)
         if located is None:
             return
@@ -575,6 +575,15 @@ class MainWindow(_v1.MainWindow):
             "guidance.rosters",
             "Prior/current rosters are optional inputs for continuity and counters; use them only when that history is available.",
             "fieldHelp_allocate_rosters",
+        )
+        # `remaining_capacity` is the runtime/domain column identifier, not a
+        # translatable phrase: only the surrounding explanation is localized.
+        self._add_field_help(
+            self._edit_capacity,
+            "files.capacity_column.help",
+            "Name of the input column that holds each mentor's remaining capacity. "
+            "The default column identifier is remaining_capacity; change it only if your file uses another header.",
+            "fieldHelp_allocate_capacity",
         )
 
     def _refresh_output_summaries(self) -> None:
@@ -647,7 +656,7 @@ class MainWindow(_v1.MainWindow):
     def _fixed_action_page(self, content: QWidget, button: QPushButton, page_id: str) -> QWidget:
         shell = super()._fixed_action_page(content, button, page_id)
         content.setProperty("workspaceContent", True)
-        content.setMaximumWidth(_MAX_WORKING_MEASURE)
+        content.setMaximumWidth(self._theme.working_measure)
         if content.layout() is not None:
             margin = self._theme.page_margin_normal
             content.layout().setContentsMargins(margin, margin, margin, margin)
@@ -655,14 +664,56 @@ class MainWindow(_v1.MainWindow):
         if scroll is not None:
             scroll.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
         footer = shell.findChild(QFrame, "pageActionFooter")
-        if footer is not None and footer.layout() is not None:
-            footer.layout().setContentsMargins(
-                self._theme.page_margin_normal,
-                self._theme.label_to_control,
-                self._theme.page_margin_normal,
-                self._theme.within_group,
-            )
+        if footer is not None:
+            footer.installEventFilter(self)
+            self._sync_footer_working_column(footer)
         return shell
+
+    def _current_page_margin(self) -> int:
+        return (
+            self._theme.page_margin_compact
+            if self.width() <= _COMPACT_WORKSPACE_WIDTH
+            else self._theme.page_margin_normal
+        )
+
+    def _sync_footer_working_column(self, footer: QFrame) -> None:
+        """Keep the fixed CTA inside the same working column as the page content."""
+
+        layout = footer.layout()
+        column = footer.findChild(QWidget, "pageActionFooterColumn")
+        if layout is None or column is None or column.layout() is None:
+            return
+        side = max(0, (footer.width() - self._theme.working_measure) // 2)
+        layout.setContentsMargins(side, 0, side, 0)
+        margin = self._current_page_margin()
+        column.layout().setContentsMargins(
+            margin,
+            self._theme.label_to_control,
+            margin,
+            self._theme.within_group,
+        )
+
+    def _apply_field_working_measure(self) -> None:
+        """Bound form fields and guidance copy to the shared field measure."""
+
+        measure = self._theme.field_measure
+        for name in ("pageBuildContent", "pageAllocateContent"):
+            content = self.findChild(QWidget, name)
+            if content is None:
+                continue
+            for form in content.findChildren(QFormLayout):
+                for row in range(form.rowCount()):
+                    for role in (
+                        QFormLayout.ItemRole.FieldRole,
+                        QFormLayout.ItemRole.SpanningRole,
+                    ):
+                        item = form.itemAt(row, role)
+                        widget = item.widget() if item is not None else None
+                        if widget is not None:
+                            widget.setMaximumWidth(measure)
+        for label in self._polish_text_labels.values():
+            if label.property("guidanceLevel") == "page":
+                label.setMaximumWidth(measure)
 
     def _normalize_file_columns(
         self,
@@ -728,13 +779,7 @@ class MainWindow(_v1.MainWindow):
             if widget is not None and widget.layout() is not None:
                 widget.layout().setContentsMargins(margin, margin, margin, margin)
         for footer in self.findChildren(QFrame, "pageActionFooter"):
-            if footer.layout() is not None:
-                footer.layout().setContentsMargins(
-                    margin,
-                    self._theme.label_to_control,
-                    margin,
-                    self._theme.within_group,
-                )
+            self._sync_footer_working_column(footer)
         if self._workspace_navigation is not None:
             layout = self._workspace_navigation.layout()
             if layout is not None:
@@ -754,6 +799,12 @@ class MainWindow(_v1.MainWindow):
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802
         if watched is self._splitter and event.type() in (QEvent.Type.Resize, QEvent.Type.Move):
             self._update_overlay_geometry()
+        elif (
+            event.type() == QEvent.Type.Resize
+            and isinstance(watched, QFrame)
+            and watched.objectName() == "pageActionFooter"
+        ):
+            self._sync_footer_working_column(watched)
         return super().eventFilter(watched, event)
 
     def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802
@@ -772,6 +823,7 @@ class MainWindow(_v1.MainWindow):
         self._refresh_support_action_texts()
         self._refresh_settings_indicators()
         self._refresh_output_summaries()
+        self._apply_field_working_measure()
         install_combo_chevrons(self)
 
     def _create_center_management_section(self):

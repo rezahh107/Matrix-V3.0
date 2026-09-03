@@ -41,27 +41,27 @@ LOGGER = logging.getLogger(__name__)
 class ThemeColors:
     """Canonical V2 semantic color roles. Compatibility aliases are properties only."""
 
-    background: str = "#F4F6F8"
+    background: str = "#EDEFF1"
     surface_primary: str = "#FFFFFF"
-    surface_secondary: str = "#E6EBF1"
+    surface_secondary: str = "#E1E4E7"
     control_surface: str = "#FFFFFF"
-    control_hover: str = "#F2F5F9"
-    boundary_subtle: str = "#D5DCE5"
-    boundary_control: str = "#7A8798"
-    text_primary: str = "#182230"
-    text_secondary: str = "#526174"
-    accent: str = "#1F5FBF"
-    accent_hover: str = "#184F9F"
-    accent_pressed: str = "#123D7D"
-    focus: str = "#0B57D0"
-    selection: str = "#D9E8FF"
+    control_hover: str = "#F2F4F6"
+    boundary_subtle: str = "#D3D7DB"
+    boundary_control: str = "#7B7F83"
+    text_primary: str = "#1A1D21"
+    text_secondary: str = "#4C5257"
+    accent: str = "#1A6079"
+    accent_hover: str = "#155569"
+    accent_pressed: str = "#11475A"
+    focus: str = "#175A73"
+    selection: str = "#D5E7EE"
     success: str = "#146C43"
     warning: str = "#8A4B08"
     error: str = "#B42318"
-    disabled_text: str = "#7A8796"
-    disabled_surface: str = "#E9EDF2"
-    diagnostic_background: str = "#EEF2F6"
-    diagnostic_text: str = "#253347"
+    disabled_text: str = "#7C8288"
+    disabled_surface: str = "#E7E9EB"
+    diagnostic_background: str = "#E9ECEE"
+    diagnostic_text: str = "#23282D"
 
     @property
     def card(self) -> str:
@@ -181,6 +181,23 @@ class Theme:
     cta_separation: int = 16
     control_radius: int = 6
     container_radius: int = 8
+
+    # Shared working-column geometry. One semantic source for the centered page
+    # content, the fixed CTA footer column and the bounded field measure, so the
+    # footer can never drift to a distant window edge on wide desktops.
+    working_measure: int = 1120
+    field_measure: int = 720
+    # Shared Matrix-owned complex-control geometry. The Python chevron overlay and
+    # the central QSS drop-down surface must not compute this independently.
+    combo_dropdown_width: int = 28
+    scrollbar_thickness: int = 12
+    scrollbar_handle_min: int = 36
+
+    @property
+    def combo_content_inset(self) -> int:
+        """Text inset that keeps content clear of the Matrix-owned drop-down."""
+
+        return self.combo_dropdown_width + 2
 
     @property
     def spacing_base(self) -> int:
@@ -413,6 +430,12 @@ def _stylesheet_token_mapping(theme: Theme) -> dict[str, str]:
         "cta_separation": str(theme.cta_separation),
         "control_radius": str(theme.control_radius),
         "container_radius": str(theme.container_radius),
+        "working_measure": str(theme.working_measure),
+        "field_measure": str(theme.field_measure),
+        "combo_dropdown_width": str(theme.combo_dropdown_width),
+        "combo_content_inset": str(theme.combo_content_inset),
+        "scrollbar_thickness": str(theme.scrollbar_thickness),
+        "scrollbar_handle_min": str(theme.scrollbar_handle_min),
         # Legacy token names map to the canonical roles; they are not independent sources.
         "card": colors.surface_primary,
         "surface_alt": colors.surface_secondary,
@@ -488,27 +511,27 @@ def build_theme(mode: str | None = None) -> Theme:
     normalized = "dark" if (mode or "").lower() == "dark" else "light"
     if normalized == "dark":
         colors = ThemeColors(
-            background="#0F141A",
-            surface_primary="#171E26",
-            surface_secondary="#202A35",
-            control_surface="#1B2632",
-            control_hover="#243342",
-            boundary_subtle="#33404D",
-            boundary_control="#7A8A9D",
-            text_primary="#E7EDF4",
-            text_secondary="#A9B6C4",
-            accent="#2F67CA",
-            accent_hover="#356FD3",
-            accent_pressed="#2E65C7",
-            focus="#73A9FF",
-            selection="#233B5B",
-            success="#4FC38A",
-            warning="#F0C04A",
-            error="#FF7A73",
-            disabled_text="#7E8B99",
-            disabled_surface="#202832",
-            diagnostic_background="#111820",
-            diagnostic_text="#D7E0EA",
+            background="#191B1D",
+            surface_primary="#212427",
+            surface_secondary="#2B2F32",
+            control_surface="#262A2D",
+            control_hover="#313538",
+            boundary_subtle="#3A3E42",
+            boundary_control="#7B7F83",
+            text_primary="#E8EAEC",
+            text_secondary="#AFB5BA",
+            accent="#2A7391",
+            accent_hover="#2E7A99",
+            accent_pressed="#24657F",
+            focus="#7CC6E0",
+            selection="#26414C",
+            success="#5CC08E",
+            warning="#E7BB59",
+            error="#F08079",
+            disabled_text="#7F868C",
+            disabled_surface="#26292C",
+            diagnostic_background="#141618",
+            diagnostic_text="#D8DCE0",
         )
     else:
         colors = ThemeColors()

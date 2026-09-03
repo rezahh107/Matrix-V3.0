@@ -1271,6 +1271,9 @@ class MainWindow(QMainWindow):
                 "اجرای تخصیص از داده مرجع پایگاه داده استفاده می‌کند؛ در صورت نیاز می‌توانید مرجع را از اکسل به‌روزرسانی کنید.",
             )
         )
+        # Stable semantic identity so the localization layer binds this exact
+        # widget instead of guessing "the first spanning label" in the form.
+        reference_hint.setObjectName("allocateReferenceHint")
         reference_hint.setWordWrap(True)
         inputs_layout.addRow("", reference_hint)
 
