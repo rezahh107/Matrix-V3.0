@@ -179,6 +179,8 @@ def _working_column_record(
     margins = content.layout().contentsMargins()
     inner_left = content_rect.left() + margins.left()
     inner_right = content_rect.right() - margins.right()
+    # The CTA sits on the column's logical trailing edge in both directions; only
+    # the physical side differs (RTL trailing is the left edge, LTR the right).
     rtl = QApplication.instance().layoutDirection() == Qt.LayoutDirection.RightToLeft
     drift = abs(cta_rect.left() - inner_left) if rtl else abs(cta_rect.right() - inner_right)
 
@@ -199,7 +201,8 @@ def _working_column_record(
         "cta_geometry": _rect_record(cta_rect),
         "cta_edge_drift_px": int(drift),
         "cta_edge_tolerance_px": int(tolerance),
-        "logical_edge": "leading" if rtl else "trailing",
+        # Names the edge the drift above is measured from, in both directions.
+        "logical_edge": "trailing",
     }
 
 

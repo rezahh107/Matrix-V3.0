@@ -97,4 +97,6 @@ QScrollBar::handle:vertical:disabled, QScrollBar::handle:horizontal:disabled { b
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical, QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { background-color: transparent; border: none; width: 0px; height: 0px; subcontrol-position: none; }
 QScrollBar::up-arrow:vertical, QScrollBar::down-arrow:vertical, QScrollBar::left-arrow:horizontal, QScrollBar::right-arrow:horizontal { background-color: transparent; border: none; image: none; width: 0px; height: 0px; }
 QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical, QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal { background-color: transparent; border: none; }
-QScrollBar::corner { background-color: transparent; border: none; }
+/* Qt hosts the corner between two scrollbars on QAbstractScrollArea, not on
+   QScrollBar. Same quiet Matrix material, addressed through its real owner. */
+QAbstractScrollArea::corner { background-color: transparent; border: none; }

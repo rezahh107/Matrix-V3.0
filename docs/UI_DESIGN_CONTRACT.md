@@ -225,6 +225,8 @@ Before visual work on a Qt family, consult `docs/UI_PRESENTATION_AUTHORITY.md`.
 
 In particular, `QComboBox` is `STYLED`: outer shell, content, drop-down surface, arrow, governed popup and direction-safe presentation have one Matrix visual owner, with the drop-down region and the vector chevron overlay derived from the same `combo_dropdown_width` token rather than from a second `QStyle` geometry query.
 
-`QScrollBar` is `STYLED` as of the Fluent-2 polish pass. Matrix owns the complete visible family in both orientations — groove/shell, handle with a minimum length and rest/hover/pressed/disabled states, `add-line`, `sub-line`, the directional arrow subcontrols, `add-page`, `sub-page` and `corner` — while Qt keeps scrolling behavior, range/value, input and accessibility. Partial scrollbar styling, `QProxyStyle`, replacement scrollbar widgets and custom scrolling implementations remain forbidden.
+`QScrollBar` is `STYLED` as of the Fluent-2 polish pass. Matrix owns the complete visible family in both orientations — groove/shell, handle with a minimum length and rest/hover/pressed/disabled states, `add-line`, `sub-line`, the directional arrow subcontrols, `add-page` and `sub-page` — while Qt keeps scrolling behavior, range/value, input and accessibility. Partial scrollbar styling, `QProxyStyle`, replacement scrollbar widgets and custom scrolling implementations remain forbidden.
+
+The corner between two scrollbars belongs to the scroll area, not to the scrollbar: Qt defines `::corner` as a `QAbstractScrollArea` subcontrol. Matrix paints it as `QAbstractScrollArea::corner` in the same central QSS, keeping the quiet neutral material. `QScrollBar::corner` names no real subcontrol and must not be authored.
 
 `QCheckBox::indicator` remains Qt-owned under the existing HYBRID boundary.

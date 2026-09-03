@@ -299,10 +299,14 @@ def test_styled_scrollbar_owns_the_complete_visible_family() -> None:
         "QScrollBar::handle:vertical:hover",
         "QScrollBar::handle:vertical:pressed",
         "QScrollBar::handle:vertical:disabled",
-        "QScrollBar::corner",
+        # Qt hosts the corner between two scrollbars on QAbstractScrollArea.
+        "QAbstractScrollArea::corner",
     )
     for selector in required:
         assert selector in QSS_SOURCE, f"scrollbar subcontrol not owned: {selector}"
+    # `QScrollBar::corner` names no real Qt subcontrol, so a rule written against
+    # it silently owns nothing while the documentation claims the corner.
+    assert "QScrollBar::corner" not in QSS_SOURCE
 
     theme = Theme()
     stylesheet = build_stylesheet(build_theme("dark"))
@@ -438,6 +442,72 @@ def test_form_fields_stay_within_the_bounded_field_measure(qapp: QApplication) -
             assert combo is not None and combo.width() <= measure + 1
             capacity = window.findChild(QLineEdit, "editCapacityCol")
             assert capacity is not None and capacity.width() <= measure + 1
+    finally:
+        _destroy(window, qapp)
+
+
+@pytest.mark.parametrize("language", [Language.FA, Language.EN])
+def test_working_column_evidence_names_the_edge_it_measures(
+    qapp: QApplication, language: Language
+) -> None:
+    """The render manifest must describe the metric it actually computes.
+
+    The CTA sits on the working column's logical *trailing* edge in both
+    directions - the right edge in LTR, the left edge in RTL - and the harness
+    measures drift from exactly that edge. Reporting RTL as ``leading`` made the
+    evidence contradict both the geometry and the design contract.
+    """
+
+    from tools.render_ui_matrix import _working_column_record
+
+    _fresh_settings()
+    window = MainWindow()
+    window._apply_language(language)
+    window.resize(1680, 900)
+    window.show()
+
+    try:
+        tolerance = window._theme.scrollbar_thickness + window._theme.micro
+        for surface_id, button in (
+            ("build", window._btn_build),
+            ("allocate", window._btn_allocate),
+        ):
+            assert window.activate_surface(surface_id)
+            qapp.processEvents()
+
+            record = _working_column_record(window, surface_id, button)
+            assert record is not None
+
+            # The manifest shape is part of the contract: no key renames.
+            assert set(record) == {
+                "working_measure",
+                "content_column_geometry",
+                "footer_column_geometry",
+                "cta_geometry",
+                "cta_edge_drift_px",
+                "cta_edge_tolerance_px",
+                "logical_edge",
+            }
+            assert record["logical_edge"] == "trailing"
+            assert record["cta_edge_drift_px"] <= record["cta_edge_tolerance_px"]
+
+            # ...and the CTA really is on that edge, so the label was corrected
+            # rather than the geometry bent to fit the old label.
+            content = window.findChild(QWidget, f"page{surface_id.capitalize()}Content")
+            assert content is not None
+            margins = content.layout().contentsMargins()
+            content_rect = _mapped_rect(content, window)
+            cta_rect = _mapped_rect(button, window)
+            if language is Language.FA:
+                assert qapp.layoutDirection() == Qt.LayoutDirection.RightToLeft
+                trailing_edge = content_rect.left() + margins.left()
+                assert abs(cta_rect.left() - trailing_edge) <= tolerance
+                assert cta_rect.center().x() < content_rect.center().x()
+            else:
+                assert qapp.layoutDirection() == Qt.LayoutDirection.LeftToRight
+                trailing_edge = content_rect.right() - margins.right()
+                assert abs(cta_rect.right() - trailing_edge) <= tolerance
+                assert cta_rect.center().x() > content_rect.center().x()
     finally:
         _destroy(window, qapp)
 
