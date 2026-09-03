@@ -59,59 +59,66 @@ Hierarchy priority:
 
 Glassmorphism, backdrop blur, Mica/Acrylic imitation, frosted/translucent workflow surfaces, routine same-plane shadows, glow and decorative motion are forbidden.
 
+Tonal direction (Fluent-2 neutral):
+
+- Dark workflow surfaces are a genuinely neutral charcoal/gray family. `background`, `surface_primary`, `surface_secondary`, `control_surface` and `control_hover` must read as neutral rather than blue/navy: no surface role may carry a channel spread or a blue-over-red bias wide enough to tint the page.
+- Light keeps a neutral light page with clearly distinguishable white primary surfaces. Depth comes from a visible page/surface/control separation plus subtle structural boundaries, never from dark heavy outlines.
+- Routine controls do not glow against the page: ordinary buttons, tab panes, popups and list/table shells use `boundary_subtle`; `boundary_control` is reserved for essential authored affordances such as text-entry shells, header rules and the scrollbar handle.
+- Accent is one controlled cool blue/teal-blue family. It is used for the primary CTA, focus, selection, active primary navigation and meaningful interactive states, and is never spread as a fill across ordinary controls.
+
 ## 5. Canonical semantic palette
 
 ### Light
 
 | role | value |
 | --- | --- |
-| `background` | `#F4F6F8` |
+| `background` | `#EDEFF1` |
 | `surface_primary` | `#FFFFFF` |
-| `surface_secondary` | `#E6EBF1` |
+| `surface_secondary` | `#E1E4E7` |
 | `control_surface` | `#FFFFFF` |
-| `control_hover` | `#F2F5F9` |
-| `boundary_subtle` | `#D5DCE5` |
-| `boundary_control` | `#7A8798` |
-| `text_primary` | `#182230` |
-| `text_secondary` | `#526174` |
-| `accent` | `#1F5FBF` |
-| `accent_hover` | `#184F9F` |
-| `accent_pressed` | `#123D7D` |
-| `focus` | `#0B57D0` |
-| `selection` | `#D9E8FF` |
+| `control_hover` | `#F2F4F6` |
+| `boundary_subtle` | `#D3D7DB` |
+| `boundary_control` | `#7B7F83` |
+| `text_primary` | `#1A1D21` |
+| `text_secondary` | `#4C5257` |
+| `accent` | `#1A6079` |
+| `accent_hover` | `#155569` |
+| `accent_pressed` | `#11475A` |
+| `focus` | `#175A73` |
+| `selection` | `#D5E7EE` |
 | `success` | `#146C43` |
 | `warning` | `#8A4B08` |
 | `error` | `#B42318` |
-| `disabled_text` | `#7A8796` |
-| `disabled_surface` | `#E9EDF2` |
-| `diagnostic_background` | `#EEF2F6` |
-| `diagnostic_text` | `#253347` |
+| `disabled_text` | `#7C8288` |
+| `disabled_surface` | `#E7E9EB` |
+| `diagnostic_background` | `#F1F3F5` |
+| `diagnostic_text` | `#23282D` |
 
 ### Dark
 
 | role | value |
 | --- | --- |
-| `background` | `#0F141A` |
-| `surface_primary` | `#171E26` |
-| `surface_secondary` | `#202A35` |
-| `control_surface` | `#1B2632` |
-| `control_hover` | `#243342` |
-| `boundary_subtle` | `#33404D` |
-| `boundary_control` | `#7A8A9D` |
-| `text_primary` | `#E7EDF4` |
-| `text_secondary` | `#A9B6C4` |
-| `accent` | `#2F67CA` |
-| `accent_hover` | `#356FD3` |
-| `accent_pressed` | `#2E65C7` |
-| `focus` | `#73A9FF` |
-| `selection` | `#233B5B` |
-| `success` | `#4FC38A` |
-| `warning` | `#F0C04A` |
-| `error` | `#FF7A73` |
-| `disabled_text` | `#7E8B99` |
-| `disabled_surface` | `#202832` |
-| `diagnostic_background` | `#111820` |
-| `diagnostic_text` | `#D7E0EA` |
+| `background` | `#191B1D` |
+| `surface_primary` | `#212427` |
+| `surface_secondary` | `#2B2F32` |
+| `control_surface` | `#262A2D` |
+| `control_hover` | `#313538` |
+| `boundary_subtle` | `#3A3E42` |
+| `boundary_control` | `#7B7F83` |
+| `text_primary` | `#E8EAEC` |
+| `text_secondary` | `#AFB5BA` |
+| `accent` | `#2A7391` |
+| `accent_hover` | `#2E7A99` |
+| `accent_pressed` | `#24657F` |
+| `focus` | `#7CC6E0` |
+| `selection` | `#26414C` |
+| `success` | `#5CC08E` |
+| `warning` | `#E7BB59` |
+| `error` | `#F08079` |
+| `disabled_text` | `#7F868C` |
+| `disabled_surface` | `#26292C` |
+| `diagnostic_background` | `#141618` |
+| `diagnostic_text` | `#D8DCE0` |
 
 `ThemeColors` is the single semantic source. Compatibility names, where temporarily retained, must resolve to these roles and must not define separate hex values.
 
@@ -144,6 +151,17 @@ Density targets:
 - compact horizontal padding: `8px`.
 
 Use flexible minimums rather than rigid fixed heights where translation/font metrics need growth.
+
+Shared working-column geometry (semantic presentation tokens, not per-page literals):
+
+- `working_measure=1120` — maximum measure of the centered primary working column. Scrollable page content and the fixed CTA footer column use the same value, so the CTA stays aligned with the form instead of drifting to a distant window edge on wide desktops.
+- `field_measure=720` — maximum measure of a form field/help row inside that column, so inputs do not stretch to an uncontrolled desktop-wide line length.
+- Both are logical (leading/trailing) values: the column is centered and the CTA keeps its trailing position in LTR and RTL alike.
+
+Shared Matrix-owned control geometry:
+
+- `combo_dropdown_width=28` — the single source for the QSS `QComboBox::drop-down` surface, the combo content inset (`combo_dropdown_width + 2`) and the Python vector chevron overlay rectangle.
+- `scrollbar_thickness=12`, `scrollbar_handle_min=36` — the reserved scrollbar extent and minimum handle length. The extent is identical in every state, so hover cannot reflow content.
 
 ## 7. Typography
 
@@ -205,4 +223,10 @@ Before visual work on a Qt family, consult `docs/UI_PRESENTATION_AUTHORITY.md`.
 - `NATIVE`: do not introduce targeted partial geometry styling.
 - `HYBRID`: stay inside the explicitly partitioned Matrix-owned surface.
 
-In particular, `QComboBox` is `STYLED`: outer shell, content, drop-down surface, arrow, governed popup and direction-safe presentation have one Matrix visual owner. `QScrollBar` remains native and `QCheckBox::indicator` remains Qt-owned under the existing HYBRID boundary.
+In particular, `QComboBox` is `STYLED`: outer shell, content, drop-down surface, arrow, governed popup and direction-safe presentation have one Matrix visual owner, with the drop-down region and the vector chevron overlay derived from the same `combo_dropdown_width` token rather than from a second `QStyle` geometry query.
+
+`QScrollBar` is `STYLED` as of the Fluent-2 polish pass. Matrix owns the complete visible family in both orientations — groove/shell, handle with a minimum length and rest/hover/pressed/disabled states, `add-line`, `sub-line`, the directional arrow subcontrols, `add-page` and `sub-page` — while Qt keeps scrolling behavior, range/value, input and accessibility. Partial scrollbar styling, `QProxyStyle`, replacement scrollbar widgets and custom scrolling implementations remain forbidden.
+
+The corner between two scrollbars belongs to the scroll area, not to the scrollbar: Qt defines `::corner` as a `QAbstractScrollArea` subcontrol. Matrix paints it as `QAbstractScrollArea::corner` in the same central QSS, keeping the quiet neutral material. `QScrollBar::corner` names no real subcontrol and must not be authored.
+
+`QCheckBox::indicator` remains Qt-owned under the existing HYBRID boundary.

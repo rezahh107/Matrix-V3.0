@@ -1,7 +1,10 @@
 /* Matrix V2 — SOLID_LAYERED_PRODUCTIVITY. All normal surfaces are opaque. */
 QWidget { background-color: {background}; color: {text_primary}; font-size: {body_size}pt; font-weight: 400; }
 QMainWindow, QWidget#workspaceRoot, QWidget[workspaceContent="true"] { background-color: {background}; }
-QToolTip { background-color: {surface_primary}; color: {text_primary}; border: 1px solid {boundary_control}; border-radius: {control_radius}px; padding: {micro}px {label_to_control}px; }
+/* Text is drawn on whatever surface hosts it; a label must never repaint the
+   page background over a card, footer or panel it sits on. */
+QLabel { background-color: transparent; }
+QToolTip { background-color: {surface_primary}; color: {text_primary}; border: 1px solid {boundary_subtle}; border-radius: {control_radius}px; padding: {micro}px {label_to_control}px; }
 QFrame#workspaceNavigation { background-color: {surface_primary}; border: none; border-bottom: 1px solid {boundary_subtle}; }
 QToolButton[navRole="primary"], QToolButton[navRole="secondary"] { background-color: transparent; color: {text_primary}; border: 2px solid transparent; border-radius: {control_radius}px; min-height: 28px; padding: 0 10px; font-size: {body_size}pt; font-weight: 400; }
 QToolButton[navRole="primary"] { min-height: 32px; }
@@ -9,20 +12,23 @@ QToolButton[navRole="secondary"] { color: {text_secondary}; }
 QToolButton[navRole="primary"]:hover, QToolButton[navRole="secondary"]:hover { background-color: {control_hover}; }
 QToolButton[navRole="primary"]:checked, QToolButton[navRole="secondary"]:checked { background-color: {selection}; color: {text_primary}; border-bottom-color: {accent}; font-weight: 600; }
 QToolButton[navRole="primary"]:focus, QToolButton[navRole="secondary"]:focus { border-color: {focus}; }
-QFrame#heroCard { background-color: {surface_primary}; border: none; border-radius: {container_radius}px; }
+QFrame#heroCard { background-color: {surface_primary}; border: 1px solid {boundary_subtle}; border-radius: {container_radius}px; }
 QLabel#heroTitle { color: {text_primary}; font-size: {title_size}pt; font-weight: 600; }
 QLabel#heroSubtitle { color: {text_secondary}; font-size: {body_size}pt; font-weight: 400; }
 QLabel#heroBadge { background-color: {surface_secondary}; color: {text_secondary}; border: none; border-radius: {control_radius}px; padding: {micro}px {label_to_control}px; font-size: {caption_size}pt; font-weight: 600; }
 QGroupBox { background-color: transparent; border: none; border-radius: 0; margin-top: {section_spacing}px; padding: {within_group}px 0 0 0; font-size: {subtitle_size}pt; font-weight: 600; color: {text_primary}; }
 QGroupBox::title { subcontrol-origin: margin; subcontrol-position: top left; padding: 0 {micro}px; background-color: {background}; color: {text_primary}; }
+QLabel[guidanceLevel="page"] { background-color: transparent; color: {text_secondary}; font-size: {body_size}pt; font-weight: 400; }
+QLabel[guidanceLevel="field"] { background-color: transparent; color: {text_secondary}; font-size: {caption_size}pt; font-weight: 400; }
 QLineEdit, QTextEdit, QPlainTextEdit, QComboBox { background-color: {control_surface}; color: {text_primary}; border: 1px solid {boundary_control}; border-radius: {control_radius}px; min-height: 32px; padding: 0 10px; selection-background-color: {selection}; selection-color: {text_primary}; }
 QTextEdit, QPlainTextEdit { padding: 6px 8px; }
 QLineEdit:hover, QTextEdit:hover, QPlainTextEdit:hover, QComboBox:hover { background-color: {control_hover}; }
 QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QComboBox:focus { border: 2px solid {focus}; background-color: {control_surface}; }
 QLineEdit:disabled, QTextEdit:disabled, QPlainTextEdit:disabled, QComboBox:disabled { background-color: {disabled_surface}; color: {disabled_text}; border-color: {boundary_subtle}; }
-QComboBox { padding-left: 30px; padding-right: 30px; }
+/* Drop-down width and content inset come from one shared Matrix geometry token. */
+QComboBox { padding-left: {combo_content_inset}px; padding-right: {combo_content_inset}px; }
 QComboBox QLineEdit { background-color: transparent; border: none; border-radius: 0; min-height: 0; padding: 0; }
-QComboBox::drop-down { subcontrol-origin: border; subcontrol-position: top right; width: 28px; background-color: {control_surface}; border: none; border-radius: {control_radius}px; }
+QComboBox::drop-down { subcontrol-origin: border; subcontrol-position: top right; width: {combo_dropdown_width}px; background-color: {control_surface}; border: none; border-radius: {control_radius}px; }
 QComboBox::drop-down:right-to-left { subcontrol-position: top left; }
 QComboBox::drop-down:left-to-right { subcontrol-position: top right; }
 QComboBox::drop-down:hover { background-color: {control_hover}; }
@@ -30,8 +36,8 @@ QComboBox::drop-down:disabled { background-color: {disabled_surface}; }
 /* Arrow pixels are Matrix-owned by the vector overlay in combo_chevron.py. */
 QComboBox::down-arrow { image: none; width: 12px; height: 8px; border: none; }
 QComboBox::down-arrow:disabled { image: none; border: none; }
-QComboBox QAbstractItemView { background-color: {surface_primary}; color: {text_primary}; border: 1px solid {boundary_control}; border-radius: {control_radius}px; padding: {micro}px; outline: 0; selection-background-color: {selection}; selection-color: {text_primary}; }
-QPushButton, QToolButton { background-color: {control_surface}; color: {text_primary}; border: 1px solid {boundary_control}; border-radius: {control_radius}px; min-height: 32px; padding: 0 10px; font-size: {body_size}pt; font-weight: 400; }
+QComboBox QAbstractItemView { background-color: {surface_primary}; color: {text_primary}; border: 1px solid {boundary_subtle}; border-radius: {control_radius}px; padding: {micro}px; outline: 0; selection-background-color: {selection}; selection-color: {text_primary}; }
+QPushButton, QToolButton { background-color: {control_surface}; color: {text_primary}; border: 1px solid {boundary_subtle}; border-radius: {control_radius}px; min-height: 32px; padding: 0 10px; font-size: {body_size}pt; font-weight: 400; }
 QPushButton:hover, QToolButton:hover { background-color: {control_hover}; }
 QPushButton:pressed, QToolButton:pressed { background-color: {surface_secondary}; }
 QPushButton:focus, QToolButton:focus { border: 2px solid {focus}; }
@@ -51,9 +57,10 @@ QComboBox#themeSelector { min-width: 104px; }
 QTabWidget::pane { background-color: {surface_primary}; border: 1px solid {boundary_subtle}; border-radius: {container_radius}px; }
 QTabBar::tab { background-color: {surface_secondary}; color: {text_secondary}; border: 1px solid {boundary_subtle}; padding: 6px 10px; min-height: 28px; }
 QTabBar::tab:selected { background-color: {selection}; color: {text_primary}; border-bottom: 2px solid {accent}; font-weight: 600; }
-QTableView, QTableWidget { background-color: {surface_primary}; alternate-background-color: {surface_secondary}; color: {text_primary}; border: 1px solid {boundary_control}; border-radius: {control_radius}px; gridline-color: {boundary_subtle}; selection-background-color: {selection}; selection-color: {text_primary}; }
+QTableView, QTableWidget { background-color: {surface_primary}; alternate-background-color: {surface_secondary}; color: {text_primary}; border: 1px solid {boundary_subtle}; border-radius: {control_radius}px; gridline-color: {boundary_subtle}; selection-background-color: {selection}; selection-color: {text_primary}; }
 QHeaderView::section { background-color: {surface_secondary}; color: {text_primary}; border: none; border-bottom: 1px solid {boundary_control}; padding: 5px 8px; min-height: 28px; font-weight: 600; }
 QFrame#pageActionFooter { background-color: {surface_primary}; border: none; border-top: 1px solid {boundary_subtle}; }
+QWidget#pageActionFooterColumn { background-color: transparent; }
 QFrame#diagnosticsPane { background-color: {diagnostic_background}; color: {diagnostic_text}; border: none; border-top: 1px solid {boundary_subtle}; }
 QFrame#logPanel, QFrame#logStackHost, QPlainTextEdit#textLog { background-color: {diagnostic_background}; color: {diagnostic_text}; border: none; }
 QLabel#logPlaceholder { background-color: {diagnostic_background}; color: {text_secondary}; font-size: {caption_size}pt; }
@@ -72,9 +79,24 @@ QFrame#busyOverlay { background-color: {surface_primary}; border: 1px solid {bou
 QLabel#busyOverlayLabel { background-color: transparent; color: {text_primary}; font-size: {subtitle_size}pt; font-weight: 600; }
 QSplitter::handle { background-color: {boundary_subtle}; height: 4px; }
 QSplitter::handle:hover { background-color: {boundary_control}; }
-QFrame#dashboardCard, QFrame#databaseSection { background-color: {surface_primary}; border: none; border-radius: {container_radius}px; }
+QFrame#dashboardCard, QFrame#databaseSection { background-color: {surface_primary}; border: 1px solid {boundary_subtle}; border-radius: {container_radius}px; }
 QLabel#dashboardCardTitle, QLabel#databaseSectionTitle { color: {text_primary}; font-size: {subtitle_size}pt; font-weight: 600; }
 QLabel#dashboardCardDescription, QLabel#databaseSectionDescription { color: {text_secondary}; font-size: {caption_size}pt; }
-QListWidget#historyRunList { background-color: {surface_primary}; color: {text_primary}; border: 1px solid {boundary_control}; border-radius: {control_radius}px; }
+QListWidget#historyRunList { background-color: {surface_primary}; color: {text_primary}; border: 1px solid {boundary_subtle}; border-radius: {control_radius}px; }
 QTreeView, QListView { color: {text_primary}; }
-/* Intentionally no QScrollBar subcontrol selectors: scrollbars remain Qt-native. */
+/* QScrollBar is Matrix-STYLED: Matrix owns the complete visible geometry of both
+   orientations while Qt keeps scrolling range/value, input and accessibility. */
+QScrollBar:vertical { background-color: transparent; border: none; width: {scrollbar_thickness}px; margin: 0px; }
+QScrollBar:horizontal { background-color: transparent; border: none; height: {scrollbar_thickness}px; margin: 0px; }
+QScrollBar:disabled { background-color: transparent; }
+QScrollBar::handle:vertical { background-color: {boundary_control}; border: none; border-radius: 3px; min-height: {scrollbar_handle_min}px; margin: 2px 3px 2px 3px; }
+QScrollBar::handle:horizontal { background-color: {boundary_control}; border: none; border-radius: 3px; min-width: {scrollbar_handle_min}px; margin: 3px 2px 3px 2px; }
+QScrollBar::handle:vertical:hover, QScrollBar::handle:horizontal:hover { background-color: {text_secondary}; }
+QScrollBar::handle:vertical:pressed, QScrollBar::handle:horizontal:pressed { background-color: {text_primary}; }
+QScrollBar::handle:vertical:disabled, QScrollBar::handle:horizontal:disabled { background-color: {disabled_surface}; }
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical, QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { background-color: transparent; border: none; width: 0px; height: 0px; subcontrol-position: none; }
+QScrollBar::up-arrow:vertical, QScrollBar::down-arrow:vertical, QScrollBar::left-arrow:horizontal, QScrollBar::right-arrow:horizontal { background-color: transparent; border: none; image: none; width: 0px; height: 0px; }
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical, QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal { background-color: transparent; border: none; }
+/* Qt hosts the corner between two scrollbars on QAbstractScrollArea, not on
+   QScrollBar. Same quiet Matrix material, addressed through its real owner. */
+QAbstractScrollArea::corner { background-color: transparent; border: none; }

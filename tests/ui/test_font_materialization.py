@@ -133,9 +133,9 @@ def test_create_app_font_defaults_to_antialias_and_size(
     assert font.styleStrategy() & QFont.StyleStrategy.PreferAntialias
     assert font.styleStrategy() & QFont.StyleStrategy.PreferQuality
     if hasattr(QFont, "HintingPreference") and hasattr(
-        QFont.HintingPreference, "PreferFullHinting"
+        QFont.HintingPreference, "PreferVerticalHinting"
     ):
-        assert font.hintingPreference() == QFont.HintingPreference.PreferFullHinting
+        assert font.hintingPreference() == QFont.HintingPreference.PreferVerticalHinting
 
 
 def _native_windows_font_oracle() -> int:

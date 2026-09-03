@@ -92,9 +92,13 @@ def test_apply_global_font_uses_fa_embedded_authority(qapp: QApplication) -> Non
         assert app_font.weight() == QFont.Weight.Normal
         assert app_font.styleStrategy() & QFont.StyleStrategy.PreferAntialias
         assert app_font.styleStrategy() & QFont.StyleStrategy.PreferQuality
-        hint_pref = getattr(QFont.HintingPreference, "PreferFullHinting", None)
-        if hint_pref is not None:
-            assert app_font.hintingPreference() == hint_pref
+        assert app_font.kerning()
+        vertical = getattr(QFont.HintingPreference, "PreferVerticalHinting", None)
+        if vertical is not None:
+            assert app_font.hintingPreference() == vertical
+        full = getattr(QFont.HintingPreference, "PreferFullHinting", None)
+        if full is not None:
+            assert app_font.hintingPreference() != full
     finally:
         qapp.setLayoutDirection(original_direction)
         qapp.setFont(original_font)

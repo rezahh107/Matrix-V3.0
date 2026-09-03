@@ -34,7 +34,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.infra.config_flags import UserSettings, save_user_settings
-from app.ui.texts import UiTranslator
+from app.ui.texts import SUPPORTED_LANGUAGES, UiTranslator
 from app.ui.widgets.file_picker import FilePicker
 
 from . import main_window_base as _base
@@ -182,6 +182,7 @@ class MainWindow(_base.MainWindow):
 
     def __init__(self) -> None:
         self._ui_text_bindings: list[_TextBinding] = []
+        self._literal_binding_index: dict[str, tuple[str, str]] | None = None
         self._formatted_center_labels: list[tuple[QLabel, str]] = []
         stored_splitter = QSettings().value("ui/main_splitter")
         self._had_saved_splitter_state = isinstance(stored_splitter, QByteArray) and not stored_splitter.isEmpty()
@@ -216,6 +217,7 @@ class MainWindow(_base.MainWindow):
         content = super()._build_build_page()
         self._bind_hero(content, "build")
         self._bind_existing_literals(content)
+        self._bind_picker(self._picker_inspactor, "files.inspactor", "Inspactor report")
         self._bind_picker(
             self._picker_schools,
             "reference.schools.placeholder",
@@ -255,7 +257,18 @@ class MainWindow(_base.MainWindow):
         self._bind(self._btn_update_groupcodes, "reference.update.groupcodes", "Update group codes")
         self._bind(self._btn_autodetect, "action.autodetect", "Auto-detect")
         self._bind_line_placeholder(self._combo_academic_year.lineEdit(), "placeholder.year", "e.g. 1404")
-        self._bind_first_spanning_label(content, "reference.allocate.hint", "Allocation uses database-backed references; update them from Excel only when needed.")
+        self._bind_semantic_label(
+            content,
+            "allocateReferenceHint",
+            "reference.allocate.hint",
+            "Allocation uses database-backed references; update them from Excel only when needed.",
+        )
+        self._bind(
+            self._edit_capacity,
+            "files.capacity_column.tooltip",
+            "Input column identifier for remaining mentor capacity. Default: remaining_capacity",
+            "tooltip",
+        )
         self._prepare_form_geometry(
             content,
             {self._picker_pool: self._btn_mentor_pool},
@@ -320,10 +333,18 @@ class MainWindow(_base.MainWindow):
         footer = QFrame(shell)
         footer.setObjectName("pageActionFooter")
         footer_layout = QHBoxLayout(footer)
-        footer_layout.setContentsMargins(24, 8, 24, 10)
-        footer_layout.addStretch(1)
+        footer_layout.setContentsMargins(0, 0, 0, 0)
+        footer_layout.setSpacing(0)
+        # The CTA lives in a working column that mirrors the scrollable content
+        # column, so the primary action can never drift to a distant window edge.
+        column = QWidget(footer)
+        column.setObjectName("pageActionFooterColumn")
+        column_layout = QHBoxLayout(column)
+        column_layout.setContentsMargins(24, 8, 24, 10)
+        column_layout.addStretch(1)
         button.setProperty("variant", "primary")
-        footer_layout.addWidget(button)
+        column_layout.addWidget(button)
+        footer_layout.addWidget(column, 1)
         layout.addWidget(footer, 0)
         return shell
 
@@ -389,6 +410,10 @@ class MainWindow(_base.MainWindow):
                     1,
                 )
             if old_field is not picker and old_field.parent() is not None:
+                # Hide before the deferred delete: an emptied row wrapper keeps
+                # painting its opaque background over the section title until the
+                # event loop actually collects it.
+                old_field.hide()
                 old_field.deleteLater()
             if label_widget is not None:
                 form.insertRow(row, label_widget, row_widget)
@@ -456,33 +481,58 @@ class MainWindow(_base.MainWindow):
         self._bind(subtitle, f"hero.{scenario}.subtitle", fallback_subtitle)
         self._bind(badge, f"hero.{scenario}.badge", fallback_badge)
 
+    def _literal_index(self) -> dict[str, tuple[str, str]]:
+        """Return the literal→key index, widened to every catalogue language.
+
+        A reviewed page constructed while one language is active carries that
+        language's catalogue values as literals. Indexing only one language left
+        rows such as the database-reference labels unbound after a switch, so the
+        other language kept showing through. The authored map stays authoritative
+        for ambiguous literals; catalogue values only add entries for keys it
+        already governs.
+        """
+
+        if self._literal_binding_index is None:
+            index: dict[str, tuple[str, str]] = dict(_LITERAL_BINDINGS)
+            catalogues = [UiTranslator(language) for language in SUPPORTED_LANGUAGES]
+            for key, fallback in set(_LITERAL_BINDINGS.values()):
+                for catalogue in catalogues:
+                    literal = catalogue.text(key, "").strip()
+                    if literal and index.get(literal, (key, fallback))[0] == key:
+                        index[literal] = (key, fallback)
+            self._literal_binding_index = index
+        return self._literal_binding_index
+
     def _bind_existing_literals(self, root: QWidget) -> None:
+        index = self._literal_index()
         for group in root.findChildren(QGroupBox):
-            mapping = _LITERAL_BINDINGS.get(group.title())
+            mapping = index.get(group.title())
             if mapping is not None:
                 self._bind(group, mapping[0], mapping[1], "title")
         for label in root.findChildren(QLabel):
-            mapping = _LITERAL_BINDINGS.get(label.text())
+            mapping = index.get(label.text())
             if mapping is not None:
                 self._bind(label, mapping[0], mapping[1])
         for button in root.findChildren(QPushButton):
-            mapping = _LITERAL_BINDINGS.get(button.text())
+            mapping = index.get(button.text())
             if mapping is not None:
                 self._bind(button, mapping[0], mapping[1])
         for picker in root.findChildren(FilePicker):
             picker.update_translator(self._translator)
 
-    def _bind_first_spanning_label(self, root: QWidget, key: str, fallback: str) -> None:
-        for group in root.findChildren(QGroupBox):
-            form = group.layout()
-            if not isinstance(form, QFormLayout):
-                continue
-            for row in range(form.rowCount()):
-                spanning = form.itemAt(row, QFormLayout.ItemRole.SpanningRole)
-                widget = spanning.widget() if spanning is not None else None
-                if isinstance(widget, QLabel) and widget.text().strip():
-                    self._bind(widget, key, fallback)
-                    return
+    def _bind_semantic_label(
+        self, root: QWidget, object_name: str, key: str, fallback: str
+    ) -> None:
+        """Bind one catalogue key to one stable, semantically identified label.
+
+        Layout-position heuristics (for example "the first spanning label in the
+        form") silently stop binding when a row is normalized or replaced, which
+        is how the reviewed Persian surface fell back to English copy.
+        """
+
+        label = root.findChild(QLabel, object_name)
+        if label is not None:
+            self._bind(label, key, fallback)
 
     def _refresh_reviewed_surface_texts(self) -> None:
         for binding in self._ui_text_bindings:

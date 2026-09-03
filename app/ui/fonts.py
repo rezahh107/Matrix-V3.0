@@ -289,13 +289,51 @@ def _with_antialias(font: QFont) -> QFont:
     strategy |= QFont.StyleStrategy.PreferAntialias
     strategy |= QFont.StyleStrategy.PreferQuality
     font.setStyleStrategy(strategy)
-    if has_prefer_full_hinting():
-        font.setHintingPreference(QFont.HintingPreference.PreferFullHinting)
+    hinting = resolve_hinting_preference()
+    if hinting is not None:
+        font.setHintingPreference(hinting)
     font.setKerning(True)
     return font
 
 
+def resolve_hinting_preference() -> object | None:
+    """Return the Matrix rendering-strategy hinting preference, if Qt exposes one.
+
+    Forced full hinting snaps stems to the pixel grid and is the mechanism behind
+    the harsh, unsmoothed Windows text observed on the Matrix surfaces: it costs
+    scalable horizontal metrics and kerning fidelity, which Persian/Vazirmatn
+    shaping depends on. ``PreferVerticalHinting`` keeps vertical stem crispness
+    while leaving horizontal metrics and kerning intact, so it is preferred
+    wherever Qt exposes it. Qt's own default is the fallback; full hinting is
+    never selected merely because the enum exists.
+    """
+
+    try:
+        from PySide6.QtGui import QFont
+    except Exception:
+        return None
+    preference = getattr(QFont, "HintingPreference", None)
+    if preference is None:
+        return None
+    vertical = getattr(preference, "PreferVerticalHinting", None)
+    if vertical is not None:
+        return vertical
+    return getattr(preference, "PreferDefaultHinting", None)
+
+
+def has_prefer_vertical_hinting() -> bool:
+    try:
+        from PySide6.QtGui import QFont
+    except Exception:
+        return False
+    return hasattr(QFont, "HintingPreference") and hasattr(
+        QFont.HintingPreference, "PreferVerticalHinting"
+    )
+
+
 def has_prefer_full_hinting() -> bool:
+    """Compatibility probe only. Full hinting is not the Matrix render strategy."""
+
     try:
         from PySide6.QtGui import QFont
     except Exception:

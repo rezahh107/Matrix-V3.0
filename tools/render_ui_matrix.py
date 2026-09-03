@@ -20,7 +20,10 @@ from app.ui.theme import apply_theme, build_theme
 
 THEMES = ("light", "dark")
 LANGUAGES = (Language.FA, Language.EN)
-SIZES = ((1200, 800), (960, 640))
+# The contract anchors are 1200x800 and 960x640. The wide anchor is deliberate
+# render evidence for the shared working column: over-wide field stretches and a
+# CTA drifting to the window edge only become visible well past the anchors.
+SIZES = ((1200, 800), (960, 640), (1680, 900))
 SURFACE_IDS = ("build", "allocate", "explain", "database")
 
 
@@ -38,6 +41,15 @@ def _rect(widget: QWidget | None) -> dict[str, int] | None:
     if widget is None:
         return None
     rect = widget.geometry()
+    return {
+        "x": rect.x(),
+        "y": rect.y(),
+        "width": rect.width(),
+        "height": rect.height(),
+    }
+
+
+def _rect_record(rect: QRect) -> dict[str, int]:
     return {
         "x": rect.x(),
         "y": rect.y(),
@@ -140,6 +152,57 @@ def _surface_record(
         "primary_cta_contained": bool(cta is None or _contained(cta, surface)),
         "viewport_geometry": _rect(viewport),
         "surface_geometry": _rect(surface),
+        "working_column": _working_column_record(window, surface_id, cta),
+    }
+
+
+def _working_column_record(
+    window: MainWindow, surface_id: str, cta: QWidget | None
+) -> dict[str, object] | None:
+    """Record shared-working-column evidence for a primary workflow surface.
+
+    A screenshot alone cannot falsify CTA detachment, so the manifest carries the
+    content column, the footer column and the measured CTA drift from the
+    column's own logical trailing edge.
+    """
+
+    content = window.findChild(QWidget, f"page{surface_id.capitalize()}Content")
+    if content is None or cta is None or content.layout() is None:
+        return None
+    column = cta.parentWidget()
+    if column is None or column.objectName() != "pageActionFooterColumn":
+        raise AssertionError(f"primary CTA is outside the working column on {surface_id}")
+
+    content_rect = _rect_in(content, window)
+    column_rect = _rect_in(column, window)
+    cta_rect = _rect_in(cta, window)
+    margins = content.layout().contentsMargins()
+    inner_left = content_rect.left() + margins.left()
+    inner_right = content_rect.right() - margins.right()
+    # The CTA sits on the column's logical trailing edge in both directions; only
+    # the physical side differs (RTL trailing is the left edge, LTR the right).
+    rtl = QApplication.instance().layoutDirection() == Qt.LayoutDirection.RightToLeft
+    drift = abs(cta_rect.left() - inner_left) if rtl else abs(cta_rect.right() - inner_right)
+
+    theme = window._theme
+    tolerance = theme.scrollbar_thickness + theme.micro
+    if drift > tolerance:
+        raise AssertionError(
+            f"primary CTA detached from the working column on {surface_id}: "
+            f"drift={drift}px tolerance={tolerance}px"
+        )
+    if content.width() > theme.working_measure or column.width() > theme.working_measure:
+        raise AssertionError(f"working column exceeds its measure on {surface_id}")
+
+    return {
+        "working_measure": theme.working_measure,
+        "content_column_geometry": _rect_record(content_rect),
+        "footer_column_geometry": _rect_record(column_rect),
+        "cta_geometry": _rect_record(cta_rect),
+        "cta_edge_drift_px": int(drift),
+        "cta_edge_tolerance_px": int(tolerance),
+        # Names the edge the drift above is measured from, in both directions.
+        "logical_edge": "trailing",
     }
 
 

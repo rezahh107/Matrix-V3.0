@@ -24,10 +24,10 @@ def qapp() -> QApplication:
     return app
 
 
-def test_create_app_font_does_not_raise_without_full_hinting_preference(
+def test_create_app_font_does_not_raise_without_a_hinting_preference(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(fonts, "has_prefer_full_hinting", lambda: False)
+    monkeypatch.setattr(fonts, "resolve_hinting_preference", lambda: None)
     font = fonts.create_app_font(point_size=9)
     assert isinstance(font, QFont)
 
@@ -39,10 +39,14 @@ def test_create_app_font_sets_antialias_and_quality_flags() -> None:
     assert strategy & QFont.StyleStrategy.PreferAntialias
     assert strategy & QFont.StyleStrategy.PreferQuality
 
+    # Full hinting is deliberately NOT the universal strategy: it snaps stems to
+    # the pixel grid and costs the scalable horizontal metrics Persian shaping
+    # needs. Vertical hinting is preferred wherever Qt exposes it.
     if hasattr(QFont, "HintingPreference") and hasattr(
-        QFont.HintingPreference, "PreferFullHinting"
+        QFont.HintingPreference, "PreferVerticalHinting"
     ):
-        assert font.hintingPreference() == QFont.HintingPreference.PreferFullHinting
+        assert font.hintingPreference() == QFont.HintingPreference.PreferVerticalHinting
+        assert font.hintingPreference() != QFont.HintingPreference.PreferFullHinting
 
 
 def test_create_app_font_uses_vazir_when_available(monkeypatch: pytest.MonkeyPatch) -> None:
