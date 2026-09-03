@@ -34,7 +34,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.infra.config_flags import UserSettings, save_user_settings
-from app.ui.texts import UiTranslator
+from app.ui.texts import SUPPORTED_LANGUAGES, UiTranslator
 from app.ui.widgets.file_picker import FilePicker
 
 from . import main_window_base as _base
@@ -182,6 +182,7 @@ class MainWindow(_base.MainWindow):
 
     def __init__(self) -> None:
         self._ui_text_bindings: list[_TextBinding] = []
+        self._literal_binding_index: dict[str, tuple[str, str]] | None = None
         self._formatted_center_labels: list[tuple[QLabel, str]] = []
         stored_splitter = QSettings().value("ui/main_splitter")
         self._had_saved_splitter_state = isinstance(stored_splitter, QByteArray) and not stored_splitter.isEmpty()
@@ -216,6 +217,7 @@ class MainWindow(_base.MainWindow):
         content = super()._build_build_page()
         self._bind_hero(content, "build")
         self._bind_existing_literals(content)
+        self._bind_picker(self._picker_inspactor, "files.inspactor", "Inspactor report")
         self._bind_picker(
             self._picker_schools,
             "reference.schools.placeholder",
@@ -475,17 +477,40 @@ class MainWindow(_base.MainWindow):
         self._bind(subtitle, f"hero.{scenario}.subtitle", fallback_subtitle)
         self._bind(badge, f"hero.{scenario}.badge", fallback_badge)
 
+    def _literal_index(self) -> dict[str, tuple[str, str]]:
+        """Return the literal→key index, widened to every catalogue language.
+
+        A reviewed page constructed while one language is active carries that
+        language's catalogue values as literals. Indexing only one language left
+        rows such as the database-reference labels unbound after a switch, so the
+        other language kept showing through. The authored map stays authoritative
+        for ambiguous literals; catalogue values only add entries for keys it
+        already governs.
+        """
+
+        if self._literal_binding_index is None:
+            index: dict[str, tuple[str, str]] = dict(_LITERAL_BINDINGS)
+            catalogues = [UiTranslator(language) for language in SUPPORTED_LANGUAGES]
+            for key, fallback in set(_LITERAL_BINDINGS.values()):
+                for catalogue in catalogues:
+                    literal = catalogue.text(key, "").strip()
+                    if literal and index.get(literal, (key, fallback))[0] == key:
+                        index[literal] = (key, fallback)
+            self._literal_binding_index = index
+        return self._literal_binding_index
+
     def _bind_existing_literals(self, root: QWidget) -> None:
+        index = self._literal_index()
         for group in root.findChildren(QGroupBox):
-            mapping = _LITERAL_BINDINGS.get(group.title())
+            mapping = index.get(group.title())
             if mapping is not None:
                 self._bind(group, mapping[0], mapping[1], "title")
         for label in root.findChildren(QLabel):
-            mapping = _LITERAL_BINDINGS.get(label.text())
+            mapping = index.get(label.text())
             if mapping is not None:
                 self._bind(label, mapping[0], mapping[1])
         for button in root.findChildren(QPushButton):
-            mapping = _LITERAL_BINDINGS.get(button.text())
+            mapping = index.get(button.text())
             if mapping is not None:
                 self._bind(button, mapping[0], mapping[1])
         for picker in root.findChildren(FilePicker):

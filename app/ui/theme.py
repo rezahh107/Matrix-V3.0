@@ -60,7 +60,7 @@ class ThemeColors:
     error: str = "#B42318"
     disabled_text: str = "#7C8288"
     disabled_surface: str = "#E7E9EB"
-    diagnostic_background: str = "#E9ECEE"
+    diagnostic_background: str = "#F1F3F5"
     diagnostic_text: str = "#23282D"
 
     @property

@@ -146,6 +146,69 @@ def _critical_record(widget: Any, container: Any) -> dict[str, object]:
     }
 
 
+def _combo_chevron_record(combo: Any) -> dict[str, object] | None:
+    """Record the Matrix-owned chevron overlay geometry for one combo.
+
+    `QComboBox` is STYLED, so the overlay must stay inside the Matrix shell and
+    keep the shared drop-down measure at every supported scale.
+    """
+
+    if combo is None:
+        return None
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QWidget
+
+    from app.ui.theme import Theme
+
+    geometry_tokens = Theme()
+    overlay = combo.findChild(QWidget, "comboChevronOverlay")
+    if overlay is None:
+        return None
+    geometry = overlay.geometry()
+    leading = combo.layoutDirection() == Qt.LayoutDirection.RightToLeft
+    return {
+        "object": "comboChevronOverlay",
+        "geometry": _rect_record(geometry),
+        "combo_geometry": _rect_record(combo.rect()),
+        "expected_width": int(geometry_tokens.combo_dropdown_width),
+        "inside_combo": bool(combo.rect().contains(geometry)),
+        "logical_edge": "leading" if leading else "trailing",
+        "edge_aligned": bool(
+            geometry.left() == 0 if leading else geometry.right() == combo.width() - 1
+        ),
+    }
+
+
+def _scrollbar_records(surface: Any) -> list[dict[str, object]]:
+    """Record the styled scrollbar extents visible on this surface."""
+
+    from PySide6.QtWidgets import QScrollArea
+
+    from app.ui.theme import Theme
+
+    records: list[dict[str, object]] = []
+    expected = int(Theme().scrollbar_thickness)
+    for scroll in surface.findChildren(QScrollArea):
+        for name, bar in (
+            ("vertical", scroll.verticalScrollBar()),
+            ("horizontal", scroll.horizontalScrollBar()),
+        ):
+            if bar is None or not bar.isVisibleTo(surface):
+                continue
+            extent = bar.width() if name == "vertical" else bar.height()
+            records.append(
+                {
+                    "object": f"{scroll.objectName()}:{name}",
+                    "geometry": _rect(bar),
+                    "expected_extent": expected,
+                    "observed_extent": int(extent),
+                    "extent_preserved": extent > 0,
+                    "range": [int(bar.minimum()), int(bar.maximum())],
+                }
+            )
+    return records
+
+
 def _assert_no_nav_overlap(window: Any) -> None:
     navigation = window._workspace_navigation
     if navigation is None:
@@ -240,6 +303,8 @@ def _child(args: argparse.Namespace) -> int:
     }
     if combo is not None:
         critical["combo"] = _scroll_reachability_record(combo, surface, app)
+    combo_chevron = _combo_chevron_record(combo)
+    scrollbars = _scrollbar_records(surface)
     failures = [
         name
         for name, record in critical.items()
@@ -251,6 +316,13 @@ def _child(args: argparse.Namespace) -> int:
     ]
     if failures:
         raise AssertionError(f"critical DPI controls unusable: {failures}")
+    if combo_chevron is not None and not combo_chevron["inside_combo"]:
+        raise AssertionError(f"combo chevron escapes the Matrix shell: {combo_chevron}")
+    unusable_scrollbars = [
+        record["object"] for record in scrollbars if not record["extent_preserved"]
+    ]
+    if unusable_scrollbars:
+        raise AssertionError(f"styled scrollbar extent lost: {unusable_scrollbars}")
 
     screen = window.screen() or app.primaryScreen()
     window_dpr = float(window.devicePixelRatioF())
@@ -292,6 +364,8 @@ def _child(args: argparse.Namespace) -> int:
         "theme": args.theme,
         "diagnostics_expanded": window.diagnostics_expanded(),
         "critical_widgets": critical,
+        "combo_chevron": combo_chevron,
+        "scrollbars": scrollbars,
         "clipping_or_containment_failures": failures,
     }
     Path(args.output).write_text(

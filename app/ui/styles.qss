@@ -1,6 +1,9 @@
 /* Matrix V2 — SOLID_LAYERED_PRODUCTIVITY. All normal surfaces are opaque. */
 QWidget { background-color: {background}; color: {text_primary}; font-size: {body_size}pt; font-weight: 400; }
 QMainWindow, QWidget#workspaceRoot, QWidget[workspaceContent="true"] { background-color: {background}; }
+/* Text is drawn on whatever surface hosts it; a label must never repaint the
+   page background over a card, footer or panel it sits on. */
+QLabel { background-color: transparent; }
 QToolTip { background-color: {surface_primary}; color: {text_primary}; border: 1px solid {boundary_subtle}; border-radius: {control_radius}px; padding: {micro}px {label_to_control}px; }
 QFrame#workspaceNavigation { background-color: {surface_primary}; border: none; border-bottom: 1px solid {boundary_subtle}; }
 QToolButton[navRole="primary"], QToolButton[navRole="secondary"] { background-color: transparent; color: {text_primary}; border: 2px solid transparent; border-radius: {control_radius}px; min-height: 28px; padding: 0 10px; font-size: {body_size}pt; font-weight: 400; }

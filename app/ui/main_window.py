@@ -13,14 +13,17 @@ from typing import Final
 from PySide6.QtCore import QByteArray, QEvent, QObject, QSettings, Qt
 from PySide6.QtGui import QAction, QCloseEvent, QKeySequence, QResizeEvent
 from PySide6.QtWidgets import (
+    QAbstractSpinBox,
     QApplication,
     QBoxLayout,
+    QComboBox,
     QDialog,
     QFormLayout,
     QFrame,
     QGridLayout,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QPushButton,
     QScrollArea,
     QSizePolicy,
@@ -694,7 +697,13 @@ class MainWindow(_v1.MainWindow):
         )
 
     def _apply_field_working_measure(self) -> None:
-        """Bound form fields and guidance copy to the shared field measure."""
+        """Bound interactive form controls to the shared field measure.
+
+        Only entry controls are bounded. Wrapped explanatory copy keeps the full
+        working column: a `QFormLayout` inside a resizable `QScrollArea` does not
+        propagate height-for-width, so narrowing a wrapped label would reserve a
+        single line and let the copy collide with the neighbouring rows.
+        """
 
         measure = self._theme.field_measure
         for name in ("pageBuildContent", "pageAllocateContent"):
@@ -703,17 +712,21 @@ class MainWindow(_v1.MainWindow):
                 continue
             for form in content.findChildren(QFormLayout):
                 for row in range(form.rowCount()):
-                    for role in (
-                        QFormLayout.ItemRole.FieldRole,
-                        QFormLayout.ItemRole.SpanningRole,
-                    ):
-                        item = form.itemAt(row, role)
-                        widget = item.widget() if item is not None else None
-                        if widget is not None:
-                            widget.setMaximumWidth(measure)
-        for label in self._polish_text_labels.values():
-            if label.property("guidanceLevel") == "page":
-                label.setMaximumWidth(measure)
+                    item = form.itemAt(row, QFormLayout.ItemRole.FieldRole)
+                    widget = item.widget() if item is not None else None
+                    if widget is not None and self._is_bounded_field(widget):
+                        widget.setMaximumWidth(measure)
+
+    @staticmethod
+    def _is_bounded_field(widget: QWidget) -> bool:
+        if isinstance(widget, (FilePicker, QLineEdit, QComboBox, QAbstractSpinBox)):
+            return True
+        # Composite rows whose only children are an entry control and its utility
+        # command: bounding them keeps the command beside its field instead of at
+        # the far edge of the working column.
+        return bool(widget.property("normalizedFileRow")) or widget.objectName().startswith(
+            "databaseReference_"
+        )
 
     def _normalize_file_columns(
         self,

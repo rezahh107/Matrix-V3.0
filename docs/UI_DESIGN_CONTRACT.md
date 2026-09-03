@@ -91,7 +91,7 @@ Tonal direction (Fluent-2 neutral):
 | `error` | `#B42318` |
 | `disabled_text` | `#7C8288` |
 | `disabled_surface` | `#E7E9EB` |
-| `diagnostic_background` | `#E9ECEE` |
+| `diagnostic_background` | `#F1F3F5` |
 | `diagnostic_text` | `#23282D` |
 
 ### Dark
