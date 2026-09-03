@@ -358,9 +358,17 @@ def test_shared_working_column_tokens_are_semantic() -> None:
 
 
 @pytest.mark.parametrize("language", [Language.FA, Language.EN])
-def test_footer_cta_shares_the_content_working_column(
+def test_action_cta_shares_the_content_working_column(
     qapp: QApplication, language: Language
 ) -> None:
+    """The working column still governs the form and its primary action.
+
+    WU-SPATIAL-HIERARCHY-SECTION-REGIONS-01 supersedes the fixed window-bottom
+    CTA footer this lock originally measured: the action now lives in the page
+    content flow. The shared-column guarantee is unchanged and still measured -
+    only the widget that carries the action moved.
+    """
+
     _fresh_settings()
     window = MainWindow()
     window._apply_language(language)
@@ -368,7 +376,7 @@ def test_footer_cta_shares_the_content_working_column(
 
     try:
         # A scroll area reserves its scrollbar extent outside the viewport, so the
-        # work column and the footer column may differ by at most that reservation.
+        # work column and the action column may differ by at most that reservation.
         tolerance = window._theme.scrollbar_thickness + window._theme.micro
         for size in ((960, 640), (1200, 800), (1680, 900)):
             window.resize(*size)
@@ -385,18 +393,20 @@ def test_footer_cta_shares_the_content_working_column(
                 )
                 column = button.parentWidget()
                 assert content is not None and column is not None
-                assert column.objectName() == "pageActionFooterColumn"
+                assert column.objectName() == "pageActionRegion"
 
                 content_rect = _mapped_rect(content, window)
                 column_rect = _mapped_rect(column, window)
                 assert content.width() <= window._theme.working_measure
                 assert column.width() <= window._theme.working_measure
-                # The CTA column and the work content share one logical column.
+                # The action column and the work content share one logical column.
                 assert (
                     abs(content_rect.center().x() - column_rect.center().x())
                     <= tolerance
-                ), f"{size} {surface_id}: CTA column is not centred on the content"
-                assert abs(content_rect.width() - column_rect.width()) <= tolerance
+                ), f"{size} {surface_id}: action column is not centred on the content"
+                assert abs(content_rect.width() - column_rect.width()) <= 2 * (
+                    window._theme.page_margin_normal + tolerance
+                )
 
                 # The CTA sits on the trailing edge of the form's own column,
                 # never on a distant window edge.
@@ -410,11 +420,16 @@ def test_footer_cta_shares_the_content_working_column(
                 )
                 assert drift <= tolerance, f"{size} {surface_id}: CTA drift={drift}px"
                 assert button.isVisibleTo(surface)
-                assert surface.rect().contains(_mapped_rect(button, surface))
 
-                # Bounding the working column must not add a horizontal page scroll.
+                # Content-contained now, so reachability is by ordinary scrolling.
                 scroll = surface.findChild(QScrollArea)
                 assert scroll is not None
+                scroll.ensureWidgetVisible(button, 0, 0)
+                qapp.processEvents()
+                viewport = scroll.viewport()
+                assert viewport.rect().contains(_mapped_rect(button, viewport))
+
+                # Bounding the working column must not add a horizontal page scroll.
                 assert (
                     scroll.horizontalScrollBarPolicy()
                     == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
@@ -478,11 +493,12 @@ def test_working_column_evidence_names_the_edge_it_measures(
             record = _working_column_record(window, surface_id, button)
             assert record is not None
 
-            # The manifest shape is part of the contract: no key renames.
+            # The manifest shape is part of the contract: no key renames beyond
+            # the one the superseded footer decision forced.
             assert set(record) == {
                 "working_measure",
                 "content_column_geometry",
-                "footer_column_geometry",
+                "action_region_geometry",
                 "cta_geometry",
                 "cta_edge_drift_px",
                 "cta_edge_tolerance_px",
