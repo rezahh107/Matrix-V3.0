@@ -20,7 +20,7 @@ Matrix uses `PRIMARY_WORKSPACE_WITH_UTILITY_SEPARATION`.
 - Primary navigation is generated from the registered capabilities and must not assume a fixed count.
 - `explain` and `database` are direct one-step secondary destinations. They must not read as peer workflow stages.
 - Destination identity is a stable surface ID, never a hard-coded tab index.
-- Primary workflow pages retain scrollable work content plus a fixed, always-reachable primary CTA footer.
+- Primary workflow pages are one scrollable work column containing the whole workflow, primary action included. See §4a for the composition grammar.
 - Existing Build/Allocate command shortcuts remain command semantics; navigation must not repurpose them. No public Rule Engine QAction/shortcut is part of the current GUI contract.
 
 ## 3. Operational status and diagnostics
@@ -65,6 +65,45 @@ Tonal direction (Fluent-2 neutral):
 - Light keeps a neutral light page with clearly distinguishable white primary surfaces. Depth comes from a visible page/surface/control separation plus subtle structural boundaries, never from dark heavy outlines.
 - Routine controls do not glow against the page: ordinary buttons, tab panes, popups and list/table shells use `boundary_subtle`; `boundary_control` is reserved for essential authored affordances such as text-entry shells, header rules and the scrollbar handle.
 - Accent is one controlled cool blue/teal-blue family. It is used for the primary CTA, focus, selection, active primary navigation and meaningful interactive states, and is never spread as a fill across ordinary controls.
+
+## 4a. Primary workflow composition
+
+A primary workflow page (`build`, `allocate`) composes, in order, inside one scrollable working column:
+
+1. hero / workflow header;
+2. page guidance;
+3. one or more **Major Section Regions**;
+4. a content-contained **Action Region**.
+
+### Major Section Regions
+
+A Major Section is one meaningful semantic group of the workflow, and it must read as a single Common Region:
+
+- solid opaque `surface_primary` surface;
+- `boundary_subtle` structural boundary at `container_radius`;
+- deliberate inner padding (`major_section_padding`);
+- an explicit section title, visibly distinct from ordinary field labels;
+- a macro gap (`major_section_gap`) to the next Major Section.
+
+Grouping is carried by the combination of region boundary, surface distinction, title typography, internal proximity and inter-section spacing. Title font size alone is never the grouping mechanism.
+
+Section identity is **structural and semantic**: a Major Section is a `QGroupBox` owned directly by the page's own top-level layout, and it is marked with the presentation role `sectionRole="major"`, which the central QSS governs. Titles, translated copy and child indexes are not identity. The default `QGroupBox` presentation stays flat, so only these groups become regions.
+
+Major Section Regions are **not** permission for card soup. The region is the grouping level; inside a region, normal form composition applies. Individual fields, help lines, rows and buttons never get their own region. Heading + spacing/proximity remains the correct tool for smaller local groupings, including nested ones.
+
+### Action Region
+
+The primary action of a workflow page belongs to the page content flow:
+
+- it follows the final meaningful Major Section, inside the same scrollable content;
+- it shares the page's working column and keeps logical trailing alignment in both directions;
+- it is reachable by ordinary page scrolling; there is **no** requirement for, and no active use of, a fixed window-bottom CTA footer;
+- it preserves the primary button's semantic variant, wiring, validation, execution behavior and keyboard accessibility;
+- it carries no footer-bar material of its own.
+
+### Large windows
+
+Unused application canvas after the completed page content is acceptable and expected. Content stays top-aligned: Major Sections are never vertically stretched, and content is never distributed over the available window height, to fill a large or maximized window. A semantic gap between the form and its own action is a defect; empty canvas below the finished content is not.
 
 ## 5. Canonical semantic palette
 
@@ -141,6 +180,26 @@ Semantic spacing:
 
 Normal structural rhythm is `4 / 8 / 12 / 16 / 20`; `6` is an allowed icon/text optical spacing. Geometry-specific exceptions must be named and justified.
 
+Macro (page-composition) spacing:
+
+- `major_section_gap=24` — the gap between two Major Section Regions. This is the one named macro extension of the routine rhythm, justified because the inter-section gap must be perceptibly larger than any intra-section gap for the region grammar to read.
+- `major_section_padding=16` — inner padding of a Major Section Region.
+- `major_section_title_line=22` — one Subtitle line at the Qt logical 96dpi baseline, with headroom for the taller Persian ascender/descender band.
+- `major_section_extra_gap` (derived, `major_section_gap - within_group`) — the extra margin a region adds on top of the page rhythm, so the macro gap has one source rather than a second competing literal.
+- `major_section_title_band` (derived, `major_section_padding + major_section_title_line + within_group`) — top padding that clears the title painted inside the region, so the group's content never collides with its own title.
+
+The locked spacing semantics for a primary workflow page:
+
+| relationship | value |
+| --- | --- |
+| page rhythm (hero ↔ guidance, and the base gap between page items) | `within_group=12` |
+| row ↔ row, and field ↔ field help, inside a section | `within_group=12` |
+| section title ↔ section body | `within_group=12` (via `major_section_title_band`) |
+| Major Section ↔ Major Section | `major_section_gap=24` |
+| final Major Section ↔ Action Region | `section_spacing=20` |
+
+**Inter-section gap must exceed the intra-section row gap.** That relationship is the locked invariant; the exact values above are the current reconciliation of it with the existing tokens. Field help uses the same `12` row rhythm rather than a tighter `4–8`, because a help label keeps the full content column: a `QFormLayout` inside a resizable `QScrollArea` does not propagate height-for-width, so narrowing wrapped copy reserves a single line and lets it collide with neighbouring rows.
+
 Density targets:
 
 - ordinary text control: minimum `32px`;
@@ -154,9 +213,9 @@ Use flexible minimums rather than rigid fixed heights where translation/font met
 
 Shared working-column geometry (semantic presentation tokens, not per-page literals):
 
-- `working_measure=1120` — maximum measure of the centered primary working column. Scrollable page content and the fixed CTA footer column use the same value, so the CTA stays aligned with the form instead of drifting to a distant window edge on wide desktops.
-- `field_measure=720` — maximum measure of a form field/help row inside that column, so inputs do not stretch to an uncontrolled desktop-wide line length.
-- Both are logical (leading/trailing) values: the column is centered and the CTA keeps its trailing position in LTR and RTL alike.
+- `working_measure=1120` — maximum measure of the centered primary working column. It governs the hero/content working width, the Major Section Region width, the field working width and the content-contained Action Region alignment. Because all of them share one measure, the action stays aligned with the form it submits instead of drifting to a distant window edge on wide desktops. It is **not** a mechanism for aligning a fixed window-bottom footer; there is no such footer.
+- `field_measure=720` — maximum measure of a form field row inside that column, so inputs do not stretch to an uncontrolled desktop-wide line length. Wrapped explanatory copy deliberately keeps the full column (see §6 spacing note).
+- Both are logical (leading/trailing) values: the column is centered and the action keeps its trailing position in LTR and RTL alike.
 
 Shared Matrix-owned control geometry:
 
@@ -186,7 +245,7 @@ Routine `700`/display-size typography is not part of V2. Primary CTA uses BodySt
 ## 8. Borders, radii, shadows and motion
 
 - Essential styled controls use `boundary_control`; structural separators use `boundary_subtle` only when useful.
-- Primary grouping normally uses heading + spacing/proximity before any container outline.
+- Local and nested grouping uses heading + spacing/proximity before any container outline. Primary-workflow **Major Section Regions** are the named exception: there, a subtle surface plus a `boundary_subtle` outline and padding are the intentional semantic grouping tools (§4a), because heading and spacing alone did not separate major groups from ordinary labels.
 - Routine radii: `control_radius=6px`, `container_radius=8px`.
 - No routine `14px` radius tier.
 - No routine same-plane shadows.

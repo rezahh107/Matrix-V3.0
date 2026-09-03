@@ -437,6 +437,12 @@ class MainWindow(_v1.MainWindow):
         self._replace_primary_output_picker(self._picker_output_matrix, "build")
         self._replace_primary_output_picker(self._picker_alloc_out, "allocate")
         self._install_page_guidance()
+        # This pass adds its own row wrappers after the pages were composed, so
+        # the section-surface marking is refreshed over the finished content.
+        for name in ("pageBuildContent", "pageAllocateContent"):
+            content = self.findChild(QWidget, name)
+            if content is not None:
+                self.mark_section_row_hosts(content)
 
     def _find_form_row(self, target: QWidget) -> tuple[QFormLayout, int, QWidget] | None:
         for form in self.findChildren(QFormLayout):
@@ -656,9 +662,12 @@ class MainWindow(_v1.MainWindow):
             self._stage_detail.setText(template.format(folder=workspace.run_dir.name))
 
     # ------------------------------------------------------- geometry / bidi
-    def _fixed_action_page(self, content: QWidget, button: QPushButton, page_id: str) -> QWidget:
-        shell = super()._fixed_action_page(content, button, page_id)
+    def _workflow_page(self, content: QWidget, button: QPushButton, page_id: str) -> QWidget:
+        shell = super()._workflow_page(content, button, page_id)
         content.setProperty("workspaceContent", True)
+        # One bounded working column now governs the page content, its Major
+        # Section Regions, the bounded field measure inside them and the
+        # content-contained Action Region alike.
         content.setMaximumWidth(self._theme.working_measure)
         if content.layout() is not None:
             margin = self._theme.page_margin_normal
@@ -666,10 +675,6 @@ class MainWindow(_v1.MainWindow):
         scroll = shell.findChild(QScrollArea)
         if scroll is not None:
             scroll.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
-        footer = shell.findChild(QFrame, "pageActionFooter")
-        if footer is not None:
-            footer.installEventFilter(self)
-            self._sync_footer_working_column(footer)
         return shell
 
     def _current_page_margin(self) -> int:
@@ -677,23 +682,6 @@ class MainWindow(_v1.MainWindow):
             self._theme.page_margin_compact
             if self.width() <= _COMPACT_WORKSPACE_WIDTH
             else self._theme.page_margin_normal
-        )
-
-    def _sync_footer_working_column(self, footer: QFrame) -> None:
-        """Keep the fixed CTA inside the same working column as the page content."""
-
-        layout = footer.layout()
-        column = footer.findChild(QWidget, "pageActionFooterColumn")
-        if layout is None or column is None or column.layout() is None:
-            return
-        side = max(0, (footer.width() - self._theme.working_measure) // 2)
-        layout.setContentsMargins(side, 0, side, 0)
-        margin = self._current_page_margin()
-        column.layout().setContentsMargins(
-            margin,
-            self._theme.label_to_control,
-            margin,
-            self._theme.within_group,
         )
 
     def _apply_field_working_measure(self) -> None:
@@ -795,8 +783,6 @@ class MainWindow(_v1.MainWindow):
             widget = self.findChild(QWidget, name)
             if widget is not None and widget.layout() is not None:
                 widget.layout().setContentsMargins(margin, margin, margin, margin)
-        for footer in self.findChildren(QFrame, "pageActionFooter"):
-            self._sync_footer_working_column(footer)
         if self._workspace_navigation is not None:
             layout = self._workspace_navigation.layout()
             if layout is not None:
@@ -816,12 +802,6 @@ class MainWindow(_v1.MainWindow):
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802
         if watched is self._splitter and event.type() in (QEvent.Type.Resize, QEvent.Type.Move):
             self._update_overlay_geometry()
-        elif (
-            event.type() == QEvent.Type.Resize
-            and isinstance(watched, QFrame)
-            and watched.objectName() == "pageActionFooter"
-        ):
-            self._sync_footer_working_column(watched)
         return super().eventFilter(watched, event)
 
     def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802

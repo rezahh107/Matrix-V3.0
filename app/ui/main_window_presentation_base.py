@@ -237,7 +237,7 @@ class MainWindow(_base.MainWindow):
             content,
             {self._picker_inspactor: self._btn_matrix_mentor_pool},
         )
-        return self._fixed_action_page(content, self._btn_build, "Build")
+        return self._workflow_page(content, self._btn_build, "Build")
 
     def _build_allocate_page(self) -> QWidget:
         content = super()._build_allocate_page()
@@ -273,7 +273,7 @@ class MainWindow(_base.MainWindow):
             content,
             {self._picker_pool: self._btn_mentor_pool},
         )
-        return self._fixed_action_page(content, self._btn_allocate, "Allocate")
+        return self._workflow_page(content, self._btn_allocate, "Allocate")
 
     def _build_rule_engine_page(self) -> QWidget:
         content = super()._build_rule_engine_page()
@@ -291,7 +291,7 @@ class MainWindow(_base.MainWindow):
         self._bind(self._btn_rule_autodetect, "action.autodetect", "Auto-detect")
         self._bind_line_placeholder(self._combo_rule_academic_year.lineEdit(), "placeholder.year", "e.g. 1404")
         self._prepare_form_geometry(content, {})
-        return self._fixed_action_page(content, self._btn_rule_engine, "RuleEngine")
+        return self._workflow_page(content, self._btn_rule_engine, "RuleEngine")
 
     def _build_explain_page(self) -> QWidget:
         page = super()._build_explain_page()
@@ -309,14 +309,27 @@ class MainWindow(_base.MainWindow):
         return page
 
     def _wrap_page(self, page: QWidget) -> QWidget:
-        if bool(page.property("fixedActionPage")):
+        if bool(page.property("workflowPage")):
             return page
         return super()._wrap_page(page)
 
-    def _fixed_action_page(self, content: QWidget, button: QPushButton, page_id: str) -> QWidget:
+    def _workflow_page(self, content: QWidget, button: QPushButton, page_id: str) -> QWidget:
+        """Compose one primary workflow page as sections plus a contained action.
+
+        The page reads hero → guidance → Major Section Regions → Action Region,
+        all inside the same scrollable content. There is no window-bottom CTA
+        footer: the primary action belongs to the content flow, directly after
+        the final Major Section, so it stays attached to the form it submits
+        however tall the desktop window becomes.
+        """
+
+        content.setObjectName(f"page{page_id}Content")
+        self._promote_major_sections(content)
+        self._install_action_region(content, button)
+
         shell = QWidget(self)
         shell.setObjectName(f"page{page_id}")
-        shell.setProperty("fixedActionPage", True)
+        shell.setProperty("workflowPage", True)
         layout = QVBoxLayout(shell)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
@@ -326,27 +339,118 @@ class MainWindow(_base.MainWindow):
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        content.setObjectName(f"page{page_id}Content")
         scroll.setWidget(content)
         layout.addWidget(scroll, 1)
-
-        footer = QFrame(shell)
-        footer.setObjectName("pageActionFooter")
-        footer_layout = QHBoxLayout(footer)
-        footer_layout.setContentsMargins(0, 0, 0, 0)
-        footer_layout.setSpacing(0)
-        # The CTA lives in a working column that mirrors the scrollable content
-        # column, so the primary action can never drift to a distant window edge.
-        column = QWidget(footer)
-        column.setObjectName("pageActionFooterColumn")
-        column_layout = QHBoxLayout(column)
-        column_layout.setContentsMargins(24, 8, 24, 10)
-        column_layout.addStretch(1)
-        button.setProperty("variant", "primary")
-        column_layout.addWidget(button)
-        footer_layout.addWidget(column, 1)
-        layout.addWidget(footer, 0)
         return shell
+
+    # ------------------------------------------------------- spatial hierarchy
+    def _promote_major_sections(self, content: QWidget) -> tuple[QGroupBox, ...]:
+        """Give the page's own workflow groups the Major Section Region role.
+
+        Section identity is structural: a Major Section is a ``QGroupBox`` owned
+        directly by the page's top-level layout. That addresses the real semantic
+        groups without matching title strings, Persian/English copy or child
+        indexes, and it cannot leak the region treatment into nested groups or
+        into unrelated dialogs that reuse ``QGroupBox``.
+        """
+
+        outer = content.layout()
+        if not isinstance(outer, QBoxLayout):
+            return ()
+
+        theme = self._theme
+        sections: list[QGroupBox] = []
+        for index in range(outer.count()):
+            group = outer.itemAt(index).widget()
+            if not isinstance(group, QGroupBox):
+                continue
+            group.setProperty("sectionRole", "major")
+            group.style().unpolish(group)
+            group.style().polish(group)
+            inner = group.layout()
+            if inner is not None:
+                # The region's own QSS padding is the only inset; a second layout
+                # margin would double it and push content off the field measure.
+                inner.setContentsMargins(0, 0, 0, 0)
+                if isinstance(inner, QFormLayout):
+                    inner.setHorizontalSpacing(theme.label_to_control)
+                    inner.setVerticalSpacing(theme.within_group)
+                elif isinstance(inner, QBoxLayout):
+                    inner.setSpacing(theme.within_group)
+            sections.append(group)
+
+        # The page rhythm is the intra-section row gap; each Major Section adds
+        # `major_section_extra_gap` on top of it through the central QSS, so the
+        # macro gap between two sections stays perceptibly larger than the gap
+        # between two rows inside one section.
+        outer.setSpacing(theme.within_group)
+        self.mark_section_row_hosts(content)
+        return tuple(sections)
+
+    def mark_section_row_hosts(self, root: QWidget) -> int:
+        """Flag the pure layout hosts that must not repaint the page background.
+
+        A row wrapper is a bare ``QWidget`` that exists only to hold a layout. It
+        has no surface of its own, but the global ``QWidget`` rule paints the page
+        background, which used to be invisible while every group was transparent.
+        On a Major Section Region's opaque surface the same fill reads as a hole
+        punched through the region, so these hosts are marked for the central QSS
+        to keep transparent. Re-running this is safe: later composition passes add
+        more row hosts, and marking is idempotent.
+        """
+
+        marked = 0
+        for child in root.findChildren(QWidget):
+            # Exactly ``QWidget`` - a subclass paints its own authored surface.
+            if type(child) is not QWidget or child.layout() is None:
+                continue
+            if bool(child.property("sectionRowHost")):
+                continue
+            child.setProperty("sectionRowHost", True)
+            child.style().unpolish(child)
+            child.style().polish(child)
+            marked += 1
+        return marked
+
+    def _install_action_region(self, content: QWidget, button: QPushButton) -> QFrame | None:
+        """Move the primary CTA into a semantic region inside the page content.
+
+        The preserved base composes the action as a bare stretch/button row. This
+        replaces that row, in place, with a named Action Region so the action
+        keeps the working column, follows the final Major Section, and remains
+        reachable by ordinary page scrolling.
+        """
+
+        outer = content.layout()
+        if not isinstance(outer, QBoxLayout):
+            return None
+
+        index = outer.count()
+        for position in range(outer.count()):
+            row = outer.itemAt(position).layout()
+            if row is None or row.indexOf(button) < 0:
+                continue
+            index = position
+            outer.takeAt(position)
+            while row.count():
+                row.takeAt(0)
+            row.deleteLater()
+            break
+
+        region = QFrame(content)
+        region.setObjectName("pageActionRegion")
+        region.setProperty("actionRegion", "page")
+        region_layout = QHBoxLayout(region)
+        region_layout.setContentsMargins(0, 0, 0, 0)
+        region_layout.setSpacing(self._theme.control_to_control)
+        # Logical trailing placement: Qt mirrors the stretch under RTL, so the
+        # action keeps the working column's trailing edge in both directions.
+        region_layout.addStretch(1)
+        button.setParent(region)
+        button.setProperty("variant", "primary")
+        region_layout.addWidget(button)
+        outer.insertWidget(index, region)
+        return region
 
     # -------------------------------------------------------------- geometry/bidi
     def _prepare_form_geometry(

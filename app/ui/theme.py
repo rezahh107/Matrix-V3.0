@@ -183,10 +183,20 @@ class Theme:
     container_radius: int = 8
 
     # Shared working-column geometry. One semantic source for the centered page
-    # content, the fixed CTA footer column and the bounded field measure, so the
-    # footer can never drift to a distant window edge on wide desktops.
+    # content, the Major Section Regions inside it, the bounded field measure and
+    # the content-contained Action Region, so form and action share one measure.
     working_measure: int = 1120
     field_measure: int = 720
+
+    # Major Section Region macro geometry. `major_section_gap` is the single named
+    # macro extension of the 4/8/12/16/20 rhythm: the gap between two Major
+    # Sections must stay perceptibly larger than the intra-section row rhythm, so
+    # grouping is read from the region rather than from the title's font size.
+    major_section_gap: int = 24
+    major_section_padding: int = 16
+    # One Subtitle line at the Qt logical 96dpi baseline, with headroom for the
+    # taller Persian ascender/descender band.
+    major_section_title_line: int = 22
     # Shared Matrix-owned complex-control geometry. The Python chevron overlay and
     # the central QSS drop-down surface must not compute this independently.
     combo_dropdown_width: int = 28
@@ -198,6 +208,28 @@ class Theme:
         """Text inset that keeps content clear of the Matrix-owned drop-down."""
 
         return self.combo_dropdown_width + 2
+
+    @property
+    def major_section_extra_gap(self) -> int:
+        """Region margin that lifts the macro gap above the page rhythm.
+
+        Primary workflow pages lay their content out on the ``within_group``
+        rhythm, so the macro gap is expressed once as the extra margin a Major
+        Section adds on top of it rather than as a second competing literal.
+        """
+
+        return self.major_section_gap - self.within_group
+
+    @property
+    def major_section_title_band(self) -> int:
+        """Top padding that clears the section title painted inside the region.
+
+        The title is drawn inside the region's own surface, so the group's
+        content rectangle has to start below it: region padding, one title line,
+        then the title-to-body gap.
+        """
+
+        return self.major_section_padding + self.major_section_title_line + self.within_group
 
     @property
     def spacing_base(self) -> int:
@@ -432,6 +464,10 @@ def _stylesheet_token_mapping(theme: Theme) -> dict[str, str]:
         "container_radius": str(theme.container_radius),
         "working_measure": str(theme.working_measure),
         "field_measure": str(theme.field_measure),
+        "major_section_gap": str(theme.major_section_gap),
+        "major_section_padding": str(theme.major_section_padding),
+        "major_section_extra_gap": str(theme.major_section_extra_gap),
+        "major_section_title_band": str(theme.major_section_title_band),
         "combo_dropdown_width": str(theme.combo_dropdown_width),
         "combo_content_inset": str(theme.combo_content_inset),
         "scrollbar_thickness": str(theme.scrollbar_thickness),

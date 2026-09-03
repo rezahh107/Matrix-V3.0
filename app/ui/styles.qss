@@ -2,8 +2,12 @@
 QWidget { background-color: {background}; color: {text_primary}; font-size: {body_size}pt; font-weight: 400; }
 QMainWindow, QWidget#workspaceRoot, QWidget[workspaceContent="true"] { background-color: {background}; }
 /* Text is drawn on whatever surface hosts it; a label must never repaint the
-   page background over a card, footer or panel it sits on. */
+   page background over a card, action region or panel it sits on. */
 QLabel { background-color: transparent; }
+/* The same rule for pure layout hosts. A bare row wrapper and a FilePicker shell
+   own no surface of their own: they must show whichever surface hosts them, or
+   they punch a page-coloured hole through a Major Section Region. */
+QWidget[sectionRowHost="true"], QWidget[normalizedFileRow="true"], FilePicker { background-color: transparent; }
 QToolTip { background-color: {surface_primary}; color: {text_primary}; border: 1px solid {boundary_subtle}; border-radius: {control_radius}px; padding: {micro}px {label_to_control}px; }
 QFrame#workspaceNavigation { background-color: {surface_primary}; border: none; border-bottom: 1px solid {boundary_subtle}; }
 QToolButton[navRole="primary"], QToolButton[navRole="secondary"] { background-color: transparent; color: {text_primary}; border: 2px solid transparent; border-radius: {control_radius}px; min-height: 28px; padding: 0 10px; font-size: {body_size}pt; font-weight: 400; }
@@ -18,6 +22,16 @@ QLabel#heroSubtitle { color: {text_secondary}; font-size: {body_size}pt; font-we
 QLabel#heroBadge { background-color: {surface_secondary}; color: {text_secondary}; border: none; border-radius: {control_radius}px; padding: {micro}px {label_to_control}px; font-size: {caption_size}pt; font-weight: 600; }
 QGroupBox { background-color: transparent; border: none; border-radius: 0; margin-top: {section_spacing}px; padding: {within_group}px 0 0 0; font-size: {subtitle_size}pt; font-weight: 600; color: {text_primary}; }
 QGroupBox::title { subcontrol-origin: margin; subcontrol-position: top left; padding: 0 {micro}px; background-color: {background}; color: {text_primary}; }
+/* Major Section Region. Only the semantic primary-workflow groups carry
+   sectionRole="major"; every other QGroupBox keeps the flat default above, so a
+   section region never becomes a global card. The region carries the grouping
+   itself: opaque surface + subtle boundary + deliberate padding + macro gap. */
+QGroupBox[sectionRole="major"] { background-color: {surface_primary}; border: 1px solid {boundary_subtle}; border-radius: {container_radius}px; margin-top: {major_section_extra_gap}px; padding: {major_section_title_band}px {major_section_padding}px {major_section_padding}px {major_section_padding}px; font-size: {subtitle_size}pt; font-weight: 600; color: {text_primary}; }
+/* The title is painted on the region's own surface, never on a page-coloured
+   rectangle cutting through it. `top left` is the logical leading corner: Qt
+   mirrors it under RTL, and the horizontal padding gives both directions the
+   same leading inset without any physical left/right assumption. */
+QGroupBox[sectionRole="major"]::title { subcontrol-origin: padding; subcontrol-position: top left; background-color: transparent; color: {text_primary}; padding: 0 {major_section_padding}px; top: {major_section_padding}px; }
 QLabel[guidanceLevel="page"] { background-color: transparent; color: {text_secondary}; font-size: {body_size}pt; font-weight: 400; }
 QLabel[guidanceLevel="field"] { background-color: transparent; color: {text_secondary}; font-size: {caption_size}pt; font-weight: 400; }
 QLineEdit, QTextEdit, QPlainTextEdit, QComboBox { background-color: {control_surface}; color: {text_primary}; border: 1px solid {boundary_control}; border-radius: {control_radius}px; min-height: 32px; padding: 0 10px; selection-background-color: {selection}; selection-color: {text_primary}; }
@@ -28,11 +42,14 @@ QLineEdit:disabled, QTextEdit:disabled, QPlainTextEdit:disabled, QComboBox:disab
 /* Drop-down width and content inset come from one shared Matrix geometry token. */
 QComboBox { padding-left: {combo_content_inset}px; padding-right: {combo_content_inset}px; }
 QComboBox QLineEdit { background-color: transparent; border: none; border-radius: 0; min-height: 0; padding: 0; }
-QComboBox::drop-down { subcontrol-origin: border; subcontrol-position: top right; width: {combo_dropdown_width}px; background-color: {control_surface}; border: none; border-radius: {control_radius}px; }
+/* The drop-down reserves the Matrix-owned region so Qt draws no Fusion chrome
+   there; it paints no fill of its own. A second opaque fill covered the shell's
+   own border across that region, which reads as a cut-off control wherever the
+   host surface matches `control_surface` - a Major Section Region in light mode.
+   The shell already carries rest/hover/focus/disabled for the whole control. */
+QComboBox::drop-down { subcontrol-origin: border; subcontrol-position: top right; width: {combo_dropdown_width}px; background-color: transparent; border: none; }
 QComboBox::drop-down:right-to-left { subcontrol-position: top left; }
 QComboBox::drop-down:left-to-right { subcontrol-position: top right; }
-QComboBox::drop-down:hover { background-color: {control_hover}; }
-QComboBox::drop-down:disabled { background-color: {disabled_surface}; }
 /* Arrow pixels are Matrix-owned by the vector overlay in combo_chevron.py. */
 QComboBox::down-arrow { image: none; width: 12px; height: 8px; border: none; }
 QComboBox::down-arrow:disabled { image: none; border: none; }
@@ -59,8 +76,10 @@ QTabBar::tab { background-color: {surface_secondary}; color: {text_secondary}; b
 QTabBar::tab:selected { background-color: {selection}; color: {text_primary}; border-bottom: 2px solid {accent}; font-weight: 600; }
 QTableView, QTableWidget { background-color: {surface_primary}; alternate-background-color: {surface_secondary}; color: {text_primary}; border: 1px solid {boundary_subtle}; border-radius: {control_radius}px; gridline-color: {boundary_subtle}; selection-background-color: {selection}; selection-color: {text_primary}; }
 QHeaderView::section { background-color: {surface_secondary}; color: {text_primary}; border: none; border-bottom: 1px solid {boundary_control}; padding: 5px 8px; min-height: 28px; font-weight: 600; }
-QFrame#pageActionFooter { background-color: {surface_primary}; border: none; border-top: 1px solid {boundary_subtle}; }
-QWidget#pageActionFooterColumn { background-color: transparent; }
+/* Content-contained Action Region. The primary CTA belongs to the page content
+   flow after the final Major Section, so it carries no footer-bar material of
+   its own; the macro gap above it is the only separation it needs. */
+QFrame#pageActionRegion { background-color: transparent; border: none; margin-top: {label_to_control}px; }
 QFrame#diagnosticsPane { background-color: {diagnostic_background}; color: {diagnostic_text}; border: none; border-top: 1px solid {boundary_subtle}; }
 QFrame#logPanel, QFrame#logStackHost, QPlainTextEdit#textLog { background-color: {diagnostic_background}; color: {diagnostic_text}; border: none; }
 QLabel#logPlaceholder { background-color: {diagnostic_background}; color: {text_secondary}; font-size: {caption_size}pt; }
