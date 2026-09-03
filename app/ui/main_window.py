@@ -775,6 +775,10 @@ class MainWindow(_v1.MainWindow):
                     1,
                 )
             if old_field is not picker and old_field.parent() is not None:
+                # Hide before the deferred delete: an emptied row wrapper keeps
+                # painting its opaque background over the section title until the
+                # event loop actually collects it.
+                old_field.hide()
                 old_field.deleteLater()
             if label_widget is not None:
                 form.insertRow(row, label_widget, row_widget)
