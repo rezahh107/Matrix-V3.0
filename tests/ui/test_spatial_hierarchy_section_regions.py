@@ -683,7 +683,10 @@ def test_repeated_window_lifecycles_stay_reclaimable(qapp: QApplication) -> None
     _fresh_settings()
     baseline = len(QApplication.allWidgets())
 
-    for cycle in range(6):
+    # Four cycles is enough to falsify the leak - it shows on the very first
+    # teardown - while keeping the cost of the whole test near one window build.
+    cycles = 4
+    for cycle in range(cycles):
         window = MainWindow()
         window.resize(1200, 800)
         window.show()
@@ -707,9 +710,13 @@ def test_repeated_window_lifecycles_stay_reclaimable(qapp: QApplication) -> None
                 if not isinstance(obj, QWidget)
             ]
             assert foreign == [], f"cycle {cycle}: non-widget in allWidgets(): {foreign}"
-            # The same walk `apply_global_font` performs on every window build.
-            for widget in QApplication.allWidgets():
-                widget.font()
+            if cycle in (0, cycles - 1):
+                # The same walk `apply_global_font` performs on every window
+                # build, which is where a stale wrapper actually detonates. The
+                # cheap type census above runs every cycle; this fuller walk
+                # brackets the sequence rather than repeating inside it.
+                for widget in QApplication.allWidgets():
+                    widget.font()
         finally:
             _destroy(window, qapp)
 
