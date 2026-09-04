@@ -12,13 +12,14 @@ WU-SPATIAL-HIERARCHY-SECTION-REGIONS-01:
 
 from __future__ import annotations
 
+import gc
 import re
 from pathlib import Path
 
 import pytest
 
 pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
-from PySide6.QtCore import QRect, QSettings, Qt
+from PySide6.QtCore import QEvent, QRect, QSettings, Qt
 from PySide6.QtWidgets import (
     QApplication,
     QBoxLayout,
@@ -61,9 +62,21 @@ def _fresh_settings() -> None:
 
 
 def _destroy(window: MainWindow, qapp: QApplication) -> None:
+    """Reclaim a workspace window completely.
+
+    `deleteLater()` alone does not free it: Qt delivers DeferredDelete only when
+    the event loop unwinds to the level that posted it, which never happens
+    under pytest. Every surviving window then stays in
+    `QApplication.allWidgets()`, which `apply_global_font` walks on each new
+    window, so the next test pays for every window the previous ones left behind.
+    """
+
     window.close()
     window.deleteLater()
     qapp.processEvents()
+    qapp.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    qapp.processEvents()
+    gc.collect()
     _fresh_settings()
 
 

@@ -12,6 +12,7 @@ Each test maps to one conformance lock of WU-UI-FLUENT2-POLISH-01:
 
 from __future__ import annotations
 
+import gc
 import json
 import re
 from pathlib import Path
@@ -19,7 +20,7 @@ from pathlib import Path
 import pytest
 
 pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
-from PySide6.QtCore import QRect, QSettings, Qt
+from PySide6.QtCore import QEvent, QRect, QSettings, Qt
 from PySide6.QtGui import QColor, QFont
 from PySide6.QtWidgets import (
     QApplication,
@@ -68,6 +69,13 @@ def _destroy(window: MainWindow, qapp: QApplication) -> None:
     window.close()
     window.deleteLater()
     qapp.processEvents()
+    # DeferredDelete is only delivered when the event loop unwinds to the level
+    # that posted it, which never happens under pytest, so it is flushed here.
+    # Without this the window stays in `QApplication.allWidgets()` for the rest
+    # of the session and every later window build pays to walk it.
+    qapp.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    qapp.processEvents()
+    gc.collect()
     _fresh_settings()
 
 
