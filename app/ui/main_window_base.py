@@ -1134,6 +1134,10 @@ class MainWindow(QMainWindow):
         )
 
         inputs_group = QGroupBox(self._t("group.inputs", "ورودی‌ها"), page)
+        # Stable identity for the Major Section Region grammar: the presentation
+        # layer and its evidence address these groups by name, never by title
+        # text or child index.
+        inputs_group.setObjectName("buildInputsSection")
         inputs_layout = QFormLayout(inputs_group)
         inputs_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
         inputs_layout.setFormAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
@@ -1205,6 +1209,7 @@ class MainWindow(QMainWindow):
         outer.addWidget(inputs_group)
 
         policy_group = QGroupBox(self._t("files.policy", "سیاست"), page)
+        policy_group.setObjectName("buildPolicySection")
         policy_layout = QFormLayout(policy_group)
         policy_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
         policy_layout.setFormAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
@@ -1218,6 +1223,7 @@ class MainWindow(QMainWindow):
         outer.addWidget(policy_group)
 
         output_group = QGroupBox("خروجی", page)
+        output_group.setObjectName("buildOutputSection")
         output_layout = QFormLayout(output_group)
         output_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
         output_layout.setFormAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
@@ -1261,6 +1267,7 @@ class MainWindow(QMainWindow):
         )
 
         inputs_group = QGroupBox("ورودی‌های تخصیص", page)
+        inputs_group.setObjectName("allocateInputsSection")
         inputs_layout = QFormLayout(inputs_group)
         inputs_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
         inputs_layout.setFormAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
@@ -1326,6 +1333,7 @@ class MainWindow(QMainWindow):
         outer.addWidget(inputs_group)
 
         advanced_group = QGroupBox("تنظیمات پیشرفته", page)
+        advanced_group.setObjectName("allocateAdvancedSection")
         advanced_layout = QFormLayout(advanced_group)
         advanced_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
         advanced_layout.setFormAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
@@ -1402,6 +1410,7 @@ class MainWindow(QMainWindow):
         outer.addWidget(register_box)
 
         output_group = QGroupBox("خروجی", page)
+        output_group.setObjectName("allocateOutputSection")
         output_layout = QFormLayout(output_group)
         output_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
         output_layout.setFormAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
@@ -1409,6 +1418,7 @@ class MainWindow(QMainWindow):
         outer.addWidget(output_group)
 
         sabt_group = QGroupBox("خروجی Sabt (ImportToSabt)", page)
+        sabt_group.setObjectName("allocateSabtSection")
         sabt_layout = QFormLayout(sabt_group)
         sabt_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
         sabt_layout.setFormAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)

@@ -179,6 +179,68 @@ def _combo_chevron_record(combo: Any) -> dict[str, object] | None:
     }
 
 
+def _major_section_records(window: Any, surface_id: str) -> list[dict[str, object]]:
+    """Record Major Section Region integrity at this scale.
+
+    The section title is painted inside the region's own surface, so a scale that
+    grows the title band past its reserved padding would clip the title or let it
+    collide with the first row. Both are checked from real style geometry.
+    """
+
+    from PySide6.QtWidgets import QGroupBox, QStyle, QStyleOptionGroupBox, QWidget
+
+    content = window.findChild(QWidget, f"page{surface_id.capitalize()}Content")
+    outer = content.layout() if content is not None else None
+    if content is None or outer is None:
+        return []
+
+    records: list[dict[str, object]] = []
+    previous_bottom: int | None = None
+    for index in range(outer.count()):
+        group = outer.itemAt(index).widget()
+        if not isinstance(group, QGroupBox) or group.property("sectionRole") != "major":
+            continue
+        option = QStyleOptionGroupBox()
+        group.initStyleOption(option)
+        style = group.style()
+        label = style.subControlRect(
+            QStyle.ComplexControl.CC_GroupBox, option, QStyle.SubControl.SC_GroupBoxLabel, group
+        )
+        contents = style.subControlRect(
+            QStyle.ComplexControl.CC_GroupBox,
+            option,
+            QStyle.SubControl.SC_GroupBoxContents,
+            group,
+        )
+        frame = style.subControlRect(
+            QStyle.ComplexControl.CC_GroupBox, option, QStyle.SubControl.SC_GroupBoxFrame, group
+        )
+        origin = _mapped_rect(group, content)
+        # The macro gap is carried by the region's own QSS margin, so the visible
+        # boundary - not the widget rect - is what a reader sees between regions.
+        # The render manifest measures the same edge.
+        rect = origin.adjusted(
+            frame.left(),
+            frame.top(),
+            frame.right() - origin.width() + 1,
+            frame.bottom() - origin.height() + 1,
+        )
+        gap = None if previous_bottom is None else rect.top() - previous_bottom - 1
+        previous_bottom = rect.bottom()
+        records.append(
+            {
+                "object": group.objectName(),
+                "boundary_geometry": _rect_record(rect),
+                "title_geometry": _rect_record(label),
+                "contents_geometry": _rect_record(contents),
+                "title_inside_region": bool(group.rect().contains(label)),
+                "title_clear_of_contents": bool(label.bottom() < contents.top()),
+                "gap_above_px": gap,
+            }
+        )
+    return records
+
+
 def _scrollbar_records(surface: Any) -> list[dict[str, object]]:
     """Record the styled scrollbar extents visible on this surface."""
 
@@ -299,12 +361,25 @@ def _child(args: argparse.Namespace) -> int:
         "navigation": _critical_record(navigation, window),
         "file_picker": _scroll_reachability_record(picker, surface, app),
         "diagnostics_toggle": _critical_record(diagnostics_toggle, status_bar),
-        "primary_cta": _critical_record(cta, surface),
+        # The primary action is content-contained, so its DPI claim is the same
+        # as any other page control: ordinary scrolling must reach it in full.
+        "primary_cta": _scroll_reachability_record(cta, surface, app),
     }
     if combo is not None:
         critical["combo"] = _scroll_reachability_record(combo, surface, app)
     combo_chevron = _combo_chevron_record(combo)
     scrollbars = _scrollbar_records(surface)
+    major_sections = _major_section_records(window, args.surface)
+    if not major_sections:
+        raise AssertionError(f"no Major Section Region on {args.surface}")
+    section_failures = [
+        record["object"]
+        for record in major_sections
+        if not bool(record["title_inside_region"])
+        or not bool(record["title_clear_of_contents"])
+    ]
+    if section_failures:
+        raise AssertionError(f"section title clipped or colliding: {section_failures}")
     failures = [
         name
         for name, record in critical.items()
@@ -366,6 +441,8 @@ def _child(args: argparse.Namespace) -> int:
         "critical_widgets": critical,
         "combo_chevron": combo_chevron,
         "scrollbars": scrollbars,
+        "major_sections": major_sections,
+        "major_section_failures": section_failures,
         "clipping_or_containment_failures": failures,
     }
     Path(args.output).write_text(
@@ -424,6 +501,10 @@ def _parent(output_dir: Path) -> int:
                     )
                 if record["clipping_or_containment_failures"]:
                     raise AssertionError(f"DPI containment failure: {record}")
+                if record["major_section_failures"]:
+                    raise AssertionError(f"DPI section-title failure: {record}")
+                if not record["major_sections"]:
+                    raise AssertionError(f"DPI case lost its Major Sections: {record}")
                 records.append(record)
 
     expected = len(SCALES) * len(CASES)

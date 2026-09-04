@@ -26,6 +26,12 @@ app/ui/fonts/*.ttf
 
 # Local golden-run history
 .golden_runs/
+ci/golden_runs/
+
+# Local UI evidence. `tools/render_ui_matrix.py` and `tools/validate_ui_dpi.py`
+# regenerate these per run, and CI publishes them with upload-artifact, so the
+# repository tracks the harnesses rather than their output.
+artifacts/
 
 # Runtime logs
 logs/

@@ -58,7 +58,7 @@ def qapp():
 
 @pytest.fixture(autouse=True)
 def _isolate_default_qsettings(qapp):
-    from PySide6.QtCore import QSettings
+    from PySide6.QtCore import QEvent, QSettings
 
     settings = QSettings()
     assert settings.status() == QSettings.Status.NoError
@@ -72,6 +72,15 @@ def _isolate_default_qsettings(qapp):
     qapp.processEvents()
     qapp.sendPostedEvents()
     qapp.processEvents()
+    # `sendPostedEvents()` deliberately skips DeferredDelete - Qt only delivers
+    # those when the event loop unwinds to the level that posted them, which
+    # never happens under pytest. Without an explicit flush every window a test
+    # built stays alive for the rest of the session, and `apply_global_font`
+    # walks `QApplication.allWidgets()` on each new window, so the suite gets
+    # quadratically slower and eventually trips over stale widget pointers.
+    qapp.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    qapp.processEvents()
+    gc.collect()
 
     settings = QSettings()
     assert settings.status() == QSettings.Status.NoError
