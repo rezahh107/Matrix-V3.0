@@ -425,24 +425,33 @@ class MainWindow(_base.MainWindow):
         if not isinstance(outer, QBoxLayout):
             return None
 
-        index = outer.count()
-        for position in range(outer.count()):
-            row = outer.itemAt(position).layout()
-            if row is None or row.indexOf(button) < 0:
-                continue
-            index = position
-            outer.takeAt(position)
-            while row.count():
-                row.takeAt(0)
-            row.deleteLater()
-            break
-
         region = QFrame(content)
         region.setObjectName("pageActionRegion")
         region.setProperty("actionRegion", "page")
         region_layout = QHBoxLayout(region)
         region_layout.setContentsMargins(0, 0, 0, 0)
         region_layout.setSpacing(self._theme.control_to_control)
+
+        index = outer.count()
+        retired = None
+        for position in range(outer.count()):
+            row = outer.itemAt(position).layout()
+            if row is None or row.indexOf(button) < 0:
+                continue
+            index = position
+            # Reparent the action before dismantling its old row. Qt drops a
+            # reparented widget from its previous layout, so the button is never
+            # an item of the row being retired.
+            button.setParent(region)
+            # ``takeAt`` hands the item to Python, and for a nested row that item
+            # *is* the layout. Hold it: discarding the return value frees the
+            # layout immediately, and touching ``row`` afterwards - or deleting
+            # it a second time - is a use-after-free that surfaces later as an
+            # unrelated crash. Letting ``retired`` fall out of scope at the end
+            # of this method releases it exactly once.
+            retired = outer.takeAt(position)
+            break
+
         # Logical trailing placement: Qt mirrors the stretch under RTL, so the
         # action keeps the working column's trailing edge in both directions.
         region_layout.addStretch(1)
@@ -450,6 +459,7 @@ class MainWindow(_base.MainWindow):
         button.setProperty("variant", "primary")
         region_layout.addWidget(button)
         outer.insertWidget(index, region)
+        del retired
         return region
 
     # -------------------------------------------------------------- geometry/bidi
