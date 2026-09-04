@@ -661,3 +661,73 @@ def test_layout_hosts_do_not_repaint_the_page_over_a_section(
                 )
     finally:
         _destroy(window, qapp)
+
+
+# ------------------------------------------------------------ CL-UI-LIFETIME-01
+def test_repeated_window_lifecycles_stay_reclaimable(qapp: QApplication) -> None:
+    """Repeated MainWindow lifecycles must not accumulate live widgets.
+
+    This is the failure class that took the Windows UI job down: `deleteLater()`
+    alone never freed a window under pytest, `apply_global_font` walks
+    `QApplication.allWidgets()` on every new window, and the suite therefore got
+    quadratically slower until it walked stale widget pointers and access-
+    violated inside `apply_theme`. Before the teardown repair this test fails on
+    the very first cycle - the widget count climbs by a few hundred per window
+    and never returns to its baseline.
+
+    The assertion is deliberately about runtime lifetime, not about the shape of
+    the composition code: it enumerates real widgets, exercises both Action
+    Regions, and proves another window still builds afterwards.
+    """
+
+    _fresh_settings()
+    baseline = len(QApplication.allWidgets())
+
+    for cycle in range(6):
+        window = MainWindow()
+        window.resize(1200, 800)
+        window.show()
+        try:
+            for surface_id, button in (
+                ("build", window._btn_build),
+                ("allocate", window._btn_allocate),
+            ):
+                assert window.activate_surface(surface_id)
+                qapp.processEvents()
+                content = _page_content(window, surface_id)
+                region = _action_region(content)
+                assert button.parentWidget() is region
+                assert content.isAncestorOf(button)
+
+            # Qt promises QWidget instances here; anything else is a stale
+            # wrapper over freed memory, never something to filter away.
+            foreign = [
+                type(obj).__name__
+                for obj in QApplication.allWidgets()
+                if not isinstance(obj, QWidget)
+            ]
+            assert foreign == [], f"cycle {cycle}: non-widget in allWidgets(): {foreign}"
+            # The same walk `apply_global_font` performs on every window build.
+            for widget in QApplication.allWidgets():
+                widget.font()
+        finally:
+            _destroy(window, qapp)
+
+        live = len(QApplication.allWidgets())
+        assert live <= baseline, (
+            f"cycle {cycle}: {live - baseline} widgets survived teardown; "
+            "windows are accumulating and every later build pays to walk them"
+        )
+
+    # A window still builds cleanly after the full sequence.
+    survivor = MainWindow()
+    try:
+        survivor.resize(1200, 800)
+        survivor.show()
+        qapp.processEvents()
+        for surface_id in ("build", "allocate"):
+            assert survivor.activate_surface(surface_id)
+            qapp.processEvents()
+            assert _action_region(_page_content(survivor, surface_id)) is not None
+    finally:
+        _destroy(survivor, qapp)

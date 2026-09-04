@@ -184,9 +184,6 @@ class MainWindow(_base.MainWindow):
         self._ui_text_bindings: list[_TextBinding] = []
         self._literal_binding_index: dict[str, tuple[str, str]] | None = None
         self._formatted_center_labels: list[tuple[QLabel, str]] = []
-        # Retired action rows are parked here for the window's lifetime; see
-        # `_install_action_region` for why they are never freed.
-        self._retired_action_rows: list[object] = []
         stored_splitter = QSettings().value("ui/main_splitter")
         self._had_saved_splitter_state = isinstance(stored_splitter, QByteArray) and not stored_splitter.isEmpty()
         self._default_splitter_ratio_pending = not self._had_saved_splitter_state
@@ -441,17 +438,19 @@ class MainWindow(_base.MainWindow):
             if row is None or row.indexOf(button) < 0:
                 continue
             index = position
-            # Reparent the action before its old row leaves the layout. Qt drops
-            # a reparented widget from its previous layout, so the button is
-            # never an item of the row being retired.
+            # Reparenting is the whole retirement: Qt removes a reparented widget
+            # from its previous layout by itself, leaving the base's row holding
+            # nothing but its stretch.
+            #
+            # The row is then left exactly where it is, under normal Qt layout
+            # ownership. Extracting it with `takeAt` would hand a QLayoutItem -
+            # for a nested row, the layout itself, which still owns that stretch -
+            # to Python, giving one object two owners; neither freeing it nor
+            # parking it in a permanent list is a sound resolution. An emptied
+            # box layout has a zero size hint, and the region is inserted *before*
+            # it, so the leftover row sits between the action and the trailing
+            # page stretch where it contributes nothing visible.
             button.setParent(region)
-            # ``takeAt`` hands the item to Python, and for a nested row that item
-            # *is* the layout, which still owns the stretch inside it. Retire the
-            # row by parking it, never by freeing it: releasing it here leaves
-            # Qt holding a pointer to freed memory, which resurfaces much later
-            # as a foreign object in QApplication.allWidgets(). Parked rows are
-            # empty, out of the layout and cost one object per page.
-            self._retired_action_rows.append(outer.takeAt(position))
             break
 
         # Logical trailing placement: Qt mirrors the stretch under RTL, so the
