@@ -453,7 +453,12 @@ def test_ui_bidi_and_primary_actions_are_contained(
         qapp.processEvents()
         surface = window._workspace_surfaces[surface_id]
         assert button.isVisibleTo(surface)
-        _assert_contained(button, surface)
+        # The primary action is content-contained since
+        # WU-SPATIAL-HIERARCHY-SECTION-REGIONS-01, so it is held to the same
+        # standard as every other control on the page - the combo and the file
+        # picker below - rather than to the retired fixed footer's guarantee of
+        # being on screen at rest.
+        _assert_scroll_reachable(button, surface, qapp)
 
     assert window._btn_rule_engine.isHidden()
     assert not window._toolbar_actions["rule_engine"].shortcut().toString()

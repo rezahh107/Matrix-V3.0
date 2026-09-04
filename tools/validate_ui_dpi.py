@@ -212,13 +212,25 @@ def _major_section_records(window: Any, surface_id: str) -> list[dict[str, objec
             QStyle.SubControl.SC_GroupBoxContents,
             group,
         )
-        rect = _mapped_rect(group, content)
+        frame = style.subControlRect(
+            QStyle.ComplexControl.CC_GroupBox, option, QStyle.SubControl.SC_GroupBoxFrame, group
+        )
+        origin = _mapped_rect(group, content)
+        # The macro gap is carried by the region's own QSS margin, so the visible
+        # boundary - not the widget rect - is what a reader sees between regions.
+        # The render manifest measures the same edge.
+        rect = origin.adjusted(
+            frame.left(),
+            frame.top(),
+            frame.right() - origin.width() + 1,
+            frame.bottom() - origin.height() + 1,
+        )
         gap = None if previous_bottom is None else rect.top() - previous_bottom - 1
         previous_bottom = rect.bottom()
         records.append(
             {
                 "object": group.objectName(),
-                "geometry": _rect_record(rect),
+                "boundary_geometry": _rect_record(rect),
                 "title_geometry": _rect_record(label),
                 "contents_geometry": _rect_record(contents),
                 "title_inside_region": bool(group.rect().contains(label)),
