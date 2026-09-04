@@ -197,15 +197,16 @@ def test_major_section_role_does_not_leak_to_unrelated_group_boxes(
                 nested = section.findChildren(QGroupBox)
                 assert nested == [], f"{section.objectName()} nests groups: {nested}"
 
+        # The window parents the dialog, so the window's own teardown is the one
+        # deletion path. Scheduling `deleteLater()` on it as well would leave two
+        # owners racing over the same object across the `processEvents()` in
+        # `_destroy`, which is how a stale wrapper reaches a later test.
         dialog = UnifiedSettingsDialog(
             window._prefs, window._user_settings, window._translator, window
         )
-        try:
-            groups = dialog.findChildren(QGroupBox)
-            assert groups, "settings surface is expected to compose groups"
-            assert all(group.property("sectionRole") != "major" for group in groups)
-        finally:
-            dialog.deleteLater()
+        groups = dialog.findChildren(QGroupBox)
+        assert groups, "settings surface is expected to compose groups"
+        assert all(group.property("sectionRole") != "major" for group in groups)
     finally:
         _destroy(window, qapp)
 

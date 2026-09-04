@@ -184,6 +184,9 @@ class MainWindow(_base.MainWindow):
         self._ui_text_bindings: list[_TextBinding] = []
         self._literal_binding_index: dict[str, tuple[str, str]] | None = None
         self._formatted_center_labels: list[tuple[QLabel, str]] = []
+        # Retired action rows are parked here for the window's lifetime; see
+        # `_install_action_region` for why they are never freed.
+        self._retired_action_rows: list[object] = []
         stored_splitter = QSettings().value("ui/main_splitter")
         self._had_saved_splitter_state = isinstance(stored_splitter, QByteArray) and not stored_splitter.isEmpty()
         self._default_splitter_ratio_pending = not self._had_saved_splitter_state
@@ -433,33 +436,30 @@ class MainWindow(_base.MainWindow):
         region_layout.setSpacing(self._theme.control_to_control)
 
         index = outer.count()
-        retired = None
         for position in range(outer.count()):
             row = outer.itemAt(position).layout()
             if row is None or row.indexOf(button) < 0:
                 continue
             index = position
-            # Reparent the action before dismantling its old row. Qt drops a
-            # reparented widget from its previous layout, so the button is never
-            # an item of the row being retired.
+            # Reparent the action before its old row leaves the layout. Qt drops
+            # a reparented widget from its previous layout, so the button is
+            # never an item of the row being retired.
             button.setParent(region)
             # ``takeAt`` hands the item to Python, and for a nested row that item
-            # *is* the layout. Hold it: discarding the return value frees the
-            # layout immediately, and touching ``row`` afterwards - or deleting
-            # it a second time - is a use-after-free that surfaces later as an
-            # unrelated crash. Letting ``retired`` fall out of scope at the end
-            # of this method releases it exactly once.
-            retired = outer.takeAt(position)
+            # *is* the layout, which still owns the stretch inside it. Retire the
+            # row by parking it, never by freeing it: releasing it here leaves
+            # Qt holding a pointer to freed memory, which resurfaces much later
+            # as a foreign object in QApplication.allWidgets(). Parked rows are
+            # empty, out of the layout and cost one object per page.
+            self._retired_action_rows.append(outer.takeAt(position))
             break
 
         # Logical trailing placement: Qt mirrors the stretch under RTL, so the
         # action keeps the working column's trailing edge in both directions.
         region_layout.addStretch(1)
-        button.setParent(region)
         button.setProperty("variant", "primary")
         region_layout.addWidget(button)
         outer.insertWidget(index, region)
-        del retired
         return region
 
     # -------------------------------------------------------------- geometry/bidi
