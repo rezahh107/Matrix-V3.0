@@ -1,7 +1,7 @@
 # Matrix dialogs and operational state evidence
 
 Base (production) commit: 782d178f5dc539bc078e04a1e67a10ad6ea5baa4
-Captured branch commit: 9a756f3b8d1f05149c33f29cb1ae68b02a491d75
+Captured branch commit: 1d8ff1e18742bf7ed50113b9f00b9e31f26c4a0a
 Captured PNGs: 84
 Failed scenarios: 0
 
