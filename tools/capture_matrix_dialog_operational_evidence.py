@@ -6,6 +6,7 @@ All data are synthetic; allocation/build CLI and persistence writes are not invo
 from __future__ import annotations
 
 import argparse
+import gc
 import json
 import os
 import platform
@@ -20,7 +21,7 @@ from unittest.mock import patch
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pandas as pd
-from PySide6.QtCore import QPoint, QRect, QSettings, Qt, qVersion
+from PySide6.QtCore import QEvent, QPoint, QRect, QSettings, Qt, qVersion
 from PySide6.QtGui import QFontMetrics, QImage, QPainter
 from PySide6.QtWidgets import (
     QApplication,
@@ -224,8 +225,13 @@ def new_window(app: QApplication, theme: str, language: Language) -> MainWindow:
 
 
 def close_window(window: MainWindow, app: QApplication) -> None:
+    """Use the repository's established DeferredDelete teardown for repeated windows."""
     window.close()
+    window.deleteLater()
     app.processEvents()
+    app.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    app.processEvents()
+    gc.collect()
 
 
 def scroll_details(scroll: QScrollArea, target: QWidget) -> dict[str, object]:
