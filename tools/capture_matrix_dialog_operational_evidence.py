@@ -23,15 +23,23 @@ import pandas as pd
 from PySide6.QtCore import QPoint, QRect, QSettings, Qt, qVersion
 from PySide6.QtGui import QFontMetrics, QImage, QPainter
 from PySide6.QtWidgets import (
-    QApplication, QDialog, QLabel, QMessageBox, QPushButton, QScrollArea,
-    QTabWidget, QTableView, QTextBrowser, QWidget,
+    QApplication,
+    QDialog,
+    QLabel,
+    QMessageBox,
+    QPushButton,
+    QScrollArea,
+    QTableView,
+    QTabWidget,
+    QTextBrowser,
+    QWidget,
 )
 
 from app.core.allocation.history_metrics import METRIC_COLUMNS
 from app.infra.config_flags import UserSettings
 from app.ui.i18n import Language
 from app.ui.main_window import MainWindow
-from app.ui.preferences.diagnostics_catalog import CAPABILITIES, CATEGORY_ORDER, CAPABILITY_BY_KEY
+from app.ui.preferences.diagnostics_catalog import CAPABILITIES, CATEGORY_ORDER
 from app.ui.preferences.settings_dialog import DiagnosticsGuideDialog, UnifiedSettingsDialog
 from app.ui.theme import apply_theme, build_theme
 
@@ -469,7 +477,7 @@ def capture_operational(collector: Collector, theme: str, language: Language) ->
             if not release.wait(6.0):
                 raise TimeoutError("synthetic hold expired")
 
-        worker = window._launch_worker(held_task, "Synthetic verification only")
+        window._launch_worker(held_task, "Synthetic verification only")
         try:
             if not started.wait(3):
                 raise TimeoutError("synthetic worker never started")
@@ -533,14 +541,14 @@ def main() -> int:
             for language in LANGUAGES:
                 for size in SIZES:
                     label = f"settings-{theme}-{language.code}-{size[0]}x{size[1]}"
-                    collector.try_case(label, lambda t=theme, l=language, s=size:
-                                       capture_settings(collector, t, l, s))
+                    collector.try_case(label, lambda t=theme, lang=language, s=size:
+                                       capture_settings(collector, t, lang, s))
                 collector.try_case(f"history-{theme}-{language.code}",
-                                   lambda t=theme, l=language: capture_history(collector, t, l))
+                                   lambda t=theme, lang=language: capture_history(collector, t, lang))
                 collector.try_case(f"operation-{theme}-{language.code}",
-                                   lambda t=theme, l=language: capture_operational(collector, t, l))
+                                   lambda t=theme, lang=language: capture_operational(collector, t, lang))
                 collector.try_case(f"explain-{theme}-{language.code}",
-                                   lambda t=theme, l=language: capture_explain(collector, t, l))
+                                   lambda t=theme, lang=language: capture_explain(collector, t, lang))
     collector.save()
     print(f"Recorded {len(collector.cases)} PNG cases; {len(collector.failures)} failures")
     for failure in collector.failures:
