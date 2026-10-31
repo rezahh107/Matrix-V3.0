@@ -89,7 +89,9 @@ class Collector:
             "pyside6": __import__("PySide6").__version__,
             "qt": qVersion(),
             "qpa_plugin": self.app.platformName(),
-            "qstyle": self.app.style().objectName(),
+            "qstyle": self.app.style().metaObject().className(),
+            "qstyle_object_name": self.app.style().objectName(),
+            "configured_base_qstyle": "Fusion",  # apply_theme() sets the Qt base style
             "font_family": widget.font().family(),
             "font_point_size": widget.font().pointSizeF(),
             "application_font": self.app.font().family(),
@@ -347,10 +349,16 @@ def sample_metrics(long_text: bool) -> pd.DataFrame:
     name = "synthetic_channel"
     if long_text:
         name += "_EXTREMELY_LONG_CHANNEL_NAME_" * 8
-    row: dict[str, object] = {key: 7 for key in METRIC_COLUMNS}
-    row["allocation_channel"] = name
-    if "same_history_mentor_ratio" in row:
-        row["same_history_mentor_ratio"] = 0.375
+    # Internally coherent synthetic counts: 3 of 8 had the same historical mentor.
+    row: dict[str, object] = {
+        "allocation_channel": name,
+        "students_total": 8,
+        "history_already_allocated": 4,
+        "history_no_history_match": 2,
+        "history_missing_or_invalid": 2,
+        "same_history_mentor_true": 3,
+        "same_history_mentor_ratio": 0.375,
+    }
     return pd.DataFrame([row], columns=METRIC_COLUMNS)
 
 
