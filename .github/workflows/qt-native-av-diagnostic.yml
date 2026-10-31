@@ -1,0 +1,105 @@
+name: Qt native crash forensic replay
+on:
+  push:
+    branches: [diagnostic/qt-access-violation-20261031]
+permissions:
+  contents: read
+jobs:
+  reproduce:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {rev: head, sha: 3aa5e7266a35e56d9bf2dec6705d1fc1d3352812, scope: single, reps: 4}
+          - {rev: base, sha: 782d178f5dc539bc078e04a1e67a10ad6ea5baa4, scope: single, reps: 4}
+          - {rev: head, sha: 3aa5e7266a35e56d9bf2dec6705d1fc1d3352812, scope: harness_file, reps: 3}
+          - {rev: base, sha: 782d178f5dc539bc078e04a1e67a10ad6ea5baa4, scope: harness_file, reps: 3}
+          - {rev: head, sha: 3aa5e7266a35e56d9bf2dec6705d1fc1d3352812, scope: full_ui, reps: 1}
+          - {rev: base, sha: 782d178f5dc539bc078e04a1e67a10ad6ea5baa4, scope: full_ui, reps: 1}
+    name: "${{ matrix.rev }} / ${{ matrix.scope }}"
+    env:
+      QT_QPA_PLATFORM: offscreen
+      PYTEST_QT_API: pyside6
+      PYTHONFAULTHANDLER: "1"
+      PYTHONUNBUFFERED: "1"
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.sha }}
+          fetch-depth: 1
+      - name: Verify exact source identity
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ matrix.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          printf '%s\n' "$EXPECTED_SHA"
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9
+        with:
+          version: "0.12.7"
+          enable-cache: true
+      - run: uv python install
+      - run: uv sync --locked
+      - name: Prepare local Windows crash dump collection
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "$env:RUNNER_TEMP\qt-native-dumps" | Out-Null
+          foreach ($exe in @("python.exe","python3.11.exe","pytest.exe")) {
+            $key = "HKCU:\Software\Microsoft\Windows\Windows Error Reporting\LocalDumps\$exe"
+            New-Item -Path $key -Force | Out-Null
+            New-ItemProperty -Path $key -Name DumpFolder -PropertyType ExpandString -Value "$env:RUNNER_TEMP\qt-native-dumps" -Force | Out-Null
+            New-ItemProperty -Path $key -Name DumpType -PropertyType DWord -Value 1 -Force | Out-Null
+          }
+      - name: Record environment
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts\qt-av | Out-Null
+          "SHA=${{ matrix.sha }}" | Out-File artifacts\qt-av\environment.txt
+          "scope=${{ matrix.scope }}" | Add-Content artifacts\qt-av\environment.txt
+          "[OS]$([Environment]::OSVersion.VersionString) [QPA]$env:QT_QPA_PLATFORM" | Add-Content artifacts\qt-av\environment.txt
+          uv run --locked python -c "import sys,PySide6; from PySide6.QtCore import qVersion; print(sys.version,sys.executable,PySide6.__version__,qVersion())" | Add-Content artifacts\qt-av\environment.txt
+      - name: Reproduce with fresh Python processes (unmodified tests)
+        shell: pwsh
+        env:
+          TEST_SCOPE: ${{ matrix.scope }}
+          REPS: ${{ matrix.reps }}
+        run: |
+          $failed = $false
+          for ($i=1; $i -le [int]$env:REPS; $i++) {
+            $selector = switch ($env:TEST_SCOPE) {
+              "single" { "tests/ui/test_qt_loader_harness.py::test_harness_handles_repeated_immediate_success" }
+              "harness_file" { "tests/ui/test_qt_loader_harness.py" }
+              "full_ui" { "tests/ui" }
+              default { throw "unknown scope" }
+            }
+            $log="artifacts\qt-av\repetition-$i.log"
+            "=== fresh process $i $selector SHA=${{ matrix.sha }} ===" | Tee-Object -FilePath $log
+            uv run --locked python -X faulthandler -m pytest $selector -vv -s --tb=short --maxfail=1 --durations=20 2>&1 | Tee-Object -FilePath $log -Append
+            $code=$LASTEXITCODE
+            "EXIT_CODE=$code" | Tee-Object -FilePath $log -Append
+            if ($code -ne 0) { $failed=$true }
+          }
+          "failed=$failed" | Set-Content artifacts\qt-av\result.txt
+          if ($failed) { exit 1 }
+      - name: Preserve native dump index and Windows events
+        if: always()
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts\qt-av | Out-Null
+          if (Test-Path "$env:RUNNER_TEMP\qt-native-dumps") {
+            Get-ChildItem "$env:RUNNER_TEMP\qt-native-dumps" -File | Select-Object Name,Length | Format-Table | Out-String | Set-Content artifacts\qt-av\dump-index.txt
+            Copy-Item "$env:RUNNER_TEMP\qt-native-dumps\*" artifacts\qt-av -ErrorAction SilentlyContinue
+          }
+          try {
+            Get-WinEvent -FilterHashtable @{LogName="Application";StartTime=(Get-Date).AddMinutes(-35)} -ErrorAction Stop | Where-Object { $_.ProviderName -in @("Application Error","Windows Error Reporting") } | Select-Object -First 30 TimeCreated,Id,Message | Format-List | Out-String | Set-Content artifacts\qt-av\windows-events.txt
+          } catch { "$_" | Set-Content artifacts\qt-av\windows-events-error.txt }
+      - name: Upload diagnostics even for failing jobs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qt-av-${{ matrix.rev }}-${{ matrix.scope }}
+          path: artifacts/qt-av
+          if-no-files-found: warn
