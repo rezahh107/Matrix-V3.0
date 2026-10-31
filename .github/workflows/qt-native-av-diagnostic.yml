@@ -3,7 +3,7 @@ on:
   push:
     branches: [diagnostic/qt-access-violation-20261031]
   pull_request:
-    branches: [verify/matrix-dialog-operational-evidence-20261031]
+    branches: [main]
 permissions:
   contents: read
 jobs:
