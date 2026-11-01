@@ -1,0 +1,40 @@
+name: UI locale bounded hang diagnostic (isolated)
+
+on:
+  push:
+    branches:
+      - diagnostics/ux-matrix-db-locale-ui-20261101
+
+permissions:
+  contents: read
+
+jobs:
+  ui:
+    name: Full existing UI suite with explicit per-test timeout
+    runs-on: windows-latest
+    timeout-minutes: 12
+    env:
+      QT_QPA_PLATFORM: offscreen
+      PYTEST_QT_API: pyside6
+      PYTHONFAULTHANDLER: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - name: Check exact commit identity
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.7"
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+            .python-version
+      - run: uv python install
+      - run: uv sync --locked
+      - name: Full UI pytest with diagnostic timeout and test names
+        run: uv run --locked pytest tests/ui --maxfail=1 -vv --timeout=45 --timeout-method=thread
