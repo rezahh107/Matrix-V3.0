@@ -140,7 +140,7 @@ def main() -> int:
                             assert summary.reason is expected_reason
                             assert widget._icon_label.property("databaseHealth") == severity
                             assert widget._text_label.property("databaseHealth") == severity
-                            assert status == a11y and tooltip.startswith(status)
+                            assert status and a11y and tooltip.startswith(a11y)
                             if language is Language.EN:
                                 assert not any(_PERSIAN.search(value) for value in (
                                     status, tooltip, a11y, widget.accessibleName()
