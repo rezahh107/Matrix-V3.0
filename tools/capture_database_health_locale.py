@@ -205,7 +205,12 @@ def main() -> int:
         "qt_version": qVersion(),
         "pyside6_version": PySide6.__version__,
         "qpa_platform": os.environ.get("QT_QPA_PLATFORM", ""),
-        "style": app.style().objectName(),
+        "style": {
+            "base_style": "Fusion",  # Explicitly selected by app.ui.theme.apply_theme.
+            "effective_qt_class": type(app.style()).__name__,
+            "qt_object_name": app.style().objectName(),
+            "matrix_qss_applied": bool(app.styleSheet()),
+        },
         "application_font": app.font().family(),
         "screen_dpr": app.primaryScreen().devicePixelRatio() if app.primaryScreen() else None,
         "font_backend_initialized": "bundled application font explicitly registered before capture",
