@@ -1,0 +1,5737 @@
+{
+  "status": "captures_recorded_not_usability_approved",
+  "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+  "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+  "capture_count": 84,
+  "failure_count": 0,
+  "cases": [
+    {
+      "case": "settings-light-fa-720x760-top",
+      "family": "settings",
+      "image": "settings-light-fa-720x760-top.png",
+      "image_pixels": [
+        720,
+        760
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Vazirmatn",
+      "font_point_size": 10.0,
+      "application_font": "Vazirmatn",
+      "layout_direction": "rtl",
+      "widget_direction": "rtl",
+      "theme": "light",
+      "language": "fa",
+      "window_size": [
+        720,
+        760
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "entrypoint": "actionPresentationSettings",
+      "category_names": [
+        "diagnosticsCategory_diagnostics",
+        "diagnosticsCategory_analysis",
+        "diagnosticsCategory_advanced"
+      ],
+      "checks": {
+        "enable_trace_debug_sheets": {
+          "checked": false,
+          "impact_text": "فقط خطایابی — نتیجه تخصیص را تغییر نمی‌دهد",
+          "impact_kind": "diagnostic",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 0,
+            "bar_maximum": 658,
+            "target": {
+              "x": 26,
+              "y": 429,
+              "width": 624,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "enable_mentor_trace_debug": {
+          "checked": false,
+          "impact_text": "فقط خطایابی",
+          "impact_kind": "diagnostic",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 0,
+            "bar_maximum": 658,
+            "target": {
+              "x": 26,
+              "y": 531,
+              "width": 624,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "enable_pool_governance_trace": {
+          "checked": false,
+          "impact_text": "فقط خطایابی",
+          "impact_kind": "diagnostic",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 0,
+            "bar_maximum": 658,
+            "target": {
+              "x": 26,
+              "y": 633,
+              "width": 624,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "enable_bucket_trace": {
+          "checked": false,
+          "impact_text": "فقط خطایابی — با Use Join Buckets متفاوت است",
+          "impact_kind": "diagnostic",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 95,
+            "bar_maximum": 658,
+            "target": {
+              "x": 26,
+              "y": 661,
+              "width": 624,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "enable_trace_export": {
+          "checked": false,
+          "impact_text": "فقط خروجی تشخیصی",
+          "impact_kind": "diagnostic",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 197,
+            "bar_maximum": 658,
+            "target": {
+              "x": 26,
+              "y": 661,
+              "width": 624,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "enable_history_metrics": {
+          "checked": false,
+          "impact_text": "فقط تحلیل — خاموش‌کردن آن history-aware allocation را خاموش نمی‌کند",
+          "impact_kind": "analysis",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 353,
+            "bar_maximum": 658,
+            "target": {
+              "x": 26,
+              "y": 661,
+              "width": 624,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "enable_qa_pool_coverage_rules": {
+          "checked": false,
+          "impact_text": "ممکن است اعتبارسنجی PASS/FAIL را تغییر دهد",
+          "impact_kind": "validation",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 509,
+            "bar_maximum": 658,
+            "target": {
+              "x": 26,
+              "y": 661,
+              "width": 624,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "use_join_buckets": {
+          "checked": false,
+          "impact_text": "گزینه پیشرفته الگوریتمی / کارایی — مسیر اجرا را تغییر می‌دهد",
+          "impact_kind": "algorithmic",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 632,
+            "bar_maximum": 658,
+            "target": {
+              "x": 26,
+              "y": 661,
+              "width": 624,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        }
+      },
+      "scroll_maximum": 658
+    },
+    {
+      "case": "settings-light-fa-720x760-bottom",
+      "family": "settings",
+      "image": "settings-light-fa-720x760-bottom.png",
+      "image_pixels": [
+        720,
+        760
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Vazirmatn",
+      "font_point_size": 10.0,
+      "application_font": "Vazirmatn",
+      "layout_direction": "rtl",
+      "widget_direction": "rtl",
+      "theme": "light",
+      "language": "fa",
+      "window_size": [
+        720,
+        760
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "scroll_value": 658,
+      "last_impact": "گزینه پیشرفته الگوریتمی / کارایی — مسیر اجرا را تغییر می‌دهد"
+    },
+    {
+      "case": "settings-light-fa-720x760-guide-fa",
+      "family": "guide",
+      "image": "settings-light-fa-720x760-guide-fa.png",
+      "image_pixels": [
+        760,
+        620
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Vazirmatn",
+      "font_point_size": 10.0,
+      "application_font": "Vazirmatn",
+      "layout_direction": "rtl",
+      "widget_direction": "rtl",
+      "theme": "light",
+      "language": "fa",
+      "window_size": [
+        760,
+        620
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "active_tab": "fa",
+      "guide_module": "app.ui.preferences.settings_dialog",
+      "reader_direction": "rtl",
+      "reader_scroll_max": 1431,
+      "reader_characters": 5338
+    },
+    {
+      "case": "settings-light-fa-720x760-guide-en",
+      "family": "guide",
+      "image": "settings-light-fa-720x760-guide-en.png",
+      "image_pixels": [
+        760,
+        620
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Vazirmatn",
+      "font_point_size": 10.0,
+      "application_font": "Vazirmatn",
+      "layout_direction": "rtl",
+      "widget_direction": "rtl",
+      "theme": "light",
+      "language": "fa",
+      "window_size": [
+        760,
+        620
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "active_tab": "en",
+      "guide_module": "app.ui.preferences.settings_dialog",
+      "reader_direction": "ltr",
+      "reader_scroll_max": 1494,
+      "reader_characters": 5608
+    },
+    {
+      "case": "settings-light-fa-620x560-top",
+      "family": "settings",
+      "image": "settings-light-fa-620x560-top.png",
+      "image_pixels": [
+        620,
+        560
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Vazirmatn",
+      "font_point_size": 10.0,
+      "application_font": "Vazirmatn",
+      "layout_direction": "rtl",
+      "widget_direction": "rtl",
+      "theme": "light",
+      "language": "fa",
+      "window_size": [
+        620,
+        560
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "entrypoint": "actionPresentationSettings",
+      "category_names": [
+        "diagnosticsCategory_diagnostics",
+        "diagnosticsCategory_analysis",
+        "diagnosticsCategory_advanced"
+      ],
+      "checks": {
+        "enable_trace_debug_sheets": {
+          "checked": false,
+          "impact_text": "فقط خطایابی — نتیجه تخصیص را تغییر نمی‌دهد",
+          "impact_kind": "diagnostic",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 0,
+            "bar_maximum": 858,
+            "target": {
+              "x": 26,
+              "y": 429,
+              "width": 524,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "enable_mentor_trace_debug": {
+          "checked": false,
+          "impact_text": "فقط خطایابی",
+          "impact_kind": "diagnostic",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 70,
+            "bar_maximum": 858,
+            "target": {
+              "x": 26,
+              "y": 461,
+              "width": 524,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "enable_pool_governance_trace": {
+          "checked": false,
+          "impact_text": "فقط خطایابی",
+          "impact_kind": "diagnostic",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 172,
+            "bar_maximum": 858,
+            "target": {
+              "x": 26,
+              "y": 461,
+              "width": 524,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "enable_bucket_trace": {
+          "checked": false,
+          "impact_text": "فقط خطایابی — با Use Join Buckets متفاوت است",
+          "impact_kind": "diagnostic",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 295,
+            "bar_maximum": 858,
+            "target": {
+              "x": 26,
+              "y": 461,
+              "width": 524,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "enable_trace_export": {
+          "checked": false,
+          "impact_text": "فقط خروجی تشخیصی",
+          "impact_kind": "diagnostic",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 397,
+            "bar_maximum": 858,
+            "target": {
+              "x": 26,
+              "y": 461,
+              "width": 524,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "enable_history_metrics": {
+          "checked": false,
+          "impact_text": "فقط تحلیل — خاموش‌کردن آن history-aware allocation را خاموش نمی‌کند",
+          "impact_kind": "analysis",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 553,
+            "bar_maximum": 858,
+            "target": {
+              "x": 26,
+              "y": 461,
+              "width": 524,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "enable_qa_pool_coverage_rules": {
+          "checked": false,
+          "impact_text": "ممکن است اعتبارسنجی PASS/FAIL را تغییر دهد",
+          "impact_kind": "validation",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 709,
+            "bar_maximum": 858,
+            "target": {
+              "x": 26,
+              "y": 461,
+              "width": 524,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "use_join_buckets": {
+          "checked": false,
+          "impact_text": "گزینه پیشرفته الگوریتمی / کارایی — مسیر اجرا را تغییر می‌دهد",
+          "impact_kind": "algorithmic",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 832,
+            "bar_maximum": 858,
+            "target": {
+              "x": 26,
+              "y": 461,
+              "width": 524,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        }
+      },
+      "scroll_maximum": 858
+    },
+    {
+      "case": "settings-light-fa-620x560-bottom",
+      "family": "settings",
+      "image": "settings-light-fa-620x560-bottom.png",
+      "image_pixels": [
+        620,
+        560
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Vazirmatn",
+      "font_point_size": 10.0,
+      "application_font": "Vazirmatn",
+      "layout_direction": "rtl",
+      "widget_direction": "rtl",
+      "theme": "light",
+      "language": "fa",
+      "window_size": [
+        620,
+        560
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "scroll_value": 858,
+      "last_impact": "گزینه پیشرفته الگوریتمی / کارایی — مسیر اجرا را تغییر می‌دهد"
+    },
+    {
+      "case": "settings-light-fa-620x560-synthetic-overflow",
+      "family": "settings",
+      "image": "settings-light-fa-620x560-synthetic-overflow.png",
+      "image_pixels": [
+        620,
+        560
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Vazirmatn",
+      "font_point_size": 10.0,
+      "application_font": "Vazirmatn",
+      "layout_direction": "rtl",
+      "widget_direction": "rtl",
+      "theme": "light",
+      "language": "fa",
+      "window_size": [
+        620,
+        560
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "overflow_control": true,
+      "overflow_text_length": 906,
+      "target": {
+        "x": 26,
+        "y": 388,
+        "width": 524,
+        "height": 42,
+        "contained": true,
+        "visible": true
+      }
+    },
+    {
+      "case": "settings-light-fa-620x560-guide-fa",
+      "family": "guide",
+      "image": "settings-light-fa-620x560-guide-fa.png",
+      "image_pixels": [
+        760,
+        620
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Vazirmatn",
+      "font_point_size": 10.0,
+      "application_font": "Vazirmatn",
+      "layout_direction": "rtl",
+      "widget_direction": "rtl",
+      "theme": "light",
+      "language": "fa",
+      "window_size": [
+        760,
+        620
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "active_tab": "fa",
+      "guide_module": "app.ui.preferences.settings_dialog",
+      "reader_direction": "rtl",
+      "reader_scroll_max": 1431,
+      "reader_characters": 5338
+    },
+    {
+      "case": "settings-light-fa-620x560-guide-en",
+      "family": "guide",
+      "image": "settings-light-fa-620x560-guide-en.png",
+      "image_pixels": [
+        760,
+        620
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Vazirmatn",
+      "font_point_size": 10.0,
+      "application_font": "Vazirmatn",
+      "layout_direction": "rtl",
+      "widget_direction": "rtl",
+      "theme": "light",
+      "language": "fa",
+      "window_size": [
+        760,
+        620
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "active_tab": "en",
+      "guide_module": "app.ui.preferences.settings_dialog",
+      "reader_direction": "ltr",
+      "reader_scroll_max": 1494,
+      "reader_characters": 5608
+    },
+    {
+      "case": "history-light-fa-empty",
+      "family": "history",
+      "image": "history-light-fa-empty.png",
+      "image_pixels": [
+        720,
+        320
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Vazirmatn",
+      "font_point_size": 10.0,
+      "application_font": "Vazirmatn",
+      "layout_direction": "rtl",
+      "widget_direction": "rtl",
+      "theme": "light",
+      "language": "fa",
+      "window_size": [
+        720,
+        320
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "entrypoint": "actionHistoryMetrics",
+      "dialog_module": "app.ui.history_metrics",
+      "table": {
+        "rows": 0,
+        "columns": [
+          {
+            "column": 0,
+            "label": "allocation_channel",
+            "header_width": 100,
+            "label_text_width": 108,
+            "first_cell": ""
+          },
+          {
+            "column": 1,
+            "label": "students_total",
+            "header_width": 100,
+            "label_text_width": 82,
+            "first_cell": ""
+          },
+          {
+            "column": 2,
+            "label": "history_already_allocated",
+            "header_width": 100,
+            "label_text_width": 146,
+            "first_cell": ""
+          },
+          {
+            "column": 3,
+            "label": "history_no_history_match",
+            "header_width": 100,
+            "label_text_width": 147,
+            "first_cell": ""
+          },
+          {
+            "column": 4,
+            "label": "history_missing_or_invalid",
+            "header_width": 100,
+            "label_text_width": 151,
+            "first_cell": ""
+          },
+          {
+            "column": 5,
+            "label": "same_history_mentor_true",
+            "header_width": 100,
+            "label_text_width": 153,
+            "first_cell": ""
+          },
+          {
+            "column": 6,
+            "label": "same_history_mentor_ratio",
+            "header_width": 100,
+            "label_text_width": 156,
+            "first_cell": ""
+          }
+        ],
+        "horizontal_max": 6,
+        "horizontal_value": 0,
+        "scroll_policy": "ScrollBarPolicy.ScrollBarAsNeeded"
+      }
+    },
+    {
+      "case": "history-light-fa-populated",
+      "family": "history",
+      "image": "history-light-fa-populated.png",
+      "image_pixels": [
+        720,
+        320
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Vazirmatn",
+      "font_point_size": 10.0,
+      "application_font": "Vazirmatn",
+      "layout_direction": "rtl",
+      "widget_direction": "rtl",
+      "theme": "light",
+      "language": "fa",
+      "window_size": [
+        720,
+        320
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "synthetic_metrics": true,
+      "table": {
+        "rows": 1,
+        "columns": [
+          {
+            "column": 0,
+            "label": "allocation_channel",
+            "header_width": 100,
+            "label_text_width": 108,
+            "first_cell": "synthetic_channel"
+          },
+          {
+            "column": 1,
+            "label": "students_total",
+            "header_width": 100,
+            "label_text_width": 82,
+            "first_cell": "8"
+          },
+          {
+            "column": 2,
+            "label": "history_already_allocated",
+            "header_width": 100,
+            "label_text_width": 146,
+            "first_cell": "4"
+          },
+          {
+            "column": 3,
+            "label": "history_no_history_match",
+            "header_width": 100,
+            "label_text_width": 147,
+            "first_cell": "2"
+          },
+          {
+            "column": 4,
+            "label": "history_missing_or_invalid",
+            "header_width": 100,
+            "label_text_width": 151,
+            "first_cell": "2"
+          },
+          {
+            "column": 5,
+            "label": "same_history_mentor_true",
+            "header_width": 100,
+            "label_text_width": 153,
+            "first_cell": "3"
+          },
+          {
+            "column": 6,
+            "label": "same_history_mentor_ratio",
+            "header_width": 100,
+            "label_text_width": 156,
+            "first_cell": "0.375"
+          }
+        ],
+        "horizontal_max": 1,
+        "horizontal_value": 0,
+        "scroll_policy": "ScrollBarPolicy.ScrollBarAsNeeded"
+      }
+    },
+    {
+      "case": "history-light-fa-rightmost",
+      "family": "history",
+      "image": "history-light-fa-rightmost.png",
+      "image_pixels": [
+        720,
+        320
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Vazirmatn",
+      "font_point_size": 10.0,
+      "application_font": "Vazirmatn",
+      "layout_direction": "rtl",
+      "widget_direction": "rtl",
+      "theme": "light",
+      "language": "fa",
+      "window_size": [
+        720,
+        320
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "table": {
+        "rows": 1,
+        "columns": [
+          {
+            "column": 0,
+            "label": "allocation_channel",
+            "header_width": 100,
+            "label_text_width": 108,
+            "first_cell": "synthetic_channel"
+          },
+          {
+            "column": 1,
+            "label": "students_total",
+            "header_width": 100,
+            "label_text_width": 82,
+            "first_cell": "8"
+          },
+          {
+            "column": 2,
+            "label": "history_already_allocated",
+            "header_width": 100,
+            "label_text_width": 146,
+            "first_cell": "4"
+          },
+          {
+            "column": 3,
+            "label": "history_no_history_match",
+            "header_width": 100,
+            "label_text_width": 147,
+            "first_cell": "2"
+          },
+          {
+            "column": 4,
+            "label": "history_missing_or_invalid",
+            "header_width": 100,
+            "label_text_width": 151,
+            "first_cell": "2"
+          },
+          {
+            "column": 5,
+            "label": "same_history_mentor_true",
+            "header_width": 100,
+            "label_text_width": 153,
+            "first_cell": "3"
+          },
+          {
+            "column": 6,
+            "label": "same_history_mentor_ratio",
+            "header_width": 100,
+            "label_text_width": 156,
+            "first_cell": "0.375"
+          }
+        ],
+        "horizontal_max": 1,
+        "horizontal_value": 1,
+        "scroll_policy": "ScrollBarPolicy.ScrollBarAsNeeded"
+      }
+    },
+    {
+      "case": "history-light-fa-long-value-control",
+      "family": "history",
+      "image": "history-light-fa-long-value-control.png",
+      "image_pixels": [
+        720,
+        320
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Vazirmatn",
+      "font_point_size": 10.0,
+      "application_font": "Vazirmatn",
+      "layout_direction": "rtl",
+      "widget_direction": "rtl",
+      "theme": "light",
+      "language": "fa",
+      "window_size": [
+        720,
+        320
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "overflow_control": true,
+      "table": {
+        "rows": 1,
+        "columns": [
+          {
+            "column": 0,
+            "label": "allocation_channel",
+            "header_width": 100,
+            "label_text_width": 108,
+            "first_cell": "synthetic_channel_EXTREMELY_LONG_CHANNEL_NAME__EXTREMELY_LONG_CHANNEL_NAME__EXTREMELY_LONG_CHANNEL_NAME__EXTREMELY_LONG_CHANNEL_NAME__EXTREMELY_LONG_CHANNEL_NAME__EXTREMELY_LONG_CHANNEL_NAME__EXTREMELY_LONG_CHANNEL_NAME__EXTREMELY_LONG_CHANNEL_NAME_"
+          },
+          {
+            "column": 1,
+            "label": "students_total",
+            "header_width": 100,
+            "label_text_width": 82,
+            "first_cell": "8"
+          },
+          {
+            "column": 2,
+            "label": "history_already_allocated",
+            "header_width": 100,
+            "label_text_width": 146,
+            "first_cell": "4"
+          },
+          {
+            "column": 3,
+            "label": "history_no_history_match",
+            "header_width": 100,
+            "label_text_width": 147,
+            "first_cell": "2"
+          },
+          {
+            "column": 4,
+            "label": "history_missing_or_invalid",
+            "header_width": 100,
+            "label_text_width": 151,
+            "first_cell": "2"
+          },
+          {
+            "column": 5,
+            "label": "same_history_mentor_true",
+            "header_width": 100,
+            "label_text_width": 153,
+            "first_cell": "3"
+          },
+          {
+            "column": 6,
+            "label": "same_history_mentor_ratio",
+            "header_width": 100,
+            "label_text_width": 156,
+            "first_cell": "0.375"
+          }
+        ],
+        "horizontal_max": 1,
+        "horizontal_value": 1,
+        "scroll_policy": "ScrollBarPolicy.ScrollBarAsNeeded"
+      }
+    },
+    {
+      "case": "operation-light-fa-ready",
+      "family": "operation",
+      "image": "operation-light-fa-ready.png",
+      "image_pixels": [
+        1200,
+        800
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Vazirmatn",
+      "font_point_size": 10.0,
+      "application_font": "Vazirmatn",
+      "layout_direction": "rtl",
+      "widget_direction": "rtl",
+      "theme": "light",
+      "language": "fa",
+      "window_size": [
+        1200,
+        800
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "operation_state": "ready",
+      "progress_value": -1,
+      "progress_min": 0,
+      "progress_max": 100,
+      "progress_busy_property": false,
+      "progress_text": "-1% | آماده",
+      "status_text": "آماده",
+      "stage_badge": "آماده",
+      "stage_detail": "برای شروع یکی از سناریوها را انتخاب کنید",
+      "diagnostics_expanded": false,
+      "allocate_enabled": true,
+      "build_enabled": true,
+      "focus_widget": null
+    },
+    {
+      "case": "operation-light-fa-missing-school-warning",
+      "family": "operation",
+      "image": "operation-light-fa-missing-school-warning.png",
+      "image_pixels": [
+        400,
+        110
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Vazirmatn",
+      "font_point_size": 10.0,
+      "application_font": "Vazirmatn",
+      "layout_direction": "rtl",
+      "widget_direction": "rtl",
+      "theme": "light",
+      "language": "fa",
+      "window_size": [
+        400,
+        110
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "operation_state": "missing_school_reference",
+      "warning_title": "داده مرجع آماده نیست",
+      "warning_text": "پیش از اجرا داده‌های School/GroupCode را در تب پایگاه داده وارد یا به‌روزرسانی کنید."
+    },
+    {
+      "case": "operation-light-fa-after-missing-school",
+      "family": "operation",
+      "image": "operation-light-fa-after-missing-school.png",
+      "image_pixels": [
+        1200,
+        800
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Vazirmatn",
+      "font_point_size": 10.0,
+      "application_font": "Vazirmatn",
+      "layout_direction": "rtl",
+      "widget_direction": "rtl",
+      "theme": "light",
+      "language": "fa",
+      "window_size": [
+        1200,
+        800
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "operation_state": "after_missing_school",
+      "progress_value": -1,
+      "progress_min": 0,
+      "progress_max": 100,
+      "progress_busy_property": false,
+      "progress_text": "-1% | آماده",
+      "status_text": "آماده",
+      "stage_badge": "آماده",
+      "stage_detail": "برای شروع یکی از سناریوها را انتخاب کنید",
+      "diagnostics_expanded": false,
+      "allocate_enabled": true,
+      "build_enabled": true,
+      "focus_widget": null
+    },
+    {
+      "case": "operation-light-fa-indeterminate",
+      "family": "operation",
+      "image": "operation-light-fa-indeterminate.png",
+      "image_pixels": [
+        1200,
+        800
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Vazirmatn",
+      "font_point_size": 10.0,
+      "application_font": "Vazirmatn",
+      "layout_direction": "rtl",
+      "widget_direction": "rtl",
+      "theme": "light",
+      "language": "fa",
+      "window_size": [
+        1200,
+        800
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "operation_state": "indeterminate_running",
+      "progress_value": 0,
+      "progress_min": 0,
+      "progress_max": 0,
+      "progress_busy_property": true,
+      "progress_text": "0% | Synthetic verification only در حال اجرا…",
+      "status_text": "Synthetic verification only در حال اجرا…",
+      "stage_badge": "Synthetic verification only",
+      "stage_detail": "در انتظار گزارش پیشرفت",
+      "diagnostics_expanded": false,
+      "allocate_enabled": false,
+      "build_enabled": false,
+      "focus_widget": null
+    },
+    {
+      "case": "operation-light-fa-completed",
+      "family": "operation",
+      "image": "operation-light-fa-completed.png",
+      "image_pixels": [
+        1200,
+        800
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Vazirmatn",
+      "font_point_size": 10.0,
+      "application_font": "Vazirmatn",
+      "layout_direction": "rtl",
+      "widget_direction": "rtl",
+      "theme": "light",
+      "language": "fa",
+      "window_size": [
+        1200,
+        800
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "operation_state": "synthetic_worker_completed",
+      "progress_value": 100,
+      "progress_min": 0,
+      "progress_max": 100,
+      "progress_busy_property": false,
+      "progress_text": "100% | کامل",
+      "status_text": "کامل",
+      "stage_badge": "Synthetic verification only",
+      "stage_detail": "عملیات با موفقیت پایان یافت",
+      "diagnostics_expanded": false,
+      "allocate_enabled": true,
+      "build_enabled": true,
+      "focus_widget": null
+    },
+    {
+      "case": "operation-light-fa-controlled-failure",
+      "family": "operation",
+      "image": "operation-light-fa-controlled-failure.png",
+      "image_pixels": [
+        1200,
+        800
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Vazirmatn",
+      "font_point_size": 10.0,
+      "application_font": "Vazirmatn",
+      "layout_direction": "rtl",
+      "widget_direction": "rtl",
+      "theme": "light",
+      "language": "fa",
+      "window_size": [
+        1200,
+        800
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "operation_state": "synthetic_worker_failed",
+      "progress_value": 0,
+      "progress_min": 0,
+      "progress_max": 100,
+      "progress_busy_property": false,
+      "progress_text": "0% | خطا",
+      "status_text": "خطا",
+      "stage_badge": "خطا",
+      "stage_detail": "Synthetic controlled failure — no allocation executed",
+      "diagnostics_expanded": true,
+      "allocate_enabled": true,
+      "build_enabled": true,
+      "focus_widget": ""
+    },
+    {
+      "case": "operation-light-fa-failure-modal",
+      "family": "operation",
+      "image": "operation-light-fa-failure-modal.png",
+      "image_pixels": [
+        392,
+        110
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Vazirmatn",
+      "font_point_size": 10.0,
+      "application_font": "Vazirmatn",
+      "layout_direction": "rtl",
+      "widget_direction": "rtl",
+      "theme": "light",
+      "language": "fa",
+      "window_size": [
+        392,
+        110
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "operation_state": "failure_message",
+      "message": "Synthetic controlled failure — no allocation executed"
+    },
+    {
+      "case": "explain-light-fa-sample",
+      "family": "explain",
+      "image": "explain-light-fa-sample.png",
+      "image_pixels": [
+        1200,
+        800
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Vazirmatn",
+      "font_point_size": 10.0,
+      "application_font": "Vazirmatn",
+      "layout_direction": "rtl",
+      "widget_direction": "rtl",
+      "theme": "light",
+      "language": "fa",
+      "window_size": [
+        1200,
+        800
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "tables": [
+        {
+          "rows": 2,
+          "columns": [
+            {
+              "column": 0,
+              "label": "student_id",
+              "header_width": 100,
+              "label_text_width": 60,
+              "first_cell": "STU-125"
+            },
+            {
+              "column": 1,
+              "label": "mentor_id",
+              "header_width": 100,
+              "label_text_width": 58,
+              "first_cell": "MENT-009"
+            },
+            {
+              "column": 2,
+              "label": "rule_tag",
+              "header_width": 100,
+              "label_text_width": 46,
+              "first_cell": "R_CAPACITY"
+            },
+            {
+              "column": 3,
+              "label": "reason",
+              "header_width": 100,
+              "label_text_width": 40,
+              "first_cell": "ظرفیت منطقه"
+            },
+            {
+              "column": 4,
+              "label": "score",
+              "header_width": 100,
+              "label_text_width": 32,
+              "first_cell": "0.82"
+            },
+            {
+              "column": 5,
+              "label": "trace_step",
+              "header_width": 100,
+              "label_text_width": 60,
+              "first_cell": "capacity_gate"
+            }
+          ],
+          "horizontal_max": 0,
+          "horizontal_value": 0,
+          "scroll_policy": "ScrollBarPolicy.ScrollBarAsNeeded"
+        }
+      ],
+      "note": "Visual inspection of existing example only; no synthesized Explain semantics"
+    },
+    {
+      "case": "settings-light-en-720x760-top",
+      "family": "settings",
+      "image": "settings-light-en-720x760-top.png",
+      "image_pixels": [
+        720,
+        760
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Segoe UI",
+      "font_point_size": 10.0,
+      "application_font": "Segoe UI",
+      "layout_direction": "ltr",
+      "widget_direction": "ltr",
+      "theme": "light",
+      "language": "en",
+      "window_size": [
+        720,
+        760
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "entrypoint": "actionPresentationSettings",
+      "category_names": [
+        "diagnosticsCategory_diagnostics",
+        "diagnosticsCategory_analysis",
+        "diagnosticsCategory_advanced"
+      ],
+      "checks": {
+        "enable_trace_debug_sheets": {
+          "checked": false,
+          "impact_text": "DIAGNOSTIC ONLY — does not change allocation results",
+          "impact_kind": "diagnostic",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 0,
+            "bar_maximum": 637,
+            "target": {
+              "x": 26,
+              "y": 429,
+              "width": 624,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "enable_mentor_trace_debug": {
+          "checked": false,
+          "impact_text": "DIAGNOSTIC ONLY",
+          "impact_kind": "diagnostic",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 0,
+            "bar_maximum": 637,
+            "target": {
+              "x": 26,
+              "y": 531,
+              "width": 624,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "enable_pool_governance_trace": {
+          "checked": false,
+          "impact_text": "DIAGNOSTIC ONLY",
+          "impact_kind": "diagnostic",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 0,
+            "bar_maximum": 637,
+            "target": {
+              "x": 26,
+              "y": 633,
+              "width": 624,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "enable_bucket_trace": {
+          "checked": false,
+          "impact_text": "DIAGNOSTIC ONLY — distinct from Use Join Buckets",
+          "impact_kind": "diagnostic",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 74,
+            "bar_maximum": 637,
+            "target": {
+              "x": 26,
+              "y": 661,
+              "width": 624,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "enable_trace_export": {
+          "checked": false,
+          "impact_text": "DIAGNOSTIC OUTPUT ONLY",
+          "impact_kind": "diagnostic",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 176,
+            "bar_maximum": 637,
+            "target": {
+              "x": 26,
+              "y": 661,
+              "width": 624,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "enable_history_metrics": {
+          "checked": false,
+          "impact_text": "ANALYSIS ONLY — disabling it does not disable history-aware allocation",
+          "impact_kind": "analysis",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 332,
+            "bar_maximum": 637,
+            "target": {
+              "x": 26,
+              "y": 661,
+              "width": 624,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "enable_qa_pool_coverage_rules": {
+          "checked": false,
+          "impact_text": "MAY AFFECT VALIDATION PASS/FAIL",
+          "impact_kind": "validation",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 488,
+            "bar_maximum": 637,
+            "target": {
+              "x": 26,
+              "y": 661,
+              "width": 624,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "use_join_buckets": {
+          "checked": false,
+          "impact_text": "ADVANCED ALGORITHMIC / PERFORMANCE OPTION — changes execution path",
+          "impact_kind": "algorithmic",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 611,
+            "bar_maximum": 637,
+            "target": {
+              "x": 26,
+              "y": 661,
+              "width": 624,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        }
+      },
+      "scroll_maximum": 637
+    },
+    {
+      "case": "settings-light-en-720x760-bottom",
+      "family": "settings",
+      "image": "settings-light-en-720x760-bottom.png",
+      "image_pixels": [
+        720,
+        760
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Segoe UI",
+      "font_point_size": 10.0,
+      "application_font": "Segoe UI",
+      "layout_direction": "ltr",
+      "widget_direction": "ltr",
+      "theme": "light",
+      "language": "en",
+      "window_size": [
+        720,
+        760
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "scroll_value": 637,
+      "last_impact": "ADVANCED ALGORITHMIC / PERFORMANCE OPTION — changes execution path"
+    },
+    {
+      "case": "settings-light-en-720x760-guide-fa",
+      "family": "guide",
+      "image": "settings-light-en-720x760-guide-fa.png",
+      "image_pixels": [
+        760,
+        620
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Segoe UI",
+      "font_point_size": 10.0,
+      "application_font": "Segoe UI",
+      "layout_direction": "ltr",
+      "widget_direction": "ltr",
+      "theme": "light",
+      "language": "en",
+      "window_size": [
+        760,
+        620
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "active_tab": "fa",
+      "guide_module": "app.ui.preferences.settings_dialog",
+      "reader_direction": "rtl",
+      "reader_scroll_max": 1431,
+      "reader_characters": 5338
+    },
+    {
+      "case": "settings-light-en-720x760-guide-en",
+      "family": "guide",
+      "image": "settings-light-en-720x760-guide-en.png",
+      "image_pixels": [
+        760,
+        620
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Segoe UI",
+      "font_point_size": 10.0,
+      "application_font": "Segoe UI",
+      "layout_direction": "ltr",
+      "widget_direction": "ltr",
+      "theme": "light",
+      "language": "en",
+      "window_size": [
+        760,
+        620
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "active_tab": "en",
+      "guide_module": "app.ui.preferences.settings_dialog",
+      "reader_direction": "ltr",
+      "reader_scroll_max": 1494,
+      "reader_characters": 5608
+    },
+    {
+      "case": "settings-light-en-620x560-top",
+      "family": "settings",
+      "image": "settings-light-en-620x560-top.png",
+      "image_pixels": [
+        620,
+        560
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Segoe UI",
+      "font_point_size": 10.0,
+      "application_font": "Segoe UI",
+      "layout_direction": "ltr",
+      "widget_direction": "ltr",
+      "theme": "light",
+      "language": "en",
+      "window_size": [
+        620,
+        560
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "entrypoint": "actionPresentationSettings",
+      "category_names": [
+        "diagnosticsCategory_diagnostics",
+        "diagnosticsCategory_analysis",
+        "diagnosticsCategory_advanced"
+      ],
+      "checks": {
+        "enable_trace_debug_sheets": {
+          "checked": false,
+          "impact_text": "DIAGNOSTIC ONLY — does not change allocation results",
+          "impact_kind": "diagnostic",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 0,
+            "bar_maximum": 879,
+            "target": {
+              "x": 26,
+              "y": 429,
+              "width": 524,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "enable_mentor_trace_debug": {
+          "checked": false,
+          "impact_text": "DIAGNOSTIC ONLY",
+          "impact_kind": "diagnostic",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 70,
+            "bar_maximum": 879,
+            "target": {
+              "x": 26,
+              "y": 461,
+              "width": 524,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "enable_pool_governance_trace": {
+          "checked": false,
+          "impact_text": "DIAGNOSTIC ONLY",
+          "impact_kind": "diagnostic",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 172,
+            "bar_maximum": 879,
+            "target": {
+              "x": 26,
+              "y": 461,
+              "width": 524,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "enable_bucket_trace": {
+          "checked": false,
+          "impact_text": "DIAGNOSTIC ONLY — distinct from Use Join Buckets",
+          "impact_kind": "diagnostic",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 295,
+            "bar_maximum": 879,
+            "target": {
+              "x": 26,
+              "y": 461,
+              "width": 524,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "enable_trace_export": {
+          "checked": false,
+          "impact_text": "DIAGNOSTIC OUTPUT ONLY",
+          "impact_kind": "diagnostic",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 397,
+            "bar_maximum": 879,
+            "target": {
+              "x": 26,
+              "y": 461,
+              "width": 524,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "enable_history_metrics": {
+          "checked": false,
+          "impact_text": "ANALYSIS ONLY — disabling it does not disable history-aware allocation",
+          "impact_kind": "analysis",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 553,
+            "bar_maximum": 879,
+            "target": {
+              "x": 26,
+              "y": 461,
+              "width": 524,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "enable_qa_pool_coverage_rules": {
+          "checked": false,
+          "impact_text": "MAY AFFECT VALIDATION PASS/FAIL",
+          "impact_kind": "validation",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 730,
+            "bar_maximum": 879,
+            "target": {
+              "x": 26,
+              "y": 461,
+              "width": 524,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "use_join_buckets": {
+          "checked": false,
+          "impact_text": "ADVANCED ALGORITHMIC / PERFORMANCE OPTION — changes execution path",
+          "impact_kind": "algorithmic",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 853,
+            "bar_maximum": 879,
+            "target": {
+              "x": 26,
+              "y": 461,
+              "width": 524,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        }
+      },
+      "scroll_maximum": 879
+    },
+    {
+      "case": "settings-light-en-620x560-bottom",
+      "family": "settings",
+      "image": "settings-light-en-620x560-bottom.png",
+      "image_pixels": [
+        620,
+        560
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Segoe UI",
+      "font_point_size": 10.0,
+      "application_font": "Segoe UI",
+      "layout_direction": "ltr",
+      "widget_direction": "ltr",
+      "theme": "light",
+      "language": "en",
+      "window_size": [
+        620,
+        560
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "scroll_value": 879,
+      "last_impact": "ADVANCED ALGORITHMIC / PERFORMANCE OPTION — changes execution path"
+    },
+    {
+      "case": "settings-light-en-620x560-synthetic-overflow",
+      "family": "settings",
+      "image": "settings-light-en-620x560-synthetic-overflow.png",
+      "image_pixels": [
+        620,
+        560
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Segoe UI",
+      "font_point_size": 10.0,
+      "application_font": "Segoe UI",
+      "layout_direction": "ltr",
+      "widget_direction": "ltr",
+      "theme": "light",
+      "language": "en",
+      "window_size": [
+        620,
+        560
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "overflow_control": true,
+      "overflow_text_length": 912,
+      "target": {
+        "x": 26,
+        "y": 388,
+        "width": 524,
+        "height": 42,
+        "contained": true,
+        "visible": true
+      }
+    },
+    {
+      "case": "settings-light-en-620x560-guide-fa",
+      "family": "guide",
+      "image": "settings-light-en-620x560-guide-fa.png",
+      "image_pixels": [
+        760,
+        620
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Segoe UI",
+      "font_point_size": 10.0,
+      "application_font": "Segoe UI",
+      "layout_direction": "ltr",
+      "widget_direction": "ltr",
+      "theme": "light",
+      "language": "en",
+      "window_size": [
+        760,
+        620
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "active_tab": "fa",
+      "guide_module": "app.ui.preferences.settings_dialog",
+      "reader_direction": "rtl",
+      "reader_scroll_max": 1431,
+      "reader_characters": 5338
+    },
+    {
+      "case": "settings-light-en-620x560-guide-en",
+      "family": "guide",
+      "image": "settings-light-en-620x560-guide-en.png",
+      "image_pixels": [
+        760,
+        620
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Segoe UI",
+      "font_point_size": 10.0,
+      "application_font": "Segoe UI",
+      "layout_direction": "ltr",
+      "widget_direction": "ltr",
+      "theme": "light",
+      "language": "en",
+      "window_size": [
+        760,
+        620
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "active_tab": "en",
+      "guide_module": "app.ui.preferences.settings_dialog",
+      "reader_direction": "ltr",
+      "reader_scroll_max": 1494,
+      "reader_characters": 5608
+    },
+    {
+      "case": "history-light-en-empty",
+      "family": "history",
+      "image": "history-light-en-empty.png",
+      "image_pixels": [
+        720,
+        320
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Segoe UI",
+      "font_point_size": 10.0,
+      "application_font": "Segoe UI",
+      "layout_direction": "ltr",
+      "widget_direction": "ltr",
+      "theme": "light",
+      "language": "en",
+      "window_size": [
+        720,
+        320
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "entrypoint": "actionHistoryMetrics",
+      "dialog_module": "app.ui.history_metrics",
+      "table": {
+        "rows": 0,
+        "columns": [
+          {
+            "column": 0,
+            "label": "allocation_channel",
+            "header_width": 100,
+            "label_text_width": 108,
+            "first_cell": ""
+          },
+          {
+            "column": 1,
+            "label": "students_total",
+            "header_width": 100,
+            "label_text_width": 82,
+            "first_cell": ""
+          },
+          {
+            "column": 2,
+            "label": "history_already_allocated",
+            "header_width": 100,
+            "label_text_width": 146,
+            "first_cell": ""
+          },
+          {
+            "column": 3,
+            "label": "history_no_history_match",
+            "header_width": 100,
+            "label_text_width": 147,
+            "first_cell": ""
+          },
+          {
+            "column": 4,
+            "label": "history_missing_or_invalid",
+            "header_width": 100,
+            "label_text_width": 151,
+            "first_cell": ""
+          },
+          {
+            "column": 5,
+            "label": "same_history_mentor_true",
+            "header_width": 100,
+            "label_text_width": 153,
+            "first_cell": ""
+          },
+          {
+            "column": 6,
+            "label": "same_history_mentor_ratio",
+            "header_width": 100,
+            "label_text_width": 156,
+            "first_cell": ""
+          }
+        ],
+        "horizontal_max": 6,
+        "horizontal_value": 0,
+        "scroll_policy": "ScrollBarPolicy.ScrollBarAsNeeded"
+      }
+    },
+    {
+      "case": "history-light-en-populated",
+      "family": "history",
+      "image": "history-light-en-populated.png",
+      "image_pixels": [
+        720,
+        320
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Segoe UI",
+      "font_point_size": 10.0,
+      "application_font": "Segoe UI",
+      "layout_direction": "ltr",
+      "widget_direction": "ltr",
+      "theme": "light",
+      "language": "en",
+      "window_size": [
+        720,
+        320
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "synthetic_metrics": true,
+      "table": {
+        "rows": 1,
+        "columns": [
+          {
+            "column": 0,
+            "label": "allocation_channel",
+            "header_width": 100,
+            "label_text_width": 108,
+            "first_cell": "synthetic_channel"
+          },
+          {
+            "column": 1,
+            "label": "students_total",
+            "header_width": 100,
+            "label_text_width": 82,
+            "first_cell": "8"
+          },
+          {
+            "column": 2,
+            "label": "history_already_allocated",
+            "header_width": 100,
+            "label_text_width": 146,
+            "first_cell": "4"
+          },
+          {
+            "column": 3,
+            "label": "history_no_history_match",
+            "header_width": 100,
+            "label_text_width": 147,
+            "first_cell": "2"
+          },
+          {
+            "column": 4,
+            "label": "history_missing_or_invalid",
+            "header_width": 100,
+            "label_text_width": 151,
+            "first_cell": "2"
+          },
+          {
+            "column": 5,
+            "label": "same_history_mentor_true",
+            "header_width": 100,
+            "label_text_width": 153,
+            "first_cell": "3"
+          },
+          {
+            "column": 6,
+            "label": "same_history_mentor_ratio",
+            "header_width": 100,
+            "label_text_width": 156,
+            "first_cell": "0.375"
+          }
+        ],
+        "horizontal_max": 1,
+        "horizontal_value": 0,
+        "scroll_policy": "ScrollBarPolicy.ScrollBarAsNeeded"
+      }
+    },
+    {
+      "case": "history-light-en-rightmost",
+      "family": "history",
+      "image": "history-light-en-rightmost.png",
+      "image_pixels": [
+        720,
+        320
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Segoe UI",
+      "font_point_size": 10.0,
+      "application_font": "Segoe UI",
+      "layout_direction": "ltr",
+      "widget_direction": "ltr",
+      "theme": "light",
+      "language": "en",
+      "window_size": [
+        720,
+        320
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "table": {
+        "rows": 1,
+        "columns": [
+          {
+            "column": 0,
+            "label": "allocation_channel",
+            "header_width": 100,
+            "label_text_width": 108,
+            "first_cell": "synthetic_channel"
+          },
+          {
+            "column": 1,
+            "label": "students_total",
+            "header_width": 100,
+            "label_text_width": 82,
+            "first_cell": "8"
+          },
+          {
+            "column": 2,
+            "label": "history_already_allocated",
+            "header_width": 100,
+            "label_text_width": 146,
+            "first_cell": "4"
+          },
+          {
+            "column": 3,
+            "label": "history_no_history_match",
+            "header_width": 100,
+            "label_text_width": 147,
+            "first_cell": "2"
+          },
+          {
+            "column": 4,
+            "label": "history_missing_or_invalid",
+            "header_width": 100,
+            "label_text_width": 151,
+            "first_cell": "2"
+          },
+          {
+            "column": 5,
+            "label": "same_history_mentor_true",
+            "header_width": 100,
+            "label_text_width": 153,
+            "first_cell": "3"
+          },
+          {
+            "column": 6,
+            "label": "same_history_mentor_ratio",
+            "header_width": 100,
+            "label_text_width": 156,
+            "first_cell": "0.375"
+          }
+        ],
+        "horizontal_max": 1,
+        "horizontal_value": 1,
+        "scroll_policy": "ScrollBarPolicy.ScrollBarAsNeeded"
+      }
+    },
+    {
+      "case": "history-light-en-long-value-control",
+      "family": "history",
+      "image": "history-light-en-long-value-control.png",
+      "image_pixels": [
+        720,
+        320
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Segoe UI",
+      "font_point_size": 10.0,
+      "application_font": "Segoe UI",
+      "layout_direction": "ltr",
+      "widget_direction": "ltr",
+      "theme": "light",
+      "language": "en",
+      "window_size": [
+        720,
+        320
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "overflow_control": true,
+      "table": {
+        "rows": 1,
+        "columns": [
+          {
+            "column": 0,
+            "label": "allocation_channel",
+            "header_width": 100,
+            "label_text_width": 108,
+            "first_cell": "synthetic_channel_EXTREMELY_LONG_CHANNEL_NAME__EXTREMELY_LONG_CHANNEL_NAME__EXTREMELY_LONG_CHANNEL_NAME__EXTREMELY_LONG_CHANNEL_NAME__EXTREMELY_LONG_CHANNEL_NAME__EXTREMELY_LONG_CHANNEL_NAME__EXTREMELY_LONG_CHANNEL_NAME__EXTREMELY_LONG_CHANNEL_NAME_"
+          },
+          {
+            "column": 1,
+            "label": "students_total",
+            "header_width": 100,
+            "label_text_width": 82,
+            "first_cell": "8"
+          },
+          {
+            "column": 2,
+            "label": "history_already_allocated",
+            "header_width": 100,
+            "label_text_width": 146,
+            "first_cell": "4"
+          },
+          {
+            "column": 3,
+            "label": "history_no_history_match",
+            "header_width": 100,
+            "label_text_width": 147,
+            "first_cell": "2"
+          },
+          {
+            "column": 4,
+            "label": "history_missing_or_invalid",
+            "header_width": 100,
+            "label_text_width": 151,
+            "first_cell": "2"
+          },
+          {
+            "column": 5,
+            "label": "same_history_mentor_true",
+            "header_width": 100,
+            "label_text_width": 153,
+            "first_cell": "3"
+          },
+          {
+            "column": 6,
+            "label": "same_history_mentor_ratio",
+            "header_width": 100,
+            "label_text_width": 156,
+            "first_cell": "0.375"
+          }
+        ],
+        "horizontal_max": 1,
+        "horizontal_value": 1,
+        "scroll_policy": "ScrollBarPolicy.ScrollBarAsNeeded"
+      }
+    },
+    {
+      "case": "operation-light-en-ready",
+      "family": "operation",
+      "image": "operation-light-en-ready.png",
+      "image_pixels": [
+        1200,
+        800
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Segoe UI",
+      "font_point_size": 10.0,
+      "application_font": "Segoe UI",
+      "layout_direction": "ltr",
+      "widget_direction": "ltr",
+      "theme": "light",
+      "language": "en",
+      "window_size": [
+        1200,
+        800
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "operation_state": "ready",
+      "progress_value": -1,
+      "progress_min": 0,
+      "progress_max": 100,
+      "progress_busy_property": false,
+      "progress_text": "-1% | Ready",
+      "status_text": "Ready",
+      "stage_badge": "Ready",
+      "stage_detail": "Select a scenario to begin",
+      "diagnostics_expanded": false,
+      "allocate_enabled": true,
+      "build_enabled": true,
+      "focus_widget": null
+    },
+    {
+      "case": "operation-light-en-missing-school-warning",
+      "family": "operation",
+      "image": "operation-light-en-missing-school-warning.png",
+      "image_pixels": [
+        400,
+        110
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Segoe UI",
+      "font_point_size": 10.0,
+      "application_font": "Segoe UI",
+      "layout_direction": "ltr",
+      "widget_direction": "ltr",
+      "theme": "light",
+      "language": "en",
+      "window_size": [
+        400,
+        110
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "operation_state": "missing_school_reference",
+      "warning_title": "Reference data not ready",
+      "warning_text": "Import or update School/GroupCode data via the Database tab before running."
+    },
+    {
+      "case": "operation-light-en-after-missing-school",
+      "family": "operation",
+      "image": "operation-light-en-after-missing-school.png",
+      "image_pixels": [
+        1200,
+        800
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Segoe UI",
+      "font_point_size": 10.0,
+      "application_font": "Segoe UI",
+      "layout_direction": "ltr",
+      "widget_direction": "ltr",
+      "theme": "light",
+      "language": "en",
+      "window_size": [
+        1200,
+        800
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "operation_state": "after_missing_school",
+      "progress_value": -1,
+      "progress_min": 0,
+      "progress_max": 100,
+      "progress_busy_property": false,
+      "progress_text": "-1% | Ready",
+      "status_text": "Ready",
+      "stage_badge": "Ready",
+      "stage_detail": "Select a scenario to begin",
+      "diagnostics_expanded": false,
+      "allocate_enabled": true,
+      "build_enabled": true,
+      "focus_widget": null
+    },
+    {
+      "case": "operation-light-en-indeterminate",
+      "family": "operation",
+      "image": "operation-light-en-indeterminate.png",
+      "image_pixels": [
+        1200,
+        800
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Segoe UI",
+      "font_point_size": 10.0,
+      "application_font": "Segoe UI",
+      "layout_direction": "ltr",
+      "widget_direction": "ltr",
+      "theme": "light",
+      "language": "en",
+      "window_size": [
+        1200,
+        800
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "operation_state": "indeterminate_running",
+      "progress_value": 0,
+      "progress_min": 0,
+      "progress_max": 0,
+      "progress_busy_property": true,
+      "progress_text": "0% | Synthetic verification only در حال اجرا…",
+      "status_text": "Synthetic verification only در حال اجرا…",
+      "stage_badge": "Synthetic verification only",
+      "stage_detail": "در انتظار گزارش پیشرفت",
+      "diagnostics_expanded": false,
+      "allocate_enabled": false,
+      "build_enabled": false,
+      "focus_widget": null
+    },
+    {
+      "case": "operation-light-en-completed",
+      "family": "operation",
+      "image": "operation-light-en-completed.png",
+      "image_pixels": [
+        1200,
+        800
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Segoe UI",
+      "font_point_size": 10.0,
+      "application_font": "Segoe UI",
+      "layout_direction": "ltr",
+      "widget_direction": "ltr",
+      "theme": "light",
+      "language": "en",
+      "window_size": [
+        1200,
+        800
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "operation_state": "synthetic_worker_completed",
+      "progress_value": 100,
+      "progress_min": 0,
+      "progress_max": 100,
+      "progress_busy_property": false,
+      "progress_text": "100% | Complete",
+      "status_text": "Complete",
+      "stage_badge": "Synthetic verification only",
+      "stage_detail": "Operation completed successfully",
+      "diagnostics_expanded": false,
+      "allocate_enabled": true,
+      "build_enabled": true,
+      "focus_widget": null
+    },
+    {
+      "case": "operation-light-en-controlled-failure",
+      "family": "operation",
+      "image": "operation-light-en-controlled-failure.png",
+      "image_pixels": [
+        1200,
+        800
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Segoe UI",
+      "font_point_size": 10.0,
+      "application_font": "Segoe UI",
+      "layout_direction": "ltr",
+      "widget_direction": "ltr",
+      "theme": "light",
+      "language": "en",
+      "window_size": [
+        1200,
+        800
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "operation_state": "synthetic_worker_failed",
+      "progress_value": 0,
+      "progress_min": 0,
+      "progress_max": 100,
+      "progress_busy_property": false,
+      "progress_text": "0% | Error",
+      "status_text": "Error",
+      "stage_badge": "Error",
+      "stage_detail": "Synthetic controlled failure — no allocation executed",
+      "diagnostics_expanded": true,
+      "allocate_enabled": true,
+      "build_enabled": true,
+      "focus_widget": ""
+    },
+    {
+      "case": "operation-light-en-failure-modal",
+      "family": "operation",
+      "image": "operation-light-en-failure-modal.png",
+      "image_pixels": [
+        392,
+        110
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Segoe UI",
+      "font_point_size": 10.0,
+      "application_font": "Segoe UI",
+      "layout_direction": "ltr",
+      "widget_direction": "ltr",
+      "theme": "light",
+      "language": "en",
+      "window_size": [
+        392,
+        110
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "operation_state": "failure_message",
+      "message": "Synthetic controlled failure — no allocation executed"
+    },
+    {
+      "case": "explain-light-en-sample",
+      "family": "explain",
+      "image": "explain-light-en-sample.png",
+      "image_pixels": [
+        1200,
+        800
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Segoe UI",
+      "font_point_size": 10.0,
+      "application_font": "Segoe UI",
+      "layout_direction": "ltr",
+      "widget_direction": "ltr",
+      "theme": "light",
+      "language": "en",
+      "window_size": [
+        1200,
+        800
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "tables": [
+        {
+          "rows": 2,
+          "columns": [
+            {
+              "column": 0,
+              "label": "student_id",
+              "header_width": 100,
+              "label_text_width": 60,
+              "first_cell": "STU-125"
+            },
+            {
+              "column": 1,
+              "label": "mentor_id",
+              "header_width": 100,
+              "label_text_width": 58,
+              "first_cell": "MENT-009"
+            },
+            {
+              "column": 2,
+              "label": "rule_tag",
+              "header_width": 100,
+              "label_text_width": 46,
+              "first_cell": "R_CAPACITY"
+            },
+            {
+              "column": 3,
+              "label": "reason",
+              "header_width": 100,
+              "label_text_width": 40,
+              "first_cell": "ظرفیت منطقه"
+            },
+            {
+              "column": 4,
+              "label": "score",
+              "header_width": 100,
+              "label_text_width": 32,
+              "first_cell": "0.82"
+            },
+            {
+              "column": 5,
+              "label": "trace_step",
+              "header_width": 100,
+              "label_text_width": 60,
+              "first_cell": "capacity_gate"
+            }
+          ],
+          "horizontal_max": 0,
+          "horizontal_value": 0,
+          "scroll_policy": "ScrollBarPolicy.ScrollBarAsNeeded"
+        }
+      ],
+      "note": "Visual inspection of existing example only; no synthesized Explain semantics"
+    },
+    {
+      "case": "settings-dark-fa-720x760-top",
+      "family": "settings",
+      "image": "settings-dark-fa-720x760-top.png",
+      "image_pixels": [
+        720,
+        760
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Vazirmatn",
+      "font_point_size": 10.0,
+      "application_font": "Vazirmatn",
+      "layout_direction": "rtl",
+      "widget_direction": "rtl",
+      "theme": "dark",
+      "language": "fa",
+      "window_size": [
+        720,
+        760
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "entrypoint": "actionPresentationSettings",
+      "category_names": [
+        "diagnosticsCategory_diagnostics",
+        "diagnosticsCategory_analysis",
+        "diagnosticsCategory_advanced"
+      ],
+      "checks": {
+        "enable_trace_debug_sheets": {
+          "checked": false,
+          "impact_text": "فقط خطایابی — نتیجه تخصیص را تغییر نمی‌دهد",
+          "impact_kind": "diagnostic",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 0,
+            "bar_maximum": 658,
+            "target": {
+              "x": 26,
+              "y": 429,
+              "width": 624,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "enable_mentor_trace_debug": {
+          "checked": false,
+          "impact_text": "فقط خطایابی",
+          "impact_kind": "diagnostic",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 0,
+            "bar_maximum": 658,
+            "target": {
+              "x": 26,
+              "y": 531,
+              "width": 624,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "enable_pool_governance_trace": {
+          "checked": false,
+          "impact_text": "فقط خطایابی",
+          "impact_kind": "diagnostic",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 0,
+            "bar_maximum": 658,
+            "target": {
+              "x": 26,
+              "y": 633,
+              "width": 624,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "enable_bucket_trace": {
+          "checked": false,
+          "impact_text": "فقط خطایابی — با Use Join Buckets متفاوت است",
+          "impact_kind": "diagnostic",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 95,
+            "bar_maximum": 658,
+            "target": {
+              "x": 26,
+              "y": 661,
+              "width": 624,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "enable_trace_export": {
+          "checked": false,
+          "impact_text": "فقط خروجی تشخیصی",
+          "impact_kind": "diagnostic",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 197,
+            "bar_maximum": 658,
+            "target": {
+              "x": 26,
+              "y": 661,
+              "width": 624,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "enable_history_metrics": {
+          "checked": false,
+          "impact_text": "فقط تحلیل — خاموش‌کردن آن history-aware allocation را خاموش نمی‌کند",
+          "impact_kind": "analysis",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 353,
+            "bar_maximum": 658,
+            "target": {
+              "x": 26,
+              "y": 661,
+              "width": 624,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "enable_qa_pool_coverage_rules": {
+          "checked": false,
+          "impact_text": "ممکن است اعتبارسنجی PASS/FAIL را تغییر دهد",
+          "impact_kind": "validation",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 509,
+            "bar_maximum": 658,
+            "target": {
+              "x": 26,
+              "y": 661,
+              "width": 624,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "use_join_buckets": {
+          "checked": false,
+          "impact_text": "گزینه پیشرفته الگوریتمی / کارایی — مسیر اجرا را تغییر می‌دهد",
+          "impact_kind": "algorithmic",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 632,
+            "bar_maximum": 658,
+            "target": {
+              "x": 26,
+              "y": 661,
+              "width": 624,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        }
+      },
+      "scroll_maximum": 658
+    },
+    {
+      "case": "settings-dark-fa-720x760-bottom",
+      "family": "settings",
+      "image": "settings-dark-fa-720x760-bottom.png",
+      "image_pixels": [
+        720,
+        760
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Vazirmatn",
+      "font_point_size": 10.0,
+      "application_font": "Vazirmatn",
+      "layout_direction": "rtl",
+      "widget_direction": "rtl",
+      "theme": "dark",
+      "language": "fa",
+      "window_size": [
+        720,
+        760
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "scroll_value": 658,
+      "last_impact": "گزینه پیشرفته الگوریتمی / کارایی — مسیر اجرا را تغییر می‌دهد"
+    },
+    {
+      "case": "settings-dark-fa-720x760-guide-fa",
+      "family": "guide",
+      "image": "settings-dark-fa-720x760-guide-fa.png",
+      "image_pixels": [
+        760,
+        620
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Vazirmatn",
+      "font_point_size": 10.0,
+      "application_font": "Vazirmatn",
+      "layout_direction": "rtl",
+      "widget_direction": "rtl",
+      "theme": "dark",
+      "language": "fa",
+      "window_size": [
+        760,
+        620
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "active_tab": "fa",
+      "guide_module": "app.ui.preferences.settings_dialog",
+      "reader_direction": "rtl",
+      "reader_scroll_max": 1431,
+      "reader_characters": 5338
+    },
+    {
+      "case": "settings-dark-fa-720x760-guide-en",
+      "family": "guide",
+      "image": "settings-dark-fa-720x760-guide-en.png",
+      "image_pixels": [
+        760,
+        620
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Vazirmatn",
+      "font_point_size": 10.0,
+      "application_font": "Vazirmatn",
+      "layout_direction": "rtl",
+      "widget_direction": "rtl",
+      "theme": "dark",
+      "language": "fa",
+      "window_size": [
+        760,
+        620
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "active_tab": "en",
+      "guide_module": "app.ui.preferences.settings_dialog",
+      "reader_direction": "ltr",
+      "reader_scroll_max": 1494,
+      "reader_characters": 5608
+    },
+    {
+      "case": "settings-dark-fa-620x560-top",
+      "family": "settings",
+      "image": "settings-dark-fa-620x560-top.png",
+      "image_pixels": [
+        620,
+        560
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Vazirmatn",
+      "font_point_size": 10.0,
+      "application_font": "Vazirmatn",
+      "layout_direction": "rtl",
+      "widget_direction": "rtl",
+      "theme": "dark",
+      "language": "fa",
+      "window_size": [
+        620,
+        560
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "entrypoint": "actionPresentationSettings",
+      "category_names": [
+        "diagnosticsCategory_diagnostics",
+        "diagnosticsCategory_analysis",
+        "diagnosticsCategory_advanced"
+      ],
+      "checks": {
+        "enable_trace_debug_sheets": {
+          "checked": false,
+          "impact_text": "فقط خطایابی — نتیجه تخصیص را تغییر نمی‌دهد",
+          "impact_kind": "diagnostic",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 0,
+            "bar_maximum": 858,
+            "target": {
+              "x": 26,
+              "y": 429,
+              "width": 524,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "enable_mentor_trace_debug": {
+          "checked": false,
+          "impact_text": "فقط خطایابی",
+          "impact_kind": "diagnostic",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 70,
+            "bar_maximum": 858,
+            "target": {
+              "x": 26,
+              "y": 461,
+              "width": 524,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "enable_pool_governance_trace": {
+          "checked": false,
+          "impact_text": "فقط خطایابی",
+          "impact_kind": "diagnostic",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 172,
+            "bar_maximum": 858,
+            "target": {
+              "x": 26,
+              "y": 461,
+              "width": 524,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "enable_bucket_trace": {
+          "checked": false,
+          "impact_text": "فقط خطایابی — با Use Join Buckets متفاوت است",
+          "impact_kind": "diagnostic",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 295,
+            "bar_maximum": 858,
+            "target": {
+              "x": 26,
+              "y": 461,
+              "width": 524,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "enable_trace_export": {
+          "checked": false,
+          "impact_text": "فقط خروجی تشخیصی",
+          "impact_kind": "diagnostic",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 397,
+            "bar_maximum": 858,
+            "target": {
+              "x": 26,
+              "y": 461,
+              "width": 524,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "enable_history_metrics": {
+          "checked": false,
+          "impact_text": "فقط تحلیل — خاموش‌کردن آن history-aware allocation را خاموش نمی‌کند",
+          "impact_kind": "analysis",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 553,
+            "bar_maximum": 858,
+            "target": {
+              "x": 26,
+              "y": 461,
+              "width": 524,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "enable_qa_pool_coverage_rules": {
+          "checked": false,
+          "impact_text": "ممکن است اعتبارسنجی PASS/FAIL را تغییر دهد",
+          "impact_kind": "validation",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 709,
+            "bar_maximum": 858,
+            "target": {
+              "x": 26,
+              "y": 461,
+              "width": 524,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "use_join_buckets": {
+          "checked": false,
+          "impact_text": "گزینه پیشرفته الگوریتمی / کارایی — مسیر اجرا را تغییر می‌دهد",
+          "impact_kind": "algorithmic",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 832,
+            "bar_maximum": 858,
+            "target": {
+              "x": 26,
+              "y": 461,
+              "width": 524,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        }
+      },
+      "scroll_maximum": 858
+    },
+    {
+      "case": "settings-dark-fa-620x560-bottom",
+      "family": "settings",
+      "image": "settings-dark-fa-620x560-bottom.png",
+      "image_pixels": [
+        620,
+        560
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Vazirmatn",
+      "font_point_size": 10.0,
+      "application_font": "Vazirmatn",
+      "layout_direction": "rtl",
+      "widget_direction": "rtl",
+      "theme": "dark",
+      "language": "fa",
+      "window_size": [
+        620,
+        560
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "scroll_value": 858,
+      "last_impact": "گزینه پیشرفته الگوریتمی / کارایی — مسیر اجرا را تغییر می‌دهد"
+    },
+    {
+      "case": "settings-dark-fa-620x560-synthetic-overflow",
+      "family": "settings",
+      "image": "settings-dark-fa-620x560-synthetic-overflow.png",
+      "image_pixels": [
+        620,
+        560
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Vazirmatn",
+      "font_point_size": 10.0,
+      "application_font": "Vazirmatn",
+      "layout_direction": "rtl",
+      "widget_direction": "rtl",
+      "theme": "dark",
+      "language": "fa",
+      "window_size": [
+        620,
+        560
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "overflow_control": true,
+      "overflow_text_length": 906,
+      "target": {
+        "x": 26,
+        "y": 388,
+        "width": 524,
+        "height": 42,
+        "contained": true,
+        "visible": true
+      }
+    },
+    {
+      "case": "settings-dark-fa-620x560-guide-fa",
+      "family": "guide",
+      "image": "settings-dark-fa-620x560-guide-fa.png",
+      "image_pixels": [
+        760,
+        620
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Vazirmatn",
+      "font_point_size": 10.0,
+      "application_font": "Vazirmatn",
+      "layout_direction": "rtl",
+      "widget_direction": "rtl",
+      "theme": "dark",
+      "language": "fa",
+      "window_size": [
+        760,
+        620
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "active_tab": "fa",
+      "guide_module": "app.ui.preferences.settings_dialog",
+      "reader_direction": "rtl",
+      "reader_scroll_max": 1431,
+      "reader_characters": 5338
+    },
+    {
+      "case": "settings-dark-fa-620x560-guide-en",
+      "family": "guide",
+      "image": "settings-dark-fa-620x560-guide-en.png",
+      "image_pixels": [
+        760,
+        620
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Vazirmatn",
+      "font_point_size": 10.0,
+      "application_font": "Vazirmatn",
+      "layout_direction": "rtl",
+      "widget_direction": "rtl",
+      "theme": "dark",
+      "language": "fa",
+      "window_size": [
+        760,
+        620
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "active_tab": "en",
+      "guide_module": "app.ui.preferences.settings_dialog",
+      "reader_direction": "ltr",
+      "reader_scroll_max": 1494,
+      "reader_characters": 5608
+    },
+    {
+      "case": "history-dark-fa-empty",
+      "family": "history",
+      "image": "history-dark-fa-empty.png",
+      "image_pixels": [
+        720,
+        320
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Vazirmatn",
+      "font_point_size": 10.0,
+      "application_font": "Vazirmatn",
+      "layout_direction": "rtl",
+      "widget_direction": "rtl",
+      "theme": "dark",
+      "language": "fa",
+      "window_size": [
+        720,
+        320
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "entrypoint": "actionHistoryMetrics",
+      "dialog_module": "app.ui.history_metrics",
+      "table": {
+        "rows": 0,
+        "columns": [
+          {
+            "column": 0,
+            "label": "allocation_channel",
+            "header_width": 100,
+            "label_text_width": 108,
+            "first_cell": ""
+          },
+          {
+            "column": 1,
+            "label": "students_total",
+            "header_width": 100,
+            "label_text_width": 82,
+            "first_cell": ""
+          },
+          {
+            "column": 2,
+            "label": "history_already_allocated",
+            "header_width": 100,
+            "label_text_width": 146,
+            "first_cell": ""
+          },
+          {
+            "column": 3,
+            "label": "history_no_history_match",
+            "header_width": 100,
+            "label_text_width": 147,
+            "first_cell": ""
+          },
+          {
+            "column": 4,
+            "label": "history_missing_or_invalid",
+            "header_width": 100,
+            "label_text_width": 151,
+            "first_cell": ""
+          },
+          {
+            "column": 5,
+            "label": "same_history_mentor_true",
+            "header_width": 100,
+            "label_text_width": 153,
+            "first_cell": ""
+          },
+          {
+            "column": 6,
+            "label": "same_history_mentor_ratio",
+            "header_width": 100,
+            "label_text_width": 156,
+            "first_cell": ""
+          }
+        ],
+        "horizontal_max": 6,
+        "horizontal_value": 0,
+        "scroll_policy": "ScrollBarPolicy.ScrollBarAsNeeded"
+      }
+    },
+    {
+      "case": "history-dark-fa-populated",
+      "family": "history",
+      "image": "history-dark-fa-populated.png",
+      "image_pixels": [
+        720,
+        320
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Vazirmatn",
+      "font_point_size": 10.0,
+      "application_font": "Vazirmatn",
+      "layout_direction": "rtl",
+      "widget_direction": "rtl",
+      "theme": "dark",
+      "language": "fa",
+      "window_size": [
+        720,
+        320
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "synthetic_metrics": true,
+      "table": {
+        "rows": 1,
+        "columns": [
+          {
+            "column": 0,
+            "label": "allocation_channel",
+            "header_width": 100,
+            "label_text_width": 108,
+            "first_cell": "synthetic_channel"
+          },
+          {
+            "column": 1,
+            "label": "students_total",
+            "header_width": 100,
+            "label_text_width": 82,
+            "first_cell": "8"
+          },
+          {
+            "column": 2,
+            "label": "history_already_allocated",
+            "header_width": 100,
+            "label_text_width": 146,
+            "first_cell": "4"
+          },
+          {
+            "column": 3,
+            "label": "history_no_history_match",
+            "header_width": 100,
+            "label_text_width": 147,
+            "first_cell": "2"
+          },
+          {
+            "column": 4,
+            "label": "history_missing_or_invalid",
+            "header_width": 100,
+            "label_text_width": 151,
+            "first_cell": "2"
+          },
+          {
+            "column": 5,
+            "label": "same_history_mentor_true",
+            "header_width": 100,
+            "label_text_width": 153,
+            "first_cell": "3"
+          },
+          {
+            "column": 6,
+            "label": "same_history_mentor_ratio",
+            "header_width": 100,
+            "label_text_width": 156,
+            "first_cell": "0.375"
+          }
+        ],
+        "horizontal_max": 1,
+        "horizontal_value": 0,
+        "scroll_policy": "ScrollBarPolicy.ScrollBarAsNeeded"
+      }
+    },
+    {
+      "case": "history-dark-fa-rightmost",
+      "family": "history",
+      "image": "history-dark-fa-rightmost.png",
+      "image_pixels": [
+        720,
+        320
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Vazirmatn",
+      "font_point_size": 10.0,
+      "application_font": "Vazirmatn",
+      "layout_direction": "rtl",
+      "widget_direction": "rtl",
+      "theme": "dark",
+      "language": "fa",
+      "window_size": [
+        720,
+        320
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "table": {
+        "rows": 1,
+        "columns": [
+          {
+            "column": 0,
+            "label": "allocation_channel",
+            "header_width": 100,
+            "label_text_width": 108,
+            "first_cell": "synthetic_channel"
+          },
+          {
+            "column": 1,
+            "label": "students_total",
+            "header_width": 100,
+            "label_text_width": 82,
+            "first_cell": "8"
+          },
+          {
+            "column": 2,
+            "label": "history_already_allocated",
+            "header_width": 100,
+            "label_text_width": 146,
+            "first_cell": "4"
+          },
+          {
+            "column": 3,
+            "label": "history_no_history_match",
+            "header_width": 100,
+            "label_text_width": 147,
+            "first_cell": "2"
+          },
+          {
+            "column": 4,
+            "label": "history_missing_or_invalid",
+            "header_width": 100,
+            "label_text_width": 151,
+            "first_cell": "2"
+          },
+          {
+            "column": 5,
+            "label": "same_history_mentor_true",
+            "header_width": 100,
+            "label_text_width": 153,
+            "first_cell": "3"
+          },
+          {
+            "column": 6,
+            "label": "same_history_mentor_ratio",
+            "header_width": 100,
+            "label_text_width": 156,
+            "first_cell": "0.375"
+          }
+        ],
+        "horizontal_max": 1,
+        "horizontal_value": 1,
+        "scroll_policy": "ScrollBarPolicy.ScrollBarAsNeeded"
+      }
+    },
+    {
+      "case": "history-dark-fa-long-value-control",
+      "family": "history",
+      "image": "history-dark-fa-long-value-control.png",
+      "image_pixels": [
+        720,
+        320
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Vazirmatn",
+      "font_point_size": 10.0,
+      "application_font": "Vazirmatn",
+      "layout_direction": "rtl",
+      "widget_direction": "rtl",
+      "theme": "dark",
+      "language": "fa",
+      "window_size": [
+        720,
+        320
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "overflow_control": true,
+      "table": {
+        "rows": 1,
+        "columns": [
+          {
+            "column": 0,
+            "label": "allocation_channel",
+            "header_width": 100,
+            "label_text_width": 108,
+            "first_cell": "synthetic_channel_EXTREMELY_LONG_CHANNEL_NAME__EXTREMELY_LONG_CHANNEL_NAME__EXTREMELY_LONG_CHANNEL_NAME__EXTREMELY_LONG_CHANNEL_NAME__EXTREMELY_LONG_CHANNEL_NAME__EXTREMELY_LONG_CHANNEL_NAME__EXTREMELY_LONG_CHANNEL_NAME__EXTREMELY_LONG_CHANNEL_NAME_"
+          },
+          {
+            "column": 1,
+            "label": "students_total",
+            "header_width": 100,
+            "label_text_width": 82,
+            "first_cell": "8"
+          },
+          {
+            "column": 2,
+            "label": "history_already_allocated",
+            "header_width": 100,
+            "label_text_width": 146,
+            "first_cell": "4"
+          },
+          {
+            "column": 3,
+            "label": "history_no_history_match",
+            "header_width": 100,
+            "label_text_width": 147,
+            "first_cell": "2"
+          },
+          {
+            "column": 4,
+            "label": "history_missing_or_invalid",
+            "header_width": 100,
+            "label_text_width": 151,
+            "first_cell": "2"
+          },
+          {
+            "column": 5,
+            "label": "same_history_mentor_true",
+            "header_width": 100,
+            "label_text_width": 153,
+            "first_cell": "3"
+          },
+          {
+            "column": 6,
+            "label": "same_history_mentor_ratio",
+            "header_width": 100,
+            "label_text_width": 156,
+            "first_cell": "0.375"
+          }
+        ],
+        "horizontal_max": 1,
+        "horizontal_value": 1,
+        "scroll_policy": "ScrollBarPolicy.ScrollBarAsNeeded"
+      }
+    },
+    {
+      "case": "operation-dark-fa-ready",
+      "family": "operation",
+      "image": "operation-dark-fa-ready.png",
+      "image_pixels": [
+        1200,
+        800
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Vazirmatn",
+      "font_point_size": 10.0,
+      "application_font": "Vazirmatn",
+      "layout_direction": "rtl",
+      "widget_direction": "rtl",
+      "theme": "dark",
+      "language": "fa",
+      "window_size": [
+        1200,
+        800
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "operation_state": "ready",
+      "progress_value": -1,
+      "progress_min": 0,
+      "progress_max": 100,
+      "progress_busy_property": false,
+      "progress_text": "-1% | آماده",
+      "status_text": "آماده",
+      "stage_badge": "آماده",
+      "stage_detail": "برای شروع یکی از سناریوها را انتخاب کنید",
+      "diagnostics_expanded": false,
+      "allocate_enabled": true,
+      "build_enabled": true,
+      "focus_widget": null
+    },
+    {
+      "case": "operation-dark-fa-missing-school-warning",
+      "family": "operation",
+      "image": "operation-dark-fa-missing-school-warning.png",
+      "image_pixels": [
+        400,
+        110
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Vazirmatn",
+      "font_point_size": 10.0,
+      "application_font": "Vazirmatn",
+      "layout_direction": "rtl",
+      "widget_direction": "rtl",
+      "theme": "dark",
+      "language": "fa",
+      "window_size": [
+        400,
+        110
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "operation_state": "missing_school_reference",
+      "warning_title": "داده مرجع آماده نیست",
+      "warning_text": "پیش از اجرا داده‌های School/GroupCode را در تب پایگاه داده وارد یا به‌روزرسانی کنید."
+    },
+    {
+      "case": "operation-dark-fa-after-missing-school",
+      "family": "operation",
+      "image": "operation-dark-fa-after-missing-school.png",
+      "image_pixels": [
+        1200,
+        800
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Vazirmatn",
+      "font_point_size": 10.0,
+      "application_font": "Vazirmatn",
+      "layout_direction": "rtl",
+      "widget_direction": "rtl",
+      "theme": "dark",
+      "language": "fa",
+      "window_size": [
+        1200,
+        800
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "operation_state": "after_missing_school",
+      "progress_value": -1,
+      "progress_min": 0,
+      "progress_max": 100,
+      "progress_busy_property": false,
+      "progress_text": "-1% | آماده",
+      "status_text": "آماده",
+      "stage_badge": "آماده",
+      "stage_detail": "برای شروع یکی از سناریوها را انتخاب کنید",
+      "diagnostics_expanded": false,
+      "allocate_enabled": true,
+      "build_enabled": true,
+      "focus_widget": null
+    },
+    {
+      "case": "operation-dark-fa-indeterminate",
+      "family": "operation",
+      "image": "operation-dark-fa-indeterminate.png",
+      "image_pixels": [
+        1200,
+        800
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Vazirmatn",
+      "font_point_size": 10.0,
+      "application_font": "Vazirmatn",
+      "layout_direction": "rtl",
+      "widget_direction": "rtl",
+      "theme": "dark",
+      "language": "fa",
+      "window_size": [
+        1200,
+        800
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "operation_state": "indeterminate_running",
+      "progress_value": 0,
+      "progress_min": 0,
+      "progress_max": 0,
+      "progress_busy_property": true,
+      "progress_text": "0% | Synthetic verification only در حال اجرا…",
+      "status_text": "Synthetic verification only در حال اجرا…",
+      "stage_badge": "Synthetic verification only",
+      "stage_detail": "در انتظار گزارش پیشرفت",
+      "diagnostics_expanded": false,
+      "allocate_enabled": false,
+      "build_enabled": false,
+      "focus_widget": null
+    },
+    {
+      "case": "operation-dark-fa-completed",
+      "family": "operation",
+      "image": "operation-dark-fa-completed.png",
+      "image_pixels": [
+        1200,
+        800
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Vazirmatn",
+      "font_point_size": 10.0,
+      "application_font": "Vazirmatn",
+      "layout_direction": "rtl",
+      "widget_direction": "rtl",
+      "theme": "dark",
+      "language": "fa",
+      "window_size": [
+        1200,
+        800
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "operation_state": "synthetic_worker_completed",
+      "progress_value": 100,
+      "progress_min": 0,
+      "progress_max": 100,
+      "progress_busy_property": false,
+      "progress_text": "100% | کامل",
+      "status_text": "کامل",
+      "stage_badge": "Synthetic verification only",
+      "stage_detail": "عملیات با موفقیت پایان یافت",
+      "diagnostics_expanded": false,
+      "allocate_enabled": true,
+      "build_enabled": true,
+      "focus_widget": null
+    },
+    {
+      "case": "operation-dark-fa-controlled-failure",
+      "family": "operation",
+      "image": "operation-dark-fa-controlled-failure.png",
+      "image_pixels": [
+        1200,
+        800
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Vazirmatn",
+      "font_point_size": 10.0,
+      "application_font": "Vazirmatn",
+      "layout_direction": "rtl",
+      "widget_direction": "rtl",
+      "theme": "dark",
+      "language": "fa",
+      "window_size": [
+        1200,
+        800
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "operation_state": "synthetic_worker_failed",
+      "progress_value": 0,
+      "progress_min": 0,
+      "progress_max": 100,
+      "progress_busy_property": false,
+      "progress_text": "0% | خطا",
+      "status_text": "خطا",
+      "stage_badge": "خطا",
+      "stage_detail": "Synthetic controlled failure — no allocation executed",
+      "diagnostics_expanded": true,
+      "allocate_enabled": true,
+      "build_enabled": true,
+      "focus_widget": ""
+    },
+    {
+      "case": "operation-dark-fa-failure-modal",
+      "family": "operation",
+      "image": "operation-dark-fa-failure-modal.png",
+      "image_pixels": [
+        392,
+        110
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Vazirmatn",
+      "font_point_size": 10.0,
+      "application_font": "Vazirmatn",
+      "layout_direction": "rtl",
+      "widget_direction": "rtl",
+      "theme": "dark",
+      "language": "fa",
+      "window_size": [
+        392,
+        110
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "operation_state": "failure_message",
+      "message": "Synthetic controlled failure — no allocation executed"
+    },
+    {
+      "case": "explain-dark-fa-sample",
+      "family": "explain",
+      "image": "explain-dark-fa-sample.png",
+      "image_pixels": [
+        1200,
+        800
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Vazirmatn",
+      "font_point_size": 10.0,
+      "application_font": "Vazirmatn",
+      "layout_direction": "rtl",
+      "widget_direction": "rtl",
+      "theme": "dark",
+      "language": "fa",
+      "window_size": [
+        1200,
+        800
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "tables": [
+        {
+          "rows": 2,
+          "columns": [
+            {
+              "column": 0,
+              "label": "student_id",
+              "header_width": 100,
+              "label_text_width": 60,
+              "first_cell": "STU-125"
+            },
+            {
+              "column": 1,
+              "label": "mentor_id",
+              "header_width": 100,
+              "label_text_width": 58,
+              "first_cell": "MENT-009"
+            },
+            {
+              "column": 2,
+              "label": "rule_tag",
+              "header_width": 100,
+              "label_text_width": 46,
+              "first_cell": "R_CAPACITY"
+            },
+            {
+              "column": 3,
+              "label": "reason",
+              "header_width": 100,
+              "label_text_width": 40,
+              "first_cell": "ظرفیت منطقه"
+            },
+            {
+              "column": 4,
+              "label": "score",
+              "header_width": 100,
+              "label_text_width": 32,
+              "first_cell": "0.82"
+            },
+            {
+              "column": 5,
+              "label": "trace_step",
+              "header_width": 100,
+              "label_text_width": 60,
+              "first_cell": "capacity_gate"
+            }
+          ],
+          "horizontal_max": 0,
+          "horizontal_value": 0,
+          "scroll_policy": "ScrollBarPolicy.ScrollBarAsNeeded"
+        }
+      ],
+      "note": "Visual inspection of existing example only; no synthesized Explain semantics"
+    },
+    {
+      "case": "settings-dark-en-720x760-top",
+      "family": "settings",
+      "image": "settings-dark-en-720x760-top.png",
+      "image_pixels": [
+        720,
+        760
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Segoe UI",
+      "font_point_size": 10.0,
+      "application_font": "Segoe UI",
+      "layout_direction": "ltr",
+      "widget_direction": "ltr",
+      "theme": "dark",
+      "language": "en",
+      "window_size": [
+        720,
+        760
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "entrypoint": "actionPresentationSettings",
+      "category_names": [
+        "diagnosticsCategory_diagnostics",
+        "diagnosticsCategory_analysis",
+        "diagnosticsCategory_advanced"
+      ],
+      "checks": {
+        "enable_trace_debug_sheets": {
+          "checked": false,
+          "impact_text": "DIAGNOSTIC ONLY — does not change allocation results",
+          "impact_kind": "diagnostic",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 0,
+            "bar_maximum": 637,
+            "target": {
+              "x": 26,
+              "y": 429,
+              "width": 624,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "enable_mentor_trace_debug": {
+          "checked": false,
+          "impact_text": "DIAGNOSTIC ONLY",
+          "impact_kind": "diagnostic",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 0,
+            "bar_maximum": 637,
+            "target": {
+              "x": 26,
+              "y": 531,
+              "width": 624,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "enable_pool_governance_trace": {
+          "checked": false,
+          "impact_text": "DIAGNOSTIC ONLY",
+          "impact_kind": "diagnostic",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 0,
+            "bar_maximum": 637,
+            "target": {
+              "x": 26,
+              "y": 633,
+              "width": 624,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "enable_bucket_trace": {
+          "checked": false,
+          "impact_text": "DIAGNOSTIC ONLY — distinct from Use Join Buckets",
+          "impact_kind": "diagnostic",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 74,
+            "bar_maximum": 637,
+            "target": {
+              "x": 26,
+              "y": 661,
+              "width": 624,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "enable_trace_export": {
+          "checked": false,
+          "impact_text": "DIAGNOSTIC OUTPUT ONLY",
+          "impact_kind": "diagnostic",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 176,
+            "bar_maximum": 637,
+            "target": {
+              "x": 26,
+              "y": 661,
+              "width": 624,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "enable_history_metrics": {
+          "checked": false,
+          "impact_text": "ANALYSIS ONLY — disabling it does not disable history-aware allocation",
+          "impact_kind": "analysis",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 332,
+            "bar_maximum": 637,
+            "target": {
+              "x": 26,
+              "y": 661,
+              "width": 624,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "enable_qa_pool_coverage_rules": {
+          "checked": false,
+          "impact_text": "MAY AFFECT VALIDATION PASS/FAIL",
+          "impact_kind": "validation",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 488,
+            "bar_maximum": 637,
+            "target": {
+              "x": 26,
+              "y": 661,
+              "width": 624,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "use_join_buckets": {
+          "checked": false,
+          "impact_text": "ADVANCED ALGORITHMIC / PERFORMANCE OPTION — changes execution path",
+          "impact_kind": "algorithmic",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 611,
+            "bar_maximum": 637,
+            "target": {
+              "x": 26,
+              "y": 661,
+              "width": 624,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        }
+      },
+      "scroll_maximum": 637
+    },
+    {
+      "case": "settings-dark-en-720x760-bottom",
+      "family": "settings",
+      "image": "settings-dark-en-720x760-bottom.png",
+      "image_pixels": [
+        720,
+        760
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Segoe UI",
+      "font_point_size": 10.0,
+      "application_font": "Segoe UI",
+      "layout_direction": "ltr",
+      "widget_direction": "ltr",
+      "theme": "dark",
+      "language": "en",
+      "window_size": [
+        720,
+        760
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "scroll_value": 637,
+      "last_impact": "ADVANCED ALGORITHMIC / PERFORMANCE OPTION — changes execution path"
+    },
+    {
+      "case": "settings-dark-en-720x760-guide-fa",
+      "family": "guide",
+      "image": "settings-dark-en-720x760-guide-fa.png",
+      "image_pixels": [
+        760,
+        620
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Segoe UI",
+      "font_point_size": 10.0,
+      "application_font": "Segoe UI",
+      "layout_direction": "ltr",
+      "widget_direction": "ltr",
+      "theme": "dark",
+      "language": "en",
+      "window_size": [
+        760,
+        620
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "active_tab": "fa",
+      "guide_module": "app.ui.preferences.settings_dialog",
+      "reader_direction": "rtl",
+      "reader_scroll_max": 1431,
+      "reader_characters": 5338
+    },
+    {
+      "case": "settings-dark-en-720x760-guide-en",
+      "family": "guide",
+      "image": "settings-dark-en-720x760-guide-en.png",
+      "image_pixels": [
+        760,
+        620
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Segoe UI",
+      "font_point_size": 10.0,
+      "application_font": "Segoe UI",
+      "layout_direction": "ltr",
+      "widget_direction": "ltr",
+      "theme": "dark",
+      "language": "en",
+      "window_size": [
+        760,
+        620
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "active_tab": "en",
+      "guide_module": "app.ui.preferences.settings_dialog",
+      "reader_direction": "ltr",
+      "reader_scroll_max": 1494,
+      "reader_characters": 5608
+    },
+    {
+      "case": "settings-dark-en-620x560-top",
+      "family": "settings",
+      "image": "settings-dark-en-620x560-top.png",
+      "image_pixels": [
+        620,
+        560
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Segoe UI",
+      "font_point_size": 10.0,
+      "application_font": "Segoe UI",
+      "layout_direction": "ltr",
+      "widget_direction": "ltr",
+      "theme": "dark",
+      "language": "en",
+      "window_size": [
+        620,
+        560
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "entrypoint": "actionPresentationSettings",
+      "category_names": [
+        "diagnosticsCategory_diagnostics",
+        "diagnosticsCategory_analysis",
+        "diagnosticsCategory_advanced"
+      ],
+      "checks": {
+        "enable_trace_debug_sheets": {
+          "checked": false,
+          "impact_text": "DIAGNOSTIC ONLY — does not change allocation results",
+          "impact_kind": "diagnostic",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 0,
+            "bar_maximum": 879,
+            "target": {
+              "x": 26,
+              "y": 429,
+              "width": 524,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "enable_mentor_trace_debug": {
+          "checked": false,
+          "impact_text": "DIAGNOSTIC ONLY",
+          "impact_kind": "diagnostic",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 70,
+            "bar_maximum": 879,
+            "target": {
+              "x": 26,
+              "y": 461,
+              "width": 524,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "enable_pool_governance_trace": {
+          "checked": false,
+          "impact_text": "DIAGNOSTIC ONLY",
+          "impact_kind": "diagnostic",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 172,
+            "bar_maximum": 879,
+            "target": {
+              "x": 26,
+              "y": 461,
+              "width": 524,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "enable_bucket_trace": {
+          "checked": false,
+          "impact_text": "DIAGNOSTIC ONLY — distinct from Use Join Buckets",
+          "impact_kind": "diagnostic",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 295,
+            "bar_maximum": 879,
+            "target": {
+              "x": 26,
+              "y": 461,
+              "width": 524,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "enable_trace_export": {
+          "checked": false,
+          "impact_text": "DIAGNOSTIC OUTPUT ONLY",
+          "impact_kind": "diagnostic",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 397,
+            "bar_maximum": 879,
+            "target": {
+              "x": 26,
+              "y": 461,
+              "width": 524,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "enable_history_metrics": {
+          "checked": false,
+          "impact_text": "ANALYSIS ONLY — disabling it does not disable history-aware allocation",
+          "impact_kind": "analysis",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 553,
+            "bar_maximum": 879,
+            "target": {
+              "x": 26,
+              "y": 461,
+              "width": 524,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "enable_qa_pool_coverage_rules": {
+          "checked": false,
+          "impact_text": "MAY AFFECT VALIDATION PASS/FAIL",
+          "impact_kind": "validation",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 730,
+            "bar_maximum": 879,
+            "target": {
+              "x": 26,
+              "y": 461,
+              "width": 524,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        },
+        "use_join_buckets": {
+          "checked": false,
+          "impact_text": "ADVANCED ALGORITHMIC / PERFORMANCE OPTION — changes execution path",
+          "impact_kind": "algorithmic",
+          "focus_policy": 11,
+          "scroll_reachability": {
+            "bar_value": 853,
+            "bar_maximum": 879,
+            "target": {
+              "x": 26,
+              "y": 461,
+              "width": 524,
+              "height": 21,
+              "contained": true,
+              "visible": true
+            }
+          }
+        }
+      },
+      "scroll_maximum": 879
+    },
+    {
+      "case": "settings-dark-en-620x560-bottom",
+      "family": "settings",
+      "image": "settings-dark-en-620x560-bottom.png",
+      "image_pixels": [
+        620,
+        560
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Segoe UI",
+      "font_point_size": 10.0,
+      "application_font": "Segoe UI",
+      "layout_direction": "ltr",
+      "widget_direction": "ltr",
+      "theme": "dark",
+      "language": "en",
+      "window_size": [
+        620,
+        560
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "scroll_value": 879,
+      "last_impact": "ADVANCED ALGORITHMIC / PERFORMANCE OPTION — changes execution path"
+    },
+    {
+      "case": "settings-dark-en-620x560-synthetic-overflow",
+      "family": "settings",
+      "image": "settings-dark-en-620x560-synthetic-overflow.png",
+      "image_pixels": [
+        620,
+        560
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Segoe UI",
+      "font_point_size": 10.0,
+      "application_font": "Segoe UI",
+      "layout_direction": "ltr",
+      "widget_direction": "ltr",
+      "theme": "dark",
+      "language": "en",
+      "window_size": [
+        620,
+        560
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "overflow_control": true,
+      "overflow_text_length": 912,
+      "target": {
+        "x": 26,
+        "y": 388,
+        "width": 524,
+        "height": 42,
+        "contained": true,
+        "visible": true
+      }
+    },
+    {
+      "case": "settings-dark-en-620x560-guide-fa",
+      "family": "guide",
+      "image": "settings-dark-en-620x560-guide-fa.png",
+      "image_pixels": [
+        760,
+        620
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Segoe UI",
+      "font_point_size": 10.0,
+      "application_font": "Segoe UI",
+      "layout_direction": "ltr",
+      "widget_direction": "ltr",
+      "theme": "dark",
+      "language": "en",
+      "window_size": [
+        760,
+        620
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "active_tab": "fa",
+      "guide_module": "app.ui.preferences.settings_dialog",
+      "reader_direction": "rtl",
+      "reader_scroll_max": 1431,
+      "reader_characters": 5338
+    },
+    {
+      "case": "settings-dark-en-620x560-guide-en",
+      "family": "guide",
+      "image": "settings-dark-en-620x560-guide-en.png",
+      "image_pixels": [
+        760,
+        620
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Segoe UI",
+      "font_point_size": 10.0,
+      "application_font": "Segoe UI",
+      "layout_direction": "ltr",
+      "widget_direction": "ltr",
+      "theme": "dark",
+      "language": "en",
+      "window_size": [
+        760,
+        620
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "active_tab": "en",
+      "guide_module": "app.ui.preferences.settings_dialog",
+      "reader_direction": "ltr",
+      "reader_scroll_max": 1494,
+      "reader_characters": 5608
+    },
+    {
+      "case": "history-dark-en-empty",
+      "family": "history",
+      "image": "history-dark-en-empty.png",
+      "image_pixels": [
+        720,
+        320
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Segoe UI",
+      "font_point_size": 10.0,
+      "application_font": "Segoe UI",
+      "layout_direction": "ltr",
+      "widget_direction": "ltr",
+      "theme": "dark",
+      "language": "en",
+      "window_size": [
+        720,
+        320
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "entrypoint": "actionHistoryMetrics",
+      "dialog_module": "app.ui.history_metrics",
+      "table": {
+        "rows": 0,
+        "columns": [
+          {
+            "column": 0,
+            "label": "allocation_channel",
+            "header_width": 100,
+            "label_text_width": 108,
+            "first_cell": ""
+          },
+          {
+            "column": 1,
+            "label": "students_total",
+            "header_width": 100,
+            "label_text_width": 82,
+            "first_cell": ""
+          },
+          {
+            "column": 2,
+            "label": "history_already_allocated",
+            "header_width": 100,
+            "label_text_width": 146,
+            "first_cell": ""
+          },
+          {
+            "column": 3,
+            "label": "history_no_history_match",
+            "header_width": 100,
+            "label_text_width": 147,
+            "first_cell": ""
+          },
+          {
+            "column": 4,
+            "label": "history_missing_or_invalid",
+            "header_width": 100,
+            "label_text_width": 151,
+            "first_cell": ""
+          },
+          {
+            "column": 5,
+            "label": "same_history_mentor_true",
+            "header_width": 100,
+            "label_text_width": 153,
+            "first_cell": ""
+          },
+          {
+            "column": 6,
+            "label": "same_history_mentor_ratio",
+            "header_width": 100,
+            "label_text_width": 156,
+            "first_cell": ""
+          }
+        ],
+        "horizontal_max": 6,
+        "horizontal_value": 0,
+        "scroll_policy": "ScrollBarPolicy.ScrollBarAsNeeded"
+      }
+    },
+    {
+      "case": "history-dark-en-populated",
+      "family": "history",
+      "image": "history-dark-en-populated.png",
+      "image_pixels": [
+        720,
+        320
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Segoe UI",
+      "font_point_size": 10.0,
+      "application_font": "Segoe UI",
+      "layout_direction": "ltr",
+      "widget_direction": "ltr",
+      "theme": "dark",
+      "language": "en",
+      "window_size": [
+        720,
+        320
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "synthetic_metrics": true,
+      "table": {
+        "rows": 1,
+        "columns": [
+          {
+            "column": 0,
+            "label": "allocation_channel",
+            "header_width": 100,
+            "label_text_width": 108,
+            "first_cell": "synthetic_channel"
+          },
+          {
+            "column": 1,
+            "label": "students_total",
+            "header_width": 100,
+            "label_text_width": 82,
+            "first_cell": "8"
+          },
+          {
+            "column": 2,
+            "label": "history_already_allocated",
+            "header_width": 100,
+            "label_text_width": 146,
+            "first_cell": "4"
+          },
+          {
+            "column": 3,
+            "label": "history_no_history_match",
+            "header_width": 100,
+            "label_text_width": 147,
+            "first_cell": "2"
+          },
+          {
+            "column": 4,
+            "label": "history_missing_or_invalid",
+            "header_width": 100,
+            "label_text_width": 151,
+            "first_cell": "2"
+          },
+          {
+            "column": 5,
+            "label": "same_history_mentor_true",
+            "header_width": 100,
+            "label_text_width": 153,
+            "first_cell": "3"
+          },
+          {
+            "column": 6,
+            "label": "same_history_mentor_ratio",
+            "header_width": 100,
+            "label_text_width": 156,
+            "first_cell": "0.375"
+          }
+        ],
+        "horizontal_max": 1,
+        "horizontal_value": 0,
+        "scroll_policy": "ScrollBarPolicy.ScrollBarAsNeeded"
+      }
+    },
+    {
+      "case": "history-dark-en-rightmost",
+      "family": "history",
+      "image": "history-dark-en-rightmost.png",
+      "image_pixels": [
+        720,
+        320
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Segoe UI",
+      "font_point_size": 10.0,
+      "application_font": "Segoe UI",
+      "layout_direction": "ltr",
+      "widget_direction": "ltr",
+      "theme": "dark",
+      "language": "en",
+      "window_size": [
+        720,
+        320
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "table": {
+        "rows": 1,
+        "columns": [
+          {
+            "column": 0,
+            "label": "allocation_channel",
+            "header_width": 100,
+            "label_text_width": 108,
+            "first_cell": "synthetic_channel"
+          },
+          {
+            "column": 1,
+            "label": "students_total",
+            "header_width": 100,
+            "label_text_width": 82,
+            "first_cell": "8"
+          },
+          {
+            "column": 2,
+            "label": "history_already_allocated",
+            "header_width": 100,
+            "label_text_width": 146,
+            "first_cell": "4"
+          },
+          {
+            "column": 3,
+            "label": "history_no_history_match",
+            "header_width": 100,
+            "label_text_width": 147,
+            "first_cell": "2"
+          },
+          {
+            "column": 4,
+            "label": "history_missing_or_invalid",
+            "header_width": 100,
+            "label_text_width": 151,
+            "first_cell": "2"
+          },
+          {
+            "column": 5,
+            "label": "same_history_mentor_true",
+            "header_width": 100,
+            "label_text_width": 153,
+            "first_cell": "3"
+          },
+          {
+            "column": 6,
+            "label": "same_history_mentor_ratio",
+            "header_width": 100,
+            "label_text_width": 156,
+            "first_cell": "0.375"
+          }
+        ],
+        "horizontal_max": 1,
+        "horizontal_value": 1,
+        "scroll_policy": "ScrollBarPolicy.ScrollBarAsNeeded"
+      }
+    },
+    {
+      "case": "history-dark-en-long-value-control",
+      "family": "history",
+      "image": "history-dark-en-long-value-control.png",
+      "image_pixels": [
+        720,
+        320
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Segoe UI",
+      "font_point_size": 10.0,
+      "application_font": "Segoe UI",
+      "layout_direction": "ltr",
+      "widget_direction": "ltr",
+      "theme": "dark",
+      "language": "en",
+      "window_size": [
+        720,
+        320
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "overflow_control": true,
+      "table": {
+        "rows": 1,
+        "columns": [
+          {
+            "column": 0,
+            "label": "allocation_channel",
+            "header_width": 100,
+            "label_text_width": 108,
+            "first_cell": "synthetic_channel_EXTREMELY_LONG_CHANNEL_NAME__EXTREMELY_LONG_CHANNEL_NAME__EXTREMELY_LONG_CHANNEL_NAME__EXTREMELY_LONG_CHANNEL_NAME__EXTREMELY_LONG_CHANNEL_NAME__EXTREMELY_LONG_CHANNEL_NAME__EXTREMELY_LONG_CHANNEL_NAME__EXTREMELY_LONG_CHANNEL_NAME_"
+          },
+          {
+            "column": 1,
+            "label": "students_total",
+            "header_width": 100,
+            "label_text_width": 82,
+            "first_cell": "8"
+          },
+          {
+            "column": 2,
+            "label": "history_already_allocated",
+            "header_width": 100,
+            "label_text_width": 146,
+            "first_cell": "4"
+          },
+          {
+            "column": 3,
+            "label": "history_no_history_match",
+            "header_width": 100,
+            "label_text_width": 147,
+            "first_cell": "2"
+          },
+          {
+            "column": 4,
+            "label": "history_missing_or_invalid",
+            "header_width": 100,
+            "label_text_width": 151,
+            "first_cell": "2"
+          },
+          {
+            "column": 5,
+            "label": "same_history_mentor_true",
+            "header_width": 100,
+            "label_text_width": 153,
+            "first_cell": "3"
+          },
+          {
+            "column": 6,
+            "label": "same_history_mentor_ratio",
+            "header_width": 100,
+            "label_text_width": 156,
+            "first_cell": "0.375"
+          }
+        ],
+        "horizontal_max": 1,
+        "horizontal_value": 1,
+        "scroll_policy": "ScrollBarPolicy.ScrollBarAsNeeded"
+      }
+    },
+    {
+      "case": "operation-dark-en-ready",
+      "family": "operation",
+      "image": "operation-dark-en-ready.png",
+      "image_pixels": [
+        1200,
+        800
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Segoe UI",
+      "font_point_size": 10.0,
+      "application_font": "Segoe UI",
+      "layout_direction": "ltr",
+      "widget_direction": "ltr",
+      "theme": "dark",
+      "language": "en",
+      "window_size": [
+        1200,
+        800
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "operation_state": "ready",
+      "progress_value": -1,
+      "progress_min": 0,
+      "progress_max": 100,
+      "progress_busy_property": false,
+      "progress_text": "-1% | Ready",
+      "status_text": "Ready",
+      "stage_badge": "Ready",
+      "stage_detail": "Select a scenario to begin",
+      "diagnostics_expanded": false,
+      "allocate_enabled": true,
+      "build_enabled": true,
+      "focus_widget": null
+    },
+    {
+      "case": "operation-dark-en-missing-school-warning",
+      "family": "operation",
+      "image": "operation-dark-en-missing-school-warning.png",
+      "image_pixels": [
+        400,
+        110
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Segoe UI",
+      "font_point_size": 10.0,
+      "application_font": "Segoe UI",
+      "layout_direction": "ltr",
+      "widget_direction": "ltr",
+      "theme": "dark",
+      "language": "en",
+      "window_size": [
+        400,
+        110
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "operation_state": "missing_school_reference",
+      "warning_title": "Reference data not ready",
+      "warning_text": "Import or update School/GroupCode data via the Database tab before running."
+    },
+    {
+      "case": "operation-dark-en-after-missing-school",
+      "family": "operation",
+      "image": "operation-dark-en-after-missing-school.png",
+      "image_pixels": [
+        1200,
+        800
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Segoe UI",
+      "font_point_size": 10.0,
+      "application_font": "Segoe UI",
+      "layout_direction": "ltr",
+      "widget_direction": "ltr",
+      "theme": "dark",
+      "language": "en",
+      "window_size": [
+        1200,
+        800
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "operation_state": "after_missing_school",
+      "progress_value": -1,
+      "progress_min": 0,
+      "progress_max": 100,
+      "progress_busy_property": false,
+      "progress_text": "-1% | Ready",
+      "status_text": "Ready",
+      "stage_badge": "Ready",
+      "stage_detail": "Select a scenario to begin",
+      "diagnostics_expanded": false,
+      "allocate_enabled": true,
+      "build_enabled": true,
+      "focus_widget": null
+    },
+    {
+      "case": "operation-dark-en-indeterminate",
+      "family": "operation",
+      "image": "operation-dark-en-indeterminate.png",
+      "image_pixels": [
+        1200,
+        800
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Segoe UI",
+      "font_point_size": 10.0,
+      "application_font": "Segoe UI",
+      "layout_direction": "ltr",
+      "widget_direction": "ltr",
+      "theme": "dark",
+      "language": "en",
+      "window_size": [
+        1200,
+        800
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "operation_state": "indeterminate_running",
+      "progress_value": 0,
+      "progress_min": 0,
+      "progress_max": 0,
+      "progress_busy_property": true,
+      "progress_text": "0% | Synthetic verification only در حال اجرا…",
+      "status_text": "Synthetic verification only در حال اجرا…",
+      "stage_badge": "Synthetic verification only",
+      "stage_detail": "در انتظار گزارش پیشرفت",
+      "diagnostics_expanded": false,
+      "allocate_enabled": false,
+      "build_enabled": false,
+      "focus_widget": null
+    },
+    {
+      "case": "operation-dark-en-completed",
+      "family": "operation",
+      "image": "operation-dark-en-completed.png",
+      "image_pixels": [
+        1200,
+        800
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Segoe UI",
+      "font_point_size": 10.0,
+      "application_font": "Segoe UI",
+      "layout_direction": "ltr",
+      "widget_direction": "ltr",
+      "theme": "dark",
+      "language": "en",
+      "window_size": [
+        1200,
+        800
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "operation_state": "synthetic_worker_completed",
+      "progress_value": 100,
+      "progress_min": 0,
+      "progress_max": 100,
+      "progress_busy_property": false,
+      "progress_text": "100% | Complete",
+      "status_text": "Complete",
+      "stage_badge": "Synthetic verification only",
+      "stage_detail": "Operation completed successfully",
+      "diagnostics_expanded": false,
+      "allocate_enabled": true,
+      "build_enabled": true,
+      "focus_widget": null
+    },
+    {
+      "case": "operation-dark-en-controlled-failure",
+      "family": "operation",
+      "image": "operation-dark-en-controlled-failure.png",
+      "image_pixels": [
+        1200,
+        800
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Segoe UI",
+      "font_point_size": 10.0,
+      "application_font": "Segoe UI",
+      "layout_direction": "ltr",
+      "widget_direction": "ltr",
+      "theme": "dark",
+      "language": "en",
+      "window_size": [
+        1200,
+        800
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "operation_state": "synthetic_worker_failed",
+      "progress_value": 0,
+      "progress_min": 0,
+      "progress_max": 100,
+      "progress_busy_property": false,
+      "progress_text": "0% | Error",
+      "status_text": "Error",
+      "stage_badge": "Error",
+      "stage_detail": "Synthetic controlled failure — no allocation executed",
+      "diagnostics_expanded": true,
+      "allocate_enabled": true,
+      "build_enabled": true,
+      "focus_widget": ""
+    },
+    {
+      "case": "operation-dark-en-failure-modal",
+      "family": "operation",
+      "image": "operation-dark-en-failure-modal.png",
+      "image_pixels": [
+        392,
+        110
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Segoe UI",
+      "font_point_size": 10.0,
+      "application_font": "Segoe UI",
+      "layout_direction": "ltr",
+      "widget_direction": "ltr",
+      "theme": "dark",
+      "language": "en",
+      "window_size": [
+        392,
+        110
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "operation_state": "failure_message",
+      "message": "Synthetic controlled failure — no allocation executed"
+    },
+    {
+      "case": "explain-dark-en-sample",
+      "family": "explain",
+      "image": "explain-dark-en-sample.png",
+      "image_pixels": [
+        1200,
+        800
+      ],
+      "source_base_sha": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+      "captured_head_sha": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "os": "Windows-10-10.0.26100-SP0",
+      "python": "3.11.16",
+      "pyside6": "6.11.2",
+      "qt": "6.11.2",
+      "qpa_plugin": "offscreen",
+      "qstyle": "QStyleSheetStyle",
+      "qstyle_object_name": "",
+      "configured_base_qstyle": "Fusion",
+      "font_family": "Segoe UI",
+      "font_point_size": 10.0,
+      "application_font": "Segoe UI",
+      "layout_direction": "ltr",
+      "widget_direction": "ltr",
+      "theme": "dark",
+      "language": "en",
+      "window_size": [
+        1200,
+        800
+      ],
+      "dpr": 1.0,
+      "screen_dpr": 1.0,
+      "screen_logical_dpi": 96.0,
+      "qt_scale_factor": null,
+      "qt_auto_screen_scale_factor": null,
+      "tables": [
+        {
+          "rows": 2,
+          "columns": [
+            {
+              "column": 0,
+              "label": "student_id",
+              "header_width": 100,
+              "label_text_width": 60,
+              "first_cell": "STU-125"
+            },
+            {
+              "column": 1,
+              "label": "mentor_id",
+              "header_width": 100,
+              "label_text_width": 58,
+              "first_cell": "MENT-009"
+            },
+            {
+              "column": 2,
+              "label": "rule_tag",
+              "header_width": 100,
+              "label_text_width": 46,
+              "first_cell": "R_CAPACITY"
+            },
+            {
+              "column": 3,
+              "label": "reason",
+              "header_width": 100,
+              "label_text_width": 40,
+              "first_cell": "ظرفیت منطقه"
+            },
+            {
+              "column": 4,
+              "label": "score",
+              "header_width": 100,
+              "label_text_width": 32,
+              "first_cell": "0.82"
+            },
+            {
+              "column": 5,
+              "label": "trace_step",
+              "header_width": 100,
+              "label_text_width": 60,
+              "first_cell": "capacity_gate"
+            }
+          ],
+          "horizontal_max": 0,
+          "horizontal_value": 0,
+          "scroll_policy": "ScrollBarPolicy.ScrollBarAsNeeded"
+        }
+      ],
+      "note": "Visual inspection of existing example only; no synthesized Explain semantics"
+    }
+  ],
+  "failures": [],
+  "evidence_limits": [
+    "Offscreen QWidget.grab and programmatic focus are not real Windows desktop acceptance.",
+    "Synthetic Worker events prove UI lifecycle only; no allocation, persistence or CLI execution.",
+    "Visual usability and bilingual semantic quality require review of original PNGs.",
+    "Long-text controls are intentionally non-production mutations.",
+    "Stored-run HistoryMetricsDialog is not treated as reachable without a live entrypoint."
+  ]
+}

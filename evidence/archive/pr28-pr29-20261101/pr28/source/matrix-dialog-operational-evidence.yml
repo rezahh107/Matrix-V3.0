@@ -1,0 +1,164 @@
+name: Matrix dialog and operational evidence (isolated)
+
+on:
+  push:
+    branches:
+      - verify/matrix-dialog-operational-evidence-20261031
+  pull_request:
+    branches:
+      - main
+
+# Capture is always read-only, including for pull_request.
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    name: Capture actual PySide6 widgets on offscreen Windows
+    runs-on: windows-latest
+    timeout-minutes: 35
+    outputs:
+      capture_exit_code: ${{ steps.capture.outputs.exit_code }}
+    env:
+      QT_QPA_PLATFORM: offscreen
+      PYTEST_QT_API: pyside6
+      MATRIX2_TEMP_SKIP_QT_UI: "0"
+      PYTHONUTF8: "1"
+    steps:
+      - name: Checkout exact feature SHA (no persisted token)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify head and unchanged production base
+        shell: bash
+        env:
+          EXPECTED: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED"
+          git diff --name-only 782d178f5dc539bc078e04a1e67a10ad6ea5baa4 HEAD > changed-files.txt
+          cat changed-files.txt
+          if grep -E '^(app/|config/|resources/|tests/|docs/LAW|docs/Technical)' changed-files.txt; then
+            echo "Production/domain files changed in evidence-only branch" >&2
+            exit 1
+          fi
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.7"
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+            .python-version
+
+      - name: Set up Python
+        run: uv python install
+
+      - name: Sync exact locked environment
+        run: uv sync --locked
+
+      - name: Capture live UI scenarios and preserve partial failures
+        id: capture
+        shell: bash
+        run: |
+          # Never mix fresh output with existing evidence in the checked-out branch.
+          rm -rf evidence/ui/dialog-operational-20261031
+          set +e
+          uv run --locked python tools/capture_matrix_dialog_operational_evidence.py --output-dir evidence/ui/dialog-operational-20261031
+          result=$?
+          mkdir -p evidence/ui/dialog-operational-20261031
+          printf "capture_exit_code=%s\nsource_branch_commit=%s\n" "$result" "$(git rev-parse HEAD)" > evidence/ui/dialog-operational-20261031/runner-status.txt
+          echo "exit_code=$result" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Upload original PNGs and failures for review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: matrix-dialog-operational-evidence
+          path: evidence/ui/dialog-operational-20261031
+          if-no-files-found: error
+
+      - name: Mark incomplete evidence run as failed
+        shell: bash
+        run: |
+          code="$(sed -n 's/^capture_exit_code=//p' evidence/ui/dialog-operational-20261031/runner-status.txt)"
+          test "$code" = "0"
+
+  publish-evidence:
+    name: Publish branch-scoped evidence (push only)
+    needs: capture
+    # Preserve failed attempt evidence; never overwrite previously valid captures on failure.
+    if: ${{ always() && github.event_name == 'push' && github.repository == 'rezahh107/Matrix-V3.0' && github.ref == 'refs/heads/verify/matrix-dialog-operational-evidence-20261031' && needs.capture.outputs.capture_exit_code != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout exactly the triggering push commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Verify publisher is operating on the source commit
+        shell: bash
+        env:
+          EXPECTED: ${{ github.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED"
+
+      - name: Download evidence from this workflow run
+        uses: actions/download-artifact@v4
+        with:
+          name: matrix-dialog-operational-evidence
+          path: ${{ runner.temp }}/matrix-captured-evidence
+
+      - name: Validate provenance and publish only to evidence branch
+        shell: bash
+        env:
+          EXPECTED: ${{ github.sha }}
+          CAPTURE_EXIT_CODE: ${{ needs.capture.outputs.capture_exit_code }}
+          EVIDENCE_INPUT: ${{ runner.temp }}/matrix-captured-evidence
+        run: |
+          set -euo pipefail
+          source_dir="$EVIDENCE_INPUT"
+          target_dir="evidence/ui/dialog-operational-20261031"
+          test -f "$source_dir/runner-status.txt"
+          grep -Fx "source_branch_commit=$EXPECTED" "$source_dir/runner-status.txt"
+          grep -Fx "capture_exit_code=$CAPTURE_EXIT_CODE" "$source_dir/runner-status.txt"
+          mkdir -p "$target_dir"
+          if [[ "$CAPTURE_EXIT_CODE" == "0" ]]; then
+            python3 - "$source_dir/manifest.json" "$EXPECTED" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          data = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          assert data["captured_head_sha"] == sys.argv[2]
+          assert data["capture_count"] == 84
+          assert data["failure_count"] == 0
+          PY
+            find "$target_dir" -maxdepth 1 -type f \( -name '*.png' -o -name 'manifest.json' -o -name 'SUMMARY.md' -o -name 'runner-status.txt' \) -delete
+            cp -a "$source_dir/." "$target_dir/"
+          else
+            failed_dir="$target_dir/failed-attempts/$EXPECTED"
+            mkdir -p "$failed_dir"
+            cp -a "$source_dir/." "$failed_dir/"
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- "$target_dir"
+          if ! git diff --cached --quiet; then
+            git commit -m "evidence(ui): publish offscreen capture and failure provenance"
+            git push origin HEAD:refs/heads/verify/matrix-dialog-operational-evidence-20261031
+          fi
+          {
+            echo "Capture source commit: $EXPECTED"
+            echo "Evidence publication commit: $(git rev-parse HEAD)"
+            echo "Capture exit code: $CAPTURE_EXIT_CODE"
+          } >> "$GITHUB_STEP_SUMMARY"
