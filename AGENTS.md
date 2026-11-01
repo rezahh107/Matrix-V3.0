@@ -29,6 +29,20 @@ Presentation-only authorities inside `app/ui/**`:
 
 These presentation/diagnostics documents are subordinate to LAW/Technical SSoT and domain authorities. They do not define or override domain behavior.
 
+**Owner-approved product-delivery outcomes (2026-11-01):** The explicit section
+"Owner-approved Matrix delivery outcomes — 2026-11-01" in
+`docs/System_Vision_Scope_Smart_Student_Allocation_v1.0.md` defines additional
+operator-workflow, accessible/self-guided UI, high-fidelity Windows CI simulation,
+and governed application version/release success outcomes. This is an outcome
+reference, **not** a new domain LAW, alternative architecture, executed CI guard,
+release permission or claim of acceptance. It is subordinate to the Policy/LAW/
+Technical SSoT and to the existing UI presentation/design contracts. The older
+historical/Draft material elsewhere in that Vision file does not supersede the
+current domain or C2/V2 decisions. When planning implementation, preserve all
+existing product goals; treat these additions as approved destination but still
+INCOMPLETE until exercised and verified. Never publish/tag/merge without an
+appropriate explicit authorization.
+
 Machine hint:
 
 - When you need exact semantics (wildcards, capacity formula details, special cases),
