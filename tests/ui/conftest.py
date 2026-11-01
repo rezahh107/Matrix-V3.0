@@ -56,10 +56,62 @@ def qapp():
         gc.collect()
 
 
+def _dispose_test_windows(qapp, preexisting_windows):
+    """Destroy only windows created during this test, including hidden/closed ones.
+
+    Closing a QWidget is not destruction unless WA_DeleteOnClose is enabled.
+    Retain pre-test top-level windows and the shared QApplication. Never delete
+    an owner while any of its QThreads are still running.
+    """
+    from PySide6.QtCore import QEvent, QThread
+    from shiboken6 import isValid
+
+    retained_ids = {id(window) for window in preexisting_windows}
+    test_windows = [
+        window for window in qapp.topLevelWidgets()
+        if isValid(window) and id(window) not in retained_ids
+    ]
+    unsafe_windows = []
+    for window in test_windows:
+        if not isValid(window):
+            continue
+        window.close()  # Gives MainWindow.closeEvent its normal worker-shutdown path.
+        if not isValid(window):
+            continue
+        owned_threads = list(window.findChildren(QThread))
+        worker = getattr(window, "_worker", None)
+        if isinstance(worker, QThread):
+            owned_threads.append(worker)
+        owned_threads.extend(
+            loader for loader in (getattr(window, "_excel_loaders", ()) or ())
+            if isinstance(loader, QThread)
+        )
+        if any(isValid(thread) and thread.isRunning() for thread in owned_threads):
+            unsafe_windows.append(type(window).__name__)
+            continue
+        window.deleteLater()
+
+    qapp.processEvents()
+    qapp.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    qapp.processEvents()
+    gc.collect()
+    remaining = [
+        type(window).__name__ for window in test_windows if isValid(window)
+    ]
+    if unsafe_windows:
+        pytest.fail(
+            f"Refusing to destroy windows with running QThreads: {unsafe_windows}"
+        )
+    if remaining:
+        pytest.fail(f"Test-owned Qt windows survived teardown: {remaining}")
+
+
 @pytest.fixture(autouse=True)
 def _isolate_default_qsettings(qapp):
-    from PySide6.QtCore import QEvent, QSettings
+    from PySide6.QtCore import QSettings
 
+    # Strong references prevent wrapper identity reuse within the test.
+    preexisting_windows = tuple(qapp.topLevelWidgets())
     settings = QSettings()
     assert settings.status() == QSettings.Status.NoError
     settings.clear()
@@ -68,19 +120,7 @@ def _isolate_default_qsettings(qapp):
 
     yield
 
-    qapp.closeAllWindows()
-    qapp.processEvents()
-    qapp.sendPostedEvents()
-    qapp.processEvents()
-    # `sendPostedEvents()` deliberately skips DeferredDelete - Qt only delivers
-    # those when the event loop unwinds to the level that posted them, which
-    # never happens under pytest. Without an explicit flush every window a test
-    # built stays alive for the rest of the session, and `apply_global_font`
-    # walks `QApplication.allWidgets()` on each new window, so the suite gets
-    # quadratically slower and eventually trips over stale widget pointers.
-    qapp.sendPostedEvents(None, QEvent.Type.DeferredDelete)
-    qapp.processEvents()
-    gc.collect()
+    _dispose_test_windows(qapp, preexisting_windows)
 
     settings = QSettings()
     assert settings.status() == QSettings.Status.NoError
