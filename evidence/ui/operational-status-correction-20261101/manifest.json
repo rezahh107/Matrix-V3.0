@@ -1,0 +1,443 @@
+{
+  "head_sha": "01ce83dae875e81a9945781f066520484e5415f4",
+  "baseline_pr": 28,
+  "baseline_verified_commit": "782d178f5dc539bc078e04a1e67a10ad6ea5baa4",
+  "platform": "Windows-10-10.0.26100-SP0",
+  "mode": "synthetic Windows offscreen; not real-device interaction",
+  "capture_count": 24,
+  "pair_count": 16,
+  "cases": [
+    {
+      "name": "operation-light-fa-ready",
+      "state": "ready",
+      "caption": "آماده",
+      "status_pill": "وضعیت: آماده",
+      "progress_range": [
+        0,
+        100
+      ],
+      "progress_value": -1,
+      "diagnostics_expanded": false,
+      "image": "after\\operation-light-fa-ready.png",
+      "baseline": "before\\operation-light-fa-ready.png",
+      "size": [
+        1200,
+        800
+      ]
+    },
+    {
+      "name": "operation-light-fa-indeterminate",
+      "state": "indeterminate",
+      "caption": "در حال پردازش",
+      "status_pill": "وضعیت: در حال اجرا",
+      "progress_range": [
+        0,
+        0
+      ],
+      "progress_value": -1,
+      "diagnostics_expanded": false,
+      "image": "after\\operation-light-fa-indeterminate.png",
+      "baseline": "before\\operation-light-fa-indeterminate.png",
+      "size": [
+        1200,
+        800
+      ]
+    },
+    {
+      "name": "operation-light-fa-determinate",
+      "state": "determinate",
+      "caption": "در حال پردازش · 37%",
+      "status_pill": "وضعیت: در حال اجرا",
+      "progress_range": [
+        0,
+        100
+      ],
+      "progress_value": 37,
+      "diagnostics_expanded": false,
+      "image": "after\\operation-light-fa-determinate.png",
+      "baseline": null,
+      "size": [
+        1200,
+        800
+      ]
+    },
+    {
+      "name": "operation-light-fa-completed",
+      "state": "completed",
+      "caption": "کامل",
+      "status_pill": "وضعیت: تکمیل‌شده",
+      "progress_range": [
+        0,
+        100
+      ],
+      "progress_value": 100,
+      "diagnostics_expanded": false,
+      "image": "after\\operation-light-fa-completed.png",
+      "baseline": "before\\operation-light-fa-completed.png",
+      "size": [
+        1200,
+        800
+      ]
+    },
+    {
+      "name": "operation-light-fa-failed",
+      "state": "failed",
+      "caption": "خطا",
+      "status_pill": "وضعیت: خطا",
+      "progress_range": [
+        0,
+        100
+      ],
+      "progress_value": -1,
+      "diagnostics_expanded": true,
+      "image": "after\\operation-light-fa-failed.png",
+      "baseline": "before\\operation-light-fa-controlled-failure.png",
+      "size": [
+        1200,
+        800
+      ]
+    },
+    {
+      "name": "operation-light-fa-cancelled",
+      "state": "cancelled",
+      "caption": "لغو شد",
+      "status_pill": "وضعیت: لغوشده",
+      "progress_range": [
+        0,
+        100
+      ],
+      "progress_value": -1,
+      "diagnostics_expanded": false,
+      "image": "after\\operation-light-fa-cancelled.png",
+      "baseline": null,
+      "size": [
+        1200,
+        800
+      ]
+    },
+    {
+      "name": "operation-light-en-ready",
+      "state": "ready",
+      "caption": "Ready",
+      "status_pill": "Status: Ready",
+      "progress_range": [
+        0,
+        100
+      ],
+      "progress_value": -1,
+      "diagnostics_expanded": false,
+      "image": "after\\operation-light-en-ready.png",
+      "baseline": "before\\operation-light-en-ready.png",
+      "size": [
+        1200,
+        800
+      ]
+    },
+    {
+      "name": "operation-light-en-indeterminate",
+      "state": "indeterminate",
+      "caption": "Processing",
+      "status_pill": "Status: Running",
+      "progress_range": [
+        0,
+        0
+      ],
+      "progress_value": -1,
+      "diagnostics_expanded": false,
+      "image": "after\\operation-light-en-indeterminate.png",
+      "baseline": "before\\operation-light-en-indeterminate.png",
+      "size": [
+        1200,
+        800
+      ]
+    },
+    {
+      "name": "operation-light-en-determinate",
+      "state": "determinate",
+      "caption": "Processing · 37%",
+      "status_pill": "Status: Running",
+      "progress_range": [
+        0,
+        100
+      ],
+      "progress_value": 37,
+      "diagnostics_expanded": false,
+      "image": "after\\operation-light-en-determinate.png",
+      "baseline": null,
+      "size": [
+        1200,
+        800
+      ]
+    },
+    {
+      "name": "operation-light-en-completed",
+      "state": "completed",
+      "caption": "Complete",
+      "status_pill": "Status: Completed",
+      "progress_range": [
+        0,
+        100
+      ],
+      "progress_value": 100,
+      "diagnostics_expanded": false,
+      "image": "after\\operation-light-en-completed.png",
+      "baseline": "before\\operation-light-en-completed.png",
+      "size": [
+        1200,
+        800
+      ]
+    },
+    {
+      "name": "operation-light-en-failed",
+      "state": "failed",
+      "caption": "Error",
+      "status_pill": "Status: Error",
+      "progress_range": [
+        0,
+        100
+      ],
+      "progress_value": -1,
+      "diagnostics_expanded": true,
+      "image": "after\\operation-light-en-failed.png",
+      "baseline": "before\\operation-light-en-controlled-failure.png",
+      "size": [
+        1200,
+        800
+      ]
+    },
+    {
+      "name": "operation-light-en-cancelled",
+      "state": "cancelled",
+      "caption": "Cancelled",
+      "status_pill": "Status: Cancelled",
+      "progress_range": [
+        0,
+        100
+      ],
+      "progress_value": -1,
+      "diagnostics_expanded": false,
+      "image": "after\\operation-light-en-cancelled.png",
+      "baseline": null,
+      "size": [
+        1200,
+        800
+      ]
+    },
+    {
+      "name": "operation-dark-fa-ready",
+      "state": "ready",
+      "caption": "آماده",
+      "status_pill": "وضعیت: آماده",
+      "progress_range": [
+        0,
+        100
+      ],
+      "progress_value": -1,
+      "diagnostics_expanded": false,
+      "image": "after\\operation-dark-fa-ready.png",
+      "baseline": "before\\operation-dark-fa-ready.png",
+      "size": [
+        1200,
+        800
+      ]
+    },
+    {
+      "name": "operation-dark-fa-indeterminate",
+      "state": "indeterminate",
+      "caption": "در حال پردازش",
+      "status_pill": "وضعیت: در حال اجرا",
+      "progress_range": [
+        0,
+        0
+      ],
+      "progress_value": -1,
+      "diagnostics_expanded": false,
+      "image": "after\\operation-dark-fa-indeterminate.png",
+      "baseline": "before\\operation-dark-fa-indeterminate.png",
+      "size": [
+        1200,
+        800
+      ]
+    },
+    {
+      "name": "operation-dark-fa-determinate",
+      "state": "determinate",
+      "caption": "در حال پردازش · 37%",
+      "status_pill": "وضعیت: در حال اجرا",
+      "progress_range": [
+        0,
+        100
+      ],
+      "progress_value": 37,
+      "diagnostics_expanded": false,
+      "image": "after\\operation-dark-fa-determinate.png",
+      "baseline": null,
+      "size": [
+        1200,
+        800
+      ]
+    },
+    {
+      "name": "operation-dark-fa-completed",
+      "state": "completed",
+      "caption": "کامل",
+      "status_pill": "وضعیت: تکمیل‌شده",
+      "progress_range": [
+        0,
+        100
+      ],
+      "progress_value": 100,
+      "diagnostics_expanded": false,
+      "image": "after\\operation-dark-fa-completed.png",
+      "baseline": "before\\operation-dark-fa-completed.png",
+      "size": [
+        1200,
+        800
+      ]
+    },
+    {
+      "name": "operation-dark-fa-failed",
+      "state": "failed",
+      "caption": "خطا",
+      "status_pill": "وضعیت: خطا",
+      "progress_range": [
+        0,
+        100
+      ],
+      "progress_value": -1,
+      "diagnostics_expanded": true,
+      "image": "after\\operation-dark-fa-failed.png",
+      "baseline": "before\\operation-dark-fa-controlled-failure.png",
+      "size": [
+        1200,
+        800
+      ]
+    },
+    {
+      "name": "operation-dark-fa-cancelled",
+      "state": "cancelled",
+      "caption": "لغو شد",
+      "status_pill": "وضعیت: لغوشده",
+      "progress_range": [
+        0,
+        100
+      ],
+      "progress_value": -1,
+      "diagnostics_expanded": false,
+      "image": "after\\operation-dark-fa-cancelled.png",
+      "baseline": null,
+      "size": [
+        1200,
+        800
+      ]
+    },
+    {
+      "name": "operation-dark-en-ready",
+      "state": "ready",
+      "caption": "Ready",
+      "status_pill": "Status: Ready",
+      "progress_range": [
+        0,
+        100
+      ],
+      "progress_value": -1,
+      "diagnostics_expanded": false,
+      "image": "after\\operation-dark-en-ready.png",
+      "baseline": "before\\operation-dark-en-ready.png",
+      "size": [
+        1200,
+        800
+      ]
+    },
+    {
+      "name": "operation-dark-en-indeterminate",
+      "state": "indeterminate",
+      "caption": "Processing",
+      "status_pill": "Status: Running",
+      "progress_range": [
+        0,
+        0
+      ],
+      "progress_value": -1,
+      "diagnostics_expanded": false,
+      "image": "after\\operation-dark-en-indeterminate.png",
+      "baseline": "before\\operation-dark-en-indeterminate.png",
+      "size": [
+        1200,
+        800
+      ]
+    },
+    {
+      "name": "operation-dark-en-determinate",
+      "state": "determinate",
+      "caption": "Processing · 37%",
+      "status_pill": "Status: Running",
+      "progress_range": [
+        0,
+        100
+      ],
+      "progress_value": 37,
+      "diagnostics_expanded": false,
+      "image": "after\\operation-dark-en-determinate.png",
+      "baseline": null,
+      "size": [
+        1200,
+        800
+      ]
+    },
+    {
+      "name": "operation-dark-en-completed",
+      "state": "completed",
+      "caption": "Complete",
+      "status_pill": "Status: Completed",
+      "progress_range": [
+        0,
+        100
+      ],
+      "progress_value": 100,
+      "diagnostics_expanded": false,
+      "image": "after\\operation-dark-en-completed.png",
+      "baseline": "before\\operation-dark-en-completed.png",
+      "size": [
+        1200,
+        800
+      ]
+    },
+    {
+      "name": "operation-dark-en-failed",
+      "state": "failed",
+      "caption": "Error",
+      "status_pill": "Status: Error",
+      "progress_range": [
+        0,
+        100
+      ],
+      "progress_value": -1,
+      "diagnostics_expanded": true,
+      "image": "after\\operation-dark-en-failed.png",
+      "baseline": "before\\operation-dark-en-controlled-failure.png",
+      "size": [
+        1200,
+        800
+      ]
+    },
+    {
+      "name": "operation-dark-en-cancelled",
+      "state": "cancelled",
+      "caption": "Cancelled",
+      "status_pill": "Status: Cancelled",
+      "progress_range": [
+        0,
+        100
+      ],
+      "progress_value": -1,
+      "diagnostics_expanded": false,
+      "image": "after\\operation-dark-en-cancelled.png",
+      "baseline": null,
+      "size": [
+        1200,
+        800
+      ]
+    }
+  ]
+}
