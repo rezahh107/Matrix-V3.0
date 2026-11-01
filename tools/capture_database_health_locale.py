@@ -24,6 +24,7 @@ from PySide6.QtGui import QColor, QFont, QFontMetrics, QImage, QPainter
 from PySide6.QtWidgets import QApplication
 
 from app.infra.local_database import DatabaseHealthReason, DatabaseHealthStatus, LocalDatabase
+from app.ui.fonts import load_vazir_font
 from app.ui.i18n import Language
 from app.ui.main_window import MainWindow
 from app.ui.theme import apply_theme, build_theme
@@ -98,6 +99,13 @@ def main() -> int:
     out.mkdir(parents=True, exist_ok=True)
 
     app = QApplication.instance() or QApplication([])
+    # Qt Windows offscreen may draw tofu glyphs before an application font is
+    # registered. The normal visual matrix visits FA first, registering the
+    # bundled font. Make that initialization explicit so visual captures test
+    # translation/layout rather than the offscreen font cold-start artifact.
+    embedded_font = load_vazir_font()
+    if embedded_font is None:
+        raise AssertionError("embedded Qt font registration unavailable")
     app.setOrganizationName("MatrixDatabaseLocaleEvidence")
     app.setApplicationName("MatrixDatabaseLocaleEvidence")
     results: list[dict[str, object]] = []
@@ -200,6 +208,7 @@ def main() -> int:
         "style": app.style().objectName(),
         "application_font": app.font().family(),
         "screen_dpr": app.primaryScreen().devicePixelRatio() if app.primaryScreen() else None,
+        "font_backend_initialized": "bundled application font explicitly registered before capture",
         "capture_count": len(results),
         "clipping_observations": clipping,
         "scenario_basis": "isolated actual SQLite health summaries; not production database",
