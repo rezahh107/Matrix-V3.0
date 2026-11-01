@@ -63,7 +63,7 @@ def _dispose_test_windows(qapp, preexisting_windows):
     Retain pre-test top-level windows and the shared QApplication. Never delete
     an owner while any of its QThreads are still running.
     """
-    from PySide6.QtCore import QEvent, QThread, Qt
+    from PySide6.QtCore import QEvent, Qt, QThread
     from shiboken6 import isValid
 
     retained_ids = {id(window) for window in preexisting_windows}
