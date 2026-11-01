@@ -98,6 +98,7 @@ def test_operational_state_labels_and_progress_are_truthful(
         window._on_finished(False, RuntimeError("Synthetic failure"))
         qapp.processEvents()
         assert window._operation_state == "failed"
+        assert window._progress.value() < window._progress.minimum()
         assert window._progress_caption.text() == window._t("status.error", "خطا")
         assert "%" not in window._progress_caption.text()
         assert window._t("statusbar.error", "وضعیت: خطا") in window._status_bar_state.text()
@@ -106,6 +107,7 @@ def test_operational_state_labels_and_progress_are_truthful(
         window._on_finished(False, None)
         qapp.processEvents()
         assert window._operation_state == "cancelled"
+        assert window._progress.value() < window._progress.minimum()
         assert window._progress_caption.text() == window._t("status.cancelled", "لغو شد")
         assert "%" not in window._progress_caption.text()
         assert window._t("statusbar.cancelled", "وضعیت: لغوشده") in window._status_bar_state.text()
