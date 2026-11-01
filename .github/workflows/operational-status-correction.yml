@@ -1,0 +1,125 @@
+name: Operational status correction visual evidence
+
+on:
+  push:
+    branches:
+      - fix/operational-progress-status-20261101
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    name: Verify and capture operational progress states (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 35
+    env:
+      QT_QPA_PLATFORM: offscreen
+      PYTEST_QT_API: pyside6
+      MATRIX2_TEMP_SKIP_QT_UI: "0"
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify exact Head
+        shell: bash
+        env:
+          HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$HEAD_SHA"
+
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.7"
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+            .python-version
+
+      - run: uv python install
+      - run: uv sync --locked
+
+      - name: Exercise operational regression including keyboard focus
+        run: uv run --locked pytest tests/ui/test_operational_progress_status.py tests/ui/test_uiux_method_locks.py -q --maxfail=1
+
+      - name: Import untouched full-resolution pre-fix PNGs from PR 28
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin refs/heads/verify/matrix-dialog-operational-evidence-20261031
+          target=evidence/ui/operational-status-correction-20261101/before
+          mkdir -p "$target"
+          for theme in light dark; do
+            for lang in fa en; do
+              for state in ready indeterminate completed controlled-failure; do
+                source="evidence/ui/dialog-operational-20261031/operation-${theme}-${lang}-${state}.png"
+                git show "FETCH_HEAD:$source" > "$target/operation-${theme}-${lang}-${state}.png"
+              done
+            done
+          done
+
+      - name: Capture after states and paired full-resolution screenshots
+        run: uv run --locked python tools/capture_operational_status_correction.py --output-dir evidence/ui/operational-status-correction-20261101
+
+      - name: Upload full-resolution evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: matrix-operational-status-correction
+          path: evidence/ui/operational-status-correction-20261101
+          if-no-files-found: warn
+
+  publish-evidence:
+    name: Publish validated evidence to correction branch only
+    needs: capture
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/fix/operational-progress-status-20261101' && needs.capture.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: matrix-operational-status-correction
+          path: evidence/ui/operational-status-correction-20261101
+
+      - name: Verify provenance and scenario counts
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path("evidence/ui/operational-status-correction-20261101")
+          manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+          assert manifest["head_sha"] == __import__("os").environ["EXPECTED_SHA"]
+          assert manifest["capture_count"] == 24
+          assert manifest["pair_count"] == 16
+          assert len(list((root / "before").glob("*.png"))) == 16
+          assert len(list((root / "after").glob("*.png"))) == 24
+          assert len(list((root / "compare").glob("*.png"))) == 16
+          PY
+
+      - name: Commit evidence without touching PR 28 or main
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add evidence/ui/operational-status-correction-20261101
+          if ! git diff --cached --quiet; then
+            git commit -m "evidence(ui): publish operational status before-after Windows captures"
+            git push origin HEAD:refs/heads/fix/operational-progress-status-20261101
+          fi
