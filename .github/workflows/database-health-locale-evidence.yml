@@ -1,0 +1,72 @@
+name: Database health locale Windows evidence
+
+on:
+  push:
+    branches:
+      - fix/ux-matrix-db-locale-001-20261101
+
+permissions:
+  contents: write
+
+jobs:
+  capture:
+    name: Validate and archive Qt health locale renders (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 35
+    env:
+      QT_QPA_PLATFORM: offscreen
+      PYTEST_QT_API: pyside6
+      PYTHONUTF8: "1"
+    steps:
+      - name: Checkout exact pushed source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Verify exact source identity
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.7"
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+            .python-version
+
+      - run: uv python install
+      - run: uv sync --locked
+
+      - name: Focused infrastructure and bilingual UI regressions
+        run: uv run --locked pytest tests/infra/test_local_database_status.py tests/ui/test_status_bar_widget.py tests/ui/test_database_health_locale.py -q --maxfail=1
+
+      - name: Generate full-resolution 32-case Windows offscreen captures
+        run: uv run --locked python tools/capture_database_health_locale.py --output-dir evidence/ui/database-health-locale-20261101
+
+      - name: Upload supplementary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: matrix-db-health-locale-windows-offscreen
+          path: evidence/ui/database-health-locale-20261101
+          if-no-files-found: error
+
+      - name: Commit reviewed source-linked PNG evidence to isolated branch
+        shell: bash
+        env:
+          EVIDENCE_BRANCH: evidence/ux-matrix-db-locale-001-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          git switch -c "$EVIDENCE_BRANCH"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add evidence/ui/database-health-locale-20261101
+          git diff --cached --quiet && { echo "::error::No evidence to commit"; exit 1; }
+          git commit -m "evidence(ui): Windows Qt offscreen DB health locale matrix"
+          git push origin "HEAD:refs/heads/$EVIDENCE_BRANCH"
+          echo "Evidence branch: $EVIDENCE_BRANCH"
