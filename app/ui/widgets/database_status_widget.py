@@ -6,20 +6,64 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QMouseEvent, QPalette
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QWidget
 
-from app.infra.local_database import DatabaseHealthStatus, DatabaseHealthSummary
+from app.infra.local_database import (
+    DatabaseHealthReason,
+    DatabaseHealthStatus,
+    DatabaseHealthSummary,
+)
+from app.ui.i18n import Language
+from app.ui.texts import UiTranslator
 from app.ui.theme import Theme
 
 __all__ = ["DatabaseStatusWidget"]
 
+# Legacy count keys are fixed schema labels, not arbitrary diagnostic strings.
+_COUNT_LABELS = {
+    "دانش‌آموز": ("database.health.students", "Students", "دانش‌آموز"),
+    "پشتیبان": ("database.health.mentors", "Mentors", "پشتیبان"),
+    "اجرا": ("database.health.runs", "Runs", "اجرا"),
+}
+_HEALTH_LABELS = {
+    "ready": ("database.health.ready", "Database: Ready", "پایگاه‌داده: آماده"),
+    "needs_review": (
+        "database.health.needs_review",
+        "Database: Needs attention",
+        "پایگاه‌داده: نیاز به بررسی",
+    ),
+    "missing_file": (
+        "database.health.missing_file",
+        "Database: File not found",
+        "پایگاه‌داده: فایل یافت نشد",
+    ),
+    "connection_error": (
+        "database.health.connection_error",
+        "Database: Connection error",
+        "پایگاه‌داده: خطای اتصال",
+    ),
+    "unavailable": (
+        "database.health.unavailable",
+        "Database: Unavailable",
+        "پایگاه‌داده: در دسترس نیست",
+    ),
+}
+
 
 class DatabaseStatusWidget(QWidget):
-    """Compact database health summary; semantic colors come only from global QSS."""
+    """Compact localized database health; severity colors remain global QSS-owned."""
 
     databaseManagerRequested = Signal()  # noqa: N815
 
-    def __init__(self, theme: Theme, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        theme: Theme,
+        parent: QWidget | None = None,
+        *,
+        translator: UiTranslator | None = None,
+    ) -> None:
         super().__init__(parent)
         self._theme = theme
+        self._translator = translator or UiTranslator(Language.EN)
+        self._summary: DatabaseHealthSummary | None = None
         self._icon_label = QLabel("●", self)
         self._icon_label.setObjectName("databaseHealthIcon")
         self._text_label = QLabel(self)
@@ -40,8 +84,8 @@ class DatabaseStatusWidget(QWidget):
         )
         layout.addStretch()
         self.setLayout(layout)
-        self.setAccessibleName("database-status-widget")
         self._apply_theme_colors(theme)
+        self.set_translator(self._translator)
 
     def _apply_theme_colors(self, theme: Theme) -> None:
         self._theme = theme
@@ -50,18 +94,52 @@ class DatabaseStatusWidget(QWidget):
         palette.setColor(QPalette.ColorRole.Text, theme.text_primary)
         self.setPalette(palette)
 
-    def set_summary(self, summary: DatabaseHealthSummary) -> None:
-        """Update wording plus a semantic-state property; color is never the only cue."""
+    def _tr(self, key: str, english: str, persian: str) -> str:
+        fallback = persian if self._translator.language_enum is Language.FA else english
+        return self._translator.text(key, fallback)
 
+    def set_translator(self, translator: UiTranslator) -> None:
+        """Rerender observed health without querying the database again."""
+        self._translator = translator
+        self.setLayoutDirection(
+            Qt.LayoutDirection.RightToLeft
+            if translator.language_enum is Language.FA
+            else Qt.LayoutDirection.LeftToRight
+        )
+        self.setAccessibleName(
+            self._tr("database.health.accessible_name", "Database health", "سلامت پایگاه‌داده")
+        )
+        if self._summary is not None:
+            self.set_summary(self._summary)
+
+    def set_summary(self, summary: DatabaseHealthSummary) -> None:
+        """Present stable status/reason, never parse free-form diagnostic messages."""
+        self._summary = summary
         state = self._state_for_status(summary.status)
         self._icon_label.setProperty("databaseHealth", state)
         self._text_label.setProperty("databaseHealth", state)
         for label in (self._icon_label, self._text_label):
             label.style().unpolish(label)
             label.style().polish(label)
-        self._text_label.setText(summary.message)
-        self.setAccessibleDescription(f"Database health: {summary.message}")
-        self.setToolTip(self._build_tooltip(summary))
+
+        message = self._localized_status(summary)
+        self._text_label.setText(message)
+        self.setAccessibleDescription(message)
+        self.setToolTip(self._build_tooltip(summary, message))
+
+    def _localized_status(self, summary: DatabaseHealthSummary) -> str:
+        # Severity wins over inconsistent or absent reasons: no invented failure.
+        if summary.status is DatabaseHealthStatus.OK:
+            label = "ready"
+        elif summary.status is DatabaseHealthStatus.DEGRADED:
+            label = "needs_review"
+        elif summary.reason is DatabaseHealthReason.MISSING_FILE:
+            label = "missing_file"
+        elif summary.reason is DatabaseHealthReason.CONNECTION_ERROR:
+            label = "connection_error"
+        else:
+            label = "unavailable"
+        return self._tr(*_HEALTH_LABELS[label])
 
     @staticmethod
     def _state_for_status(status: DatabaseHealthStatus) -> str:
@@ -71,15 +149,18 @@ class DatabaseStatusWidget(QWidget):
             return "warning"
         return "error"
 
-    def _build_tooltip(self, summary: DatabaseHealthSummary) -> str:
-        parts: list[str] = []
+    def _build_tooltip(self, summary: DatabaseHealthSummary, message: str) -> str:
+        parts = [message]
         if summary.counts:
-            parts.append(" | ".join(f"{key}: {value:,}" for key, value in summary.counts.items()))
-        if summary.last_updated:
-            last = summary.last_updated
-            if isinstance(last, datetime):
-                parts.append(f"آخرین به‌روزرسانی: {last.isoformat(timespec='seconds')}")
-        return summary.message if not parts else " — ".join(parts)
+            counts = []
+            for key, value in summary.counts.items():
+                label = self._tr(*_COUNT_LABELS[key]) if key in _COUNT_LABELS else key
+                counts.append(f"{label}: {value:,}")
+            parts.append(" | ".join(counts))
+        if isinstance(summary.last_updated, datetime):
+            checked = self._tr("database.health.last_checked", "Last checked", "آخرین بررسی")
+            parts.append(f"{checked}: {summary.last_updated.isoformat(timespec='seconds')}")
+        return " — ".join(parts)
 
     def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802
         super().mousePressEvent(event)
