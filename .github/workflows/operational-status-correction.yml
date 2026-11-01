@@ -1,12 +1,11 @@
 name: Operational status correction visual evidence
 
+# Historical evidence lane: only runs for pushes to this correction branch.
+# The regular UI suite retains operational regressions for all future PRs.
 on:
   push:
     branches:
       - fix/operational-progress-status-20261101
-  pull_request:
-    branches:
-      - main
 
 permissions:
   contents: read
@@ -24,14 +23,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
 
       - name: Verify exact Head
         shell: bash
         env:
-          HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          HEAD_SHA: ${{ github.sha }}
         run: test "$(git rev-parse HEAD)" = "$HEAD_SHA"
 
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
@@ -49,21 +48,28 @@ jobs:
       - name: Exercise operational regression including keyboard focus
         run: uv run --locked pytest tests/ui/test_operational_progress_status.py -q --maxfail=1
 
-      - name: Import untouched full-resolution pre-fix PNGs from PR 28
+      - name: Verify tracked PR28 Before fixtures against pinned Git blob IDs
         shell: bash
         run: |
           set -euo pipefail
-          git fetch --no-tags origin refs/heads/verify/matrix-dialog-operational-evidence-20261031
-          target=evidence/ui/operational-status-correction-20261101/before
-          mkdir -p "$target"
-          for theme in light dark; do
-            for lang in fa en; do
-              for state in ready indeterminate completed controlled-failure; do
-                source="evidence/ui/dialog-operational-20261031/operation-${theme}-${lang}-${state}.png"
-                git show "FETCH_HEAD:$source" > "$target/operation-${theme}-${lang}-${state}.png"
-              done
-            done
-          done
+          root=evidence/ui/operational-status-correction-20261101/before
+          provenance="$root/PR28_GIT_BLOB_SHA1.tsv"
+          test -f "$provenance"
+          count=0
+          while IFS=$'\t' read -r expected filename; do
+            [[ -z "$expected" || "$expected" == "#"* ]] && continue
+            [[ "$expected" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::Invalid fixture SHA: $filename"; exit 1; }
+            [[ "$filename" =~ ^operation-(light|dark)-(en|fa)-(ready|indeterminate|completed|controlled-failure)\.png$ ]] || exit 1
+            test -f "$root/$filename"
+            actual="$(git hash-object "$root/$filename")"
+            if [[ "$actual" != "$expected" ]]; then
+              echo "::error::Before fixture changed: $filename"
+              exit 1
+            fi
+            count=$((count + 1))
+          done < "$provenance"
+          [[ "$count" -eq 16 ]]
+          [[ "$(find "$root" -maxdepth 1 -type f -name '*.png' | wc -l | tr -d ' ')" == "16" ]]
 
       - name: Capture after states and paired full-resolution screenshots
         run: uv run --locked python tools/capture_operational_status_correction.py --output-dir evidence/ui/operational-status-correction-20261101
@@ -97,44 +103,3 @@ jobs:
           name: matrix-existing-ui-dpi-evidence
           path: artifacts/ui-dpi
           if-no-files-found: warn
-
-  baseline-ui-control:
-    name: Baseline UI suite control (original production commit)
-    runs-on: windows-latest
-    timeout-minutes: 30
-    env:
-      QT_QPA_PLATFORM: offscreen
-      PYTEST_QT_API: pyside6
-    steps:
-      - name: Checkout untouched production baseline
-        uses: actions/checkout@v4
-        with:
-          ref: 782d178f5dc539bc078e04a1e67a10ad6ea5baa4
-          persist-credentials: false
-
-      - name: Verify production baseline identity
-        shell: bash
-        run: test "$(git rev-parse HEAD)" = "782d178f5dc539bc078e04a1e67a10ad6ea5baa4"
-
-      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
-        with:
-          version: "0.12.7"
-          enable-cache: true
-          cache-dependency-glob: |
-            pyproject.toml
-            uv.lock
-            .python-version
-
-      - run: uv python install
-      - run: uv sync --locked
-
-      - name: Run unchanged production UI suite (non-gating baseline control)
-        id: baseline
-        continue-on-error: true
-        run: uv run --locked pytest tests/ui --maxfail=1 -q
-
-      - name: Publish observed baseline outcome
-        if: always()
-        shell: pwsh
-        run: |
-          "Untouched baseline 782d178f5dc539bc078e04a1e67a10ad6ea5baa4 UI suite outcome: ${{ steps.baseline.outcome }}" >> $env:GITHUB_STEP_SUMMARY
