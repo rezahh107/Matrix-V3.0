@@ -893,15 +893,12 @@ class MainWindow(QMainWindow):
 
         if not hasattr(self, "_status_bar_state"):
             return
-        self._operation_state = "failed" if key == "error" else key
         mapping = {
             "ready": f"✅ {self._t('statusbar.ready', 'وضعیت: آماده')}",
             "running": f"⏳ {self._t('statusbar.running', 'وضعیت: در حال اجرا')}",
-            "completed": f"✅ {self._t('statusbar.completed', 'وضعیت: تکمیل‌شده')}",
-            "failed": f"❌ {self._t('statusbar.error', 'وضعیت: خطا')}",
-            "cancelled": f"⚠️ {self._t('statusbar.cancelled', 'وضعیت: لغوشده')}",
+            "error": f"❌ {self._t('statusbar.error', 'وضعیت: خطا')}",
         }
-        self._status_bar_state.setText(mapping[self._operation_state])
+        self._status_bar_state.setText(mapping.get(key, mapping["ready"]))
 
     def _refresh_database_status(self) -> None:
         """به‌روزرسانی ویجت سلامت پایگاه‌داده بدون بلاک کردن UI."""
@@ -990,7 +987,7 @@ class MainWindow(QMainWindow):
                         self._t("stage.pick_scenario", "برای شروع یکی از سناریوها را انتخاب کنید")
                     )
                 elif state in ("completed", "cancelled"):
-                    detail_key = f"status.{ 'complete' if state == 'completed' else 'cancelled' }.detail"
+                    detail_key = "status.complete.detail" if state == "completed" else "status.cancelled.detail"
                     self._stage_detail.setText(self._t(detail_key, ""))
         self._update_status_bar_state(state)
         self._update_progress_caption(self._last_progress_pct, self._last_progress_message)
