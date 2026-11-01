@@ -65,6 +65,41 @@ def test_cleanup_refuses_to_destroy_an_active_child_qthread(
     assert qapp is QApplication.instance()
 
 
+def test_cleanup_refuses_unparented_active_mainwindow_worker_reference(
+    qapp: QApplication,
+) -> None:
+    from app.ui.task_runner import Worker
+
+    started, release = Event(), Event()
+
+    def blocked_job(*, progress) -> None:
+        started.set()
+        release.wait(10)
+
+    class WorkerOwner(QWidget):
+        def __init__(self) -> None:
+            super().__init__()
+            self._worker = Worker(blocked_job)
+
+    preexisting = tuple(qapp.topLevelWidgets())
+    owner = WorkerOwner()
+    worker = owner._worker
+    worker.start()
+    assert started.wait(5), "Worker did not start"
+
+    try:
+        with pytest.raises(pytest.fail.Exception, match="running QThreads"):
+            _dispose_test_windows(qapp, preexisting)
+        assert isValid(owner)
+        assert worker.isRunning()
+    finally:
+        release.set()
+        assert worker.wait(5000), "Worker did not stop"
+
+    _dispose_test_windows(qapp, preexisting)
+    assert not isValid(owner)
+
+
 def test_repeated_mainwindow_teardown_prevents_widget_accumulation(
     qapp: QApplication,
 ) -> None:
