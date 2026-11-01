@@ -1,0 +1,103 @@
+name: "Diagnostic — Windows Qt lifecycle (isolated)"
+
+on:
+  push:
+    branches: ["diagnostics/qt-lifecycle-postrepair-20261101"]
+    paths: [".github/workflows/qt-windows-discrimination.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  qt-discrimination:
+    name: "Qt diagnostic / ${{ matrix.mode }}"
+    runs-on: windows-latest
+    timeout-minutes: 45 # Diagnostic observation budget only; production CI stays at 30.
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [isolate, pairs, suite]
+    env:
+      QT_QPA_PLATFORM: offscreen
+      PYTEST_QT_API: pyside6
+      PYTHONFAULTHANDLER: "1"
+    steps:
+      - name: Checkout exact diagnostic commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Verify exact checkout identity
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          actual="$(git rev-parse HEAD)"
+          printf 'Expected SHA: %s\nActual SHA: %s\n' "$EXPECTED_SHA" "$actual"
+          test "$actual" = "$EXPECTED_SHA"
+
+      - name: Set up pinned uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.7"
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+            .python-version
+
+      - name: Install pinned Python and locked dependencies
+        shell: pwsh
+        run: |
+          uv python install
+          uv sync --locked
+
+      - name: Prepare local native-crash capture (no dump upload)
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $dumpDir = Join-Path $env:RUNNER_TEMP "matrix-qt-native-dumps"
+          New-Item -ItemType Directory -Path $dumpDir -Force | Out-Null
+          $key = "HKLM:\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps\python.exe"
+          New-Item -Path $key -Force -ErrorAction Stop | Out-Null
+          New-ItemProperty -Path $key -Name "DumpFolder" -PropertyType ExpandString -Value $dumpDir -Force | Out-Null
+          New-ItemProperty -Path $key -Name "DumpType" -PropertyType DWord -Value 1 -Force | Out-Null
+          New-ItemProperty -Path $key -Name "DumpCount" -PropertyType DWord -Value 3 -Force | Out-Null
+          Write-Host "WER minidumps configured (raw dumps remain on disposable runner)"
+
+      - name: Execute diagnostic cases (do not change test behavior)
+        shell: pwsh
+        run: |
+          uv run --locked python -u tools/ci/run_qt_windows_discrimination.py --mode ${{ matrix.mode }} --output-dir artifacts/qt-discrimination/${{ matrix.mode }}
+
+      - name: Capture bounded native dump metadata (never upload raw dumps)
+        if: always()
+        shell: pwsh
+        run: |
+          $output = "artifacts/qt-discrimination/${{ matrix.mode }}"
+          New-Item -ItemType Directory -Path $output -Force | Out-Null
+          $dumpDir = Join-Path $env:RUNNER_TEMP "matrix-qt-native-dumps"
+          $items = @()
+          if (Test-Path $dumpDir) {
+            $items = @(Get-ChildItem -Path $dumpDir -File | ForEach-Object {
+              [PSCustomObject]@{
+                name = $_.Name
+                bytes = $_.Length
+                sha256 = (Get-FileHash -Algorithm SHA256 -Path $_.FullName).Hash
+              }
+            })
+          }
+          ConvertTo-Json -InputObject @($items) -Depth 3 | Set-Content -Path "$output/native-dump-metadata.json" -Encoding utf8
+          Write-Host "Native dump files observed: $($items.Count); raw bytes are NOT uploaded."
+
+      - name: Upload sanitized diagnostic metadata
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qt-postrepair-${{ matrix.mode }}
+          path: |
+            artifacts/qt-discrimination/${{ matrix.mode }}
+            !artifacts/qt-discrimination/**/pytest.log
+          if-no-files-found: warn
