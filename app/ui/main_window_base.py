@@ -3427,6 +3427,7 @@ class MainWindow(QMainWindow):
         self._disable_controls(False)
         self._set_busy_cursor(False)
         self._progress.setRange(0, 100)
+        self._progress.reset()  # A terminal failure/cancellation must not keep stale fill.
         self._progress.setProperty("busy", False)
         self._worker = None
         hook, self._success_hook = self._success_hook, None
