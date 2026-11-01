@@ -60,7 +60,8 @@ jobs:
             [[ -z "$expected" || "$expected" == "#"* ]] && continue
             [[ "$expected" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::Invalid fixture SHA: $filename"; exit 1; }
             # Git for Windows may check out the text provenance as CRLF.
-            filename="${filename%
+            filename="$(printf '%s' "$filename" | tr -d '\015')"
+            [[ "$filename" =~ ^operation-(light|dark)-(en|fa)-(ready|indeterminate|completed|controlled-failure)\.png$ ]] || { echo "::error::Unexpected fixture filename: $filename"; exit 1; }
             test -f "$root/$filename"
             actual="$(git hash-object "$root/$filename")"
             if [[ "$actual" != "$expected" ]]; then
