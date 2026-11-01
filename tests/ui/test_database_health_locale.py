@@ -14,10 +14,17 @@ from app.ui.theme import apply_theme, build_theme
 
 _PERSIAN = re.compile(r"[\u0600-\u06ff]")
 _CASES = {
-    "ok": (DatabaseHealthStatus.OK, DatabaseHealthReason.READY, "Database: Ready", "پایگاه‌داده: آماده", "ok"),
-    "degraded": (DatabaseHealthStatus.DEGRADED, DatabaseHealthReason.NEEDS_REVIEW, "Database: Needs attention", "پایگاه‌داده: نیاز به بررسی", "warning"),
-    "missing": (DatabaseHealthStatus.UNAVAILABLE, DatabaseHealthReason.MISSING_FILE, "Database: File not found", "پایگاه‌داده: فایل یافت نشد", "error"),
-    "connection": (DatabaseHealthStatus.UNAVAILABLE, DatabaseHealthReason.CONNECTION_ERROR, "Database: Connection error", "پایگاه‌داده: خطای اتصال", "error"),
+    "ok": (DatabaseHealthStatus.OK, DatabaseHealthReason.READY, "DB: Ready", "پایگاه‌داده: آماده", "ok"),
+    "degraded": (DatabaseHealthStatus.DEGRADED, DatabaseHealthReason.NEEDS_REVIEW, "DB: Review", "پایگاه‌داده: نیاز به بررسی", "warning"),
+    "missing": (DatabaseHealthStatus.UNAVAILABLE, DatabaseHealthReason.MISSING_FILE, "DB: File missing", "پایگاه‌داده: فایل یافت نشد", "error"),
+    "connection": (DatabaseHealthStatus.UNAVAILABLE, DatabaseHealthReason.CONNECTION_ERROR, "DB: SQL error", "پایگاه‌داده: خطای اتصال", "error"),
+}
+
+_FULL_EN = {
+    "ok": "Database: Ready",
+    "degraded": "Database: Needs attention",
+    "missing": "Database: File not found",
+    "connection": "Database: Connection error",
 }
 
 
@@ -55,11 +62,12 @@ def test_health_live_en_fa_en_main_window(qapp, tmp_path, scenario: str, theme: 
             window._apply_language(language)
             qapp.processEvents()
             assert widget._text_label.text() == expected
-            assert widget.accessibleDescription() == expected
+            detailed = _FULL_EN[scenario] if language is Language.EN else fa
+            assert widget.accessibleDescription() == detailed
             assert widget.accessibleName() == (
                 "Database health" if language is Language.EN else "سلامت پایگاه‌داده"
             )
-            assert widget.toolTip().startswith(expected)
+            assert widget.toolTip().startswith(detailed)
             assert widget._icon_label.property("databaseHealth") == state
             assert widget._text_label.property("databaseHealth") == state
             if language is Language.EN:
@@ -95,7 +103,8 @@ def test_unknown_unavailable_reason_does_not_fabricate_specific_cause(qapp) -> N
         widget = window._database_status
         assert widget is not None
         widget.set_summary(summary)
-        assert widget._text_label.text() == "Database: Unavailable"
+        assert widget._text_label.text() == "DB: Unavailable"
+        assert widget.accessibleDescription() == "Database: Unavailable"
         assert "File not found" not in widget.toolTip()
         assert "Connection error" not in widget.toolTip()
     finally:
