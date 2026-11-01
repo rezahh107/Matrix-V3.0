@@ -5,7 +5,7 @@ from __future__ import annotations
 from threading import Event
 
 import pytest
-from PySide6.QtCore import QThread, Qt
+from PySide6.QtCore import Qt, QThread
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import QApplication, QMainWindow, QWidget
 from shiboken6 import isValid
@@ -150,7 +150,7 @@ def test_delete_on_close_preserves_closeevent_worker_shutdown(
             self.delete_flag_during_close: bool | None = None
             self.shutdown_ok = False
 
-        def closeEvent(self, event: QCloseEvent) -> None:
+        def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 - Qt override
             self.delete_flag_during_close = self.testAttribute(
                 Qt.WidgetAttribute.WA_DeleteOnClose
             )
@@ -181,7 +181,7 @@ def test_rejected_close_keeps_window_alive_and_retries_after_acceptance(
     class RejectingWindow(QWidget):
         allow_close = False
 
-        def closeEvent(self, event: QCloseEvent) -> None:
+        def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 - Qt override
             if self.allow_close:
                 event.accept()
             else:
