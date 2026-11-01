@@ -1,0 +1,187 @@
+name: One-shot independent validation of archived PR28/PR29 evidence
+on:
+  push:
+    branches:
+      - evidence/matrix-pr28-pr29-archive-20261101
+    paths:
+      - .github/workflows/archive-evidence-verification-one-shot.yml
+
+permissions:
+  contents: write
+
+jobs:
+  verify-and-retire:
+    if: github.repository == 'rezahh107/Matrix-V3.0' && github.ref == 'refs/heads/evidence/matrix-pr28-pr29-archive-20261101'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Fresh exact archive checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: true
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Pillow only for archive image validation
+        run: python -m pip install --disable-pip-version-check pillow==11.3.0
+
+      - name: Independent checksum, provenance, PNG and diagnostic review
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$GITHUB_REF" = 'refs/heads/evidence/matrix-pr28-pr29-archive-20261101'
+          python - <<'PY'
+          import hashlib
+          import io
+          import json
+          import os
+          from pathlib import Path
+          import subprocess
+          import tarfile
+          import zipfile
+          from PIL import Image
+
+          root = Path('evidence/archive/pr28-pr29-20261101')
+          manifest = json.loads((root / 'MANIFEST.json').read_text(encoding='utf-8'))
+          items = manifest['files']
+          assert len(items) == 102, f'expected 102 archived file records, saw {len(items)}'
+          paths = {item['archive_path'] for item in items}
+          assert len(paths) == len(items), 'duplicate archive paths in manifest'
+          for item in items:
+              path = Path(item['archive_path'])
+              assert path.is_file(), f'missing: {path}'
+              content = path.read_bytes()
+              assert len(content) == item['size_bytes'], f'size: {path}'
+              assert hashlib.sha256(content).hexdigest() == item['sha256'], f'SHA256: {path}'
+              computed_sha = subprocess.check_output(['git', 'hash-object', '--', str(path)], text=True).strip()
+              assert computed_sha == item['git_blob_sha1'], f'git blob identity: {path}'
+          for source, published in (
+              ('pr28/source/tools/capture_matrix_dialog_operational_evidence.py', 'tools/capture_matrix_dialog_operational_evidence.py'),
+              ('pr28/source/matrix-dialog-operational-evidence.yml', '.github/workflows/matrix-dialog-operational-evidence.yml'),
+              ('pr29/source/qt-native-av-diagnostic.yml', '.github/workflows/qt-native-av-diagnostic.yml'),
+          ):
+              record = next(i for i in items if i['archive_path'] == str(root / source))
+              assert record['source_path'] == published, f'source reference: {source}'
+              assert len(record['source_commit']) == 40, f'no exact commit: {source}'
+
+          def verify_png(b, name):
+              with Image.open(io.BytesIO(b)) as image:
+                  image.verify()
+                  assert image.format == 'PNG', name
+
+          published_paths = sorted((root / 'pr28/captures').glob('*.png'))
+          assert len(published_paths) == 89
+          for path in published_paths:
+              verify_png(path.read_bytes(), str(path))
+
+          exact_zip = root / 'pr28/original-actions-artifact/matrix-dialog-operational-evidence.zip'
+          exact_bytes = exact_zip.read_bytes()
+          assert hashlib.sha256(exact_bytes).hexdigest() == '1d1fbe489024ebd2be0b30d7fb5cbbacd439f7bdc6bb3148489d215a01df296c'
+          original_differences = set()
+          with zipfile.ZipFile(io.BytesIO(exact_bytes), 'r') as z:
+              assert z.testzip() is None
+              assert len(z.namelist()) == 92
+              assert len([n for n in z.namelist() if n.endswith('.png')]) == 89
+              report = json.loads(z.read('manifest.json'))
+              assert report['capture_count'] == 84 and report['failure_count'] == 0
+              assert len(report['cases']) == 84
+              for name in z.namelist():
+                  assert name == Path(name).name, f'Unexpected zip nested path: {name}'
+                  original = z.read(name)
+                  if name.endswith('.png'):
+                      verify_png(original, 'original Actions member: ' + name)
+                  published = (root / 'pr28/captures' / name).read_bytes()
+                  if original != published:
+                      original_differences.add(name)
+                      alternative = root / 'pr28/original-actions-variants' / name
+                      assert alternative.is_file(), f'missing original variant: {name}'
+                      assert alternative.read_bytes() == original, f'variant mismatch: {name}'
+          expected_differences = set(manifest['pr28']['original_actions_distinct_pngs'])
+          assert original_differences == expected_differences, f'Unexpected original artifact differences {original_differences ^ expected_differences}'
+          assert len(original_differences) == 5
+
+          diagnostic_path = root / 'pr29/artifacts/qt-diagnostic-artifact-contents.tar.xz'
+          with tarfile.open(diagnostic_path, 'r:xz') as t:
+              members = {x.name: x for x in t.getmembers()}
+              assert len(members) == 41 and all(x.isfile() for x in members.values())
+              inventory = json.loads(t.extractfile(members['SOURCE_ARTIFACT_INVENTORY.json']).read())
+              assert inventory['source_run'] == 41229347383
+              assert len(inventory['artifacts']) == 6
+              seen = set()
+              for artifact in inventory['artifacts']:
+                  for f in artifact['files']:
+                      name = f['path']
+                      assert name not in seen, f'duplicate artifact path {name}'
+                      seen.add(name)
+                      member = members[name]
+                      data = t.extractfile(member).read()
+                      assert len(data) == f['size'] and hashlib.sha256(data).hexdigest() == f['sha256'], f'diagnostic artifact integrity: {name}'
+              assert len(seen) == 40
+              assert set(members) == seen | {'SOURCE_ARTIFACT_INVENTORY.json'}
+
+          diff = subprocess.check_output(
+              ['git', 'diff', '--name-only', '91b765ca6bfb72da6012e4c119a8f3c4e08d9944', 'HEAD'],
+              text=True,
+          ).splitlines()
+          permitted_workflow = '.github/workflows/archive-evidence-verification-one-shot.yml'
+          assert all(p.startswith('evidence/archive/pr28-pr29-20261101/') or p == permitted_workflow for p in diff), diff
+          assert 'main' != subprocess.check_output(['git', 'branch', '--show-current'], text=True).strip()
+
+          ver_doc = root / 'ARCHIVE_VERIFICATION.md'
+          original_doc = ver_doc.read_text(encoding='utf-8')
+          checklist = f"""# Fresh-checkout archive verification — 2026-11-01
+
+          **VERIFIED: archival evidence is present and intact.** Verification was executed in a fresh isolated GitHub Actions checkout of archive branch commit \`{os.environ['GITHUB_SHA']}\`.
+
+          ## Evidence inventory and checks
+
+          - **102/102** archived file records: existence, size, SHA-256 and Git blob SHA-1 all matched.
+          - PR #28: **84 original scenario PNGs** and **5 contact sheets** (89 published PNGs) passed Pillow decoding.
+          - The exact original GitHub Actions capture ZIP, artifact **13073348210**, run **41281584739**, passed archive SHA-256, ZIP member CRC and manifest checks; all **89 original-run PNGs** passed Pillow verification.
+          - Exactly **five** original Actions PNGs differ bytewise from published branch snapshots; all five originals are independently archived and read back bit-for-bit; no source images were resized or regenerated. This is a historical provenance distinction, not a test failure.
+          - PR #28 Python capture script and PR #28 + PR #29 original workflows were verified as inert source material (not active workflows).
+          - PR #29: **6** diagnostic artifact datasets with **40/40** inner files matched sizes and SHA-256 and inventory membership; no raw Windows memory dump is in those saved six datasets.
+          - All relative changes from baseline \`91b765ca6bfb72da6012e4c119a8f3c4e08d9944\` were restricted to the dedicated evidence archive path plus this one-shot workflow (which removes itself in the publishing commit).
+          - Security: previously reviewed text artifacts include GitHub runner paths but no detected sensitive dumps, credentials, customer data, or database exports; bounded review only.
+          - Verified source identities: PR #28 Head \`82eca13347414024a23b49534b2bad465c232db1\`; capture source-run SHA \`bcdfb6464f0f843c1ee51c9d2b3b2310635708e1\`; PR #29 Head \`867c31125623c3588b1446fd43448cf90690eb68\`; diagnostic job tested Head \`3aa5e7266a35e56d9bf2dec6705d1fc1d3352812\` and Base \`782d178f5dc539bc078e04a1e67a10ad6ea5baa4\`.
+          - GitHub Actions run 41229347383: six historical SUCCESS diagnostic jobs, **without** reproducing the native failure. The crash remains **UNKNOWN/UNRESOLVED**.
+          - Original failing job 124615002999 remains valid historical evidence; replay does not establish a fix.
+          - Latest PR #28 Head \`action_required\` checks are not confused with the earlier successful capture run.
+          - UI/UX issues from PR #28 remain **unconfirmed as fixed**: History header/cell truncation and empty-state localization, Persian buttons, Explain reason truncation, mixed-language text, stored-history reachability, real Windows font/focus/scroll/high-DPI acceptance. PR #30 separately corrected operational progress/status on main, which was not retested as part of this archive job.
+
+          ## Important boundaries
+
+          This is **evidence preservation and integrity validation**, not app runtime testing, real interactive Windows acceptance, crash root-cause proof, product fix, release, deployment, or UI/UX sign-off. No changes to main, production paths or existing source branches were requested from this workflow.
+
+          ## Reproduction
+
+          From a fresh checkout of the archive branch, read \`MANIFEST.json\`; run SHA-256 and \`git hash-object\` on all indexed files; Pillow-verify all 89 published captures plus 89 original Actions PNGs and five distinct original variants; compare original ZIP members against published variants; recheck tar.xz inventory (40 inner records) with SHA-256. This GitHub Actions execution exercised those validations using Python 3.12 and Pillow 11.3.0.
+
+          ## Earlier partial validation history
+
+          The first archive commit lacked the five byte-distinct original Actions captures. An authorized branch-specific, self-removing archival GitHub Actions workflow run 41305711305 copied the exact historic ZIP and five variants and matched their checksums. Subsequent fresh-checkout verification above establishes their presence at the checked-out revision. The old provisional claim of unpreserved files no longer applies.
+          """
+          ver_doc.write_text(checklist.replace('          ', ''), encoding='utf-8')
+          print(f'PASS: files={len(items)}, published_png={len(published_paths)}, original_zip_png=89, original_variants={len(original_differences)}, diagnostic_files={len(seen)}')
+          PY
+
+      - name: Commit verified report and remove one-shot verification workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          rm .github/workflows/archive-evidence-verification-one-shot.yml
+          git add -- evidence/archive/pr28-pr29-20261101/ARCHIVE_VERIFICATION.md
+          git add -u -- .github/workflows/archive-evidence-verification-one-shot.yml
+          git diff --cached --name-only | while IFS= read -r file; do
+            case "$file" in
+              evidence/archive/pr28-pr29-20261101/ARCHIVE_VERIFICATION.md|.github/workflows/archive-evidence-verification-one-shot.yml) ;;
+              *) echo "Unexpected change: $file" >&2; exit 1 ;;
+            esac
+          done
+          git commit -m 'docs(archive): record successful fresh-checkout integrity and image verification'
+          git push origin HEAD:refs/heads/evidence/matrix-pr28-pr29-archive-20261101
