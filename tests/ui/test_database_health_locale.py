@@ -15,8 +15,8 @@ from app.ui.theme import apply_theme, build_theme
 _PERSIAN = re.compile(r"[\u0600-\u06ff]")
 _CASES = {
     "ok": (DatabaseHealthStatus.OK, DatabaseHealthReason.READY, "DB: Ready", "پایگاه‌داده: آماده", "ok"),
-    "degraded": (DatabaseHealthStatus.DEGRADED, DatabaseHealthReason.NEEDS_REVIEW, "DB: Review", "پایگاه‌داده: نیاز به بررسی", "warning"),
-    "missing": (DatabaseHealthStatus.UNAVAILABLE, DatabaseHealthReason.MISSING_FILE, "DB: File missing", "پایگاه‌داده: فایل یافت نشد", "error"),
+    "degraded": (DatabaseHealthStatus.DEGRADED, DatabaseHealthReason.NEEDS_REVIEW, "DB: Check", "پایگاه‌داده: نیاز به بررسی", "warning"),
+    "missing": (DatabaseHealthStatus.UNAVAILABLE, DatabaseHealthReason.MISSING_FILE, "DB: No file", "پایگاه‌داده: فایل یافت نشد", "error"),
     "connection": (DatabaseHealthStatus.UNAVAILABLE, DatabaseHealthReason.CONNECTION_ERROR, "DB: SQL error", "پایگاه‌داده: خطای اتصال", "error"),
 }
 
