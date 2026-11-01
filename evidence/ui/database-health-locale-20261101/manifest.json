@@ -1,0 +1,914 @@
+{
+  "head_sha": "748cc5e7c82b23289443e430e282312021caa2e9",
+  "capture_mode": "Windows Qt offscreen (not native desktop acceptance)",
+  "os": "Windows-10-10.0.26100-SP0",
+  "python": "3.11.16",
+  "qt_version": "6.11.2",
+  "pyside6_version": "6.11.2",
+  "qpa_platform": "offscreen",
+  "style": "",
+  "application_font": "Vazirmatn",
+  "screen_dpr": 1.0,
+  "font_backend_initialized": "bundled application font explicitly registered before capture",
+  "capture_count": 32,
+  "clipping_observations": [],
+  "scenario_basis": "isolated actual SQLite health summaries; not production database",
+  "cases": [
+    {
+      "name": "db-light-en-1200x800-ready",
+      "image": "db-light-en-1200x800-ready.png",
+      "language": "en",
+      "theme": "light",
+      "size_logical": [
+        1200,
+        800
+      ],
+      "image_pixels": [
+        1200,
+        800
+      ],
+      "device_pixel_ratio": 1.0,
+      "screen_dpr": 1.0,
+      "status": "ok",
+      "reason": "ready",
+      "severity_qss_property": "ok",
+      "status_text": "DB: Ready",
+      "tooltip": "Database: Ready — Students: 0 | Mentors: 0 | Runs: 0 — Last checked: 2026-11-01T12:57:23",
+      "accessible_name": "Database health",
+      "accessible_description": "Database: Ready",
+      "text_width_px": 59,
+      "label_width_px": 60,
+      "font": "Segoe UI",
+      "visible": true,
+      "layout_direction": "ltr"
+    },
+    {
+      "name": "db-light-en-1200x800-warning",
+      "image": "db-light-en-1200x800-warning.png",
+      "language": "en",
+      "theme": "light",
+      "size_logical": [
+        1200,
+        800
+      ],
+      "image_pixels": [
+        1200,
+        800
+      ],
+      "device_pixel_ratio": 1.0,
+      "screen_dpr": 1.0,
+      "status": "degraded",
+      "reason": "needs_review",
+      "severity_qss_property": "warning",
+      "status_text": "DB: Check",
+      "tooltip": "Database: Needs attention — Students: 0 | Mentors: 0 | Runs: 0 — Last checked: 2026-11-01T12:57:23",
+      "accessible_name": "Database health",
+      "accessible_description": "Database: Needs attention",
+      "text_width_px": 60,
+      "label_width_px": 60,
+      "font": "Segoe UI",
+      "visible": true,
+      "layout_direction": "ltr"
+    },
+    {
+      "name": "db-light-en-1200x800-missing-file",
+      "image": "db-light-en-1200x800-missing-file.png",
+      "language": "en",
+      "theme": "light",
+      "size_logical": [
+        1200,
+        800
+      ],
+      "image_pixels": [
+        1200,
+        800
+      ],
+      "device_pixel_ratio": 1.0,
+      "screen_dpr": 1.0,
+      "status": "unavailable",
+      "reason": "missing_file",
+      "severity_qss_property": "error",
+      "status_text": "DB: No file",
+      "tooltip": "Database: File not found",
+      "accessible_name": "Database health",
+      "accessible_description": "Database: File not found",
+      "text_width_px": 61,
+      "label_width_px": 62,
+      "font": "Segoe UI",
+      "visible": true,
+      "layout_direction": "ltr"
+    },
+    {
+      "name": "db-light-en-1200x800-connection-error",
+      "image": "db-light-en-1200x800-connection-error.png",
+      "language": "en",
+      "theme": "light",
+      "size_logical": [
+        1200,
+        800
+      ],
+      "image_pixels": [
+        1200,
+        800
+      ],
+      "device_pixel_ratio": 1.0,
+      "screen_dpr": 1.0,
+      "status": "unavailable",
+      "reason": "connection_error",
+      "severity_qss_property": "error",
+      "status_text": "DB: SQL error",
+      "tooltip": "Database: Connection error",
+      "accessible_name": "Database health",
+      "accessible_description": "Database: Connection error",
+      "text_width_px": 78,
+      "label_width_px": 80,
+      "font": "Segoe UI",
+      "visible": true,
+      "layout_direction": "ltr"
+    },
+    {
+      "name": "db-light-en-960x640-ready",
+      "image": "db-light-en-960x640-ready.png",
+      "language": "en",
+      "theme": "light",
+      "size_logical": [
+        960,
+        640
+      ],
+      "image_pixels": [
+        960,
+        640
+      ],
+      "device_pixel_ratio": 1.0,
+      "screen_dpr": 1.0,
+      "status": "ok",
+      "reason": "ready",
+      "severity_qss_property": "ok",
+      "status_text": "DB: Ready",
+      "tooltip": "Database: Ready — Students: 0 | Mentors: 0 | Runs: 0 — Last checked: 2026-11-01T12:57:23",
+      "accessible_name": "Database health",
+      "accessible_description": "Database: Ready",
+      "text_width_px": 59,
+      "label_width_px": 60,
+      "font": "Segoe UI",
+      "visible": true,
+      "layout_direction": "ltr"
+    },
+    {
+      "name": "db-light-en-960x640-warning",
+      "image": "db-light-en-960x640-warning.png",
+      "language": "en",
+      "theme": "light",
+      "size_logical": [
+        960,
+        640
+      ],
+      "image_pixels": [
+        960,
+        640
+      ],
+      "device_pixel_ratio": 1.0,
+      "screen_dpr": 1.0,
+      "status": "degraded",
+      "reason": "needs_review",
+      "severity_qss_property": "warning",
+      "status_text": "DB: Check",
+      "tooltip": "Database: Needs attention — Students: 0 | Mentors: 0 | Runs: 0 — Last checked: 2026-11-01T12:57:23",
+      "accessible_name": "Database health",
+      "accessible_description": "Database: Needs attention",
+      "text_width_px": 60,
+      "label_width_px": 60,
+      "font": "Segoe UI",
+      "visible": true,
+      "layout_direction": "ltr"
+    },
+    {
+      "name": "db-light-en-960x640-missing-file",
+      "image": "db-light-en-960x640-missing-file.png",
+      "language": "en",
+      "theme": "light",
+      "size_logical": [
+        960,
+        640
+      ],
+      "image_pixels": [
+        960,
+        640
+      ],
+      "device_pixel_ratio": 1.0,
+      "screen_dpr": 1.0,
+      "status": "unavailable",
+      "reason": "missing_file",
+      "severity_qss_property": "error",
+      "status_text": "DB: No file",
+      "tooltip": "Database: File not found",
+      "accessible_name": "Database health",
+      "accessible_description": "Database: File not found",
+      "text_width_px": 61,
+      "label_width_px": 62,
+      "font": "Segoe UI",
+      "visible": true,
+      "layout_direction": "ltr"
+    },
+    {
+      "name": "db-light-en-960x640-connection-error",
+      "image": "db-light-en-960x640-connection-error.png",
+      "language": "en",
+      "theme": "light",
+      "size_logical": [
+        960,
+        640
+      ],
+      "image_pixels": [
+        960,
+        640
+      ],
+      "device_pixel_ratio": 1.0,
+      "screen_dpr": 1.0,
+      "status": "unavailable",
+      "reason": "connection_error",
+      "severity_qss_property": "error",
+      "status_text": "DB: SQL error",
+      "tooltip": "Database: Connection error",
+      "accessible_name": "Database health",
+      "accessible_description": "Database: Connection error",
+      "text_width_px": 78,
+      "label_width_px": 80,
+      "font": "Segoe UI",
+      "visible": true,
+      "layout_direction": "ltr"
+    },
+    {
+      "name": "db-light-fa-1200x800-ready",
+      "image": "db-light-fa-1200x800-ready.png",
+      "language": "fa",
+      "theme": "light",
+      "size_logical": [
+        1200,
+        800
+      ],
+      "image_pixels": [
+        1200,
+        800
+      ],
+      "device_pixel_ratio": 1.0,
+      "screen_dpr": 1.0,
+      "status": "ok",
+      "reason": "ready",
+      "severity_qss_property": "ok",
+      "status_text": "پایگاه‌داده: آماده",
+      "tooltip": "پایگاه‌داده: آماده — دانش‌آموز: 0 | پشتیبان: 0 | اجرا: 0 — آخرین بررسی: 2026-11-01T12:57:23",
+      "accessible_name": "سلامت پایگاه‌داده",
+      "accessible_description": "پایگاه‌داده: آماده",
+      "text_width_px": 82,
+      "label_width_px": 82,
+      "font": "Vazirmatn",
+      "visible": true,
+      "layout_direction": "rtl"
+    },
+    {
+      "name": "db-light-fa-1200x800-warning",
+      "image": "db-light-fa-1200x800-warning.png",
+      "language": "fa",
+      "theme": "light",
+      "size_logical": [
+        1200,
+        800
+      ],
+      "image_pixels": [
+        1200,
+        800
+      ],
+      "device_pixel_ratio": 1.0,
+      "screen_dpr": 1.0,
+      "status": "degraded",
+      "reason": "needs_review",
+      "severity_qss_property": "warning",
+      "status_text": "پایگاه‌داده: نیاز به بررسی",
+      "tooltip": "پایگاه‌داده: نیاز به بررسی — دانش‌آموز: 0 | پشتیبان: 0 | اجرا: 0 — آخرین بررسی: 2026-11-01T12:57:23",
+      "accessible_name": "سلامت پایگاه‌داده",
+      "accessible_description": "پایگاه‌داده: نیاز به بررسی",
+      "text_width_px": 121,
+      "label_width_px": 122,
+      "font": "Vazirmatn",
+      "visible": true,
+      "layout_direction": "rtl"
+    },
+    {
+      "name": "db-light-fa-1200x800-missing-file",
+      "image": "db-light-fa-1200x800-missing-file.png",
+      "language": "fa",
+      "theme": "light",
+      "size_logical": [
+        1200,
+        800
+      ],
+      "image_pixels": [
+        1200,
+        800
+      ],
+      "device_pixel_ratio": 1.0,
+      "screen_dpr": 1.0,
+      "status": "unavailable",
+      "reason": "missing_file",
+      "severity_qss_property": "error",
+      "status_text": "پایگاه‌داده: فایل یافت نشد",
+      "tooltip": "پایگاه‌داده: فایل یافت نشد",
+      "accessible_name": "سلامت پایگاه‌داده",
+      "accessible_description": "پایگاه‌داده: فایل یافت نشد",
+      "text_width_px": 133,
+      "label_width_px": 134,
+      "font": "Vazirmatn",
+      "visible": true,
+      "layout_direction": "rtl"
+    },
+    {
+      "name": "db-light-fa-1200x800-connection-error",
+      "image": "db-light-fa-1200x800-connection-error.png",
+      "language": "fa",
+      "theme": "light",
+      "size_logical": [
+        1200,
+        800
+      ],
+      "image_pixels": [
+        1200,
+        800
+      ],
+      "device_pixel_ratio": 1.0,
+      "screen_dpr": 1.0,
+      "status": "unavailable",
+      "reason": "connection_error",
+      "severity_qss_property": "error",
+      "status_text": "پایگاه‌داده: خطای اتصال",
+      "tooltip": "پایگاه‌داده: خطای اتصال",
+      "accessible_name": "سلامت پایگاه‌داده",
+      "accessible_description": "پایگاه‌داده: خطای اتصال",
+      "text_width_px": 119,
+      "label_width_px": 120,
+      "font": "Vazirmatn",
+      "visible": true,
+      "layout_direction": "rtl"
+    },
+    {
+      "name": "db-light-fa-960x640-ready",
+      "image": "db-light-fa-960x640-ready.png",
+      "language": "fa",
+      "theme": "light",
+      "size_logical": [
+        960,
+        640
+      ],
+      "image_pixels": [
+        960,
+        640
+      ],
+      "device_pixel_ratio": 1.0,
+      "screen_dpr": 1.0,
+      "status": "ok",
+      "reason": "ready",
+      "severity_qss_property": "ok",
+      "status_text": "پایگاه‌داده: آماده",
+      "tooltip": "پایگاه‌داده: آماده — دانش‌آموز: 0 | پشتیبان: 0 | اجرا: 0 — آخرین بررسی: 2026-11-01T12:57:23",
+      "accessible_name": "سلامت پایگاه‌داده",
+      "accessible_description": "پایگاه‌داده: آماده",
+      "text_width_px": 82,
+      "label_width_px": 82,
+      "font": "Vazirmatn",
+      "visible": true,
+      "layout_direction": "rtl"
+    },
+    {
+      "name": "db-light-fa-960x640-warning",
+      "image": "db-light-fa-960x640-warning.png",
+      "language": "fa",
+      "theme": "light",
+      "size_logical": [
+        960,
+        640
+      ],
+      "image_pixels": [
+        960,
+        640
+      ],
+      "device_pixel_ratio": 1.0,
+      "screen_dpr": 1.0,
+      "status": "degraded",
+      "reason": "needs_review",
+      "severity_qss_property": "warning",
+      "status_text": "پایگاه‌داده: نیاز به بررسی",
+      "tooltip": "پایگاه‌داده: نیاز به بررسی — دانش‌آموز: 0 | پشتیبان: 0 | اجرا: 0 — آخرین بررسی: 2026-11-01T12:57:23",
+      "accessible_name": "سلامت پایگاه‌داده",
+      "accessible_description": "پایگاه‌داده: نیاز به بررسی",
+      "text_width_px": 121,
+      "label_width_px": 122,
+      "font": "Vazirmatn",
+      "visible": true,
+      "layout_direction": "rtl"
+    },
+    {
+      "name": "db-light-fa-960x640-missing-file",
+      "image": "db-light-fa-960x640-missing-file.png",
+      "language": "fa",
+      "theme": "light",
+      "size_logical": [
+        960,
+        640
+      ],
+      "image_pixels": [
+        960,
+        640
+      ],
+      "device_pixel_ratio": 1.0,
+      "screen_dpr": 1.0,
+      "status": "unavailable",
+      "reason": "missing_file",
+      "severity_qss_property": "error",
+      "status_text": "پایگاه‌داده: فایل یافت نشد",
+      "tooltip": "پایگاه‌داده: فایل یافت نشد",
+      "accessible_name": "سلامت پایگاه‌داده",
+      "accessible_description": "پایگاه‌داده: فایل یافت نشد",
+      "text_width_px": 133,
+      "label_width_px": 134,
+      "font": "Vazirmatn",
+      "visible": true,
+      "layout_direction": "rtl"
+    },
+    {
+      "name": "db-light-fa-960x640-connection-error",
+      "image": "db-light-fa-960x640-connection-error.png",
+      "language": "fa",
+      "theme": "light",
+      "size_logical": [
+        960,
+        640
+      ],
+      "image_pixels": [
+        960,
+        640
+      ],
+      "device_pixel_ratio": 1.0,
+      "screen_dpr": 1.0,
+      "status": "unavailable",
+      "reason": "connection_error",
+      "severity_qss_property": "error",
+      "status_text": "پایگاه‌داده: خطای اتصال",
+      "tooltip": "پایگاه‌داده: خطای اتصال",
+      "accessible_name": "سلامت پایگاه‌داده",
+      "accessible_description": "پایگاه‌داده: خطای اتصال",
+      "text_width_px": 119,
+      "label_width_px": 120,
+      "font": "Vazirmatn",
+      "visible": true,
+      "layout_direction": "rtl"
+    },
+    {
+      "name": "db-dark-en-1200x800-ready",
+      "image": "db-dark-en-1200x800-ready.png",
+      "language": "en",
+      "theme": "dark",
+      "size_logical": [
+        1200,
+        800
+      ],
+      "image_pixels": [
+        1200,
+        800
+      ],
+      "device_pixel_ratio": 1.0,
+      "screen_dpr": 1.0,
+      "status": "ok",
+      "reason": "ready",
+      "severity_qss_property": "ok",
+      "status_text": "DB: Ready",
+      "tooltip": "Database: Ready — Students: 0 | Mentors: 0 | Runs: 0 — Last checked: 2026-11-01T12:57:23",
+      "accessible_name": "Database health",
+      "accessible_description": "Database: Ready",
+      "text_width_px": 59,
+      "label_width_px": 60,
+      "font": "Segoe UI",
+      "visible": true,
+      "layout_direction": "ltr"
+    },
+    {
+      "name": "db-dark-en-1200x800-warning",
+      "image": "db-dark-en-1200x800-warning.png",
+      "language": "en",
+      "theme": "dark",
+      "size_logical": [
+        1200,
+        800
+      ],
+      "image_pixels": [
+        1200,
+        800
+      ],
+      "device_pixel_ratio": 1.0,
+      "screen_dpr": 1.0,
+      "status": "degraded",
+      "reason": "needs_review",
+      "severity_qss_property": "warning",
+      "status_text": "DB: Check",
+      "tooltip": "Database: Needs attention — Students: 0 | Mentors: 0 | Runs: 0 — Last checked: 2026-11-01T12:57:23",
+      "accessible_name": "Database health",
+      "accessible_description": "Database: Needs attention",
+      "text_width_px": 60,
+      "label_width_px": 60,
+      "font": "Segoe UI",
+      "visible": true,
+      "layout_direction": "ltr"
+    },
+    {
+      "name": "db-dark-en-1200x800-missing-file",
+      "image": "db-dark-en-1200x800-missing-file.png",
+      "language": "en",
+      "theme": "dark",
+      "size_logical": [
+        1200,
+        800
+      ],
+      "image_pixels": [
+        1200,
+        800
+      ],
+      "device_pixel_ratio": 1.0,
+      "screen_dpr": 1.0,
+      "status": "unavailable",
+      "reason": "missing_file",
+      "severity_qss_property": "error",
+      "status_text": "DB: No file",
+      "tooltip": "Database: File not found",
+      "accessible_name": "Database health",
+      "accessible_description": "Database: File not found",
+      "text_width_px": 61,
+      "label_width_px": 62,
+      "font": "Segoe UI",
+      "visible": true,
+      "layout_direction": "ltr"
+    },
+    {
+      "name": "db-dark-en-1200x800-connection-error",
+      "image": "db-dark-en-1200x800-connection-error.png",
+      "language": "en",
+      "theme": "dark",
+      "size_logical": [
+        1200,
+        800
+      ],
+      "image_pixels": [
+        1200,
+        800
+      ],
+      "device_pixel_ratio": 1.0,
+      "screen_dpr": 1.0,
+      "status": "unavailable",
+      "reason": "connection_error",
+      "severity_qss_property": "error",
+      "status_text": "DB: SQL error",
+      "tooltip": "Database: Connection error",
+      "accessible_name": "Database health",
+      "accessible_description": "Database: Connection error",
+      "text_width_px": 78,
+      "label_width_px": 80,
+      "font": "Segoe UI",
+      "visible": true,
+      "layout_direction": "ltr"
+    },
+    {
+      "name": "db-dark-en-960x640-ready",
+      "image": "db-dark-en-960x640-ready.png",
+      "language": "en",
+      "theme": "dark",
+      "size_logical": [
+        960,
+        640
+      ],
+      "image_pixels": [
+        960,
+        640
+      ],
+      "device_pixel_ratio": 1.0,
+      "screen_dpr": 1.0,
+      "status": "ok",
+      "reason": "ready",
+      "severity_qss_property": "ok",
+      "status_text": "DB: Ready",
+      "tooltip": "Database: Ready — Students: 0 | Mentors: 0 | Runs: 0 — Last checked: 2026-11-01T12:57:23",
+      "accessible_name": "Database health",
+      "accessible_description": "Database: Ready",
+      "text_width_px": 59,
+      "label_width_px": 60,
+      "font": "Segoe UI",
+      "visible": true,
+      "layout_direction": "ltr"
+    },
+    {
+      "name": "db-dark-en-960x640-warning",
+      "image": "db-dark-en-960x640-warning.png",
+      "language": "en",
+      "theme": "dark",
+      "size_logical": [
+        960,
+        640
+      ],
+      "image_pixels": [
+        960,
+        640
+      ],
+      "device_pixel_ratio": 1.0,
+      "screen_dpr": 1.0,
+      "status": "degraded",
+      "reason": "needs_review",
+      "severity_qss_property": "warning",
+      "status_text": "DB: Check",
+      "tooltip": "Database: Needs attention — Students: 0 | Mentors: 0 | Runs: 0 — Last checked: 2026-11-01T12:57:23",
+      "accessible_name": "Database health",
+      "accessible_description": "Database: Needs attention",
+      "text_width_px": 60,
+      "label_width_px": 60,
+      "font": "Segoe UI",
+      "visible": true,
+      "layout_direction": "ltr"
+    },
+    {
+      "name": "db-dark-en-960x640-missing-file",
+      "image": "db-dark-en-960x640-missing-file.png",
+      "language": "en",
+      "theme": "dark",
+      "size_logical": [
+        960,
+        640
+      ],
+      "image_pixels": [
+        960,
+        640
+      ],
+      "device_pixel_ratio": 1.0,
+      "screen_dpr": 1.0,
+      "status": "unavailable",
+      "reason": "missing_file",
+      "severity_qss_property": "error",
+      "status_text": "DB: No file",
+      "tooltip": "Database: File not found",
+      "accessible_name": "Database health",
+      "accessible_description": "Database: File not found",
+      "text_width_px": 61,
+      "label_width_px": 62,
+      "font": "Segoe UI",
+      "visible": true,
+      "layout_direction": "ltr"
+    },
+    {
+      "name": "db-dark-en-960x640-connection-error",
+      "image": "db-dark-en-960x640-connection-error.png",
+      "language": "en",
+      "theme": "dark",
+      "size_logical": [
+        960,
+        640
+      ],
+      "image_pixels": [
+        960,
+        640
+      ],
+      "device_pixel_ratio": 1.0,
+      "screen_dpr": 1.0,
+      "status": "unavailable",
+      "reason": "connection_error",
+      "severity_qss_property": "error",
+      "status_text": "DB: SQL error",
+      "tooltip": "Database: Connection error",
+      "accessible_name": "Database health",
+      "accessible_description": "Database: Connection error",
+      "text_width_px": 78,
+      "label_width_px": 80,
+      "font": "Segoe UI",
+      "visible": true,
+      "layout_direction": "ltr"
+    },
+    {
+      "name": "db-dark-fa-1200x800-ready",
+      "image": "db-dark-fa-1200x800-ready.png",
+      "language": "fa",
+      "theme": "dark",
+      "size_logical": [
+        1200,
+        800
+      ],
+      "image_pixels": [
+        1200,
+        800
+      ],
+      "device_pixel_ratio": 1.0,
+      "screen_dpr": 1.0,
+      "status": "ok",
+      "reason": "ready",
+      "severity_qss_property": "ok",
+      "status_text": "پایگاه‌داده: آماده",
+      "tooltip": "پایگاه‌داده: آماده — دانش‌آموز: 0 | پشتیبان: 0 | اجرا: 0 — آخرین بررسی: 2026-11-01T12:57:23",
+      "accessible_name": "سلامت پایگاه‌داده",
+      "accessible_description": "پایگاه‌داده: آماده",
+      "text_width_px": 82,
+      "label_width_px": 82,
+      "font": "Vazirmatn",
+      "visible": true,
+      "layout_direction": "rtl"
+    },
+    {
+      "name": "db-dark-fa-1200x800-warning",
+      "image": "db-dark-fa-1200x800-warning.png",
+      "language": "fa",
+      "theme": "dark",
+      "size_logical": [
+        1200,
+        800
+      ],
+      "image_pixels": [
+        1200,
+        800
+      ],
+      "device_pixel_ratio": 1.0,
+      "screen_dpr": 1.0,
+      "status": "degraded",
+      "reason": "needs_review",
+      "severity_qss_property": "warning",
+      "status_text": "پایگاه‌داده: نیاز به بررسی",
+      "tooltip": "پایگاه‌داده: نیاز به بررسی — دانش‌آموز: 0 | پشتیبان: 0 | اجرا: 0 — آخرین بررسی: 2026-11-01T12:57:23",
+      "accessible_name": "سلامت پایگاه‌داده",
+      "accessible_description": "پایگاه‌داده: نیاز به بررسی",
+      "text_width_px": 121,
+      "label_width_px": 122,
+      "font": "Vazirmatn",
+      "visible": true,
+      "layout_direction": "rtl"
+    },
+    {
+      "name": "db-dark-fa-1200x800-missing-file",
+      "image": "db-dark-fa-1200x800-missing-file.png",
+      "language": "fa",
+      "theme": "dark",
+      "size_logical": [
+        1200,
+        800
+      ],
+      "image_pixels": [
+        1200,
+        800
+      ],
+      "device_pixel_ratio": 1.0,
+      "screen_dpr": 1.0,
+      "status": "unavailable",
+      "reason": "missing_file",
+      "severity_qss_property": "error",
+      "status_text": "پایگاه‌داده: فایل یافت نشد",
+      "tooltip": "پایگاه‌داده: فایل یافت نشد",
+      "accessible_name": "سلامت پایگاه‌داده",
+      "accessible_description": "پایگاه‌داده: فایل یافت نشد",
+      "text_width_px": 133,
+      "label_width_px": 134,
+      "font": "Vazirmatn",
+      "visible": true,
+      "layout_direction": "rtl"
+    },
+    {
+      "name": "db-dark-fa-1200x800-connection-error",
+      "image": "db-dark-fa-1200x800-connection-error.png",
+      "language": "fa",
+      "theme": "dark",
+      "size_logical": [
+        1200,
+        800
+      ],
+      "image_pixels": [
+        1200,
+        800
+      ],
+      "device_pixel_ratio": 1.0,
+      "screen_dpr": 1.0,
+      "status": "unavailable",
+      "reason": "connection_error",
+      "severity_qss_property": "error",
+      "status_text": "پایگاه‌داده: خطای اتصال",
+      "tooltip": "پایگاه‌داده: خطای اتصال",
+      "accessible_name": "سلامت پایگاه‌داده",
+      "accessible_description": "پایگاه‌داده: خطای اتصال",
+      "text_width_px": 119,
+      "label_width_px": 120,
+      "font": "Vazirmatn",
+      "visible": true,
+      "layout_direction": "rtl"
+    },
+    {
+      "name": "db-dark-fa-960x640-ready",
+      "image": "db-dark-fa-960x640-ready.png",
+      "language": "fa",
+      "theme": "dark",
+      "size_logical": [
+        960,
+        640
+      ],
+      "image_pixels": [
+        960,
+        640
+      ],
+      "device_pixel_ratio": 1.0,
+      "screen_dpr": 1.0,
+      "status": "ok",
+      "reason": "ready",
+      "severity_qss_property": "ok",
+      "status_text": "پایگاه‌داده: آماده",
+      "tooltip": "پایگاه‌داده: آماده — دانش‌آموز: 0 | پشتیبان: 0 | اجرا: 0 — آخرین بررسی: 2026-11-01T12:57:23",
+      "accessible_name": "سلامت پایگاه‌داده",
+      "accessible_description": "پایگاه‌داده: آماده",
+      "text_width_px": 82,
+      "label_width_px": 82,
+      "font": "Vazirmatn",
+      "visible": true,
+      "layout_direction": "rtl"
+    },
+    {
+      "name": "db-dark-fa-960x640-warning",
+      "image": "db-dark-fa-960x640-warning.png",
+      "language": "fa",
+      "theme": "dark",
+      "size_logical": [
+        960,
+        640
+      ],
+      "image_pixels": [
+        960,
+        640
+      ],
+      "device_pixel_ratio": 1.0,
+      "screen_dpr": 1.0,
+      "status": "degraded",
+      "reason": "needs_review",
+      "severity_qss_property": "warning",
+      "status_text": "پایگاه‌داده: نیاز به بررسی",
+      "tooltip": "پایگاه‌داده: نیاز به بررسی — دانش‌آموز: 0 | پشتیبان: 0 | اجرا: 0 — آخرین بررسی: 2026-11-01T12:57:23",
+      "accessible_name": "سلامت پایگاه‌داده",
+      "accessible_description": "پایگاه‌داده: نیاز به بررسی",
+      "text_width_px": 121,
+      "label_width_px": 122,
+      "font": "Vazirmatn",
+      "visible": true,
+      "layout_direction": "rtl"
+    },
+    {
+      "name": "db-dark-fa-960x640-missing-file",
+      "image": "db-dark-fa-960x640-missing-file.png",
+      "language": "fa",
+      "theme": "dark",
+      "size_logical": [
+        960,
+        640
+      ],
+      "image_pixels": [
+        960,
+        640
+      ],
+      "device_pixel_ratio": 1.0,
+      "screen_dpr": 1.0,
+      "status": "unavailable",
+      "reason": "missing_file",
+      "severity_qss_property": "error",
+      "status_text": "پایگاه‌داده: فایل یافت نشد",
+      "tooltip": "پایگاه‌داده: فایل یافت نشد",
+      "accessible_name": "سلامت پایگاه‌داده",
+      "accessible_description": "پایگاه‌داده: فایل یافت نشد",
+      "text_width_px": 133,
+      "label_width_px": 134,
+      "font": "Vazirmatn",
+      "visible": true,
+      "layout_direction": "rtl"
+    },
+    {
+      "name": "db-dark-fa-960x640-connection-error",
+      "image": "db-dark-fa-960x640-connection-error.png",
+      "language": "fa",
+      "theme": "dark",
+      "size_logical": [
+        960,
+        640
+      ],
+      "image_pixels": [
+        960,
+        640
+      ],
+      "device_pixel_ratio": 1.0,
+      "screen_dpr": 1.0,
+      "status": "unavailable",
+      "reason": "connection_error",
+      "severity_qss_property": "error",
+      "status_text": "پایگاه‌داده: خطای اتصال",
+      "tooltip": "پایگاه‌داده: خطای اتصال",
+      "accessible_name": "سلامت پایگاه‌داده",
+      "accessible_description": "پایگاه‌داده: خطای اتصال",
+      "text_width_px": 119,
+      "label_width_px": 120,
+      "font": "Vazirmatn",
+      "visible": true,
+      "layout_direction": "rtl"
+    }
+  ]
+}
