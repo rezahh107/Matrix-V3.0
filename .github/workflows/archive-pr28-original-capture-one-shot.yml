@@ -1,0 +1,107 @@
+name: One-shot archival transfer of original PR28 capture evidence
+
+on:
+  push:
+    branches:
+      - evidence/matrix-pr28-pr29-archive-20261101
+    paths:
+      - .github/workflows/archive-pr28-original-capture-one-shot.yml
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  preserve-original:
+    if: github.repository == 'rezahh107/Matrix-V3.0' && github.ref == 'refs/heads/evidence/matrix-pr28-pr29-archive-20261101'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out the exact archive-branch commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: true
+          fetch-depth: 1
+
+      - name: Verify no application sources or main are targeted
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$GITHUB_REF" = "refs/heads/evidence/matrix-pr28-pr29-archive-20261101"
+          test "$(git branch --show-current)" != "main"
+          test -d evidence/archive/pr28-pr29-20261101/pr28/captures
+
+      - name: Download, verify, and copy exact original Actions ZIP
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARCHIVE_ARTIFACT_ID: '13073348210'
+        run: |
+          set -euo pipefail
+          gh api -H "Accept: application/vnd.github+json" "repos/$GITHUB_REPOSITORY/actions/artifacts/$ARCHIVE_ARTIFACT_ID/zip" > "$RUNNER_TEMP/pr28-original-actions.zip"
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import pathlib
+          import shutil
+          import zipfile
+
+          root = pathlib.Path('evidence/archive/pr28-pr29-20261101')
+          source = pathlib.Path(os.environ['RUNNER_TEMP']) / 'pr28-original-actions.zip'
+          expected_zip = '1d1fbe489024ebd2be0b30d7fb5cbbacd439f7bdc6bb3148489d215a01df296c'
+          actual_zip = hashlib.sha256(source.read_bytes()).hexdigest()
+          if actual_zip != expected_zip:
+              raise SystemExit(f'Original Actions ZIP checksum mismatch: {actual_zip}')
+          original_only = {
+              'contact-operation.png': '2b6d037e0b92e93684ddb6703f432567dc710c2ed96e9baa2d48f2fd4a17efd4',
+              'operation-dark-en-controlled-failure.png': '7f2be3d33745658b86a52641887f525ee2bdf544ae4fc1fa97b79a6a3e3aaa00',
+              'operation-dark-fa-controlled-failure.png': 'f4c4b5c1c862492213163ed303eaee38b3a9876bb8164143b56308337363628f',
+              'operation-light-en-controlled-failure.png': '02b7ccce647fa29861c61a8110d2bba8bf7444fed4e5e90f413919fec2c829cb',
+              'operation-light-fa-controlled-failure.png': '3aa7ef35818186043b7c259764782d9f367900888f26dde5f97e9832cd879adc',
+          }
+          with zipfile.ZipFile(source) as z:
+              if z.testzip() is not None:
+                  raise SystemExit('Original Actions ZIP has a corrupt member')
+              names = z.namelist()
+              if len(names) != 92 or sum(name.endswith('.png') for name in names) != 89:
+                  raise SystemExit('Unexpected original evidence member count')
+              manifest = json.loads(z.read('manifest.json'))
+              if manifest.get('capture_count') != 84 or manifest.get('failure_count') != 0:
+                  raise SystemExit('Original capture metadata mismatch')
+              dest = root / 'pr28/original-actions-variants'
+              dest.mkdir(parents=True, exist_ok=True)
+              for name, expected in original_only.items():
+                  body = z.read(name)
+                  actual = hashlib.sha256(body).hexdigest()
+                  if actual != expected or not body.startswith(b'\x89PNG\r\n\x1a\n'):
+                      raise SystemExit(f'Original PNG integrity mismatch: {name}')
+                  (dest / name).write_bytes(body)
+          archive = root / 'pr28/original-actions-artifact/matrix-dialog-operational-evidence.zip'
+          archive.parent.mkdir(parents=True, exist_ok=True)
+          shutil.copyfile(source, archive)
+          if hashlib.sha256(archive.read_bytes()).hexdigest() != expected_zip:
+              raise SystemExit('Copied ZIP checksum mismatch')
+          print('Verified exact original run ZIP, 84 scenarios and 5 contact sheets; archived 5 distinct original-run PNGs')
+          PY
+
+      - name: Commit only evidence and remove the temporary workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          rm .github/workflows/archive-pr28-original-capture-one-shot.yml
+          git add -- evidence/archive/pr28-pr29-20261101/pr28/original-actions-artifact/ evidence/archive/pr28-pr29-20261101/pr28/original-actions-variants/
+          git add -u -- .github/workflows/archive-pr28-original-capture-one-shot.yml
+          git diff --cached --name-only | while IFS= read -r file; do
+            case "$file" in
+              evidence/archive/pr28-pr29-20261101/pr28/original-actions-artifact/*|evidence/archive/pr28-pr29-20261101/pr28/original-actions-variants/*|.github/workflows/archive-pr28-original-capture-one-shot.yml) ;;
+              *) echo "Unapproved staged file: $file" >&2; exit 1 ;;
+            esac
+          done
+          git diff --cached --quiet && { echo 'No archival changes made' >&2; exit 1; }
+          git commit -m 'archive: retain exact original PR28 Actions capture and five original-run variants'
+          git push origin HEAD:refs/heads/evidence/matrix-pr28-pr29-archive-20261101
