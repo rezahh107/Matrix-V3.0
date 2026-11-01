@@ -766,7 +766,7 @@ class MainWindow(QMainWindow):
         """نوار وضعیت پایین با نمایش زبان و وضعیت جاری."""
 
         status_bar = ThemedStatusBar(self._theme, self)
-        db_widget = DatabaseStatusWidget(self._theme, status_bar)
+        db_widget = DatabaseStatusWidget(self._theme, status_bar, translator=self._translator)
         db_widget.databaseManagerRequested.connect(self.open_database_manager)
         language_label = QLabel(
             f"{self._t('status.language', 'زبان فعال')}: {self._prefs.language.code.upper()}"
@@ -963,6 +963,8 @@ class MainWindow(QMainWindow):
             )
         self._refresh_tab_texts()
         self._refresh_action_texts()
+        if self._database_status is not None:
+            self._database_status.set_translator(self._translator)
         self._refresh_last_run_badge()
         if hasattr(self, "_log_panel"):
             self._log_panel.update_translator(self._translator)

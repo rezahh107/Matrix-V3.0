@@ -77,6 +77,15 @@ class DatabaseHealthStatus(StrEnum):
     UNAVAILABLE = "unavailable"
 
 
+class DatabaseHealthReason(StrEnum):
+    """Stable language-independent cause for presenting health to users."""
+
+    READY = "ready"
+    NEEDS_REVIEW = "needs_review"
+    MISSING_FILE = "missing_file"
+    CONNECTION_ERROR = "connection_error"
+
+
 @dataclass(frozen=True)
 class DatabaseHealthSummary:
     """خلاصه وضعیت پایگاه‌داده برای نمایش در نوار وضعیت."""
@@ -85,6 +94,7 @@ class DatabaseHealthSummary:
     message: str
     counts: dict[str, int]
     last_updated: datetime | None = None
+    reason: DatabaseHealthReason | None = None
 
 
 @dataclass(frozen=True)
@@ -1025,6 +1035,7 @@ class LocalDatabase:
                 status=DatabaseHealthStatus.UNAVAILABLE,
                 message="پایگاه‌داده: در دسترس نیست",
                 counts={},
+                reason=DatabaseHealthReason.MISSING_FILE,
             )
 
         try:
@@ -1059,6 +1070,7 @@ class LocalDatabase:
                         status=DatabaseHealthStatus.DEGRADED,
                         message="پایگاه‌داده: نیاز به بررسی",
                         counts=counts,
+                        reason=DatabaseHealthReason.NEEDS_REVIEW,
                         last_updated=last_updated,
                     )
 
@@ -1066,6 +1078,7 @@ class LocalDatabase:
                     status=DatabaseHealthStatus.OK,
                     message="پایگاه‌داده: آماده",
                     counts=counts,
+                    reason=DatabaseHealthReason.READY,
                     last_updated=last_updated,
                 )
         except sqlite3.Error:
@@ -1074,6 +1087,7 @@ class LocalDatabase:
                 status=DatabaseHealthStatus.UNAVAILABLE,
                 message="پایگاه‌داده: خطای اتصال",
                 counts={},
+                reason=DatabaseHealthReason.CONNECTION_ERROR,
             )
 
     def _collect_table_diagnostics(
