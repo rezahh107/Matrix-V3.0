@@ -51,8 +51,8 @@ _HEALTH_LABELS = {
 # complete reason. Persian strings remain unchanged where they already fit.
 _COMPACT_EN_LABELS = {
     "ready": ("database.health.compact.ready", "DB: Ready"),
-    "needs_review": ("database.health.compact.needs_review", "DB: Review"),
-    "missing_file": ("database.health.compact.missing_file", "DB: File missing"),
+    "needs_review": ("database.health.compact.needs_review", "DB: Check"),
+    "missing_file": ("database.health.compact.missing_file", "DB: No file"),
     "connection_error": ("database.health.compact.connection_error", "DB: SQL error"),
     "unavailable": ("database.health.compact.unavailable", "DB: Unavailable"),
 }
