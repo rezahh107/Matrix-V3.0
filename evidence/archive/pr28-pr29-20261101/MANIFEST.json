@@ -9,14 +9,18 @@
     "actions_zip_sha256": "1d1fbe489024ebd2be0b30d7fb5cbbacd439f7bdc6bb3148489d215a01df296c",
     "reported_capture_count": 84,
     "contact_sheets": 5,
-    "unpreserved_original_actions_pngs": [
+    "unpreserved_original_actions_pngs": [],
+    "blocked_original_capture_exact_bytes": false,
+    "original_actions_copy_run_id": 41305711305,
+    "original_actions_zip_archive_path": "evidence/archive/pr28-pr29-20261101/pr28/original-actions-artifact/matrix-dialog-operational-evidence.zip",
+    "original_actions_distinct_pngs_archive_path": "evidence/archive/pr28-pr29-20261101/pr28/original-actions-variants/",
+    "original_actions_distinct_pngs": [
       "contact-operation.png",
       "operation-dark-en-controlled-failure.png",
       "operation-dark-fa-controlled-failure.png",
       "operation-light-en-controlled-failure.png",
       "operation-light-fa-controlled-failure.png"
-    ],
-    "blocked_original_capture_exact_bytes": true
+    ]
   },
   "pr29": {
     "head_sha": "867c31125623c3588b1446fd43448cf90690eb68",
@@ -28,17 +32,6 @@
     "original_zip_digests_inside_artifact_inventory": true
   },
   "files": [
-    {
-      "archive_path": "evidence/archive/pr28-pr29-20261101/pr28/captures/SUMMARY.md",
-      "source_commit": "82eca13347414024a23b49534b2bad465c232db1",
-      "source_path": "evidence/ui/dialog-operational-20261031/SUMMARY.md",
-      "git_blob_sha1": "f9c9502c219464fcc819199b54118853d3152c60",
-      "size_bytes": 7526,
-      "sha256": "9cba51e8b572a1cdcd7ac3c27e95e506421758dafa63474bd15cee20bf6f4392",
-      "evidence_type": "capture_summary",
-      "original_actions_zip_member_sha256": "9cba51e8b572a1cdcd7ac3c27e95e506421758dafa63474bd15cee20bf6f4392",
-      "original_actions_member_differs_from_published": false
-    },
     {
       "archive_path": "evidence/archive/pr28-pr29-20261101/pr28/captures/contact-explain.png",
       "source_commit": "82eca13347414024a23b49534b2bad465c232db1",
@@ -1041,13 +1034,78 @@
       "original_actions_member_differs_from_published": false
     },
     {
-      "archive_path": "evidence/archive/pr28-pr29-20261101/pr29/artifacts/qt-diagnostic-artifact-contents.tar.xz",
-      "source_commit": "artifact-download-run-41229347383",
-      "source_path": "six artifacts; see SOURCE_ARTIFACT_INVENTORY.json inside",
-      "git_blob_sha1": "861ffc4a3745f05c54b85a59edd90872b9101ded",
-      "size_bytes": 8312,
-      "sha256": "79afc9c641a76dddded4a45236509ce57775e09f0ee6adb4792eae827e8ff3fb",
-      "evidence_type": "diagnostic_artifact_contents"
+      "archive_path": "evidence/archive/pr28-pr29-20261101/pr28/captures/SUMMARY.md",
+      "source_commit": "82eca13347414024a23b49534b2bad465c232db1",
+      "source_path": "evidence/ui/dialog-operational-20261031/SUMMARY.md",
+      "git_blob_sha1": "f9c9502c219464fcc819199b54118853d3152c60",
+      "size_bytes": 7526,
+      "sha256": "9cba51e8b572a1cdcd7ac3c27e95e506421758dafa63474bd15cee20bf6f4392",
+      "evidence_type": "capture_summary",
+      "original_actions_zip_member_sha256": "9cba51e8b572a1cdcd7ac3c27e95e506421758dafa63474bd15cee20bf6f4392",
+      "original_actions_member_differs_from_published": false
+    },
+    {
+      "archive_path": "evidence/archive/pr28-pr29-20261101/pr28/original-actions-artifact/matrix-dialog-operational-evidence.zip",
+      "source_commit": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "source_path": "actions-run:41281584739:artifact:13073348210/zip",
+      "git_blob_sha1": "6be50a7afa913390041c6614859abf52a513fee4",
+      "size_bytes": 5648382,
+      "sha256": "1d1fbe489024ebd2be0b30d7fb5cbbacd439f7bdc6bb3148489d215a01df296c",
+      "evidence_type": "exact_original_actions_artifact_zip"
+    },
+    {
+      "archive_path": "evidence/archive/pr28-pr29-20261101/pr28/original-actions-variants/contact-operation.png",
+      "source_commit": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "source_path": "actions-run:41281584739:artifact:13073348210/zip-member/contact-operation.png",
+      "git_blob_sha1": "e7946cef64b55d488aa62493b0d2016ef0fadc42",
+      "size_bytes": 289491,
+      "sha256": "2b6d037e0b92e93684ddb6703f432567dc710c2ed96e9baa2d48f2fd4a17efd4",
+      "evidence_type": "exact_original_actions_png"
+    },
+    {
+      "archive_path": "evidence/archive/pr28-pr29-20261101/pr28/original-actions-variants/operation-dark-en-controlled-failure.png",
+      "source_commit": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "source_path": "actions-run:41281584739:artifact:13073348210/zip-member/operation-dark-en-controlled-failure.png",
+      "git_blob_sha1": "878e54661d07ff7246f8b844bdaca0408914f27d",
+      "size_bytes": 113737,
+      "sha256": "7f2be3d33745658b86a52641887f525ee2bdf544ae4fc1fa97b79a6a3e3aaa00",
+      "evidence_type": "exact_original_actions_png"
+    },
+    {
+      "archive_path": "evidence/archive/pr28-pr29-20261101/pr28/original-actions-variants/operation-dark-fa-controlled-failure.png",
+      "source_commit": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "source_path": "actions-run:41281584739:artifact:13073348210/zip-member/operation-dark-fa-controlled-failure.png",
+      "git_blob_sha1": "fe02f82dac4fd8379369001ac317f61221c92d81",
+      "size_bytes": 112686,
+      "sha256": "f4c4b5c1c862492213163ed303eaee38b3a9876bb8164143b56308337363628f",
+      "evidence_type": "exact_original_actions_png"
+    },
+    {
+      "archive_path": "evidence/archive/pr28-pr29-20261101/pr28/original-actions-variants/operation-light-en-controlled-failure.png",
+      "source_commit": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "source_path": "actions-run:41281584739:artifact:13073348210/zip-member/operation-light-en-controlled-failure.png",
+      "git_blob_sha1": "aa36d95fcd85257c63b6c972323e06fbcc35246f",
+      "size_bytes": 112449,
+      "sha256": "02b7ccce647fa29861c61a8110d2bba8bf7444fed4e5e90f413919fec2c829cb",
+      "evidence_type": "exact_original_actions_png"
+    },
+    {
+      "archive_path": "evidence/archive/pr28-pr29-20261101/pr28/original-actions-variants/operation-light-fa-controlled-failure.png",
+      "source_commit": "bcdfb6464f0f843c1ee51c9d2b3b2310635708e1",
+      "source_path": "actions-run:41281584739:artifact:13073348210/zip-member/operation-light-fa-controlled-failure.png",
+      "git_blob_sha1": "50e38bccc2f14ba5cfe217ee8b92d9375fcfd836",
+      "size_bytes": 111160,
+      "sha256": "3aa7ef35818186043b7c259764782d9f367900888f26dde5f97e9832cd879adc",
+      "evidence_type": "exact_original_actions_png"
+    },
+    {
+      "archive_path": "evidence/archive/pr28-pr29-20261101/pr28/source/matrix-dialog-operational-evidence.yml",
+      "source_commit": "82eca13347414024a23b49534b2bad465c232db1",
+      "source_path": ".github/workflows/matrix-dialog-operational-evidence.yml",
+      "git_blob_sha1": "cdf0412b8b406b6ba0fff45316d4855686f69642",
+      "sha256": "513302375961793fb878bd2c08275e6fb9ddf435c27e687d4d15b18375febbd8",
+      "size_bytes": 6460,
+      "evidence_type": "archived_source"
     },
     {
       "archive_path": "evidence/archive/pr28-pr29-20261101/pr28/source/tools/capture_matrix_dialog_operational_evidence.py",
@@ -1059,13 +1117,13 @@
       "evidence_type": "archived_source"
     },
     {
-      "archive_path": "evidence/archive/pr28-pr29-20261101/pr28/source/matrix-dialog-operational-evidence.yml",
-      "source_commit": "82eca13347414024a23b49534b2bad465c232db1",
-      "source_path": ".github/workflows/matrix-dialog-operational-evidence.yml",
-      "git_blob_sha1": "cdf0412b8b406b6ba0fff45316d4855686f69642",
-      "sha256": "513302375961793fb878bd2c08275e6fb9ddf435c27e687d4d15b18375febbd8",
-      "size_bytes": 6460,
-      "evidence_type": "archived_source"
+      "archive_path": "evidence/archive/pr28-pr29-20261101/pr29/artifacts/qt-diagnostic-artifact-contents.tar.xz",
+      "source_commit": "artifact-download-run-41229347383",
+      "source_path": "six artifacts; see SOURCE_ARTIFACT_INVENTORY.json inside",
+      "git_blob_sha1": "861ffc4a3745f05c54b85a59edd90872b9101ded",
+      "size_bytes": 8312,
+      "sha256": "79afc9c641a76dddded4a45236509ce57775e09f0ee6adb4792eae827e8ff3fb",
+      "evidence_type": "diagnostic_artifact_contents"
     },
     {
       "archive_path": "evidence/archive/pr28-pr29-20261101/pr29/source/qt-native-av-diagnostic.yml",
