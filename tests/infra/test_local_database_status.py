@@ -2,6 +2,7 @@ import sqlite3
 from datetime import datetime
 
 from app.infra.local_database import (
+    DatabaseHealthReason,
     DatabaseHealthStatus,
     LocalDatabase,
     RunRecord,
@@ -15,6 +16,7 @@ def test_health_unavailable_when_missing(tmp_path):
 
     assert summary.status is DatabaseHealthStatus.UNAVAILABLE
     assert "در دسترس نیست" in summary.message
+    assert summary.reason is DatabaseHealthReason.MISSING_FILE
     assert summary.counts == {}
 
 
@@ -26,6 +28,7 @@ def test_health_degraded_when_tables_missing(tmp_path):
     summary = db.get_database_health_summary()
 
     assert summary.status is DatabaseHealthStatus.DEGRADED
+    assert summary.reason is DatabaseHealthReason.NEEDS_REVIEW
     assert summary.counts.get("دانش‌آموز") == 0
 
 
@@ -36,6 +39,7 @@ def test_health_ok_with_empty_schema(tmp_path):
     summary = db.get_database_health_summary()
 
     assert summary.status is DatabaseHealthStatus.OK
+    assert summary.reason is DatabaseHealthReason.READY
     assert summary.counts == {"دانش‌آموز": 0, "پشتیبان": 0, "اجرا": 0}
     assert summary.last_updated is not None
 
@@ -78,3 +82,15 @@ def test_health_counts_with_data(tmp_path):
     assert summary.counts["پشتیبان"] == 1
     assert summary.counts["اجرا"] == 1
     assert summary.last_updated is not None
+
+
+def test_health_connection_error_has_distinct_reason(tmp_path):
+    # Real SQLite error after file existence check (not a missing path).
+    path = tmp_path / "invalid.sqlite"
+    path.write_bytes(b"not an SQLite database")
+    summary = LocalDatabase(path).get_database_health_summary()
+
+    assert summary.status is DatabaseHealthStatus.UNAVAILABLE
+    assert summary.reason is DatabaseHealthReason.CONNECTION_ERROR
+    assert "خطای اتصال" in summary.message
+    assert summary.counts == {}
