@@ -47,6 +47,16 @@ _HEALTH_LABELS = {
     ),
 }
 
+# A quiet status bar needs short labels; the tooltip and accessibility retain the
+# complete reason. Persian strings remain unchanged where they already fit.
+_COMPACT_EN_LABELS = {
+    "ready": ("database.health.compact.ready", "DB: Ready"),
+    "needs_review": ("database.health.compact.needs_review", "DB: Review"),
+    "missing_file": ("database.health.compact.missing_file", "DB: File missing"),
+    "connection_error": ("database.health.compact.connection_error", "DB: SQL error"),
+    "unavailable": ("database.health.compact.unavailable", "DB: Unavailable"),
+}
+
 
 class DatabaseStatusWidget(QWidget):
     """Compact localized database health; severity colors remain global QSS-owned."""
@@ -123,11 +133,11 @@ class DatabaseStatusWidget(QWidget):
             label.style().polish(label)
 
         message = self._localized_status(summary)
-        self._text_label.setText(message)
+        self._text_label.setText(self._localized_status(summary, compact=True))
         self.setAccessibleDescription(message)
         self.setToolTip(self._build_tooltip(summary, message))
 
-    def _localized_status(self, summary: DatabaseHealthSummary) -> str:
+    def _localized_status(self, summary: DatabaseHealthSummary, *, compact: bool = False) -> str:
         # Severity wins over inconsistent or absent reasons: no invented failure.
         if summary.status is DatabaseHealthStatus.OK:
             label = "ready"
@@ -139,6 +149,9 @@ class DatabaseStatusWidget(QWidget):
             label = "connection_error"
         else:
             label = "unavailable"
+        if compact and self._translator.language_enum is Language.EN:
+            key, fallback = _COMPACT_EN_LABELS[label]
+            return self._translator.text(key, fallback)
         return self._tr(*_HEALTH_LABELS[label])
 
     @staticmethod
