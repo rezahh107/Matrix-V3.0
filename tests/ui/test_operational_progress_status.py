@@ -18,11 +18,16 @@ from app.ui.theme import apply_theme, build_theme
 
 
 def _wait_for_worker(window: MainWindow, app: QApplication) -> None:
+    # The UI's terminal signal precedes QThread's final native teardown.
+    # Retain a strong reference until both boundaries have completed.
+    worker = window._worker
+    assert worker is not None
     deadline = time.monotonic() + 8
     while window._worker is not None and time.monotonic() < deadline:
         app.processEvents()
         QTest.qWait(10)
     assert window._worker is None, "synthetic Worker failed to deliver finished signal"
+    assert worker.wait(5000), "synthetic QThread did not fully stop"
 
 
 @pytest.mark.parametrize("language", (Language.FA, Language.EN))
