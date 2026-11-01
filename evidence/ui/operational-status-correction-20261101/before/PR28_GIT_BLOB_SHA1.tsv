@@ -1,0 +1,19 @@
+# PR28 original PNGs from commit 82eca13347414024a23b49534b2bad465c232db1
+# Source: evidence/ui/dialog-operational-20261031/<filename>
+# Pinned Git blob IDs for already tracked immutable Before fixtures. No live branch access.
+2db45a73e286999346435dc19f873f197a29ba79	operation-dark-en-completed.png
+854e35b15a962a2dae26e78febbe724b2a4961ae	operation-dark-en-controlled-failure.png
+f927f1f99742bb1a503a340a891f80fc225ee9e5	operation-dark-en-indeterminate.png
+f1d41afc1df3ae152642f51d28250e68d5418810	operation-dark-en-ready.png
+f911387c34aa24d56555a27dd56596667f6234f5	operation-dark-fa-completed.png
+fdee43475f746206fac8186d14df74512335115d	operation-dark-fa-controlled-failure.png
+6ef59b45604900458ba020f8e1d22ed88bb4e664	operation-dark-fa-indeterminate.png
+67cddddb14792b3a8c2f02147e6ba9266f0a8202	operation-dark-fa-ready.png
+45685ebc61f72038850dfef9c97e833698c22971	operation-light-en-completed.png
+549661695047d02718c6c0823954c10d91c81929	operation-light-en-controlled-failure.png
+630149405ceafb64a2febb45102c20d74e31324b	operation-light-en-indeterminate.png
+34a72b023914a68c0ee692c190eafcb1d18deb7f	operation-light-en-ready.png
+2a87a7ff481211104b9fcea3ac694cbf8c4c089e	operation-light-fa-completed.png
+d8a8579cf7ae4a15930c14e88df19f87a09196e0	operation-light-fa-controlled-failure.png
+8d936974a97769e24157586a8cdcddeee27e9b19	operation-light-fa-indeterminate.png
+ec3cac63cf880037fa6ef9c00812b3b6567cac87	operation-light-fa-ready.png

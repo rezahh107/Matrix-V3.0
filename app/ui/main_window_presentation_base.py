@@ -702,16 +702,21 @@ class MainWindow(_base.MainWindow):
         self._update_status_bar_state("ready")
 
     def _update_status_bar_state(self, key: str) -> None:
+        # This presentation layer is the active owner of the status pill.
+        state = "failed" if key == "error" else key
+        self._operation_state = state
         if not hasattr(self, "_status_bar_state"):
             return
         mapping = {
             "ready": self._t("statusbar.ready", "Status: Ready"),
             "running": self._t("statusbar.running", "Status: Running"),
-            "error": self._t("statusbar.error", "Status: Error"),
+            "completed": self._t("statusbar.completed", "Status: Completed"),
+            "failed": self._t("statusbar.error", "Status: Error"),
+            "cancelled": self._t("statusbar.cancelled", "Status: Cancelled"),
         }
-        state = key if key in mapping else "ready"
         self._status_bar_state.setText(mapping[state])
-        self._status_bar_state.setProperty("state", state)
+        # The central Qt stylesheet already owns the error color.
+        self._status_bar_state.setProperty("state", "error" if state == "failed" else state)
         self._status_bar_state.style().unpolish(self._status_bar_state)
         self._status_bar_state.style().polish(self._status_bar_state)
 
