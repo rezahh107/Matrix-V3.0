@@ -38,7 +38,7 @@ jobs:
           $failed = $false
           foreach ($mode in @("close-only", "delete-later")) {
             Write-Host "CASE_START mode=$mode"
-            uv run --locked python -u tools/ci/run_qt_window_accumulation.py --cleanup $mode --iterations 10 --output "artifacts/qt-ownership/$mode.json"
+            uv run --locked python -u -m tools.ci.run_qt_window_accumulation --cleanup $mode --iterations 10 --output "artifacts/qt-ownership/$mode.json"
             $code = $LASTEXITCODE
             Write-Host "CASE_END mode=$mode process_exit=$code"
             if ($code -ne 0) { $failed = $true }
