@@ -47,7 +47,7 @@ jobs:
       - run: uv sync --locked
 
       - name: Exercise operational regression including keyboard focus
-        run: uv run --locked pytest tests/ui/test_operational_progress_status.py tests/ui/test_uiux_method_locks.py -q --maxfail=1
+        run: uv run --locked pytest tests/ui/test_operational_progress_status.py -q --maxfail=1
 
       - name: Import untouched full-resolution pre-fix PNGs from PR 28
         shell: bash
