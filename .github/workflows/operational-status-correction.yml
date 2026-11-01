@@ -59,7 +59,53 @@ jobs:
           while IFS=$'\t' read -r expected filename; do
             [[ -z "$expected" || "$expected" == "#"* ]] && continue
             [[ "$expected" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::Invalid fixture SHA: $filename"; exit 1; }
-            [[ "$filename" =~ ^operation-(light|dark)-(en|fa)-(ready|indeterminate|completed|controlled-failure)\.png$ ]] || exit 1
+            # Git for Windows may check out the text provenance as CRLF.
+            filename="${filename%
+            test -f "$root/$filename"
+            actual="$(git hash-object "$root/$filename")"
+            if [[ "$actual" != "$expected" ]]; then
+              echo "::error::Before fixture changed: $filename"
+              exit 1
+            fi
+            count=$((count + 1))
+          done < "$provenance"
+          [[ "$count" -eq 16 ]]
+          [[ "$(find "$root" -maxdepth 1 -type f -name '*.png' | wc -l | tr -d ' ')" == "16" ]]
+
+      - name: Capture after states and paired full-resolution screenshots
+        run: uv run --locked python tools/capture_operational_status_correction.py --output-dir evidence/ui/operational-status-correction-20261101
+
+      - name: Render existing deterministic UI matrix
+        run: uv run --locked python tools/render_ui_matrix.py --output-dir artifacts/ui-render-matrix
+
+      - name: Validate existing bounded High-DPI harness
+        run: uv run --locked python tools/validate_ui_dpi.py --output-dir artifacts/ui-dpi
+
+      - name: Upload full-resolution operational evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: matrix-operational-status-correction
+          path: evidence/ui/operational-status-correction-20261101
+          if-no-files-found: warn
+
+      - name: Upload existing UI render evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: matrix-existing-ui-render-evidence
+          path: artifacts/ui-render-matrix
+          if-no-files-found: warn
+
+      - name: Upload existing UI DPI evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: matrix-existing-ui-dpi-evidence
+          path: artifacts/ui-dpi
+          if-no-files-found: warn
+\r'}"
+            [[ "$filename" =~ ^operation-(light|dark)-(en|fa)-(ready|indeterminate|completed|controlled-failure)\.png$ ]] || { echo "::error::Unexpected fixture name: $filename"; exit 1; }
             test -f "$root/$filename"
             actual="$(git hash-object "$root/$filename")"
             if [[ "$actual" != "$expected" ]]; then
