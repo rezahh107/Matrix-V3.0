@@ -101,6 +101,7 @@ def main() -> int:
     app.setOrganizationName("MatrixDatabaseLocaleEvidence")
     app.setApplicationName("MatrixDatabaseLocaleEvidence")
     results: list[dict[str, object]] = []
+    clipping: list[str] = []
     with tempfile.TemporaryDirectory() as temp:
         settings_dir = Path(temp) / "settings"
         settings_dir.mkdir()
@@ -149,9 +150,9 @@ def main() -> int:
                             text_width = fm.horizontalAdvance(status)
                             label_width = label.width()
                             if not widget.isVisibleTo(window) or text_width > label_width:
-                                raise AssertionError(
-                                    f"hidden/clipped database label: {status!r} "
-                                    f"required={text_width} available={label_width}"
+                                clipping.append(
+                                    f"{theme}/{language.code}/{width}x{height}/{scenario}: "
+                                    f"{status!r} required={text_width} available={label_width}"
                                 )
                             stem = f"db-{theme}-{language.code}-{width}x{height}-{scenario}"
                             capture = out / (stem + ".png")
@@ -200,6 +201,7 @@ def main() -> int:
         "application_font": app.font().family(),
         "screen_dpr": app.primaryScreen().devicePixelRatio() if app.primaryScreen() else None,
         "capture_count": len(results),
+        "clipping_observations": clipping,
         "scenario_basis": "isolated actual SQLite health summaries; not production database",
         "cases": results,
     }
@@ -207,6 +209,8 @@ def main() -> int:
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
     print(f"Recorded {len(results)} full-size PNGs, contact sheet, and manifest")
+    if clipping:
+        raise AssertionError("Clipped status labels: " + "; ".join(clipping))
     return 0
 
 
