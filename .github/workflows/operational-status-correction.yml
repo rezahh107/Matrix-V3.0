@@ -68,12 +68,34 @@ jobs:
       - name: Capture after states and paired full-resolution screenshots
         run: uv run --locked python tools/capture_operational_status_correction.py --output-dir evidence/ui/operational-status-correction-20261101
 
-      - name: Upload full-resolution evidence
+      - name: Render existing deterministic UI matrix
+        run: uv run --locked python tools/render_ui_matrix.py --output-dir artifacts/ui-render-matrix
+
+      - name: Validate existing bounded High-DPI harness
+        run: uv run --locked python tools/validate_ui_dpi.py --output-dir artifacts/ui-dpi
+
+      - name: Upload full-resolution operational evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: matrix-operational-status-correction
           path: evidence/ui/operational-status-correction-20261101
+          if-no-files-found: warn
+
+      - name: Upload existing UI render evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: matrix-existing-ui-render-evidence
+          path: artifacts/ui-render-matrix
+          if-no-files-found: warn
+
+      - name: Upload existing UI DPI evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: matrix-existing-ui-dpi-evidence
+          path: artifacts/ui-dpi
           if-no-files-found: warn
 
   baseline-ui-control:
