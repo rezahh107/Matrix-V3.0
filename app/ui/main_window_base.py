@@ -467,6 +467,7 @@ class MainWindow(QMainWindow):
         self._last_run_badge: QLabel | None = None
         self._last_progress_pct: int | None = None
         self._last_progress_message: str | None = None
+        self._operation_state: str = "ready"
         self._current_action: str = self._translator.text("status.ready", "آماده")
         self._status_bar: ThemedStatusBar | None = None
         self._database_status: DatabaseStatusWidget | None = None
@@ -559,7 +560,10 @@ class MainWindow(QMainWindow):
         self._progress.setRange(0, 100)
         self._progress.setObjectName("progressBar")
         self._progress.setProperty("busy", False)
-        self._progress_caption = QLabel(f"0% | {self._t('status.ready', 'آماده')}")
+        # Qt's default value is -1 before the first update; its built-in label
+        # must never show that sentinel or a fake percentage during busy mode.
+        self._progress.setTextVisible(False)
+        self._progress_caption = QLabel(self._t("status.ready", "آماده"))
         self._progress_caption.setAlignment(
             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
         )
@@ -889,12 +893,15 @@ class MainWindow(QMainWindow):
 
         if not hasattr(self, "_status_bar_state"):
             return
+        self._operation_state = "failed" if key == "error" else key
         mapping = {
             "ready": f"✅ {self._t('statusbar.ready', 'وضعیت: آماده')}",
             "running": f"⏳ {self._t('statusbar.running', 'وضعیت: در حال اجرا')}",
-            "error": f"❌ {self._t('statusbar.error', 'وضعیت: خطا')}",
+            "completed": f"✅ {self._t('statusbar.completed', 'وضعیت: تکمیل‌شده')}",
+            "failed": f"❌ {self._t('statusbar.error', 'وضعیت: خطا')}",
+            "cancelled": f"⚠️ {self._t('statusbar.cancelled', 'وضعیت: لغوشده')}",
         }
-        self._status_bar_state.setText(mapping.get(key, mapping["ready"]))
+        self._status_bar_state.setText(mapping[self._operation_state])
 
     def _refresh_database_status(self) -> None:
         """به‌روزرسانی ویجت سلامت پایگاه‌داده بدون بلاک کردن UI."""
@@ -964,16 +971,29 @@ class MainWindow(QMainWindow):
             self._log_panel.update_translator(self._translator)
         if hasattr(self, "_busy_label"):
             self._busy_label.setText(self._t("status.running", "در حال پردازش"))
-        if self._worker is None or not self._worker.isRunning():
-            self._status.setText(self._t("status.ready", "آماده"))
-            if self._stage_badge is not None:
-                self._stage_badge.setText(self._t("status.ready", "آماده"))
+        # A language change must not silently turn a terminal result into Ready.
+        state = self._operation_state
+        if state != "running":
+            status_key, fallback = {
+                "ready": ("status.ready", "آماده"),
+                "completed": ("status.complete", "کامل"),
+                "failed": ("status.error", "خطا"),
+                "cancelled": ("status.cancelled", "لغو شد"),
+            }[state]
+            label = self._t(status_key, fallback)
+            self._status.setText(label)
+            if self._stage_badge is not None and state != "completed":
+                self._stage_badge.setText(label)
             if self._stage_detail is not None:
-                self._stage_detail.setText(
-                    self._t("stage.pick_scenario", "برای شروع یکی از سناریوها را انتخاب کنید")
-                )
-            self._update_progress_caption(self._progress.value(), self._t("status.ready", "آماده"))
-            self._update_status_bar_state("ready")
+                if state == "ready":
+                    self._stage_detail.setText(
+                        self._t("stage.pick_scenario", "برای شروع یکی از سناریوها را انتخاب کنید")
+                    )
+                elif state in ("completed", "cancelled"):
+                    detail_key = f"status.{ 'complete' if state == 'completed' else 'cancelled' }.detail"
+                    self._stage_detail.setText(self._t(detail_key, ""))
+        self._update_status_bar_state(state)
+        self._update_progress_caption(self._last_progress_pct, self._last_progress_message)
 
     def _refresh_last_run_badge(self) -> None:
         """به‌روزرسانی برچسب آخرین اجرای ثبت‌شده."""
@@ -1096,13 +1116,28 @@ class MainWindow(QMainWindow):
         if detail is not None and self._stage_detail is not None:
             self._stage_detail.setText(detail.strip() or "")
 
-    def _update_progress_caption(self, pct: int, message: str | None) -> None:
-        """نمایش درصد پیشرفت همراه با توضیح مرحله."""
+    def _update_progress_caption(self, pct: int | None, message: str | None) -> None:
+        """Render the operation state; only reported determinate progress has a percentage."""
 
         if self._progress_caption is None:
             return
-        safe_message = message or self._status.text() or "در حال پردازش"
-        self._progress_caption.setText(f"{pct}% | {safe_message}")
+        labels = {
+            "ready": self._t("status.ready", "آماده"),
+            "running": self._t("status.running", "در حال پردازش"),
+            "completed": self._t("status.complete", "کامل"),
+            "failed": self._t("status.error", "خطا"),
+            "cancelled": self._t("status.cancelled", "لغو شد"),
+        }
+        caption = labels[self._operation_state]
+        if (
+            self._operation_state == "running"
+            and pct is not None
+            and 0 <= pct <= 100
+            and self._progress.minimum() == 0
+            and self._progress.maximum() == 100
+        ):
+            caption = f"{caption} · {pct}%"
+        self._progress_caption.setText(caption)
 
     def _on_theme_changed(self, index: int) -> None:
         """تغییر تم بر اساس انتخاب کاربر."""
@@ -3039,17 +3074,19 @@ class MainWindow(QMainWindow):
     ) -> Worker:
         """اجرای تابع در Worker با آماده‌سازی UI."""
 
-        self._progress.setValue(0)
+        self._last_progress_pct = None
+        self._last_progress_message = None
         self._current_action = action
         running_text = f"{action} در حال اجرا…"
         self._status.setText(running_text)
         self._set_stage(action, "در انتظار گزارش پیشرفت")
-        self._update_progress_caption(0, running_text)
         self._append_log(f"<b>▶️ شروع {action}</b>")
         self._disable_controls(True)
         self._set_busy_cursor(True)
         self._progress.setRange(0, 0)
         self._progress.setProperty("busy", True)
+        self._update_status_bar_state("running")
+        self._update_progress_caption(None, None)
         self._success_hook = on_success
 
         worker = Worker(func)
@@ -3353,25 +3390,32 @@ class MainWindow(QMainWindow):
     def _on_progress(self, pct: int, message: str) -> None:
         """به‌روزرسانی نوار پیشرفت و ثبت لاگ."""
 
-        pct_value = max(0, min(100, int(pct)))
+        # Values outside [0, 100] are unknown, not a number to clamp into a
+        # plausible-looking progress report.
+        pct_value: int | None = pct if 0 <= pct <= 100 else None
         safe_msg = message or "(بدون پیام)"
-        update_progress = self._last_progress_pct is None or pct_value != self._last_progress_pct
-        update_message = self._last_progress_message is None or safe_msg != self._last_progress_message
+        update_progress = (
+            pct_value != self._last_progress_pct
+            or (pct_value is None and self._progress.maximum() != 0)
+        )
+        update_message = safe_msg != self._last_progress_message
         if not update_progress and not update_message:
             return
-        if self._progress.maximum() == 0:
-            self._progress.setRange(0, 100)
-            self._progress.setProperty("busy", False)
         if update_progress:
             self._last_progress_pct = pct_value
-            self._progress.setValue(pct_value)
+            if pct_value is None:
+                self._progress.setRange(0, 0)
+                self._progress.setProperty("busy", True)
+            else:
+                self._progress.setRange(0, 100)
+                self._progress.setProperty("busy", False)
+                self._progress.setValue(pct_value)
         if update_message:
             self._last_progress_message = safe_msg
-            self._status.setText(message or "در حال پردازش")
+            self._status.setText(message or self._t("status.running", "در حال پردازش"))
             self._set_stage(self._current_action, safe_msg)
-        if update_progress or update_message:
-            self._update_progress_caption(self._progress.value(), safe_msg)
         self._update_status_bar_state("running")
+        self._update_progress_caption(pct_value, safe_msg)
 
     @Slot(bool, object)
     def _on_finished(self, success: bool, error: object | None) -> None:
@@ -3405,9 +3449,9 @@ class MainWindow(QMainWindow):
                 color = self._theme.colors.warning
                 self._status.setText(self._t("status.error", "خطا"))
                 self._set_stage(self._t("status.error", "خطا"), detail)
-                self._update_progress_caption(self._progress.value(), detail)
+                self._update_status_bar_state("failed")
+                self._update_progress_caption(None, detail)
                 self._append_log(f'<span style="color:{color}">❌ {detail}</span>')
-                self._update_status_bar_state("error")
                 return
             msg = str(error)
             if isinstance(error, (FileNotFoundError, PermissionError)):
@@ -3427,9 +3471,9 @@ class MainWindow(QMainWindow):
                 )
             self._status.setText(self._t("status.error", "خطا"))
             self._set_stage(self._t("status.error", "خطا"), msg)
-            self._update_progress_caption(self._progress.value(), self._t("status.error", "خطا"))
+            self._update_status_bar_state("failed")
+            self._update_progress_caption(None, None)
             self._append_log(f'<span style="color:{color}">❌ {msg}</span>')
-            self._update_status_bar_state("error")
             return
 
         if not success:
@@ -3438,11 +3482,9 @@ class MainWindow(QMainWindow):
                 self._t("status.cancelled", "لغو شد"),
                 self._t("status.cancelled.detail", "عملیات متوقف شد"),
             )
-            self._update_progress_caption(
-                self._progress.value(), self._t("status.cancelled", "لغو شد")
-            )
+            self._update_status_bar_state("cancelled")
+            self._update_progress_caption(None, None)
             self._append_log(f'⚠️ {self._t("status.cancelled.detail", "عملیات متوقف شد")}')
-            self._update_status_bar_state("ready")
             return
 
         self._progress.setValue(100)
@@ -3450,11 +3492,11 @@ class MainWindow(QMainWindow):
         self._set_stage(
             self._current_action, self._t("status.complete.detail", "عملیات با موفقیت پایان یافت")
         )
-        self._update_progress_caption(100, self._t("status.complete", "کامل"))
+        self._update_status_bar_state("completed")
+        self._update_progress_caption(None, None)
         self._append_log(
             f'<span style="color:{self._theme.colors.success}">✅ {self._t("status.complete.detail", "عملیات با موفقیت پایان یافت")}</span>'
         )
-        self._update_status_bar_state("ready")
         self._refresh_database_status()
         if hook is not None:
             try:
