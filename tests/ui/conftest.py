@@ -63,7 +63,7 @@ def _dispose_test_windows(qapp, preexisting_windows):
     Retain pre-test top-level windows and the shared QApplication. Never delete
     an owner while any of its QThreads are still running.
     """
-    from PySide6.QtCore import QEvent, QThread
+    from PySide6.QtCore import QEvent, QThread, Qt
     from shiboken6 import isValid
 
     retained_ids = {id(window) for window in preexisting_windows}
@@ -72,10 +72,21 @@ def _dispose_test_windows(qapp, preexisting_windows):
         if isValid(window) and id(window) not in retained_ids
     ]
     unsafe_windows = []
+    refused_windows = []
     for window in test_windows:
         if not isValid(window):
             continue
-        window.close()  # Gives MainWindow.closeEvent its normal worker-shutdown path.
+        # close() may immediately destroy WA_DeleteOnClose widgets, including
+        # their running child QThreads, before the safety check below can run.
+        # Keep closeEvent (and its normal Worker shutdown) but own deletion here.
+        delete_on_close = window.testAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        if delete_on_close:
+            window.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, False)
+        try:
+            closed = window.close()
+        finally:
+            if delete_on_close and isValid(window):
+                window.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
         if not isValid(window):
             continue
         owned_threads = list(window.findChildren(QThread))
@@ -88,6 +99,9 @@ def _dispose_test_windows(qapp, preexisting_windows):
         )
         if any(isValid(thread) and thread.isRunning() for thread in owned_threads):
             unsafe_windows.append(type(window).__name__)
+            continue
+        if not closed:
+            refused_windows.append(type(window).__name__)
             continue
         window.deleteLater()
 
@@ -102,6 +116,8 @@ def _dispose_test_windows(qapp, preexisting_windows):
         pytest.fail(
             f"Refusing to destroy windows with running QThreads: {unsafe_windows}"
         )
+    if refused_windows:
+        pytest.fail(f"Test-owned Qt windows refused to close: {refused_windows}")
     if remaining:
         pytest.fail(f"Test-owned Qt windows survived teardown: {remaining}")
 
