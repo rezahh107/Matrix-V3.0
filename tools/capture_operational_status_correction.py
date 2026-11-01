@@ -33,12 +33,18 @@ PAIRABLE = {"ready": "ready", "indeterminate": "indeterminate",
 
 
 def wait_finished(window: MainWindow, app: QApplication) -> None:
+    # Retain the QThread beyond the UI completion signal, through native teardown.
+    worker = window._worker
+    if worker is None:
+        raise AssertionError("no synthetic Worker to await")
     deadline = time.monotonic() + 8
     while window._worker is not None and time.monotonic() < deadline:
         app.processEvents()
         time.sleep(0.02)
     if window._worker is not None:
         raise TimeoutError("synthetic Worker did not deliver a finished signal")
+    if not worker.wait(5000):
+        raise TimeoutError("synthetic QThread did not fully stop")
 
 
 def capture(window: MainWindow, app: QApplication, output: Path, stem: str,
