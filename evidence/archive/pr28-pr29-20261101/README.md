@@ -1,6 +1,6 @@
 # Matrix V3 — PR #28 / PR #29 evidence archive (2026-11-01)
 
-**Status: PARTIAL EVIDENCE PRESERVATION — DO NOT CLOSE THE SOURCE PRs YET.**
+**Status: original capture and diagnostic evidence preserved; independent fresh-checkout verification is required before PR closure.**
 This branch is separate from `main` and is **not** a production fix. All replay/test and screenshots are historical observations, not Owner visual acceptance.
 
 ## Sources and exact revisions
@@ -13,10 +13,11 @@ This branch is separate from `main` and is **not** a production fix. All replay/
 ## What this branch contains
 
 - `pr28/captures/`: **84 published UI scenario PNGs**, five contact sheets, `manifest.json`, `SUMMARY.md` and `runner-status.txt`. The files are copied by exact Git blob SHA from PR #28 final Head, not regenerated or scaled.
+- `pr28/original-actions-artifact/`: the full exact original-run Actions ZIP (SHA-256 `1d1fbe489024ebd2be0b30d7fb5cbbacd439f7bdc6bb3148489d215a01df296c`), which preserves all 84 original captured screenshots and 5 contact sheets without re-encoding. `pr28/original-actions-variants/` additionally holds the five original-run PNGs that differ from the published branch.
 - `pr28/source/`: original Python capture script and capture workflow **as inert historical files outside** `.github/workflows/`.
 - `pr29/source/`: Qt diagnostic workflow as an inert historical file, outside `.github/workflows/`.
 - `pr29/artifacts/qt-diagnostic-artifact-contents.tar.xz`: 40 original inner files from the six downloaded diagnostic artifacts, with `SOURCE_ARTIFACT_INVENTORY.json` recording each original Actions ZIP SHA-256, artifact IDs, inner paths, sizes and individual SHA-256 digests. Original inner files were not rewritten.
-- `MANIFEST.json`: archive SHA-256, size, original commit/path and Git blob IDs for all **96 copied Git file objects**, plus original PR #28 capture-run ZIP member SHA-256.
+- `MANIFEST.json`: archive SHA-256, size, original commit/path and Git blob IDs for all **102 copied Git file objects**, plus original PR #28 capture-run ZIP member SHA-256.
 
 ## Material source discrepancy — blocking PR closure
 
@@ -28,7 +29,7 @@ Original capture artifact `matrix-dialog-operational-evidence` (ID `13073348210`
 4. `operation-light-en-controlled-failure.png`
 5. `operation-light-fa-controlled-failure.png`
 
-Both original-run member and published-branch SHA-256 identities are recorded in `MANIFEST.json`. **The published-branch copy, not the exact original-run version of these five images, is stored in this Git archive.** The downloaded original ZIP is available as a conversation deliverable and temporarily as a GitHub Actions artifact, but neither establishes an authorized permanent secondary archive. No fake PASS or claim of complete archival is warranted. An authorized durable store for the exact five original-run image bytes (and verification) is required **before PR #29 or PR #28 may close** under the Owner's explicit safeguards. Do not overwrite one capture generation with the other.
+Both original-run member and published-branch SHA-256 identities are recorded in `MANIFEST.json`. **Both versions are now stored durably in this branch:** the exact source-branch Git blobs under `pr28/captures/`, and the five exact original-run image bytes under `pr28/original-actions-variants/`, together with the complete original capture ZIP under `pr28/original-actions-artifact/`. Historical captures must not be overwritten or conflated. Fresh-checkout independent verification remains the final closure precondition.
 
 ## Observed diagnostics and limits
 
