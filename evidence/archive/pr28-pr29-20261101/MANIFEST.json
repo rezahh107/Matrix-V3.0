@@ -1054,30 +1054,27 @@
       "source_commit": "82eca13347414024a23b49534b2bad465c232db1",
       "source_path": "tools/capture_matrix_dialog_operational_evidence.py",
       "git_blob_sha1": "70456bfd541cc03a373dcb7d190b774fdb1aa185",
-      "sha256": null,
-      "size_bytes": null,
-      "evidence_type": "archived_source",
-      "hash_status": "pending_direct_source_read"
+      "sha256": "17a72940772f74334de85cc7af6c63c1b2776f35dfd3db95ba8fee8a04fad404",
+      "size_bytes": 27569,
+      "evidence_type": "archived_source"
     },
     {
       "archive_path": "evidence/archive/pr28-pr29-20261101/pr28/source/matrix-dialog-operational-evidence.yml",
       "source_commit": "82eca13347414024a23b49534b2bad465c232db1",
       "source_path": ".github/workflows/matrix-dialog-operational-evidence.yml",
       "git_blob_sha1": "cdf0412b8b406b6ba0fff45316d4855686f69642",
-      "sha256": null,
-      "size_bytes": null,
-      "evidence_type": "archived_source",
-      "hash_status": "pending_direct_source_read"
+      "sha256": "513302375961793fb878bd2c08275e6fb9ddf435c27e687d4d15b18375febbd8",
+      "size_bytes": 6460,
+      "evidence_type": "archived_source"
     },
     {
       "archive_path": "evidence/archive/pr28-pr29-20261101/pr29/source/qt-native-av-diagnostic.yml",
       "source_commit": "867c31125623c3588b1446fd43448cf90690eb68",
       "source_path": ".github/workflows/qt-native-av-diagnostic.yml",
       "git_blob_sha1": "b7e4648221e4de8446da6b07548eddc833efb7c0",
-      "sha256": null,
-      "size_bytes": null,
-      "evidence_type": "archived_source",
-      "hash_status": "pending_direct_source_read"
+      "sha256": "51627c25dca341261d6d65b1d4492000164ce372fd669e1df69b78436b263c78",
+      "size_bytes": 5375,
+      "evidence_type": "archived_source"
     }
   ]
 }
