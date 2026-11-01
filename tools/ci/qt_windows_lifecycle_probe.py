@@ -120,7 +120,7 @@ def pytest_configure(config: pytest.Config) -> None:
     _PATH.parent.mkdir(parents=True, exist_ok=True)
     _write("probe_configured", python=sys.version.split()[0], executable=sys.executable,
            platform=sys.platform, pid=os.getpid())
-    atexit.register(lambda: _write("python_atexit", **_qt_snapshot()))
+    atexit.register(lambda: _write("python_atexit", working_set_bytes=_working_set_bytes()))
 
 
 @pytest.hookimpl(hookwrapper=True)
