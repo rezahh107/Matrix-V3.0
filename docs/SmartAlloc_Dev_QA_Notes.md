@@ -12,7 +12,7 @@
 
 ## یادآوری معماری
 - Core فقط منطق Policy-First را اجرا می‌کند؛ I/O، Excel و Qt در لایه‌ی Infra/UI باقی می‌مانند.
-- تغییرات مربوط به AppPreferences یا مسیرها باید از `app/utils/path_utils.py` عبور کنند تا در حالت frozen و توسعه یکسان باشد.
+- تغییرات مربوط به AppPreferences یا مسیرها باید از `app/utils/path_utils.py` عبور کنند تا در مسیر اجرای سورس با `uv` سازگار بمانند.
 
 ## QA پیش از تحویل سورس قابل اجرا با uv
 1. اجرای `uv sync --locked` و `uv run --locked pytest -q` از ریشهٔ سورس.
