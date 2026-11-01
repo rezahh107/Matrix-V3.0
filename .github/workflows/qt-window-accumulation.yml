@@ -1,0 +1,53 @@
+name: "Diagnostic — Qt live widgets versus font cost"
+on:
+  push:
+    branches: ["diagnostics/qt-windows-discrimination-20261101"]
+    paths: [".github/workflows/qt-window-accumulation.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  lifetime-comparison:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    env:
+      QT_QPA_PLATFORM: offscreen
+      PYTEST_QT_API: pyside6
+      PYTHONFAULTHANDLER: "1"
+    steps:
+      - name: Checkout diagnostic source identity
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - name: Verify exact commit
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Set up pinned uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.7"
+      - name: Sync Python and dependencies
+        shell: pwsh
+        run: |
+          uv python install
+          uv sync --locked
+      - name: Compare Qt ownership outcomes in separate processes
+        shell: pwsh
+        run: |
+          $failed = $false
+          foreach ($mode in @("close-only", "delete-later")) {
+            Write-Host "CASE_START mode=$mode"
+            uv run --locked python -u tools/ci/run_qt_window_accumulation.py --cleanup $mode --iterations 10 --output "artifacts/qt-ownership/$mode.json"
+            $code = $LASTEXITCODE
+            Write-Host "CASE_END mode=$mode process_exit=$code"
+            if ($code -ne 0) { $failed = $true }
+          }
+          if ($failed) { exit 1 }
+      - name: Upload aggregate Qt metrics (no project data)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qt-window-ownership-diagnostics
+          path: artifacts/qt-ownership/*.json
+          if-no-files-found: warn
