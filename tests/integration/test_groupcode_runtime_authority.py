@@ -785,6 +785,7 @@ def test_mainwindow_real_gui_build_allocate_sabt_and_recovery(
     )
     window._user_settings = UserSettings(enable_trace_export=True)
     window._prefs.output_root_dir = str(tmp_path / "gui-outputs")
+    window._prefs.last_output_dir = ""  # isolate persisted C2 run pointer
 
     def wait_for_terminal(expected: str) -> None:
         deadline = time.monotonic() + 90
@@ -884,7 +885,17 @@ def test_mainwindow_real_gui_build_allocate_sabt_and_recovery(
         assert sheet2.loc[0, "شناسه دانش آموز"] == student_id
         assert sheet2.loc[0, "کد ملی"] == "0000000001"
         assert window._prefs.last_alloc_output == str(allocation)
-        assert window._btn_open_output_folder.isEnabled()
+        assert window._toolbar_actions["output"].isEnabled()
+        from PySide6.QtGui import QDesktopServices
+
+        opened_folders: list[str] = []
+        monkeypatch.setattr(
+            QDesktopServices,
+            "openUrl",
+            staticmethod(lambda url: opened_folders.append(url.toLocalFile())),
+        )
+        window._toolbar_actions["output"].trigger()
+        assert opened_folders == [str(tmp_path)]
         assert not warnings and not async_errors
 
         original_hashes = {
