@@ -623,3 +623,81 @@ def test_operator_workflow_db_build_allocate_qa_sabt(
         tab.close()
         app.processEvents()
         db.close_all_connections()
+
+
+def test_excel_student_import_mixed_national_codes_to_sabt_readback(tmp_path: Path) -> None:
+    """Real Excel reader + DB-backed student import + keyed Sabt export/readback."""
+    from openpyxl import load_workbook
+
+    from app.infra.excel.import_to_sabt import (
+        ImportToSabtExportError,
+        build_errors_frame,
+        build_sheet2_frame,
+        build_summary_frame,
+        ensure_template_workbook,
+        load_exporter_config,
+        prepare_allocation_export_frame,
+        write_import_to_sabt_excel,
+    )
+    from app.infra.reference_students_repository import import_student_report_from_excel
+
+    db_path, _, _ = _prepare_reference_db(tmp_path, group_code=24)
+    students_raw = pd.concat([_student(24)] * 3, ignore_index=True)
+    students_raw["student_id"] = ["S-1", "S-2", "S-3"]
+    students_raw["کد ملی"] = ["0000000001", "0000000002", "0000000003"]
+    students_raw["GF_NationalCode"] = ["۰۰۱۲۳۴۵۶۷۸", "", None]
+    excel_path = _write_excel(students_raw, tmp_path / "mixed-student-report.xlsx")
+
+    db = LocalDatabase(db_path)
+    policy = load_policy()
+    students = import_student_report_from_excel(excel_path, db=db, policy=policy)
+    assert len(students) == 3
+    assert "student_id" in students.columns
+
+    # Allocation order intentionally differs from Excel source order.
+    allocations = pd.DataFrame(
+        {"student_id": ["S-2", "S-1", "S-3"], "mentor_id": ["M-1"] * 3}
+    )
+    mentors = pd.DataFrame({"mentor_id": ["M-1"], "mentor_name": ["Synthetic"]})
+
+    with pytest.raises(ImportToSabtExportError, match="LAW/EXPORT-SSOT-ID-01"):
+        prepare_allocation_export_frame(
+            allocations,
+            students,
+            mentors,
+            student_ids=pd.Series(["S-1", "S-2", "S-3"], index=[10, 11, 12]),
+        )
+
+    merged = prepare_allocation_export_frame(allocations, students, mentors)
+    assert merged["student_id"].tolist() == ["S-2", "S-1", "S-3"]
+    cfg = load_exporter_config("config/SmartAlloc_Exporter_Config_v1.json")
+    sheet = build_sheet2_frame(merged, cfg)
+    assert sheet["شناسه دانش آموز"].tolist() == ["S-2", "S-1", "S-3"]
+    assert sheet["کد ملی"].tolist() == [
+        "0000000002",
+        "0012345678",
+        "0000000003",
+    ]
+
+    summary = build_summary_frame(
+        cfg, total_students=3, allocated_count=3, error_count=0
+    )
+    errors = build_errors_frame(
+        pd.DataFrame({"student_id": ["S-1"], "allocation_status": ["success"]}),
+        cfg,
+    )
+    template = tmp_path / "mixed-sabt-template.xlsx"
+    output = tmp_path / "mixed-sabt.xlsx"
+    ensure_template_workbook(template, cfg)
+    write_import_to_sabt_excel(sheet, summary, errors, None, None, template, output)
+    with load_workbook(output, read_only=True, data_only=True) as workbook:
+        actual_rows = list(workbook["Sheet2"].values)
+    columns = list(actual_rows[0])
+    id_idx = columns.index("شناسه دانش آموز")
+    national_idx = columns.index("کد ملی")
+    assert [(row[id_idx], row[national_idx]) for row in actual_rows[1:]] == [
+        ("S-2", "0000000002"),
+        ("S-1", "0012345678"),
+        ("S-3", "0000000003"),
+    ]
+    db.close_all_connections()
