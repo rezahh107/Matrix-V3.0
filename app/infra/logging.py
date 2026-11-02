@@ -171,6 +171,18 @@ def _apply_log_dir_override(config: dict[str, Any], log_directory: Path) -> None
         handler_cfg["filename"] = str((log_directory / filename_path.name).resolve())
 
 
+def _configure_utf8_console_stream(stream: Any) -> None:
+    """Prevent Persian console-log encoding errors on non-UTF-8 Windows streams.
+
+    Only streams supporting reconfigure are touched; file handlers retain their
+    existing explicit encoding and non-Windows streams remain unchanged.
+    """
+
+    reconfigure = getattr(stream, "reconfigure", None)
+    if callable(reconfigure):
+        reconfigure(encoding="utf-8", errors="backslashreplace")
+
+
 def setup_logging(
     config_path: str | Path = DEFAULT_LOGGING_CONFIG,
     log_dir: str | Path | None = None,
@@ -219,6 +231,10 @@ def setup_logging(
                     handler_cfg["filename"] = str(file_path)
                     file_path.parent.mkdir(parents=True, exist_ok=True)
 
+    # GitHub's redirected Windows stdout can default to cp1252, which cannot
+    # encode the Persian startup messages and silently drops logging records.
+    if sys.platform == "win32":
+        _configure_utf8_console_stream(sys.stdout)
     logging.config.dictConfig(data)
 
 

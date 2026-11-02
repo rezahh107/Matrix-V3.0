@@ -97,5 +97,15 @@ jobs:
           uv run --locked pytest tests/infra/test_cli_database_preparation.py tests/integration/test_build_matrix_school_expansion.py tests/test_excel_export_smoke.py -q
           if ($LASTEXITCODE -ne 0) { throw "Representative clean-source integration failed" }
           $env:MATRIX_CI_SMOKE_CLOSE_MS = "2000"
-          uv run --locked python -m app.main
-          if ($LASTEXITCODE -ne 0) { throw "Real app.main entrypoint failed" }
+          $startupLog = Join-Path $env:RUNNER_TEMP "matrix-uv-startup.txt"
+          uv run --locked python -m app.main *> $startupLog
+          if ($LASTEXITCODE -ne 0) {
+            Get-Content $startupLog
+            throw "Real app.main entrypoint failed"
+          }
+          $startupText = Get-Content $startupLog -Raw -Encoding utf8
+          if ($startupText.Contains("UnicodeEncodeError") -or
+              $startupText.Contains("--- Logging error ---")) {
+            throw "Console logging failed despite successful application exit"
+          }
+          Write-Output "Real app.main exited successfully with no console encoding exceptions."

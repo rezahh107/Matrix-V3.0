@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+import io
 import logging
 import sys
 from pathlib import Path
 
 import yaml
 
-from app.infra.logging import configure_logging, install_exception_hook
+from app.infra.logging import (
+    _configure_utf8_console_stream,
+    configure_logging,
+    install_exception_hook,
+)
 
 
 def _create_logging_config(tmp_path: Path) -> Path:
@@ -47,6 +52,21 @@ def _create_logging_config(tmp_path: Path) -> Path:
         yaml.safe_dump(config, allow_unicode=True, sort_keys=False), encoding="utf-8"
     )
     return config_path
+
+
+def test_persian_console_log_is_writable_with_legacy_windows_codepage() -> None:
+    """The log handler should not produce UnicodeEncodeError on cp1252 stdout."""
+
+    buffer = io.BytesIO()
+    stream = io.TextIOWrapper(buffer, encoding="cp1252", errors="strict")
+    _configure_utf8_console_stream(stream)
+    handler = logging.StreamHandler(stream)
+    handler.emit(logging.LogRecord(
+        name="matrix", level=logging.INFO, pathname=__file__, lineno=1,
+        msg="راه‌اندازی سامانه", args=(), exc_info=None,
+    ))
+    stream.flush()
+    assert "راه‌اندازی سامانه".encode("utf-8") in buffer.getvalue()
 
 
 def test_configure_logging_enriches_records(tmp_path: Path) -> None:
