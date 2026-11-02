@@ -704,3 +704,193 @@ def test_excel_student_import_mixed_national_codes_to_sabt_readback(tmp_path: Pa
         ("S-3", "0000000003"),
     ]
     db.close_all_connections()
+
+
+def test_mainwindow_real_gui_build_allocate_sabt_and_recovery(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Actual C2 GUI buttons -> Qt Workers -> CLI -> Excel; native dialogs stubbed.
+
+    Private historical Sabt profiles are intentionally not part of the uv source
+    archive. The only supplied profile here is created from synthetic columns.
+    """
+    import time
+    from hashlib import sha256
+
+    from PySide6.QtWidgets import QApplication, QFileDialog, QMessageBox
+
+    from app.core.common.types import CANONICAL_TRACE_ORDER
+    from app.infra.config_flags import UserSettings
+    from app.infra.excel import export_allocations as sabt_exports
+    from app.ui import main_window_base as window_base
+    from app.ui.main_window import MainWindow
+
+    monkeypatch.setattr(
+        window_base,
+        "YearDatabaseManager",
+        lambda _root: YearDatabaseManager(tmp_path / "years"),
+    )
+    app = QApplication.instance() or QApplication([])
+    school_file = _write_excel(_schools(), tmp_path / "gui-schools.xlsx")
+    group_file = _write_excel(_groupcodes(24), tmp_path / "gui-groups.xlsx")
+    changed_groups = _write_excel(_groupcodes(25), tmp_path / "gui-stale-groups.xlsx")
+    inspactor_file = _write_excel(_inspactor(24), tmp_path / "gui-inspactor.xlsx")
+    students_file = _write_excel(_student(24), tmp_path / "gui-students.xlsx")
+    profile_file = tmp_path / "authorized-synthetic-profile.xlsx"
+    pd.DataFrame(
+        {
+            sabt_exports._HEADER_COLUMN: [
+                "کد ثبت نام0",
+                "پیدا کردن ردیف پشتیبان از فیلد 141",
+            ],
+            sabt_exports._VALUE_COLUMN: ["student_id", ""],
+            sabt_exports._ORDER_COLUMN: [1, 2],
+            sabt_exports._SOURCE_COLUMN: [
+                sabt_exports._SOURCE_STUDENT,
+                sabt_exports._SOURCE_ALLOCATION,
+            ],
+        }
+    ).to_excel(profile_file, sheet_name=sabt_exports._PROFILE_SHEET_NAME, index=False)
+
+    matrix = tmp_path / "gui-matrix.xlsx"
+    allocation = tmp_path / "gui-allocation.xlsx"
+    sabt = tmp_path / "gui-sabt.xlsx"
+    file_choices = iter([school_file, group_file, changed_groups])
+    monkeypatch.setattr(
+        QFileDialog,
+        "getOpenFileName",
+        staticmethod(lambda *_args: (str(next(file_choices)), "Excel (*.xlsx)")),
+    )
+    notices: list[str] = []
+    warnings: list[str] = []
+    async_errors: list[str] = []
+    monkeypatch.setattr(
+        QMessageBox,
+        "information",
+        staticmethod(lambda _parent, _title, detail: notices.append(str(detail))),
+    )
+    monkeypatch.setattr(
+        QMessageBox,
+        "warning",
+        staticmethod(lambda _parent, _title, detail: warnings.append(str(detail))),
+    )
+    window = MainWindow()
+    window._show_async_message = lambda _icon, _title, detail: async_errors.append(
+        str(detail)
+    )
+    window._user_settings = UserSettings(enable_trace_export=True)
+    window._prefs.output_root_dir = str(tmp_path / "gui-outputs")
+
+    def wait_for_terminal(expected: str) -> None:
+        deadline = time.monotonic() + 90
+        observed = []
+        while time.monotonic() < deadline:
+            running = window._worker
+            if running is not None and running not in observed:
+                observed.append(running)
+            app.processEvents()
+            if window._worker is None and window._operation_state == expected:
+                break
+            time.sleep(0.02)
+        assert window._worker is None, "GUI Worker did not complete"
+        assert window._operation_state == expected, (
+            expected, window._operation_state, async_errors, warnings
+        )
+        for worker in observed:
+            assert worker.wait(5000), "Qt worker did not terminate"
+
+    try:
+        window.show()
+        app.processEvents()
+        assert window.activate_surface("database")
+        tab = window._database_tab
+        assert tab is not None
+        tab._schools_button.click()
+        tab._groupcodes_button.click()
+        assert len(notices) == 2 and not warnings
+        assert window._school_repository.status().row_count == 1
+        assert window._groupcode_repository.status().row_count == 1
+        assert "24" in tab._groupcodes_status_label.text() or (
+            set(window._groupcode_repository.load_canonical_frame()["group_code"].astype(int))
+            == {24}
+        )
+
+        assert window.activate_surface("build")
+        window._picker_inspactor.setText(str(inspactor_file))
+        window._picker_output_matrix.setText(str(matrix))
+        window._btn_build.click()
+        wait_for_terminal("completed")
+        assert matrix.is_file()
+        assert _matrix_group_values(matrix) == {24}
+        assert window._prefs.last_matrix_path == str(matrix)
+
+        assert window.activate_surface("allocate")
+        window._picker_students.setText(str(students_file))
+        window._picker_pool.setText(str(matrix))
+        window._picker_alloc_out.setText(str(allocation))
+        window._combo_academic_year.setCurrentText("1404")
+        window._picker_sabt_output_alloc.setText(str(sabt))
+        window._picker_sabt_profile_alloc.setText(str(profile_file))
+        window._picker_sabt_template_alloc.setText("")
+        window._btn_allocate.click()
+        wait_for_terminal("completed")
+
+        assert allocation.is_file() and sabt.is_file()
+        assert (tmp_path / "sabt-template.xlsx").is_file()
+        with pd.ExcelFile(allocation) as book:
+            assert {"allocations", "logs", "updated_pool", "trace"}.issubset(
+                book.sheet_names
+            )
+            allocations = pd.read_excel(book, "allocations", dtype=str)
+            trace = pd.read_excel(book, "trace", dtype=str)
+        student_id = str(allocations.loc[0, "student_id"])
+        assert student_id and student_id.lower() != "nan"
+        assert trace.loc[trace["student_id"] == student_id, "stage"].tolist() == list(
+            CANONICAL_TRACE_ORDER
+        )
+
+        qa_file = tmp_path / "gui-allocation_validation.xlsx"
+        assert qa_file.is_file()
+        with pd.ExcelFile(qa_file) as book:
+            qa = pd.read_excel(book, "summary")
+        assert not qa.empty
+        assert set(qa["status"]) <= {"PASS", "WARN"}
+        with pd.ExcelFile(sabt) as book:
+            assert {"Sheet2", "Summary", "Errors"}.issubset(book.sheet_names)
+            sheet2 = pd.read_excel(book, "Sheet2", dtype=str)
+        assert len(sheet2) == 1
+        assert sheet2.loc[0, "شناسه دانش آموز"] == student_id
+        assert sheet2.loc[0, "کد ملی"] == "0000000001"
+        assert window._prefs.last_alloc_output == str(allocation)
+        assert window._btn_open_output_folder.isEnabled()
+        assert not warnings and not async_errors
+
+        original_hashes = {
+            path: sha256(path.read_bytes()).hexdigest() for path in (allocation, sabt)
+        }
+        # A clean uv archive has no historical profile; missing user input must
+        # be stopped before starting another Worker or overwriting prior output.
+        window._picker_sabt_profile_alloc.setText("")
+        window._btn_allocate.click()
+        assert window._worker is None
+        assert warnings and "Sabt" in warnings[-1]
+        assert all(sha256(path.read_bytes()).hexdigest() == digest
+                   for path, digest in original_hashes.items())
+
+        # Real Database action changes the authoritative references; the same
+        # GUI Allocate input is stale and cannot replace successful output.
+        window._picker_sabt_profile_alloc.setText(str(profile_file))
+        assert window.activate_surface("database")
+        tab._groupcodes_button.click()
+        assert set(window._groupcode_repository.load_canonical_frame()["group_code"].astype(int)) == {25}
+        assert window.activate_surface("allocate")
+        window._btn_allocate.click()
+        wait_for_terminal("failed")
+        assert all(sha256(path.read_bytes()).hexdigest() == digest
+                   for path, digest in original_hashes.items())
+        assert warnings or async_errors
+    finally:
+        window.close()
+        app.processEvents()
+        if window._local_db is not None:
+            window._local_db.close_all_connections()
