@@ -782,6 +782,10 @@ def _normalize_digits(value: Any, length: int) -> str:
     except (TypeError, ValueError):
         pass
 
+    # Preserve the pre-existing empty sentinel for numeric zero.
+    if isinstance(value, (int, float)) and value == 0:
+        return ""
+
     # Pandas may read an integral Excel numeric cell as 1234567890.0.
     # Do not treat the decimal artifact as an extra national-code digit.
     if isinstance(value, float) and value.is_integer():
