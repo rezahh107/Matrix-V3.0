@@ -94,6 +94,21 @@ def _sample_alloc_frame() -> pd.DataFrame:
     )
 
 
+def test_sheet2_canonical_national_id_fallback_preserves_leading_zeros() -> None:
+    """A normal Excel student import need not carry a GF-prefixed column."""
+    config = load_exporter_config("config/SmartAlloc_Exporter_Config_v1.json")
+    source = _sample_alloc_frame().iloc[:1].drop(columns=["student_GF_NationalCode"])
+    source["student_national_id"] = "0000000001"
+
+    sheet = build_sheet2_frame(source, config)
+    assert sheet.loc[0, "کد ملی"] == "0000000001"
+
+    # If both are present, the explicit GF field remains authoritative.
+    source["student_GF_NationalCode"] = "0012345678"
+    explicit = build_sheet2_frame(source, config)
+    assert explicit.loc[0, "کد ملی"] == "0012345678"
+
+
 def test_sheet2_structure_matches_template(tmp_path: Path) -> None:
     cfg = load_exporter_config("config/SmartAlloc_Exporter_Config_v1.json")
     df_alloc = _sample_alloc_frame()
