@@ -836,8 +836,18 @@ def test_mainwindow_real_gui_build_allocate_sabt_and_recovery(
         window._combo_academic_year.setCurrentText("1404")
         window._picker_sabt_output_alloc.setText(str(sabt))
         # Exercise the actual FilePicker click; only the native OS dialog is stubbed.
-        assert window._picker_sabt_profile_alloc.isEnabled()
-        assert window._picker_sabt_profile_alloc._button.isEnabled()
+        from PySide6.QtCore import Qt
+
+        states: list[tuple[str, str, bool, bool]] = []
+        node = window._picker_sabt_profile_alloc
+        while node is not None:
+            states.append((
+                type(node).__name__, node.objectName(), node.isEnabled(),
+                node.testAttribute(Qt.WidgetAttribute.WA_ForceDisabled),
+            ))
+            node = node.parentWidget()
+        assert window._picker_sabt_profile_alloc.isEnabled(), states
+        assert window._picker_sabt_profile_alloc._button.isEnabled(), states
         window._picker_sabt_profile_alloc._button.click()
         assert window._picker_sabt_profile_alloc.text() == str(profile_file), (
             chosen_files, window._picker_sabt_profile_alloc.text()
