@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 from openpyxl import Workbook
@@ -166,6 +167,124 @@ def test_national_code_fallback_is_per_row_not_per_existing_column() -> None:
     sheet = build_sheet2_frame(source, cfg)
     assert sheet["کد ملی"].tolist() == [r[4] for r in rows]
     assert sheet["شناسه دانش آموز"].tolist() == source["student_id"].tolist()
+
+
+@pytest.mark.parametrize(
+    ("gf_value", "canonical", "expected"),
+    [
+        (0, "0000000001", "0000000001"),
+        (0.0, "0000000002", "0000000002"),
+        (np.int64(0), "0000000003", "0000000003"),
+        (np.float64(0.0), "0000000004", "0000000004"),
+        ("0", "0000000005", "0000000005"),
+        ("0.0", "0000000006", "0000000006"),
+        ("۰۰۰.۰", "0000000007", "0000000007"),
+        ("0000000000", "0000000008", "0000000008"),
+        (pd.NA, "0000000009", "0000000009"),
+        (None, "0000000010", "0000000010"),
+        (float("nan"), "0000000011", "0000000011"),
+        ("   ", "0000000012", "0000000012"),
+        (0, None, ""),
+        ("0.0", None, ""),
+        (np.int64(0), None, ""),
+        ("۰۰۰", None, ""),
+        ("0012345678", "9999999999", "0012345678"),
+        ("0012345678.0", "9999999999", "0012345678"),
+        (np.int64(1234567890), "9999999999", "1234567890"),
+    ],
+)
+def test_national_code_zero_representation_cannot_block_canonical_fallback(
+    gf_value: object, canonical: str | None, expected: str
+) -> None:
+    cfg = load_exporter_config("config/SmartAlloc_Exporter_Config_v1.json")
+    source = pd.DataFrame(
+        {
+            "student_id": ["S-1", "S-2"],
+            "student_GF_NationalCode": [gf_value, "۰۰۱۲۳۴۵۶۷۸"],
+            "student_national_code": [0.0, "9999999999"],
+            "student_national_id": [canonical, "9999999999"],
+        },
+        dtype=object,
+    )
+    spec = cfg["sheets"]["Sheet2"]["columns"]["کد ملی"]
+    selected = _series_from_source(source, spec, cfg, today=datetime(2026, 1, 1))
+    # Assert source selection *and* the final, normalized Sheet2 output.
+    assert selected.iloc[0] == (gf_value if expected in {"0012345678", "1234567890"} else (canonical or ""))
+    sheet = build_sheet2_frame(source, cfg)
+    assert sheet["کد ملی"].tolist() == [expected, "0012345678"]
+    assert sheet["شناسه دانش آموز"].tolist() == ["S-1", "S-2"]
+
+
+def test_national_code_fallback_skips_zero_canonical_alias_per_record() -> None:
+    cfg = load_exporter_config("config/SmartAlloc_Exporter_Config_v1.json")
+    source = pd.DataFrame(
+        {
+            "student_id": ["S1", "S2", "S3"],
+            "student_GF_NationalCode": [0.0, "0.0", "0000000000"],
+            "student_national_code": [np.int64(0), "0000000001", None],
+            "student_national_id": ["0000000002", "9999999999", "0000000003"],
+        },
+        dtype=object,
+    )
+    result = build_sheet2_frame(source, cfg)
+    assert result["کد ملی"].tolist() == [
+        "0000000002",
+        "0000000001",
+        "0000000003",
+    ]
+
+
+def test_zero_representation_excel_import_sabt_workbook_roundtrip(
+    tmp_path: Path,
+) -> None:
+    from openpyxl import load_workbook
+
+    cfg = load_exporter_config("config/SmartAlloc_Exporter_Config_v1.json")
+    expected = [
+        ("S-01", "0000000001"),
+        ("S-02", "0000000002"),
+        ("S-03", "0000000003"),
+        ("S-04", "0000000004"),
+        ("S-05", "0000000005"),
+        ("S-06", "0012345678"),
+    ]
+    original = pd.DataFrame(
+        {
+            "student_id": [row[0] for row in expected],
+            "student_GF_NationalCode": [0, 0.0, "0", "0.0", pd.NA, "۰۰۱۲۳۴۵۶۷۸"],
+            "student_national_code": [None] * len(expected),
+            "student_national_id": [row[1] for row in expected],
+        }
+    )
+    student_file = tmp_path / "synthetic-students.xlsx"
+    original.to_excel(student_file, index=False)
+    loaded = pd.read_excel(
+        student_file,
+        dtype={"student_id": str, "student_national_id": str},
+    )
+    assert loaded["student_national_id"].tolist() == [code for _, code in expected]
+
+    sheet = build_sheet2_frame(loaded, cfg)
+    assert list(zip(sheet["شناسه دانش آموز"], sheet["کد ملی"])) == expected
+    summary = build_summary_frame(
+        cfg, total_students=len(expected), allocated_count=len(expected), error_count=0
+    )
+    errors = build_errors_frame(pd.DataFrame(columns=["student_id"]), cfg)
+    template = tmp_path / "synthetic-template.xlsx"
+    output = tmp_path / "synthetic-sabt.xlsx"
+    ensure_template_workbook(template, cfg)
+    write_import_to_sabt_excel(sheet, summary, errors, None, None, template, output)
+
+    workbook = load_workbook(output, read_only=True, data_only=True)
+    try:
+        rows = list(workbook["Sheet2"].values)
+    finally:
+        workbook.close()
+    headers = list(rows[0])
+    student_col = headers.index("شناسه دانش آموز")
+    national_col = headers.index("کد ملی")
+    actual = [(row[student_col], row[national_col]) for row in rows[1:]]
+    assert actual == expected
 
 
 def test_national_code_prefixed_alias_fallback_and_other_gf_9000_rule() -> None:
