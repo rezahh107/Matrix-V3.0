@@ -11,6 +11,8 @@ from app.infra.excel.import_to_sabt import (  # noqa: E402
     ImportToSabtExportError,
     _coalesce_duplicate_identifier_rows,
     _safe_merge,
+    _normalize_digits,
+    _series_from_source,
     apply_alias_rule,
     build_errors_frame,
     build_optional_sheet_frame,
@@ -107,6 +109,92 @@ def test_sheet2_canonical_national_id_fallback_preserves_leading_zeros() -> None
     source["student_GF_NationalCode"] = "0012345678"
     explicit = build_sheet2_frame(source, config)
     assert explicit.loc[0, "کد ملی"] == "0012345678"
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        (None, ""),
+        (pd.NA, ""),
+        (float("nan"), ""),
+        ("  ", ""),
+        (1234567890.0, "1234567890"),
+        ("1234567890.0", "1234567890"),
+        (123456789.0, "0123456789"),
+        ("0000000001.0", "0000000001"),
+        ("  ۰۰۱۲۳۴۵۶۷۸  ", "0012345678"),
+        ("٠٠١٢٣٤٥٦٧٨", "0012345678"),
+        ("0001", "0000000001"),
+        ("1234567890123", "4567890123"),
+    ],
+)
+def test_national_code_normalization_handles_excel_representations(
+    raw: object, expected: str
+) -> None:
+    assert _normalize_digits(raw, 10) == expected
+
+
+def test_sixteen_digit_normalizer_preserves_decimal_artifact_and_zeroes() -> None:
+    assert _normalize_digits("0000000000000123.0", 16) == "0000000000000123"
+    assert _normalize_digits(1234567890123456.0, 16) == "1234567890123456"
+    assert _normalize_digits(pd.NA, 16) == ""
+
+
+def test_national_code_fallback_is_per_row_not_per_existing_column() -> None:
+    cfg = load_exporter_config("config/SmartAlloc_Exporter_Config_v1.json")
+    rows = [
+        # Populated explicit GF wins even when a canonical value conflicts.
+        ("۰۰۱۲۳۴۵۶۷۸", "9999999999", None, None, "0012345678"),
+        ("", " ", "0000000001", "9999999999", "0000000001"),
+        (None, "0000000002", "9999999999", None, "0000000002"),
+        (pd.NA, pd.NA, 1234567890.0, None, "1234567890"),
+        (float("nan"), None, None, "0000000004", "0000000004"),
+        ("   ", "", "0000000005", None, "0000000005"),
+        (None, None, None, None, ""),
+        ("١٢٣٤٥٦٧٨٩٠", "0000000006", None, None, "1234567890"),
+        ("1234567890.0", "9999999999", None, None, "1234567890"),
+    ]
+    source = pd.DataFrame(
+        {
+            "student_id": [f"synthetic-{i}" for i in range(len(rows))],
+            "student_GF_NationalCode": [r[0] for r in rows],
+            "student_national_code": [r[1] for r in rows],
+            "student_national_id": [r[2] for r in rows],
+            "national_id": [r[3] for r in rows],
+        }
+    )
+    sheet = build_sheet2_frame(source, cfg)
+    assert sheet["کد ملی"].tolist() == [r[4] for r in rows]
+    assert sheet["شناسه دانش آموز"].tolist() == source["student_id"].tolist()
+
+
+def test_national_code_prefixed_alias_fallback_and_other_gf_9000_rule() -> None:
+    cfg = load_exporter_config("config/SmartAlloc_Exporter_Config_v1.json")
+    source = pd.DataFrame(
+        {
+            "student_id": ["A", "B"],
+            "student_student_national_id": ["0000000001", None],
+            "student_GF_NationalCode": ["", pd.NA],
+            "student_gf_GF_NationalCode": [None, "0000000002"],
+            "student_GF_Mobile": ["09123456789", "09129876543"],
+            "student_mobile": ["09999999999", "09999999999"],
+            "student_GF_FirstName": ["9000", "Named"],
+            "fallback_name": ["Restored", "Other"],
+        }
+    )
+    sheet = build_sheet2_frame(source, cfg)
+    assert sheet["کد ملی"].tolist() == ["0000000001", "0000000002"]
+    assert sheet["تلفن همراه"].tolist() == ["09123456789", "09129876543"]
+    custom_cfg = {
+        "sheets": {"Sheet2": {"columns": {"fallback_name": {"source": "df", "field": "fallback_name"}}}}
+    }
+    names = _series_from_source(
+        source,
+        {"source": "gf", "field": "GF_FirstName", "on_value_9000_use": "fallback_name"},
+        custom_cfg,
+        today=datetime(2026, 1, 1),
+    )
+    assert names.tolist() == ["Restored", "Named"]
 
 
 def test_sheet2_structure_matches_template(tmp_path: Path) -> None:
