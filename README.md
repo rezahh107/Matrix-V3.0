@@ -8,13 +8,11 @@ uv sync --locked
 uv run --locked python -m app.main
 ```
 
-## ساخت فایل اجرایی (PyInstaller)
-```bash
-uv sync --locked --group packaging
-uv run --locked --group packaging pyinstaller --onefile --windowed --name تخصیص_دانشجو_منتور \
-  --collect-all PySide6 --hidden-import openpyxl --hidden-import pandas.io.formats.excel \
-  app/main.py
-```
+## مسیر تحویل پشتیبانی‌شده
+
+مسیر فعلی اجرای Matrix، **سورس پروژه با `uv`** و فرمان‌های بخش «اجرا» است. برای راه‌اندازی از یک پوشهٔ کامل سورس (شامل `pyproject.toml`، `uv.lock`، `.python-version` و منابع پروژه) استفاده کنید؛ این متن ادعای انتشار یک بستهٔ آماده نیست.
+
+ساخت فایل مستقل با PyInstaller، بستهٔ EXE و نصب‌کننده **جزو اهداف تحویل پشتیبانی‌شدهٔ Matrix نیستند**. وجود وابستگی‌ها یا ابزارهای بسته‌بندی تاریخی در مخزن به معنی توصیه یا پشتیبانی از آن مسیر نیست.
 
 ## Policy-First در Core
 
