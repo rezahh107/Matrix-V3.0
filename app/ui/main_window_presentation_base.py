@@ -80,6 +80,7 @@ _LITERAL_BINDINGS: dict[str, tuple[str, str]] = {
     "خروجی تخصیص": ("files.alloc_output", "Allocation output"),
     "فایل خروجی": ("files.sabt_output", "Output file"),
     "فایل تنظیمات": ("files.sabt_config", "Configuration file"),
+    "فایل پروفایل Sabt": ("files.sabt_profile", "Sabt export profile"),
     "فایل قالب": ("files.sabt_template", "Template file"),
     "فایل ماتریس": ("files.rule_matrix", "Matrix file"),
     "پیشنهاد خودکار": ("action.autodetect", "Auto-detect"),
