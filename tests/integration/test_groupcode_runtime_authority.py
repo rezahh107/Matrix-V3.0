@@ -895,7 +895,7 @@ def test_mainwindow_real_gui_build_allocate_sabt_and_recovery(
             staticmethod(lambda url: opened_folders.append(url.toLocalFile())),
         )
         window._toolbar_actions["output"].trigger()
-        assert opened_folders == [str(tmp_path)]
+        assert [Path(folder) for folder in opened_folders] == [tmp_path]
         assert not warnings and not async_errors
 
         original_hashes = {
