@@ -19,6 +19,37 @@ from app.ui.fonts import _register_embedded_vazirmatn
 from app.utils.path_utils import get_log_directory, get_user_data_dir, resource_path
 
 
+def _verify_directory_io(directory: Path) -> None:
+    """Prove create/write/read/delete on the actual filesystem, not via is_dir()."""
+
+    payload = b"matrix-uv-directory-io-probe"
+    try:
+        # delete-on-close also requires deletion rights on Windows. Even when a
+        # write/read fails, the context manager closes and removes the file.
+        with tempfile.NamedTemporaryFile(
+            mode="w+b", prefix=".matrix-uv-io-", dir=directory
+        ) as handle:
+            probe_path = Path(handle.name)
+            if handle.write(payload) != len(payload):
+                raise RuntimeError(f"Incomplete directory probe write: {directory}")
+            handle.flush()
+            handle.seek(0)
+            if handle.read() != payload:
+                raise RuntimeError(f"Directory probe read-back mismatch: {directory}")
+        if probe_path.exists():
+            raise RuntimeError(f"Directory probe cleanup left a file: {probe_path}")
+    except OSError as exc:
+        raise RuntimeError(f"Application directory I/O qualification failed: {directory}") from exc
+
+
+def _verify_application_directories() -> None:
+    """Qualify both actual resolved application storage locations."""
+
+    for directory in (get_user_data_dir(), get_log_directory()):
+        _verify_directory_io(directory)
+
+
+
 def main() -> None:
     if os.name != "nt":
         raise RuntimeError("Windows-only runtime qualification")
@@ -31,8 +62,7 @@ def main() -> None:
         if not path.is_file():
             raise RuntimeError(f"Missing application resource: {path}")
     json.loads(resource_path("config", "policy.json").read_text(encoding="utf-8"))
-    if not get_user_data_dir().is_dir() or not get_log_directory().is_dir():
-        raise RuntimeError("Application user/log directories not writable")
+    _verify_application_directories()
     with tempfile.TemporaryDirectory(prefix="matrix-ci-db-") as work:
         db_path = Path(work) / "references.sqlite"
         # LocalDatabase tracks open SQLite handles; closing its context is
