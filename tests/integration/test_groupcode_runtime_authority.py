@@ -452,3 +452,148 @@ def test_groupcode_authority_persists_across_annual_db_reopen(tmp_path: Path) ->
     assert set(stored["group_code"].astype(int)) == {24}
     assert status.source_filename == group_path.name
     assert status.imported_at is not None
+
+
+def test_operator_workflow_db_build_allocate_qa_sabt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Exercise one connected operator path; Qt dialogs are stubbed, execution is real."""
+    from hashlib import sha256
+
+    from PySide6.QtWidgets import QApplication, QFileDialog, QMessageBox
+
+    from app.core.common.types import CANONICAL_TRACE_ORDER
+    from app.infra.config_flags import UserSettings
+    from app.ui.database_tab import DatabaseTab
+
+    app = QApplication.instance() or QApplication([])
+    db_path = tmp_path / "operator.sqlite"
+    db = LocalDatabase(db_path)
+    school_repo = SchoolRepository(db)
+    group_repo = GroupCodeRepository(db)
+    school_file = _write_excel(_schools(), tmp_path / "schools.xlsx")
+    group_file = _write_excel(_groupcodes(24), tmp_path / "groupcodes.xlsx")
+    stale_group_file = _write_excel(_groupcodes(25), tmp_path / "updated-groupcodes.xlsx")
+
+    choices = iter((school_file, group_file, stale_group_file))
+    monkeypatch.setattr(
+        QFileDialog,
+        "getOpenFileName",
+        staticmethod(lambda *_args: (str(next(choices)), "Excel Files (*.xlsx)")),
+    )
+    notices: list[str] = []
+    monkeypatch.setattr(
+        QMessageBox,
+        "information",
+        staticmethod(lambda _parent, _title, message: notices.append(message)),
+    )
+    warnings: list[str] = []
+    monkeypatch.setattr(
+        QMessageBox,
+        "warning",
+        staticmethod(lambda _parent, _title, message: warnings.append(message)),
+    )
+
+    tab = DatabaseTab(school_repository=school_repo, groupcode_repository=group_repo)
+    try:
+        assert school_repo.status().row_count == 0
+        assert group_repo.status().row_count == 0
+        tab._schools_button.click()
+        tab._groupcodes_button.click()
+        app.processEvents()
+        assert len(notices) == 2 and not warnings
+        assert school_repo.status().row_count == 1
+        assert group_repo.status().row_count == 1
+        assert group_repo.status().imported_at is not None
+        assert set(group_repo.load_canonical_frame()["group_code"].astype(int)) == {24}
+
+        # Build uses precisely the references just persisted by the Qt Database action.
+        matrix_path = _build_matrix(tmp_path=tmp_path, db_path=db_path, group_code=24)
+        assert _matrix_group_values(matrix_path) == {24}
+        build_qa = tmp_path / "matrix_vs_students_validation.xlsx"
+        assert build_qa.exists()
+        with pd.ExcelFile(build_qa) as qa_book:
+            assert "summary" in qa_book.sheet_names
+            assert not pd.read_excel(qa_book, "summary").empty
+
+        students_file = _write_excel(_student(24), tmp_path / "students.xlsx")
+        allocation_path = tmp_path / "allocation.xlsx"
+        sabt_path = tmp_path / "sabt.xlsx"
+        common = [
+            "allocate",
+            "--students",
+            str(students_file),
+            "--pool",
+            str(matrix_path),
+            "--pool-type",
+            "matrix",
+            "--pool-sheet",
+            "matrix",
+            "--policy",
+            str(POLICY_PATH),
+            "--academic-year",
+            "1404",
+            "--counter-duplicate-strategy",
+            "assign-new",
+            "--output",
+            str(allocation_path),
+            "--sabt-output",
+            str(sabt_path),
+            "--sabt-template",
+            str(tmp_path / "synthetic-template.xlsx"),
+            "--local-db",
+            str(db_path),
+        ]
+        settings = {"user_settings": UserSettings(enable_trace_export=True)}
+        assert cli_legacy.main(common, ui_overrides=settings) == 0
+        assert allocation_path.exists() and sabt_path.exists()
+
+        with pd.ExcelFile(allocation_path) as alloc_book:
+            assert {"allocations", "logs", "updated_pool", "trace"}.issubset(
+                alloc_book.sheet_names
+            )
+            allocations = pd.read_excel(alloc_book, "allocations", dtype=str)
+            logs = pd.read_excel(alloc_book, "logs", dtype=str)
+            trace = pd.read_excel(alloc_book, "trace", dtype=str)
+        assert len(allocations) == 1
+        allocated_id = str(allocations.loc[0, "student_id"])
+        assert allocated_id and allocated_id.lower() != "nan"
+        assert "success" in set(logs["allocation_status"])
+        assert trace.loc[trace["student_id"] == allocated_id, "stage"].tolist() == list(
+            CANONICAL_TRACE_ORDER
+        )
+
+        allocation_qa = tmp_path / "allocation_validation.xlsx"
+        with pd.ExcelFile(allocation_qa) as qa_book:
+            assert "summary" in qa_book.sheet_names
+            qa_summary = pd.read_excel(qa_book, "summary")
+            assert not qa_summary.empty
+            assert qa_summary["passed"].astype(bool).all()
+
+        with pd.ExcelFile(sabt_path) as sabt_book:
+            assert {"Sheet2", "Summary", "Errors"}.issubset(sabt_book.sheet_names)
+            sheet2 = pd.read_excel(sabt_book, "Sheet2", dtype=str)
+            assert len(sheet2) == 1
+            assert str(sheet2.loc[0, "شناسه دانش آموز"]) == allocated_id
+            assert str(sheet2.loc[0, "کد ملی"]) == "0000000001"
+
+        # After a real reference update, stale student data must be blocked and
+        # must not overwrite the prior verified outputs.
+        original = {
+            path: sha256(path.read_bytes()).hexdigest()
+            for path in (allocation_path, sabt_path)
+        }
+        tab._groupcodes_button.click()
+        app.processEvents()
+        assert set(group_repo.load_canonical_frame()["group_code"].astype(int)) == {25}
+        with pytest.raises(ValueError, match="Unknown group code"):
+            cli_legacy.main(common, ui_overrides=settings)
+        assert all(
+            sha256(path.read_bytes()).hexdigest() == digest
+            for path, digest in original.items()
+        )
+        assert not warnings
+    finally:
+        tab.close()
+        app.processEvents()
+        db.close_all_connections()
