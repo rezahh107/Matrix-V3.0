@@ -690,8 +690,11 @@ def test_excel_student_import_mixed_national_codes_to_sabt_readback(tmp_path: Pa
     output = tmp_path / "mixed-sabt.xlsx"
     ensure_template_workbook(template, cfg)
     write_import_to_sabt_excel(sheet, summary, errors, None, None, template, output)
-    with load_workbook(output, read_only=True, data_only=True) as workbook:
+    workbook = load_workbook(output, read_only=True, data_only=True)
+    try:
         actual_rows = list(workbook["Sheet2"].values)
+    finally:
+        workbook.close()
     columns = list(actual_rows[0])
     id_idx = columns.index("شناسه دانش آموز")
     national_idx = columns.index("کد ملی")
