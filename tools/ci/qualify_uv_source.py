@@ -60,10 +60,10 @@ def build_candidate(output_dir: Path) -> dict[str, object]:
     # streams (which can differ under Windows console newline translation).
     entries = git("ls-tree", "-r", "-z", "HEAD", "--", *RUNTIME_PATHS)
     expected_blobs: dict[str, str] = {}
-    for entry in entries.split(b"\\0"):
+    for entry in entries.split(b"\0"):
         if not entry:
             continue
-        metadata, path_bytes = entry.split(b"\\t", 1)
+        metadata, path_bytes = entry.split(b"\t", 1)
         mode, kind, object_id = metadata.split(b" ", 2)
         if kind != b"blob":
             raise RuntimeError(f"Unsupported Git tree entry: {path_bytes!r}")
@@ -98,7 +98,7 @@ def build_candidate(output_dir: Path) -> dict[str, object]:
         # Git's immutable tree is the authority for all content, not filenames alone.
         for name in sorted(expected_paths):
             data = source.read(name)
-            header = f"blob {len(data)}\\0".encode()
+            header = f"blob {len(data)}\0".encode()
             archive_blob = hashlib.sha1(header + data).hexdigest()
             if archive_blob != expected_blobs[name]:
                 raise RuntimeError(
