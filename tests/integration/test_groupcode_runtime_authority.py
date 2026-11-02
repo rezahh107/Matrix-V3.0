@@ -832,22 +832,23 @@ def test_mainwindow_real_gui_build_allocate_sabt_and_recovery(
         assert window.activate_surface("allocate")
         window._picker_students.setText(str(students_file))
         window._picker_pool.setText(str(matrix))
+        # Selecting a real pool starts an asynchronous manager-name ExcelLoader.
+        # GUI controls are intentionally disabled until this loader finishes.
+        loaders = list(window._excel_loaders)
+        deadline = time.monotonic() + 20
+        while window._excel_loaders and time.monotonic() < deadline:
+            app.processEvents()
+            time.sleep(0.02)
+        assert not window._excel_loaders, "Manager-name loader did not finish"
+        for loader in loaders:
+            assert loader.wait(5000)
+        app.processEvents()
         window._picker_alloc_out.setText(str(allocation))
         window._combo_academic_year.setCurrentText("1404")
         window._picker_sabt_output_alloc.setText(str(sabt))
         # Exercise the actual FilePicker click; only the native OS dialog is stubbed.
-        from PySide6.QtCore import Qt
-
-        states: list[tuple[str, str, bool, bool]] = []
-        node = window._picker_sabt_profile_alloc
-        while node is not None:
-            states.append((
-                type(node).__name__, node.objectName(), node.isEnabled(),
-                node.testAttribute(Qt.WidgetAttribute.WA_ForceDisabled),
-            ))
-            node = node.parentWidget()
-        assert window._picker_sabt_profile_alloc.isEnabled(), states
-        assert window._picker_sabt_profile_alloc._button.isEnabled(), states
+        assert window._picker_sabt_profile_alloc.isEnabled()
+        assert window._picker_sabt_profile_alloc._button.isEnabled()
         window._picker_sabt_profile_alloc._button.click()
         assert window._picker_sabt_profile_alloc.text() == str(profile_file), (
             chosen_files, window._picker_sabt_profile_alloc.text()
