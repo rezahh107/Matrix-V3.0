@@ -66,7 +66,7 @@ def test_persian_console_log_is_writable_with_legacy_windows_codepage() -> None:
         msg="راه‌اندازی سامانه", args=(), exc_info=None,
     ))
     stream.flush()
-    assert "راه‌اندازی سامانه".encode("utf-8") in buffer.getvalue()
+    assert "راه‌اندازی سامانه".encode() in buffer.getvalue()
 
 
 def test_configure_logging_enriches_records(tmp_path: Path) -> None:
