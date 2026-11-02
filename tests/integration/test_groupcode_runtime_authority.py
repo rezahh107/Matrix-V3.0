@@ -232,6 +232,8 @@ def test_p0_03_groupcode_change_blocks_now_ineligible_real_allocation(tmp_path: 
             "1404",
             "--counter-duplicate-strategy",
             "assign-new",
+            "--export-profile-path",
+            str(profile_path),
             "--output",
             str(output_a),
             "--local-db",
@@ -464,6 +466,7 @@ def test_operator_workflow_db_build_allocate_qa_sabt(
 
     from app.core.common.types import CANONICAL_TRACE_ORDER
     from app.infra.config_flags import UserSettings
+    from app.infra.excel import export_allocations as sabt_exports
     from app.ui.database_tab import DatabaseTab
 
     app = QApplication.instance() or QApplication([])
@@ -516,6 +519,25 @@ def test_operator_workflow_db_build_allocate_qa_sabt(
             assert "summary" in qa_book.sheet_names
             assert not pd.read_excel(qa_book, "summary").empty
 
+        # The public source archive deliberately excludes the legacy XLSX mapping.
+        # Supply an explicitly synthetic profile rather than leaking a real workbook.
+        profile_path = tmp_path / "synthetic-sabt-profile.xlsx"
+        pd.DataFrame(
+            {
+                sabt_exports._HEADER_COLUMN: [
+                    "کد ثبت نام0",
+                    "پیدا کردن ردیف پشتیبان از فیلد 141",
+                ],
+                sabt_exports._VALUE_COLUMN: ["student_id", ""],
+                sabt_exports._ORDER_COLUMN: [1, 2],
+                sabt_exports._SOURCE_COLUMN: [
+                    sabt_exports._SOURCE_STUDENT,
+                    sabt_exports._SOURCE_ALLOCATION,
+                ],
+            }
+        ).to_excel(
+            profile_path, sheet_name=sabt_exports._PROFILE_SHEET_NAME, index=False
+        )
         students_file = _write_excel(_student(24), tmp_path / "students.xlsx")
         allocation_path = tmp_path / "allocation.xlsx"
         sabt_path = tmp_path / "sabt.xlsx"
@@ -568,7 +590,7 @@ def test_operator_workflow_db_build_allocate_qa_sabt(
             assert "summary" in qa_book.sheet_names
             qa_summary = pd.read_excel(qa_book, "summary")
             assert not qa_summary.empty
-            assert qa_summary["passed"].astype(bool).all()
+            assert qa_summary["passed"].astype(str).str.lower().eq("true").all()
 
         with pd.ExcelFile(sabt_path) as sabt_book:
             assert {"Sheet2", "Summary", "Errors"}.issubset(sabt_book.sheet_names)
