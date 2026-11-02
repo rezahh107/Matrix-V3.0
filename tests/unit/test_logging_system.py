@@ -2,13 +2,19 @@
 
 from __future__ import annotations
 
+import io
 import logging
 import sys
 from pathlib import Path
 
 import yaml
 
-from app.infra.logging import configure_logging, install_exception_hook
+from app.infra.logging import (
+    _configure_utf8_console_stream,
+    _resolve_logging_paths,
+    configure_logging,
+    install_exception_hook,
+)
 
 
 def _create_logging_config(tmp_path: Path) -> Path:
@@ -47,6 +53,21 @@ def _create_logging_config(tmp_path: Path) -> Path:
         yaml.safe_dump(config, allow_unicode=True, sort_keys=False), encoding="utf-8"
     )
     return config_path
+
+
+def test_persian_console_log_is_writable_with_legacy_windows_codepage() -> None:
+    """The log handler should not produce UnicodeEncodeError on cp1252 stdout."""
+
+    buffer = io.BytesIO()
+    stream = io.TextIOWrapper(buffer, encoding="cp1252", errors="strict")
+    _configure_utf8_console_stream(stream)
+    handler = logging.StreamHandler(stream)
+    handler.emit(logging.LogRecord(
+        name="matrix", level=logging.INFO, pathname=__file__, lineno=1,
+        msg="راه‌اندازی سامانه", args=(), exc_info=None,
+    ))
+    stream.flush()
+    assert "راه‌اندازی سامانه".encode() in buffer.getvalue()
 
 
 def test_configure_logging_enriches_records(tmp_path: Path) -> None:
@@ -102,3 +123,28 @@ def test_install_exception_hook_creates_error_report(tmp_path: Path) -> None:
     content = reports[-1].read_text(encoding="utf-8")
     assert "RuntimeError" in content
     assert "boom" in content
+
+
+def test_configure_logging_default_paths_match_runtime_probe(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    """The operator's cwd logs/errors paths are the actual configured destinations."""
+
+    workspace = tmp_path / "real-workdir"
+    workspace.mkdir()
+    monkeypatch.chdir(workspace)
+    config_path = _create_logging_config(tmp_path)
+    context = configure_logging(
+        app_name="TestApp",
+        app_version="0.1",
+        logger_name="test.logger",
+        config_path=config_path,
+    )
+    try:
+        assert (context.log_dir, context.error_dir) == _resolve_logging_paths()
+        assert context.log_dir == workspace / "logs"
+        assert context.error_dir == workspace / "logs" / "errors"
+        assert context.log_dir != tmp_path / "user-home" / "logs"
+        assert context.error_dir.is_dir()
+    finally:
+        logging.shutdown()
