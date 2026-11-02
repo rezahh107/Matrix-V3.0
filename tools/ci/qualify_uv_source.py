@@ -56,10 +56,19 @@ def git(*args: str) -> bytes:
 def build_candidate(output_dir: Path) -> dict[str, object]:
     output_dir.mkdir(parents=True, exist_ok=True)
     source_sha = git("rev-parse", "HEAD").decode().strip()
-    expected_paths = {
-        line for line in git("ls-tree", "-r", "--name-only", "HEAD", "--", *RUNTIME_PATHS)
-        .decode().splitlines() if line
-    }
+    # Compare archive bytes against exact Git *blob objects*, not git-show text
+    # streams (which can differ under Windows console newline translation).
+    entries = git("ls-tree", "-r", "-z", "HEAD", "--", *RUNTIME_PATHS)
+    expected_blobs: dict[str, str] = {}
+    for entry in entries.split(b"\\0"):
+        if not entry:
+            continue
+        metadata, path_bytes = entry.split(b"\\t", 1)
+        mode, kind, object_id = metadata.split(b" ", 2)
+        if kind != b"blob":
+            raise RuntimeError(f"Unsupported Git tree entry: {path_bytes!r}")
+        expected_blobs[path_bytes.decode("utf-8")] = object_id.decode("ascii")
+    expected_paths = set(expected_blobs)
     missing = REQUIRED_FILES - expected_paths
     if missing:
         raise RuntimeError(f"Required runtime files missing: {sorted(missing)}")
@@ -88,10 +97,19 @@ def build_candidate(output_dir: Path) -> dict[str, object]:
             )
         # Git's immutable tree is the authority for all content, not filenames alone.
         for name in sorted(expected_paths):
-            if source.read(name) != git("show", f"HEAD:{name}"):
-                raise RuntimeError(f"Git source content differs from archive: {name}")
+            data = source.read(name)
+            header = f"blob {len(data)}\\0".encode()
+            archive_blob = hashlib.sha1(header + data).hexdigest()
+            if archive_blob != expected_blobs[name]:
+                raise RuntimeError(
+                    f"Archive blob differs from reviewed Git tree: {name} "
+                    f"(archive {archive_blob}; tree {expected_blobs[name]})"
+                )
 
-    config = tomllib.loads(git("show", "HEAD:pyproject.toml").decode())
+    with zipfile.ZipFile(archive) as source:
+        pyproject_bytes = source.read("pyproject.toml")
+        lock_bytes = source.read("uv.lock")
+    config = tomllib.loads(pyproject_bytes.decode("utf-8"))
     version = config["project"]["version"]
     if not isinstance(version, str) or not version:
         raise RuntimeError("Package version missing")
@@ -100,7 +118,7 @@ def build_candidate(output_dir: Path) -> dict[str, object]:
         "candidate_package_version_not_official_release": version,
         "archive": archive.name,
         "archive_sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
-        "uv_lock_sha256": hashlib.sha256(git("show", "HEAD:uv.lock")).hexdigest(),
+        "uv_lock_sha256": hashlib.sha256(lock_bytes).hexdigest(),
         "files_checked_against_git_tree": len(expected_paths),
         "publication": "NOT_AUTHORIZED",
     }

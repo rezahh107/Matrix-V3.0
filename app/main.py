@@ -9,7 +9,6 @@ from __future__ import annotations
 import atexit
 import getpass
 import importlib
-from importlib.metadata import version as installed_package_version
 import logging
 import os
 import re
@@ -17,6 +16,7 @@ import sys
 import traceback
 from collections.abc import Callable
 from datetime import datetime
+from importlib.metadata import version as installed_package_version
 from pathlib import Path
 from types import ModuleType, TracebackType
 from typing import TYPE_CHECKING, cast

@@ -10,7 +10,6 @@ from importlib.metadata import version
 from pathlib import Path
 
 from PySide6.QtCore import QEvent, QSettings, QThread
-from PySide6.QtWidgets import QApplication
 from shiboken6 import isValid
 
 from app.infra.local_database import LocalDatabase
