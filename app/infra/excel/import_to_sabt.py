@@ -967,6 +967,10 @@ def _series_from_source(
                 candidates.extend(mapped)
             prefixed = f"student_{field}" if not field.startswith("student_") else field
             candidates.extend([prefixed, f"student_gf_{field}", field])
+            # The exporter config uses this GF alias, but Excel student imports
+            # canonically carry national_id. Prefer an explicit GF value first.
+            if field == "GF_NationalCode":
+                candidates.extend(("student_national_code", "student_national_id", "national_id"))
         expanded_candidates: list[str] = []
         for column_name in candidates:
             if not column_name:
