@@ -774,7 +774,21 @@ def _stringify_merge_key(value: Any) -> str:
 
 
 def _normalize_digits(value: Any, length: int) -> str:
-    text = str(value or "").translate(_DIGIT_TRANSLATION)
+    if value is None:
+        return ""
+    try:
+        if pd.isna(value):
+            return ""
+    except (TypeError, ValueError):
+        pass
+
+    # Pandas may read an integral Excel numeric cell as 1234567890.0.
+    # Do not treat the decimal artifact as an extra national-code digit.
+    if isinstance(value, float) and value.is_integer():
+        value = int(value)
+    text = str(value).strip().translate(_DIGIT_TRANSLATION)
+    if re.fullmatch(r"[+-]?\\d+\\.0+", text):
+        text = text.split(".", 1)[0]
     digits = "".join(ch for ch in text if ch.isdigit())
     if not digits:
         return ""
@@ -978,32 +992,46 @@ def _series_from_source(
             expanded_candidates.append(column_name)
             expanded_candidates.append(f"student_{column_name}")
         candidates = expanded_candidates
-        for column_name in dict.fromkeys(filter(None, candidates)):
-            if column_name in df.columns:
-                series = df[column_name]
-                fallback_column = source_cfg.get("on_value_9000_use")
-                if fallback_column:
-                    if fallback_column in df.columns:
-                        fallback_series = df[fallback_column]
-                    else:
-                        fallback_series = None
-                        fallback_spec = columns_cfg.get(fallback_column)
-                        if isinstance(fallback_spec, Mapping) and fallback_spec is not source_cfg:
-                            fallback_series = _series_from_source(
-                                df,
-                                fallback_spec,
-                                exporter_cfg,
-                                today=today,
-                            )
-                    if fallback_series is not None:
-                        mask = series.astype("string") == "9000"
-                        series = series.copy()
-                        fallback_values = (
-                            ensure_series(fallback_series).reindex(df.index).fillna("")
-                        )
-                        series.loc[mask] = fallback_values[mask]
-                return series
-        return _empty_series()
+        unique_candidates = dict.fromkeys(filter(None, candidates))
+        if field == "GF_NationalCode":
+            # Keep explicit populated GF values first, but resolve missing values
+            # from canonical student columns for each already-joined student row.
+            series = _empty_series()
+            for column_name in unique_candidates:
+                if column_name not in df.columns:
+                    continue
+                candidate = ensure_series(df[column_name])
+                meaningful = candidate.astype("string").str.strip().ne("").fillna(False)
+                fill = series.eq("") & meaningful
+                series.loc[fill] = candidate.loc[fill]
+        else:
+            series = next(
+                (df[column_name] for column_name in unique_candidates if column_name in df.columns),
+                None,
+            )
+        if series is None:
+            return _empty_series()
+
+        fallback_column = source_cfg.get("on_value_9000_use")
+        if fallback_column:
+            if fallback_column in df.columns:
+                fallback_series = df[fallback_column]
+            else:
+                fallback_series = None
+                fallback_spec = columns_cfg.get(fallback_column)
+                if isinstance(fallback_spec, Mapping) and fallback_spec is not source_cfg:
+                    fallback_series = _series_from_source(
+                        df,
+                        fallback_spec,
+                        exporter_cfg,
+                        today=today,
+                    )
+            if fallback_series is not None:
+                mask = series.astype("string") == "9000"
+                series = series.copy()
+                fallback_values = ensure_series(fallback_series).reindex(df.index).fillna("")
+                series.loc[mask] = fallback_values[mask]
+        return series
 
     if source_type == "derived":
         from_column = source_cfg.get("from")
