@@ -1485,6 +1485,23 @@ class MainWindow(QMainWindow):
         self._set_picker_button_text(self._picker_sabt_config_alloc)
         sabt_layout.addRow("فایل تنظیمات", self._picker_sabt_config_alloc)
 
+        # The source-only uv archive intentionally excludes the historical XLSX
+        # profile. Operators may supply an authorized local profile instead.
+        self._picker_sabt_profile_alloc = FilePicker(
+            page,
+            placeholder="پروفایل Sabt (Sheet1، الزامی)",
+            dialog_filter="Excel Profile (*.xlsx *.xlsm *.xls)",
+        )
+        self._picker_sabt_profile_alloc.setObjectName("editSabtProfileAlloc")
+        self._picker_sabt_profile_alloc.setToolTip(
+            "فایل نگاشت ستون‌های Sabt؛ داده‌های خصوصی را در مخزن یا CI قرار ندهید"
+        )
+        default_profile = resource_path("docs", "Report (4).xlsx")
+        if default_profile.is_file():
+            self._picker_sabt_profile_alloc.setText(str(default_profile))
+        self._set_picker_button_text(self._picker_sabt_profile_alloc)
+        sabt_layout.addRow("فایل پروفایل Sabt", self._picker_sabt_profile_alloc)
+
         self._picker_sabt_template_alloc = FilePicker(
             page,
             placeholder="قالب اختیاری ImportToSabt",
@@ -1775,6 +1792,7 @@ class MainWindow(QMainWindow):
             self._picker_alloc_out,
             self._picker_sabt_output_alloc,
             self._picker_sabt_config_alloc,
+            self._picker_sabt_profile_alloc,
             self._picker_sabt_template_alloc,
             self._edit_capacity,
             self._combo_academic_year,
@@ -2184,6 +2202,19 @@ class MainWindow(QMainWindow):
         if not self._ensure_filled(required_inputs):
             return
 
+        profile_path = self._picker_sabt_profile_alloc.text().strip()
+        if not profile_path or not Path(profile_path).is_file():
+            QMessageBox.warning(
+                self,
+                self._t("sabt.profile.required.title", "پروفایل Sabt آماده نیست"),
+                self._t(
+                    "sabt.profile.required.detail",
+                    "برای تخصیص، فایل پروفایل مجاز Sabt (Sheet1) را انتخاب کنید. "
+                    "این فایل در بسته تمیز uv توزیع نمی‌شود.",
+                ),
+            )
+            return
+
         capacity = self._edit_capacity.text().strip() or "remaining_capacity"
         self._edit_capacity.setText(capacity)
         policy_path = (
@@ -2397,6 +2428,14 @@ class MainWindow(QMainWindow):
         sabt_template = self._picker_sabt_template_alloc.text().strip()
         if sabt_template:
             overrides["sabt_template"] = sabt_template
+        elif sabt_output:
+            # The CLI's historical default lives inside the source tree.
+            # GUI-generated templates belong beside the selected run output.
+            overrides["sabt_template"] = str(
+                Path(sabt_output).with_name("sabt-template.xlsx")
+            )
+
+        overrides["export_profile_path"] = self._picker_sabt_profile_alloc.text().strip()
 
         center_overrides = self.get_center_manager_map()
         if center_overrides:
