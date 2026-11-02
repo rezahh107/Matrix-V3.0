@@ -500,7 +500,9 @@ def test_operator_workflow_db_build_allocate_qa_sabt(
     tab = DatabaseTab(school_repository=school_repo, groupcode_repository=group_repo)
     try:
         assert school_repo.status().row_count == 0
-        assert group_repo.status().row_count == 0
+        # A fresh DB seeds 33 built-in SSoT groupcodes; explicit import replaces them.
+        assert group_repo.status().version_tag == "builtin:ssot"
+        assert group_repo.status().imported_at is None
         tab._schools_button.click()
         tab._groupcodes_button.click()
         app.processEvents()
