@@ -32,6 +32,9 @@ RUNTIME_PATHS = (
     "run_gui.py",
     "Launch_Matrix3.cmd",
     "tools/ci",
+    "tests/infra/test_cli_database_preparation.py",
+    "tests/integration/test_build_matrix_school_expansion.py",
+    "tests/test_excel_export_smoke.py",
 )
 REQUIRED_FILES = {
     "app/main.py",
@@ -45,7 +48,11 @@ REQUIRED_FILES = {
     ".python-version",
     "README.md",
     "CHANGELOG.md",
+    "tests/test_excel_export_smoke.py",
+    "tests/infra/test_cli_database_preparation.py",
+    "tests/integration/test_build_matrix_school_expansion.py",
 }
+SAFE_QUALIFICATION_TESTS = {"tests/infra/test_cli_database_preparation.py", "tests/integration/test_build_matrix_school_expansion.py", "tests/test_excel_export_smoke.py"}
 REJECTED_EXTENSIONS = {".xlsx", ".xls", ".csv", ".sqlite", ".db", ".pem", ".key"}
 
 
@@ -75,7 +82,8 @@ def build_candidate(output_dir: Path) -> dict[str, object]:
     forbidden = sorted(
         path for path in expected_paths
         if Path(path).suffix.lower() in REJECTED_EXTENSIONS or
-        path.startswith(("tests/", "ci/golden_datasets/", "evidence/"))
+        (path.startswith("tests/") and path not in SAFE_QUALIFICATION_TESTS)
+        or path.startswith(("ci/golden_datasets/", "evidence/"))
     )
     if forbidden:
         raise RuntimeError(f"Unsafe source candidate entries: {forbidden}")

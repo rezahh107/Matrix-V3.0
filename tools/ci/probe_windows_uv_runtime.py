@@ -34,12 +34,15 @@ def main() -> None:
         raise RuntimeError("Application user/log directories not writable")
     with tempfile.TemporaryDirectory(prefix="matrix-ci-db-") as work:
         db_path = Path(work) / "references.sqlite"
-        LocalDatabase(db_path).initialize()
-        with sqlite3.connect(db_path) as conn:
-            if not conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_meta'"
-            ).fetchone():
-                raise RuntimeError("Local reference database schema not initialized")
+        # LocalDatabase tracks open SQLite handles; closing its context is
+        # essential before Windows can remove the isolated temporary folder.
+        with LocalDatabase(db_path) as db:
+            db.initialize()
+            with sqlite3.connect(db_path) as conn:
+                if not conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_meta'"
+                ).fetchone():
+                    raise RuntimeError("Local reference database schema not initialized")
 
     app = setup_application()
     families = _register_embedded_vazirmatn()
