@@ -10,8 +10,8 @@ from openpyxl import Workbook
 from app.infra.excel.import_to_sabt import (  # noqa: E402
     ImportToSabtExportError,
     _coalesce_duplicate_identifier_rows,
-    _safe_merge,
     _normalize_digits,
+    _safe_merge,
     _series_from_source,
     apply_alias_rule,
     build_errors_frame,
