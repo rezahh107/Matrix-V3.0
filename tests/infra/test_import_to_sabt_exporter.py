@@ -269,7 +269,9 @@ def test_zero_representation_excel_import_sabt_workbook_roundtrip(
     summary = build_summary_frame(
         cfg, total_students=len(expected), allocated_count=len(expected), error_count=0
     )
-    errors = build_errors_frame(pd.DataFrame(columns=["student_id"]), cfg)
+    errors = build_errors_frame(
+        pd.DataFrame(columns=["student_id", "allocation_status"]), cfg
+    )
     template = tmp_path / "synthetic-template.xlsx"
     output = tmp_path / "synthetic-sabt.xlsx"
     ensure_template_workbook(template, cfg)
