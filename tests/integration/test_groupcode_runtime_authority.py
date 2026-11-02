@@ -470,6 +470,8 @@ def test_operator_workflow_db_build_allocate_qa_sabt(
     app = QApplication.instance() or QApplication([])
     db_path = tmp_path / "operator.sqlite"
     db = LocalDatabase(db_path)
+    # MainWindow prepares the annual DB schema before attaching DatabaseTab.
+    db.initialize()
     school_repo = SchoolRepository(db)
     group_repo = GroupCodeRepository(db)
     school_file = _write_excel(_schools(), tmp_path / "schools.xlsx")
