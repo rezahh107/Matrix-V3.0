@@ -755,7 +755,7 @@ def test_mainwindow_real_gui_build_allocate_sabt_and_recovery(
     matrix = tmp_path / "gui-matrix.xlsx"
     allocation = tmp_path / "gui-allocation.xlsx"
     sabt = tmp_path / "gui-sabt.xlsx"
-    file_choices = iter([school_file, group_file, changed_groups])
+    file_choices = iter([school_file, group_file, profile_file, changed_groups])
     monkeypatch.setattr(
         QFileDialog,
         "getOpenFileName",
@@ -830,7 +830,9 @@ def test_mainwindow_real_gui_build_allocate_sabt_and_recovery(
         window._picker_alloc_out.setText(str(allocation))
         window._combo_academic_year.setCurrentText("1404")
         window._picker_sabt_output_alloc.setText(str(sabt))
-        window._picker_sabt_profile_alloc.setText(str(profile_file))
+        # Exercise the actual FilePicker click; only the native OS dialog is stubbed.
+        window._picker_sabt_profile_alloc._button.click()
+        assert window._picker_sabt_profile_alloc.text() == str(profile_file)
         window._picker_sabt_template_alloc.setText("")
         window._btn_allocate.click()
         wait_for_terminal("completed")
