@@ -9,6 +9,7 @@ from __future__ import annotations
 import atexit
 import getpass
 import importlib
+from importlib.metadata import version as installed_package_version
 import logging
 import os
 import re
@@ -36,7 +37,7 @@ else:
 from app.infra.logging import LoggingContext, configure_logging, install_exception_hook
 from app.utils.path_utils import get_log_directory
 
-__version__ = "1.0.1"
+__version__ = installed_package_version("smart-student-allocation")
 __author__ = "Your Name"
 __description__ = "سیستم تخصیص دانشجو-منتور"
 
@@ -396,6 +397,15 @@ def main() -> int:
         MainWindowClass = load_main_window()  # noqa: N806
         window = MainWindowClass()
         window.show()
+        # CI-only bounded lifecycle qualification of the real -m app.main entrypoint.
+        # Normal operator startup has no automatic close behavior.
+        if os.environ.get("GITHUB_ACTIONS") == "true" and os.environ.get(
+            "MATRIX_CI_SMOKE_CLOSE_MS"
+        ):
+            shutdown_delay = int(os.environ["MATRIX_CI_SMOKE_CLOSE_MS"])
+            if not 500 <= shutdown_delay <= 15000:
+                raise ValueError("MATRIX_CI_SMOKE_CLOSE_MS must be 500..15000")
+            QTimer.singleShot(shutdown_delay, window.close)
         logger.info("برنامه با موفقیت راه‌اندازی شد و پنجره اصلی نمایش داده شد")
         exit_code = app.exec()
         logger.info("برنامه با کد خروج %s بسته شد", exit_code)

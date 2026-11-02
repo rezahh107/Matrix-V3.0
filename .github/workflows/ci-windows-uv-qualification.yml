@@ -33,3 +33,54 @@ jobs:
         run: uv sync --locked
       - name: Reproduce existing scheduled flaky UI smoke
         run: uv run --locked python -m tools.ci.run_flaky_ui_smoke
+
+  source-candidate-windows:
+    name: Clean source archive and uv Windows launch
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+      - name: Assert exact source
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.7"
+      - name: Install pinned Python
+        run: uv python install
+      - name: Build and verify exact-commit, privacy-bounded candidate
+        shell: pwsh
+        run: |
+          python tools/ci/qualify_uv_source.py --output-dir "$env:RUNNER_TEMP/matrix-uv-candidate"
+          if ($LASTEXITCODE -ne 0) { throw "Candidate qualification failed" }
+      - name: Fresh Windows uv setup and real entrypoint
+        shell: pwsh
+        run: |
+          $candidate = "$env:RUNNER_TEMP/matrix-uv-candidate"
+          $manifest = Get-Content (Join-Path $candidate "candidate-manifest.json") -Raw | ConvertFrom-Json
+          $archive = Join-Path $candidate $manifest.archive
+          $actual = (Get-FileHash -Algorithm SHA256 $archive).Hash.ToLowerInvariant()
+          if ($actual -ne $manifest.archive_sha256) { throw "Archive SHA256 mismatch" }
+          $source = "$env:RUNNER_TEMP/matrix-uv-clean"
+          New-Item -ItemType Directory -Force $source | Out-Null
+          Expand-Archive -Path $archive -DestinationPath $source
+          Set-Location $source
+          uv sync --locked
+          if ($LASTEXITCODE -ne 0) { throw "Clean uv sync failed" }
+          uv run --locked python -m tools.ci.probe_windows_uv_runtime
+          if ($LASTEXITCODE -ne 0) { throw "Windows runtime probe failed" }
+          $env:MATRIX_CI_SMOKE_CLOSE_MS = "2000"
+          uv run --locked python -m app.main
+          if ($LASTEXITCODE -ne 0) { throw "Real app.main entrypoint failed" }
+      - name: Upload candidate and exact-source manifest for review (not a release)
+        uses: actions/upload-artifact@v4
+        with:
+          name: matrix-uv-source-candidate
+          path: ${{ runner.temp }}/matrix-uv-candidate/*
+          if-no-files-found: error
