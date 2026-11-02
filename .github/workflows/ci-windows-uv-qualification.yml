@@ -31,6 +31,8 @@ jobs:
         run: uv python install
       - name: Sync locked environment
         run: uv sync --locked
+      - name: Focused Windows filesystem qualification regressions
+        run: uv run --locked pytest tests/unit/test_windows_uv_runtime_probe.py -q
       - name: Reproduce existing scheduled flaky UI smoke
         run: uv run --locked python -m tools.ci.run_flaky_ui_smoke
 
