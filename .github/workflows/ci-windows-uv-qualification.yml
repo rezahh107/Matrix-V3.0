@@ -96,7 +96,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Clean uv sync failed" }
           uv run --locked python -m tools.ci.probe_windows_uv_runtime
           if ($LASTEXITCODE -ne 0) { throw "Windows runtime probe failed" }
-          uv run --locked pytest tests/infra/test_cli_database_preparation.py tests/integration/test_build_matrix_school_expansion.py tests/integration/test_groupcode_runtime_authority.py::test_operator_workflow_db_build_allocate_qa_sabt tests/test_excel_export_smoke.py -q
+          uv run --locked pytest tests/infra/test_cli_database_preparation.py tests/integration/test_build_matrix_school_expansion.py tests/integration/test_groupcode_runtime_authority.py::test_operator_workflow_db_build_allocate_qa_sabt tests/integration/test_groupcode_runtime_authority.py::test_excel_student_import_mixed_national_codes_to_sabt_readback tests/test_excel_export_smoke.py -q
           if ($LASTEXITCODE -ne 0) { throw "Representative clean-source integration failed" }
           $env:MATRIX_CI_SMOKE_CLOSE_MS = "2000"
           $startupLog = Join-Path $env:RUNNER_TEMP "matrix-uv-startup.txt"
