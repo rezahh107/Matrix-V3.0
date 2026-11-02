@@ -590,7 +590,7 @@ def test_operator_workflow_db_build_allocate_qa_sabt(
             assert "summary" in qa_book.sheet_names
             qa_summary = pd.read_excel(qa_book, "summary")
             assert not qa_summary.empty
-            assert qa_summary["passed"].astype(str).str.lower().eq("true").all()
+            assert set(qa_summary["status"]) <= {"PASS", "WARN"}
 
         with pd.ExcelFile(sabt_path) as sabt_book:
             assert {"Sheet2", "Summary", "Errors"}.issubset(sabt_book.sheet_names)
