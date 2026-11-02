@@ -1006,7 +1006,10 @@ def _series_from_source(
                 if column_name not in df.columns:
                     continue
                 candidate = ensure_series(df[column_name])
-                meaningful = candidate.astype("string").str.strip().ne("").fillna(False)
+                # Use the same digit normalization as Sheet2. A zero-only
+                # representation is the existing missing-value sentinel, whether
+                # Excel supplied 0, 0.0, NumPy zero, or text such as "0.0".
+                meaningful = candidate.map(lambda value: bool(_normalize_digits(value, 10).strip("0")))
                 fill = series.eq("") & meaningful
                 series.loc[fill] = candidate.loc[fill]
         else:
