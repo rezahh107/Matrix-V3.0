@@ -996,7 +996,8 @@ def _series_from_source(
         if field == "GF_NationalCode":
             # Keep explicit populated GF values first, but resolve missing values
             # from canonical student columns for each already-joined student row.
-            series = _empty_series()
+            # Object dtype preserves integral Excel floats until digits_10 normalizes them.
+            series = _empty_series().astype("object")
             for column_name in unique_candidates:
                 if column_name not in df.columns:
                     continue
