@@ -787,7 +787,7 @@ def _normalize_digits(value: Any, length: int) -> str:
     if isinstance(value, float) and value.is_integer():
         value = int(value)
     text = str(value).strip().translate(_DIGIT_TRANSLATION)
-    if re.fullmatch(r"[+-]?\\d+\\.0+", text):
+    if re.fullmatch(r"[+-]?\d+\.0+", text):
         text = text.split(".", 1)[0]
     digits = "".join(ch for ch in text if ch.isdigit())
     if not digits:
