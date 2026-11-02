@@ -2050,7 +2050,22 @@ class MainWindow(QMainWindow):
             preflight = self._get_unknowns_preflight_result(
                 exit_code=exit_code, report_path=report_path
             )
-            self._handle_preflight_result(preflight, on_proceed=on_proceed)
+            if not self._handle_preflight_result(preflight, on_proceed=on_proceed):
+                # A completed preflight worker is not a completed allocation.
+                # Do not leave the success indicator green when the follow-up
+                # operation was blocked or the operator declined its warning.
+                blocked = preflight.status != "issues"
+                outcome = "failed" if blocked else "cancelled"
+                label = self._t(
+                    "status.error" if blocked else "status.cancelled",
+                    "خطا" if blocked else "لغو شد",
+                )
+                self._status.setText(label)
+                self._set_stage(label, self._t(
+                    "status.cancelled.detail", "عملیات متوقف شد"
+                ))
+                self._update_status_bar_state(outcome)
+                self._update_progress_caption(None, None)
 
         action = self._t(
             "status.preflight_unknowns",
@@ -2063,10 +2078,10 @@ class MainWindow(QMainWindow):
         result: UnknownsPreflightResult,
         *,
         on_proceed: Callable[[], None],
-    ) -> None:
+    ) -> bool:
         if result.status == "clean":
             on_proceed()
-            return
+            return True
         if result.status == "blocking":
             QMessageBox.warning(
                 self,
@@ -2076,7 +2091,7 @@ class MainWindow(QMainWindow):
                     "پیش‌بررسی داده‌های ناشناخته با خطای مسدودکننده مواجه شد.",
                 ),
             )
-            return
+            return False
         if result.status != "issues":
             unexpected_template = self._t(
                 "error.unknowns.unexpected",
@@ -2087,7 +2102,7 @@ class MainWindow(QMainWindow):
                 self._t("status.error", "خطا"),
                 unexpected_template.format(code=result.exit_code),
             )
-            return
+            return False
         if result.summary is None:
             QMessageBox.warning(
                 self,
@@ -2097,7 +2112,7 @@ class MainWindow(QMainWindow):
                     "گزارش پیش‌بررسی داده‌های ناشناخته یافت نشد.",
                 ),
             )
-            return
+            return False
         counts_template = self._t(
             "dialog.unknowns.counts",
             "تعداد موارد: {total} | دانش‌آموز: {student} | استخر: {pool} | منتور: {mentor}",
@@ -2138,6 +2153,8 @@ class MainWindow(QMainWindow):
         dialog.setModal(True)
         if dialog.exec() == QDialog.DialogCode.Accepted and dialog.should_proceed:
             on_proceed()
+            return True
+        return False
 
     def _start_allocate(self) -> None:
         """اجرای سناریوی تخصیص با فراخوانی CLI."""
