@@ -774,7 +774,25 @@ def _stringify_merge_key(value: Any) -> str:
 
 
 def _normalize_digits(value: Any, length: int) -> str:
-    text = str(value or "").translate(_DIGIT_TRANSLATION)
+    if value is None:
+        return ""
+    try:
+        if pd.isna(value):
+            return ""
+    except (TypeError, ValueError):
+        pass
+
+    # Preserve the pre-existing empty sentinel for numeric zero.
+    if isinstance(value, (int, float)) and value == 0:
+        return ""
+
+    # Pandas may read an integral Excel numeric cell as 1234567890.0.
+    # Do not treat the decimal artifact as an extra national-code digit.
+    if isinstance(value, float) and value.is_integer():
+        value = int(value)
+    text = str(value).strip().translate(_DIGIT_TRANSLATION)
+    if re.fullmatch(r"[+-]?\d+\.0+", text):
+        text = text.split(".", 1)[0]
     digits = "".join(ch for ch in text if ch.isdigit())
     if not digits:
         return ""
@@ -967,6 +985,10 @@ def _series_from_source(
                 candidates.extend(mapped)
             prefixed = f"student_{field}" if not field.startswith("student_") else field
             candidates.extend([prefixed, f"student_gf_{field}", field])
+            # The exporter config uses this GF alias, but Excel student imports
+            # canonically carry national_id. Prefer an explicit GF value first.
+            if field == "GF_NationalCode":
+                candidates.extend(("student_national_code", "student_national_id", "national_id"))
         expanded_candidates: list[str] = []
         for column_name in candidates:
             if not column_name:
@@ -974,32 +996,50 @@ def _series_from_source(
             expanded_candidates.append(column_name)
             expanded_candidates.append(f"student_{column_name}")
         candidates = expanded_candidates
-        for column_name in dict.fromkeys(filter(None, candidates)):
-            if column_name in df.columns:
-                series = df[column_name]
-                fallback_column = source_cfg.get("on_value_9000_use")
-                if fallback_column:
-                    if fallback_column in df.columns:
-                        fallback_series = df[fallback_column]
-                    else:
-                        fallback_series = None
-                        fallback_spec = columns_cfg.get(fallback_column)
-                        if isinstance(fallback_spec, Mapping) and fallback_spec is not source_cfg:
-                            fallback_series = _series_from_source(
-                                df,
-                                fallback_spec,
-                                exporter_cfg,
-                                today=today,
-                            )
-                    if fallback_series is not None:
-                        mask = series.astype("string") == "9000"
-                        series = series.copy()
-                        fallback_values = (
-                            ensure_series(fallback_series).reindex(df.index).fillna("")
-                        )
-                        series.loc[mask] = fallback_values[mask]
-                return series
-        return _empty_series()
+        unique_candidates = dict.fromkeys(filter(None, candidates))
+        if field == "GF_NationalCode":
+            # Keep explicit populated GF values first, but resolve missing values
+            # from canonical student columns for each already-joined student row.
+            # Object dtype preserves integral Excel floats until digits_10 normalizes them.
+            series = _empty_series().astype("object")
+            for column_name in unique_candidates:
+                if column_name not in df.columns:
+                    continue
+                candidate = ensure_series(df[column_name])
+                # Use the same digit normalization as Sheet2. A zero-only
+                # representation is the existing missing-value sentinel, whether
+                # Excel supplied 0, 0.0, NumPy zero, or text such as "0.0".
+                meaningful = candidate.map(lambda value: bool(_normalize_digits(value, 10).strip("0")))
+                fill = series.eq("") & meaningful
+                series.loc[fill] = candidate.loc[fill]
+        else:
+            series = next(
+                (df[column_name] for column_name in unique_candidates if column_name in df.columns),
+                None,
+            )
+        if series is None:
+            return _empty_series()
+
+        fallback_column = source_cfg.get("on_value_9000_use")
+        if fallback_column:
+            if fallback_column in df.columns:
+                fallback_series = df[fallback_column]
+            else:
+                fallback_series = None
+                fallback_spec = columns_cfg.get(fallback_column)
+                if isinstance(fallback_spec, Mapping) and fallback_spec is not source_cfg:
+                    fallback_series = _series_from_source(
+                        df,
+                        fallback_spec,
+                        exporter_cfg,
+                        today=today,
+                    )
+            if fallback_series is not None:
+                mask = series.astype("string") == "9000"
+                series = series.copy()
+                fallback_values = ensure_series(fallback_series).reindex(df.index).fillna("")
+                series.loc[mask] = fallback_values[mask]
+        return series
 
     if source_type == "derived":
         from_column = source_cfg.get("from")

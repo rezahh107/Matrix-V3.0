@@ -34,6 +34,7 @@ RUNTIME_PATHS = (
     "tools/ci",
     "tests/infra/test_cli_database_preparation.py",
     "tests/integration/test_build_matrix_school_expansion.py",
+    "tests/integration/test_groupcode_runtime_authority.py",
     "tests/test_excel_export_smoke.py",
 )
 REQUIRED_FILES = {
@@ -51,8 +52,9 @@ REQUIRED_FILES = {
     "tests/test_excel_export_smoke.py",
     "tests/infra/test_cli_database_preparation.py",
     "tests/integration/test_build_matrix_school_expansion.py",
+    "tests/integration/test_groupcode_runtime_authority.py",
 }
-SAFE_QUALIFICATION_TESTS = {"tests/infra/test_cli_database_preparation.py", "tests/integration/test_build_matrix_school_expansion.py", "tests/test_excel_export_smoke.py"}
+SAFE_QUALIFICATION_TESTS = {"tests/infra/test_cli_database_preparation.py", "tests/integration/test_build_matrix_school_expansion.py", "tests/test_excel_export_smoke.py", "tests/integration/test_groupcode_runtime_authority.py"}
 REJECTED_EXTENSIONS = {".xlsx", ".xls", ".csv", ".sqlite", ".db", ".pem", ".key"}
 
 
