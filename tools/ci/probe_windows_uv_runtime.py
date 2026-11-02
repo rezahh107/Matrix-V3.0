@@ -6,6 +6,7 @@ import json
 import os
 import sqlite3
 import tempfile
+from contextlib import closing
 from importlib.metadata import version
 from pathlib import Path
 
@@ -38,7 +39,7 @@ def main() -> None:
         # essential before Windows can remove the isolated temporary folder.
         with LocalDatabase(db_path) as db:
             db.initialize()
-            with sqlite3.connect(db_path) as conn:
+            with closing(sqlite3.connect(db_path)) as conn:
                 if not conn.execute(
                     "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_meta'"
                 ).fetchone():
