@@ -34,12 +34,11 @@ jobs:
       - name: Reproduce existing scheduled flaky UI smoke
         run: uv run --locked python -m tools.ci.run_flaky_ui_smoke
 
-  source-candidate-windows:
-    name: Clean source archive and uv Windows launch
-    runs-on: windows-latest
-    timeout-minutes: 30
-    env:
-      QT_QPA_PLATFORM: offscreen
+
+  source-candidate-linux:
+    name: Exact-blob source archive (Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
@@ -49,21 +48,41 @@ jobs:
         env:
           EXPECTED_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
         run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - name: Build and validate Git-blob-identical source archive
+        run: python3 tools/ci/qualify_uv_source.py --output-dir "${RUNNER_TEMP}/matrix-uv-candidate"
+      - name: Upload reviewable candidate (not a release)
+        uses: actions/upload-artifact@v4
+        with:
+          name: matrix-uv-source-candidate
+          path: ${{ runner.temp }}/matrix-uv-candidate/*
+          if-no-files-found: error
+
+  source-candidate-windows:
+    name: Clean source archive and uv Windows launch
+    needs: [source-candidate-linux]
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - name: Download exact-blob source archive and manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: matrix-uv-source-candidate
+          path: ${{ runner.temp }}/matrix-uv-candidate
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           version: "0.12.7"
       - name: Install pinned Python
         run: uv python install
-      - name: Build and verify exact-commit, privacy-bounded candidate
-        shell: pwsh
-        run: |
-          python tools/ci/qualify_uv_source.py --output-dir "$env:RUNNER_TEMP/matrix-uv-candidate"
-          if ($LASTEXITCODE -ne 0) { throw "Candidate qualification failed" }
       - name: Fresh Windows uv setup and real entrypoint
         shell: pwsh
+        env:
+          EXPECTED_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
         run: |
           $candidate = "$env:RUNNER_TEMP/matrix-uv-candidate"
           $manifest = Get-Content (Join-Path $candidate "candidate-manifest.json") -Raw | ConvertFrom-Json
+          if ($manifest.source_sha -ne $env:EXPECTED_SHA) { throw "Source SHA mismatch" }
           $archive = Join-Path $candidate $manifest.archive
           $actual = (Get-FileHash -Algorithm SHA256 $archive).Hash.ToLowerInvariant()
           if ($actual -ne $manifest.archive_sha256) { throw "Archive SHA256 mismatch" }
@@ -78,9 +97,3 @@ jobs:
           $env:MATRIX_CI_SMOKE_CLOSE_MS = "2000"
           uv run --locked python -m app.main
           if ($LASTEXITCODE -ne 0) { throw "Real app.main entrypoint failed" }
-      - name: Upload candidate and exact-source manifest for review (not a release)
-        uses: actions/upload-artifact@v4
-        with:
-          name: matrix-uv-source-candidate
-          path: ${{ runner.temp }}/matrix-uv-candidate/*
-          if-no-files-found: error
