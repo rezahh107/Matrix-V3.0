@@ -126,23 +126,35 @@ def _dispose_test_windows(qapp, preexisting_windows):
 def _isolate_default_qsettings(qapp):
     from PySide6.QtCore import QSettings
 
-    # Strong references prevent wrapper identity reuse within the test.
-    preexisting_windows = tuple(qapp.topLevelWidgets())
-    settings = QSettings()
-    assert settings.status() == QSettings.Status.NoError
-    settings.clear()
-    settings.sync()
-    assert settings.status() == QSettings.Status.NoError
+    # Some test modules override the session qapp fixture. QSettings() needs
+    # valid Qt application identity in *every* test, including those modules:
+    # on Windows an unnamed application can fail opening its native registry key.
+    previous_application_name = qapp.applicationName()
+    previous_organization_name = qapp.organizationName()
+    qapp.setOrganizationName(_TEST_QSETTINGS_ORGANIZATION)
+    qapp.setApplicationName(_TEST_QSETTINGS_APPLICATION)
 
-    yield
+    try:
+        # Strong references prevent wrapper identity reuse within the test.
+        preexisting_windows = tuple(qapp.topLevelWidgets())
+        settings = QSettings()
+        assert settings.status() == QSettings.Status.NoError, settings.fileName()
+        settings.clear()
+        settings.sync()
+        assert settings.status() == QSettings.Status.NoError, settings.fileName()
 
-    _dispose_test_windows(qapp, preexisting_windows)
+        yield
 
-    settings = QSettings()
-    assert settings.status() == QSettings.Status.NoError
-    settings.clear()
-    settings.sync()
-    assert settings.status() == QSettings.Status.NoError
+        _dispose_test_windows(qapp, preexisting_windows)
+
+        settings = QSettings()
+        assert settings.status() == QSettings.Status.NoError, settings.fileName()
+        settings.clear()
+        settings.sync()
+        assert settings.status() == QSettings.Status.NoError, settings.fileName()
+    finally:
+        qapp.setApplicationName(previous_application_name)
+        qapp.setOrganizationName(previous_organization_name)
 
 
 def waitSignal(signal: Any, *, timeout: int | None = None) -> list[tuple[Any, ...]]:  # noqa: N802
