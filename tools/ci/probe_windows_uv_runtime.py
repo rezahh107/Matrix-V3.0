@@ -14,6 +14,7 @@ from PySide6.QtCore import QEvent, QSettings, QThread
 from shiboken6 import isValid
 
 from app.infra.local_database import LocalDatabase
+from app.infra.logging import _resolve_logging_paths
 from app.main import __version__, load_main_window, setup_application
 from app.ui.fonts import _register_embedded_vazirmatn
 from app.utils.path_utils import get_log_directory, get_user_data_dir, resource_path
@@ -43,11 +44,21 @@ def _verify_directory_io(directory: Path) -> None:
 
 
 def _verify_application_directories() -> None:
-    """Qualify both actual resolved application storage locations."""
+    """Exercise operational file logs, error reports, and user-home crash storage."""
 
-    for directory in (get_user_data_dir(), get_log_directory()):
+    # Use configure_logging's own resolver: the working-directory destination
+    # must not be hidden by writable user-home folders.
+    operational_logs, error_reports = _resolve_logging_paths()
+    # Normal configure_logging creates these destinations before opening files.
+    operational_logs.mkdir(parents=True, exist_ok=True)
+    error_reports.mkdir(parents=True, exist_ok=True)
+    for directory in (
+        get_user_data_dir(),
+        get_log_directory(),
+        operational_logs,
+        error_reports,
+    ):
         _verify_directory_io(directory)
-
 
 
 def main() -> None:

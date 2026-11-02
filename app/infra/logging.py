@@ -238,6 +238,13 @@ def setup_logging(
     logging.config.dictConfig(data)
 
 
+def _resolve_logging_paths(log_dir: str | Path | None = None) -> tuple[Path, Path]:
+    """Resolve the actual file-log and exception-report destinations."""
+
+    directory = Path(log_dir).expanduser().resolve() if log_dir else Path("logs").resolve()
+    return directory, directory / "errors"
+
+
 def configure_logging(
     *,
     app_name: str,
@@ -259,10 +266,9 @@ def configure_logging(
         LoggingContext: کانتکست نشست فعلی برای تولید گزارش خطا.
     """
 
-    log_directory = Path(log_dir).expanduser().resolve() if log_dir else Path("logs").resolve()
+    log_directory, error_directory = _resolve_logging_paths(log_dir)
     log_directory.mkdir(parents=True, exist_ok=True)
     setup_logging(config_path, log_directory)
-    error_directory = log_directory / "errors"
     error_directory.mkdir(parents=True, exist_ok=True)
 
     context = LoggingContext(
