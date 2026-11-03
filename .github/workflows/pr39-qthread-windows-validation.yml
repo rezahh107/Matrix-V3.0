@@ -1,0 +1,115 @@
+name: PR39 Windows QThread independent qualification
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  negative:
+    name: Negative control CLOSE_GUARD_BYPASS
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      QT_QPA_PLATFORM: offscreen
+      PYTEST_QT_API: pyside6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - name: Verify current and original commit identities
+        shell: pwsh
+        env:
+          EXPECTED: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if ((git rev-parse HEAD).Trim() -ne $env:EXPECTED) { throw 'Wrong candidate HEAD' }
+          if ((git rev-parse HEAD^).Trim() -ne 'd353fde78ac130374eb7c240afccd3d25348e22a') { throw 'Wrong original parent' }
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9
+        with:
+          version: '0.12.7'
+      - name: Reproduce expected failure on ORIGINAL Head plus earlier bounded patch
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $original = 'd353fde78ac130374eb7c240afccd3d25348e22a'
+          $previousPatch = Join-Path $env:GITHUB_WORKSPACE 'ci/validation/pr39/previous-bounded.patch'
+          $testSource = Join-Path $env:GITHUB_WORKSPACE 'tests/ui/test_worker_native_termination.py'
+          $worktree = Join-Path $env:RUNNER_TEMP 'matrix-pr39-negative'
+          & git worktree add --detach $worktree $original
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot checkout original SHA' }
+          try {
+            Push-Location $worktree
+            try {
+              if ((git rev-parse HEAD).Trim() -ne $original) { throw 'Original SHA mismatch' }
+              & git apply --check $previousPatch
+              if ($LASTEXITCODE -ne 0) { throw 'Earlier bounded patch failed applicability' }
+              & git apply $previousPatch
+              if ($LASTEXITCODE -ne 0) { throw 'Earlier bounded patch failed apply' }
+              Copy-Item $testSource (Join-Path $worktree 'tests/ui/test_worker_native_termination.py') -Force
+              & uv python install
+              if ($LASTEXITCODE -ne 0) { throw 'Python install failed' }
+              & uv sync --locked
+              if ($LASTEXITCODE -ne 0) { throw 'Negative environment unavailable' }
+              $log = Join-Path $env:RUNNER_TEMP 'closeguard-negative.log'
+              & uv run --locked python -m pytest -s -q --tb=short 'tests/ui/test_worker_native_termination.py::test_close_guard_uses_native_join_not_is_running[not-running-still-unjoined-refused]' *> $log
+              $exitCode = $LASTEXITCODE
+              Get-Content $log -Tail 120
+              if ($exitCode -eq 0) { throw 'NEGATIVE_INEFFECTIVE: original passed' }
+              if ($exitCode -eq 5) { throw 'NEGATIVE_NOT_COLLECTED' }
+              if (-not (Select-String -Path $log -Pattern 'CLOSE_GUARD_BYPASS' -Quiet)) { throw 'NEGATIVE_INCONCLUSIVE: unrelated failure' }
+              if (-not (Select-String -Path $log -Pattern '1 failed' -Quiet)) { throw 'NEGATIVE_INCONCLUSIVE: expected exactly one failed case' }
+              Write-Host 'EXPECTED_NEGATIVE_CONTROL_CONFIRMED: CLOSE_GUARD_BYPASS'
+            } finally { Pop-Location }
+          } finally { & git worktree remove --force $worktree }
+  focused:
+    name: Native QThread named regression cases
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      QT_QPA_PLATFORM: offscreen
+      PYTEST_QT_API: pyside6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Verify patched exact source and parent
+        shell: pwsh
+        env:
+          EXPECTED: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if ((git rev-parse HEAD).Trim() -ne $env:EXPECTED) { throw 'Wrong tested SHA' }
+          if ((git rev-parse HEAD^).Trim() -ne 'd353fde78ac130374eb7c240afccd3d25348e22a') { throw 'Wrong parent SHA' }
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9
+        with:
+          version: '0.12.7'
+      - run: uv python install
+      - run: uv sync --locked
+      - name: Named native and associated Qt lifetimes
+        run: uv run --locked python -m pytest -vv -ra tests/ui/test_worker_native_termination.py tests/ui/test_preflight_continuation_handoff.py tests/ui/test_operational_progress_status.py tests/ui/test_unknowns_decision_gate.py tests/ui/test_qt_fixture_window_lifetime.py --maxfail=1
+  golden:
+    name: Golden phase01 and phase02 on patched Windows
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      QT_QPA_PLATFORM: offscreen
+      GOLDEN_DIFF_AUDITOR_DECISION: BASELINE_OK
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Verify patched exact source and parent
+        shell: pwsh
+        env:
+          EXPECTED: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if ((git rev-parse HEAD).Trim() -ne $env:EXPECTED) { throw 'Wrong tested SHA' }
+          if ((git rev-parse HEAD^).Trim() -ne 'd353fde78ac130374eb7c240afccd3d25348e22a') { throw 'Wrong parent SHA' }
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9
+        with:
+          version: '0.12.7'
+      - run: uv python install
+      - run: uv sync --locked
+      - name: Phase01 current behavior
+        run: uv run --locked python scripts/run_golden_regression_phase01.py
+      - name: Phase02 differential auditor
+        run: uv run --locked python scripts/run_golden_regression_phase02.py --config ci/configs/golden_regression.yml
