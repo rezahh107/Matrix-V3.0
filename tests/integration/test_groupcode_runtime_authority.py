@@ -855,11 +855,28 @@ def test_mainwindow_real_gui_build_allocate_sabt_and_recovery(
             chosen_files, window._picker_sabt_profile_alloc.text()
         )
         window._picker_sabt_template_alloc.setText("")
+        # An unrelated valid workbook in an explicit output directory is not
+        # a generated-template target, even when its name matches the old default.
+        from openpyxl import Workbook, load_workbook
+
+        sentinel = tmp_path / "sabt-template.xlsx"
+        sentinel_book = Workbook()
+        sentinel_book.active["A1"] = "SYNTHETIC USER WORKBOOK - DO NOT MODIFY"
+        sentinel_book.save(sentinel)
+        sentinel_hash = sha256(sentinel.read_bytes()).hexdigest()
         window._btn_allocate.click()
         wait_for_terminal("completed")
 
         assert allocation.is_file() and sabt.is_file()
-        assert (tmp_path / "sabt-template.xlsx").is_file()
+        generated = list(tmp_path.glob("sabt-template-*/sabt-template.xlsx"))
+        assert len(generated) == 1 and generated[0].is_file()
+        assert generated[0].resolve() != sabt.resolve()
+        assert sha256(sentinel.read_bytes()).hexdigest() == sentinel_hash
+        verified_sentinel = load_workbook(sentinel, read_only=True)
+        try:
+            assert verified_sentinel.active["A1"].value == "SYNTHETIC USER WORKBOOK - DO NOT MODIFY"
+        finally:
+            verified_sentinel.close()
         with pd.ExcelFile(allocation) as book:
             assert {"allocations", "logs", "updated_pool", "trace"}.issubset(
                 book.sheet_names
@@ -901,6 +918,83 @@ def test_mainwindow_real_gui_build_allocate_sabt_and_recovery(
         original_hashes = {
             path: sha256(path.read_bytes()).hexdigest() for path in (allocation, sabt)
         }
+        # Each rejected role collision must stop *before preflight* and leave
+        # previous outputs plus all synthetic input workbooks byte-identical.
+        # Existing-output replacement is still permitted when roles differ.
+        from shutil import copyfile
+
+        qa_profile = tmp_path / "qa_guard_validation.xlsx"
+        copyfile(profile_file, qa_profile)
+        protected_policy = tmp_path / "reports" / "unknown_data_report.json"
+        protected_policy.parent.mkdir(exist_ok=True)
+        copyfile(POLICY_PATH, protected_policy)
+        protected = {
+            path: sha256(path.read_bytes()).hexdigest()
+            for path in (
+                allocation, sabt, profile_file, students_file, matrix,
+                sentinel, qa_profile, protected_policy,
+            )
+        }
+        inputs = [
+            window._picker_students,
+            window._picker_pool,
+            window._picker_alloc_out,
+            window._picker_sabt_output_alloc,
+            window._picker_sabt_template_alloc,
+            window._picker_sabt_profile_alloc,
+            window._picker_policy_allocate,
+            window._picker_sabt_config_alloc,
+        ]
+        baseline_paths = {picker: picker.text() for picker in inputs}
+        cases = [
+            ("sabt vs profile", window._picker_sabt_output_alloc, str(profile_file)),
+            ("sabt vs allocation", window._picker_sabt_output_alloc, str(allocation)),
+            ("template vs sabt", window._picker_sabt_template_alloc, str(sabt)),
+            ("template vs profile", window._picker_sabt_template_alloc, str(profile_file)),
+            ("template vs student", window._picker_sabt_template_alloc, str(students_file)),
+            ("sabt vs student", window._picker_sabt_output_alloc, str(students_file)),
+            ("allocation vs student", window._picker_alloc_out, str(students_file)),
+            ("allocation vs profile", window._picker_alloc_out, str(profile_file)),
+            ("sabt vs config", window._picker_sabt_output_alloc,
+             window._picker_sabt_config_alloc.text()),
+            ("QA vs profile", window._picker_alloc_out, str(tmp_path / "qa_guard.xlsx")),
+            ("preflight vs policy", window._picker_policy_allocate, str(protected_policy)),
+        ]
+        original_cli = window_base.cli.main
+        launched_cli: list[str] = []
+
+        def deny_cli(_argv: object, **_kwargs: object) -> int:
+            launched_cli.append(str(_argv))
+            raise AssertionError("Unsafe path collision must not launch CLI")
+
+        try:
+            window_base.cli.main = deny_cli
+            for case_name, picker, path in cases:
+                for control, original_path in baseline_paths.items():
+                    control.setText(original_path)
+                if case_name == "QA vs profile":
+                    window._picker_sabt_profile_alloc.setText(str(qa_profile))
+                if case_name == "preflight vs policy":
+                    window._picker_alloc_out.setText(str(tmp_path / "guard.xlsx"))
+                picker.setText(path)
+                prior_warnings = len(warnings)
+                window._btn_allocate.click()
+                assert window._worker is None, case_name
+                assert len(warnings) == prior_warnings + 1, case_name
+                assert not launched_cli, case_name
+                assert all(
+                    sha256(file.read_bytes()).hexdigest() == digest
+                    for file, digest in protected.items()
+                ), case_name
+        finally:
+            window_base.cli.main = original_cli
+            for control, original_path in baseline_paths.items():
+                control.setText(original_path)
+        assert all(
+            sha256(file.read_bytes()).hexdigest() == digest
+            for file, digest in protected.items()
+        )
+
         # A clean uv archive has no historical profile; missing user input must
         # be stopped before starting another Worker or overwriting prior output.
         window._picker_sabt_profile_alloc.setText("")

@@ -252,7 +252,26 @@ class MainWindow(_base.MainWindow):
         self._bind_picker(self._picker_current_roster, "placeholder.current_roster", "Current roster / counters")
         self._bind_picker(self._picker_sabt_output_alloc, "placeholder.sabt_output", "Sabt output (*.xlsx)")
         self._bind_picker(self._picker_sabt_config_alloc, "placeholder.sabt_config", "SmartAlloc_Exporter_Config_v1.json")
+        self._bind_picker(self._picker_sabt_profile_alloc, "placeholder.sabt_profile", "Required Sabt profile workbook (Sheet1)")
+        self._bind(
+            self._picker_sabt_profile_alloc,
+            "tooltip.sabt_profile",
+            "Select an authorized column-mapping workbook; never upload student data or organizational profiles to Git/CI.",
+            "tooltip",
+        )
+        self._bind(
+            self._picker_sabt_profile_alloc.line_edit(),
+            "tooltip.sabt_profile",
+            "Select an authorized column-mapping workbook; never upload student data or organizational profiles to Git/CI.",
+            "tooltip",
+        )
         self._bind_picker(self._picker_sabt_template_alloc, "placeholder.sabt_template", "Optional ImportToSabt template")
+        self._bind_semantic_label(
+            content,
+            "sabtAutoTemplateHint",
+            "hint.sabt_template",
+            "With no template selected, a minimal workbook is created in an isolated folder beside the Sabt output after preflight approval.",
+        )
         self._bind(self._btn_mentor_pool, "action.pool_governance", "Pool governance")
         self._bind(self._btn_update_schools, "reference.update.schools", "Update schools")
         self._bind(self._btn_update_groupcodes, "reference.update.groupcodes", "Update group codes")
