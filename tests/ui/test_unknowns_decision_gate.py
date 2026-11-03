@@ -102,6 +102,7 @@ def test_preflight_terminal_status_and_allocation_worker_gate(
 ) -> None:
     """Actual Qt preflight Worker; only clean/approved cases can launch an allocation Worker."""
     import time
+
     from PySide6.QtWidgets import QDialog, QMessageBox
 
     from app.ui import main_window_base
@@ -118,7 +119,7 @@ def test_preflight_terminal_status_and_allocation_worker_gate(
         def __init__(self, *_args, **_kwargs):
             self.should_proceed = approve
 
-        def setModal(self, _modal):
+        def setModal(self, _modal):  # noqa: N802 - Qt API
             pass
 
         def exec(self):
@@ -171,6 +172,7 @@ def test_preflight_summarizer_exception_is_failed_not_completed(
 ) -> None:
     """A callback exception must never be caught as a successful Worker completion."""
     import time
+
     from PySide6.QtWidgets import QMessageBox
 
     from app.ui import main_window_base
