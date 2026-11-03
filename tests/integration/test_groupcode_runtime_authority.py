@@ -704,3 +704,320 @@ def test_excel_student_import_mixed_national_codes_to_sabt_readback(tmp_path: Pa
         ("S-3", "0000000003"),
     ]
     db.close_all_connections()
+
+
+def test_mainwindow_real_gui_build_allocate_sabt_and_recovery(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Actual C2 GUI buttons -> Qt Workers -> CLI -> Excel; native dialogs stubbed.
+
+    Private historical Sabt profiles are intentionally not part of the uv source
+    archive. The only supplied profile here is created from synthetic columns.
+    """
+    import time
+    from hashlib import sha256
+
+    from PySide6.QtWidgets import QApplication, QFileDialog, QMessageBox
+
+    from app.core.common.types import CANONICAL_TRACE_ORDER
+    from app.infra.config_flags import UserSettings
+    from app.infra.excel import export_allocations as sabt_exports
+    from app.ui import main_window_base as window_base
+    from app.ui.main_window import MainWindow
+
+    monkeypatch.setattr(
+        window_base,
+        "YearDatabaseManager",
+        lambda _root: YearDatabaseManager(tmp_path / "years"),
+    )
+    app = QApplication.instance() or QApplication([])
+    school_file = _write_excel(_schools(), tmp_path / "gui-schools.xlsx")
+    group_file = _write_excel(_groupcodes(24), tmp_path / "gui-groups.xlsx")
+    changed_groups = _write_excel(_groupcodes(25), tmp_path / "gui-stale-groups.xlsx")
+    inspactor_file = _write_excel(_inspactor(24), tmp_path / "gui-inspactor.xlsx")
+    students_file = _write_excel(_student(24), tmp_path / "gui-students.xlsx")
+    profile_file = tmp_path / "authorized-synthetic-profile.xlsx"
+    pd.DataFrame(
+        {
+            sabt_exports._HEADER_COLUMN: [
+                "کد ثبت نام0",
+                "پیدا کردن ردیف پشتیبان از فیلد 141",
+            ],
+            sabt_exports._VALUE_COLUMN: ["student_id", ""],
+            sabt_exports._ORDER_COLUMN: [1, 2],
+            sabt_exports._SOURCE_COLUMN: [
+                sabt_exports._SOURCE_STUDENT,
+                sabt_exports._SOURCE_ALLOCATION,
+            ],
+        }
+    ).to_excel(profile_file, sheet_name=sabt_exports._PROFILE_SHEET_NAME, index=False)
+
+    matrix = tmp_path / "gui-matrix.xlsx"
+    allocation = tmp_path / "gui-allocation.xlsx"
+    sabt = tmp_path / "gui-sabt.xlsx"
+    file_choices = iter([school_file, group_file, profile_file, changed_groups])
+    chosen_files: list[str] = []
+
+    def choose_file(*_args: object) -> tuple[str, str]:
+        path = str(next(file_choices))
+        chosen_files.append(path)
+        return path, "Excel (*.xlsx)"
+
+    monkeypatch.setattr(
+        QFileDialog, "getOpenFileName", staticmethod(choose_file)
+    )
+    notices: list[str] = []
+    warnings: list[str] = []
+    async_errors: list[str] = []
+    monkeypatch.setattr(
+        QMessageBox,
+        "information",
+        staticmethod(lambda _parent, _title, detail: notices.append(str(detail))),
+    )
+    monkeypatch.setattr(
+        QMessageBox,
+        "warning",
+        staticmethod(lambda _parent, _title, detail: warnings.append(str(detail))),
+    )
+    window = MainWindow()
+    window._show_async_message = lambda _icon, _title, detail: async_errors.append(
+        str(detail)
+    )
+    window._user_settings = UserSettings(enable_trace_export=True)
+    window._prefs.output_root_dir = str(tmp_path / "gui-outputs")
+    window._prefs.last_output_dir = ""  # isolate persisted C2 run pointer
+
+    def wait_for_terminal(expected: str) -> None:
+        deadline = time.monotonic() + 90
+        observed = []
+        while time.monotonic() < deadline:
+            running = window._worker
+            if running is not None and running not in observed:
+                observed.append(running)
+            app.processEvents()
+            if window._worker is None and window._operation_state == expected:
+                break
+            time.sleep(0.02)
+        assert window._worker is None, "GUI Worker did not complete"
+        assert window._operation_state == expected, (
+            expected, window._operation_state, async_errors, warnings
+        )
+        for worker in observed:
+            assert worker.wait(5000), "Qt worker did not terminate"
+
+    try:
+        window.show()
+        app.processEvents()
+        assert window.activate_surface("database")
+        tab = window._database_tab
+        assert tab is not None
+        tab._schools_button.click()
+        tab._groupcodes_button.click()
+        assert len(notices) == 2 and not warnings
+        assert window._school_repository.status().row_count == 1
+        assert window._groupcode_repository.status().row_count == 1
+        assert "24" in tab._groupcodes_status_label.text() or (
+            set(window._groupcode_repository.load_canonical_frame()["group_code"].astype(int))
+            == {24}
+        )
+
+        assert window.activate_surface("build")
+        window._picker_inspactor.setText(str(inspactor_file))
+        window._picker_output_matrix.setText(str(matrix))
+        window._btn_build.click()
+        wait_for_terminal("completed")
+        assert matrix.is_file()
+        assert _matrix_group_values(matrix) == {24}
+        assert window._prefs.last_matrix_path == str(matrix)
+
+        assert window.activate_surface("allocate")
+        window._picker_students.setText(str(students_file))
+        window._picker_pool.setText(str(matrix))
+        # Selecting a real pool starts an asynchronous manager-name ExcelLoader.
+        # GUI controls are intentionally disabled until this loader finishes.
+        loaders = list(window._excel_loaders)
+        deadline = time.monotonic() + 20
+        while window._excel_loaders and time.monotonic() < deadline:
+            app.processEvents()
+            time.sleep(0.02)
+        assert not window._excel_loaders, "Manager-name loader did not finish"
+        for loader in loaders:
+            assert loader.wait(5000)
+        app.processEvents()
+        window._picker_alloc_out.setText(str(allocation))
+        window._combo_academic_year.setCurrentText("1404")
+        window._picker_sabt_output_alloc.setText(str(sabt))
+        # Exercise the actual FilePicker click; only the native OS dialog is stubbed.
+        assert window._picker_sabt_profile_alloc.isEnabled()
+        assert window._picker_sabt_profile_alloc._button.isEnabled()
+        window._picker_sabt_profile_alloc._button.click()
+        assert window._picker_sabt_profile_alloc.text() == str(profile_file), (
+            chosen_files, window._picker_sabt_profile_alloc.text()
+        )
+        window._picker_sabt_template_alloc.setText("")
+        # An unrelated valid workbook in an explicit output directory is not
+        # a generated-template target, even when its name matches the old default.
+        from openpyxl import Workbook, load_workbook
+
+        sentinel = tmp_path / "sabt-template.xlsx"
+        sentinel_book = Workbook()
+        sentinel_book.active["A1"] = "SYNTHETIC USER WORKBOOK - DO NOT MODIFY"
+        sentinel_book.save(sentinel)
+        sentinel_hash = sha256(sentinel.read_bytes()).hexdigest()
+        window._btn_allocate.click()
+        wait_for_terminal("completed")
+
+        assert allocation.is_file() and sabt.is_file()
+        generated = list(tmp_path.glob("sabt-template-*/sabt-template.xlsx"))
+        assert len(generated) == 1 and generated[0].is_file()
+        assert generated[0].resolve() != sabt.resolve()
+        assert sha256(sentinel.read_bytes()).hexdigest() == sentinel_hash
+        verified_sentinel = load_workbook(sentinel, read_only=True)
+        try:
+            assert verified_sentinel.active["A1"].value == "SYNTHETIC USER WORKBOOK - DO NOT MODIFY"
+        finally:
+            verified_sentinel.close()
+        with pd.ExcelFile(allocation) as book:
+            assert {"allocations", "logs", "updated_pool", "trace"}.issubset(
+                book.sheet_names
+            )
+            allocations = pd.read_excel(book, "allocations", dtype=str)
+            trace = pd.read_excel(book, "trace", dtype=str)
+        student_id = str(allocations.loc[0, "student_id"])
+        assert student_id and student_id.lower() != "nan"
+        assert trace.loc[trace["student_id"] == student_id, "stage"].tolist() == list(
+            CANONICAL_TRACE_ORDER
+        )
+
+        qa_file = tmp_path / "gui-allocation_validation.xlsx"
+        assert qa_file.is_file()
+        with pd.ExcelFile(qa_file) as book:
+            qa = pd.read_excel(book, "summary")
+        assert not qa.empty
+        assert set(qa["status"]) <= {"PASS", "WARN"}
+        with pd.ExcelFile(sabt) as book:
+            assert {"Sheet2", "Summary", "Errors"}.issubset(book.sheet_names)
+            sheet2 = pd.read_excel(book, "Sheet2", dtype=str)
+        assert len(sheet2) == 1
+        assert sheet2.loc[0, "شناسه دانش آموز"] == student_id
+        assert sheet2.loc[0, "کد ملی"] == "0000000001"
+        assert window._prefs.last_alloc_output == str(allocation)
+        assert window._toolbar_actions["output"].isEnabled()
+        from PySide6.QtGui import QDesktopServices
+
+        opened_folders: list[str] = []
+        monkeypatch.setattr(
+            QDesktopServices,
+            "openUrl",
+            staticmethod(lambda url: opened_folders.append(url.toLocalFile())),
+        )
+        window._toolbar_actions["output"].trigger()
+        assert [Path(folder) for folder in opened_folders] == [tmp_path]
+        assert not warnings and not async_errors
+
+        original_hashes = {
+            path: sha256(path.read_bytes()).hexdigest() for path in (allocation, sabt)
+        }
+        # Each rejected role collision must stop *before preflight* and leave
+        # previous outputs plus all synthetic input workbooks byte-identical.
+        # Existing-output replacement is still permitted when roles differ.
+        from shutil import copyfile
+
+        qa_profile = tmp_path / "qa_guard_validation.xlsx"
+        copyfile(profile_file, qa_profile)
+        protected_policy = tmp_path / "reports" / "unknown_data_report.json"
+        protected_policy.parent.mkdir(exist_ok=True)
+        copyfile(POLICY_PATH, protected_policy)
+        protected = {
+            path: sha256(path.read_bytes()).hexdigest()
+            for path in (
+                allocation, sabt, profile_file, students_file, matrix,
+                sentinel, qa_profile, protected_policy,
+            )
+        }
+        inputs = [
+            window._picker_students,
+            window._picker_pool,
+            window._picker_alloc_out,
+            window._picker_sabt_output_alloc,
+            window._picker_sabt_template_alloc,
+            window._picker_sabt_profile_alloc,
+            window._picker_policy_allocate,
+            window._picker_sabt_config_alloc,
+        ]
+        baseline_paths = {picker: picker.text() for picker in inputs}
+        cases = [
+            ("sabt vs profile", window._picker_sabt_output_alloc, str(profile_file)),
+            ("sabt vs allocation", window._picker_sabt_output_alloc, str(allocation)),
+            ("template vs sabt", window._picker_sabt_template_alloc, str(sabt)),
+            ("template vs profile", window._picker_sabt_template_alloc, str(profile_file)),
+            ("template vs student", window._picker_sabt_template_alloc, str(students_file)),
+            ("sabt vs student", window._picker_sabt_output_alloc, str(students_file)),
+            ("allocation vs student", window._picker_alloc_out, str(students_file)),
+            ("allocation vs profile", window._picker_alloc_out, str(profile_file)),
+            ("sabt vs config", window._picker_sabt_output_alloc,
+             window._picker_sabt_config_alloc.text()),
+            ("QA vs profile", window._picker_alloc_out, str(tmp_path / "qa_guard.xlsx")),
+            ("preflight vs policy", window._picker_policy_allocate, str(protected_policy)),
+        ]
+        original_cli = window_base.cli.main
+        launched_cli: list[str] = []
+
+        def deny_cli(_argv: object, **_kwargs: object) -> int:
+            launched_cli.append(str(_argv))
+            raise AssertionError("Unsafe path collision must not launch CLI")
+
+        try:
+            window_base.cli.main = deny_cli
+            for case_name, picker, path in cases:
+                for control, original_path in baseline_paths.items():
+                    control.setText(original_path)
+                if case_name == "QA vs profile":
+                    window._picker_sabt_profile_alloc.setText(str(qa_profile))
+                if case_name == "preflight vs policy":
+                    window._picker_alloc_out.setText(str(tmp_path / "guard.xlsx"))
+                picker.setText(path)
+                prior_warnings = len(warnings)
+                window._btn_allocate.click()
+                assert window._worker is None, case_name
+                assert len(warnings) == prior_warnings + 1, case_name
+                assert not launched_cli, case_name
+                assert all(
+                    sha256(file.read_bytes()).hexdigest() == digest
+                    for file, digest in protected.items()
+                ), case_name
+        finally:
+            window_base.cli.main = original_cli
+            for control, original_path in baseline_paths.items():
+                control.setText(original_path)
+        assert all(
+            sha256(file.read_bytes()).hexdigest() == digest
+            for file, digest in protected.items()
+        )
+
+        # A clean uv archive has no historical profile; missing user input must
+        # be stopped before starting another Worker or overwriting prior output.
+        window._picker_sabt_profile_alloc.setText("")
+        window._btn_allocate.click()
+        assert window._worker is None
+        assert warnings and "Sabt" in warnings[-1]
+        assert all(sha256(path.read_bytes()).hexdigest() == digest
+                   for path, digest in original_hashes.items())
+
+        # Real Database action changes the authoritative references; the same
+        # GUI Allocate input is stale and cannot replace successful output.
+        window._picker_sabt_profile_alloc.setText(str(profile_file))
+        assert window.activate_surface("database")
+        tab._groupcodes_button.click()
+        assert set(window._groupcode_repository.load_canonical_frame()["group_code"].astype(int)) == {25}
+        assert window.activate_surface("allocate")
+        window._btn_allocate.click()
+        wait_for_terminal("failed")
+        assert all(sha256(path.read_bytes()).hexdigest() == digest
+                   for path, digest in original_hashes.items())
+        assert warnings or async_errors
+    finally:
+        window.close()
+        app.processEvents()
+        if window._local_db is not None:
+            window._local_db.close_all_connections()

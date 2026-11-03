@@ -6,10 +6,12 @@ import logging
 import re
 import threading
 import traceback
-from collections.abc import Callable, Iterable, Sequence
+from collections import Counter
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from html import escape, unescape
 from pathlib import Path
+from tempfile import mkdtemp
 from typing import Literal
 
 import pandas as pd
@@ -156,6 +158,42 @@ def _format_exception_details(exc: BaseException) -> str:
         detail_lines.append("")
     detail_lines.append(tb_str)
     return "\n".join(detail_lines).strip()
+
+
+def _first_unsafe_path_overlap(
+    *, writes: Mapping[str, str | Path], reads: Mapping[str, str | Path]
+) -> tuple[str, str] | None:
+    """Reject different file roles that resolve to the same writable path.
+
+    Existing outputs may be intentionally replaced. Only role collisions are
+    unsafe; an explicitly selected Sabt template is itself a writable input.
+    """
+
+    def _same_file(first: Path, second: Path) -> bool:
+        if first == second:
+            return True
+        try:
+            # Existing Windows hard links have different paths but one file ID.
+            return first.samefile(second)
+        except OSError:
+            return False  # New output paths cannot already be hard-linked.
+
+    write_paths: list[tuple[Path, str]] = []
+    for role, raw in writes.items():
+        if not raw:
+            continue
+        path = Path(raw).expanduser().resolve()
+        for previous_path, previous_role in write_paths:
+            if _same_file(path, previous_path):
+                return previous_role, role
+        write_paths.append((path, role))
+    for role, raw in reads.items():
+        if raw:
+            path = Path(raw).expanduser().resolve()
+            for write_path, write_role in write_paths:
+                if _same_file(path, write_path):
+                    return write_role, role
+    return None
 
 
 @dataclass(frozen=True)
@@ -1485,6 +1523,23 @@ class MainWindow(QMainWindow):
         self._set_picker_button_text(self._picker_sabt_config_alloc)
         sabt_layout.addRow("فایل تنظیمات", self._picker_sabt_config_alloc)
 
+        # The source-only uv archive intentionally excludes the historical XLSX
+        # profile. Operators may supply an authorized local profile instead.
+        self._picker_sabt_profile_alloc = FilePicker(
+            page,
+            placeholder="پروفایل Sabt (Sheet1، الزامی)",
+            dialog_filter="Excel Profile (*.xlsx *.xlsm *.xls)",
+        )
+        self._picker_sabt_profile_alloc.setObjectName("editSabtProfileAlloc")
+        self._picker_sabt_profile_alloc.setToolTip(
+            "فایل نگاشت ستون‌های Sabt؛ داده‌های خصوصی را در مخزن یا CI قرار ندهید"
+        )
+        default_profile = resource_path("docs", "Report (4).xlsx")
+        if default_profile.is_file():
+            self._picker_sabt_profile_alloc.setText(str(default_profile))
+        self._set_picker_button_text(self._picker_sabt_profile_alloc)
+        sabt_layout.addRow("فایل پروفایل Sabt", self._picker_sabt_profile_alloc)
+
         self._picker_sabt_template_alloc = FilePicker(
             page,
             placeholder="قالب اختیاری ImportToSabt",
@@ -1498,10 +1553,10 @@ class MainWindow(QMainWindow):
         sabt_layout.addRow("فایل قالب", self._picker_sabt_template_alloc)
 
         sabt_hint = QLabel(
-            "اگر فایل قالب خالی بماند، ensure_template_workbook براساس"
-            " SmartAlloc_Exporter_Config_v1.json یک Workbook حداقلی می‌سازد و"
-            " نیازی به فایل باینری جدا نیست."
+            "اگر فایل قالب خالی باشد، برنامه پس از تأیید پیش‌بررسی،"
+            " قالب حداقلی را در پوشه‌ای مجزا کنار خروجی Sabt ایجاد می‌کند."
         )
+        sabt_hint.setObjectName("sabtAutoTemplateHint")
         sabt_hint.setWordWrap(True)
         sabt_layout.addRow("", sabt_hint)
 
@@ -1775,6 +1830,7 @@ class MainWindow(QMainWindow):
             self._picker_alloc_out,
             self._picker_sabt_output_alloc,
             self._picker_sabt_config_alloc,
+            self._picker_sabt_profile_alloc,
             self._picker_sabt_template_alloc,
             self._edit_capacity,
             self._combo_academic_year,
@@ -1992,8 +2048,50 @@ class MainWindow(QMainWindow):
                 exit_code=exit_code,
                 summary=None,
             )
-        report = load_unknowns_report(report_path)
-        summary = summarize_unknowns_report(report, sample_limit=5)
+        try:
+            report = load_unknowns_report(report_path)
+            issues = report.get("issues")
+            report_summary = report.get("summary")
+            if (
+                not isinstance(issues, list)
+                or not issues
+                or not isinstance(report_summary, dict)
+                or type(report_summary.get("total")) is not int
+                or not isinstance(report_summary.get("by_entity_type"), dict)
+                or not isinstance(report_summary.get("by_code"), dict)
+                or any(
+                    not isinstance(issue, dict)
+                    or not isinstance(issue.get("code"), str)
+                    or not issue["code"]
+                    or issue.get("entity_type") not in {"student", "pool", "mentor"}
+                    for issue in issues
+                )
+            ):
+                raise ValueError("Unknowns report has no valid issues/summary")
+            summary = summarize_unknowns_report(report, sample_limit=5)
+            if summary.total != len(issues) or not summary.samples:
+                raise ValueError("Unknowns summary contradicts issue rows")
+            if any(
+                type(value) is not int or value < 0
+                for counts in (report_summary["by_entity_type"], report_summary["by_code"])
+                for value in counts.values()
+            ):
+                raise ValueError("Unknowns summary contains invalid counts")
+            if summary.by_entity_type != dict(Counter(issue["entity_type"] for issue in issues)):
+                raise ValueError("Unknowns entity totals contradict issue rows")
+            if summary.by_code != dict(Counter(issue["code"] for issue in issues)):
+                raise ValueError("Unknowns issue codes contradict issue rows")
+        except Exception as exc:
+            # A successful preflight Worker must never leave a green terminal
+            # state because parsing/summarization raised inside its UI callback.
+            # Log only the exception type: reports may contain student data.
+            logger.warning("Invalid unknowns report (%s)", type(exc).__name__)
+            return UnknownsPreflightResult(
+                status="error",
+                report_path=report_path,
+                exit_code=exit_code,
+                summary=None,
+            )
         return UnknownsPreflightResult(
             status="issues",
             report_path=report_path,
@@ -2009,9 +2107,33 @@ class MainWindow(QMainWindow):
         report_path: Path,
         on_proceed: Callable[[], None],
     ) -> None:
+        def _finish_preflight(preflight: UnknownsPreflightResult) -> None:
+            if self._handle_preflight_result(preflight, on_proceed=on_proceed):
+                return
+            # Only a *valid issues report* can lead to an operator cancellation.
+            # Missing/malformed summaries, blocking reports and abnormal exit
+            # codes are failures even if the preflight Worker itself succeeded.
+            cancelled = preflight.status == "issues" and preflight.summary is not None
+            outcome = "cancelled" if cancelled else "failed"
+            label = self._t(
+                "status.cancelled" if cancelled else "status.error",
+                "لغو شد" if cancelled else "خطا",
+            )
+            self._status.setText(label)
+            detail = self._t(
+                "status.cancelled.detail" if cancelled else "error.unknowns.preflight_failed",
+                "عملیات متوقف شد" if cancelled else "پیش‌بررسی ناموفق بود؛ گزارش و ورودی‌ها را بررسی کنید.",
+            )
+            self._set_stage(label, detail)
+            self._progress.setRange(0, 100)
+            self._progress.reset()
+            self._progress.setProperty("busy", False)
+            self._update_status_bar_state(outcome)
+            self._update_progress_caption(None, None)
+
         override = self._preflight_result_override(report_path)
         if override is not None:
-            self._handle_preflight_result(override, on_proceed=on_proceed)
+            _finish_preflight(override)
             return
         result: dict[str, int] = {}
         override_payload = dict(overrides)
@@ -2028,11 +2150,11 @@ class MainWindow(QMainWindow):
             result["exit_code"] = exit_code
 
         def _after() -> None:
-            exit_code = result.get("exit_code", 0)
+            exit_code = result.get("exit_code", -1)
             preflight = self._get_unknowns_preflight_result(
                 exit_code=exit_code, report_path=report_path
             )
-            self._handle_preflight_result(preflight, on_proceed=on_proceed)
+            _finish_preflight(preflight)
 
         action = self._t(
             "status.preflight_unknowns",
@@ -2045,10 +2167,10 @@ class MainWindow(QMainWindow):
         result: UnknownsPreflightResult,
         *,
         on_proceed: Callable[[], None],
-    ) -> None:
+    ) -> bool:
         if result.status == "clean":
             on_proceed()
-            return
+            return True
         if result.status == "blocking":
             QMessageBox.warning(
                 self,
@@ -2058,18 +2180,26 @@ class MainWindow(QMainWindow):
                     "پیش‌بررسی داده‌های ناشناخته با خطای مسدودکننده مواجه شد.",
                 ),
             )
-            return
+            return False
         if result.status != "issues":
-            unexpected_template = self._t(
-                "error.unknowns.unexpected",
-                "کد خروج پیش‌بررسی ناشناخته‌ها نامعتبر است: {code}",
-            )
+            # Exit code 2 promises an issues report. A missing/invalid one is
+            # a report failure, not an unexpected exit code or a user decision.
+            if result.exit_code == 2:
+                message = self._t(
+                    "error.unknowns.report_missing",
+                    "گزارش پیش‌بررسی داده‌های ناشناخته موجود نیست یا معتبر نیست.",
+                )
+            else:
+                message = self._t(
+                    "error.unknowns.unexpected",
+                    "کد خروج پیش‌بررسی ناشناخته‌ها نامعتبر است: {code}",
+                ).format(code=result.exit_code)
             QMessageBox.warning(
                 self,
                 self._t("status.error", "خطا"),
-                unexpected_template.format(code=result.exit_code),
+                message,
             )
-            return
+            return False
         if result.summary is None:
             QMessageBox.warning(
                 self,
@@ -2079,7 +2209,7 @@ class MainWindow(QMainWindow):
                     "گزارش پیش‌بررسی داده‌های ناشناخته یافت نشد.",
                 ),
             )
-            return
+            return False
         counts_template = self._t(
             "dialog.unknowns.counts",
             "تعداد موارد: {total} | دانش‌آموز: {student} | استخر: {pool} | منتور: {mentor}",
@@ -2120,6 +2250,8 @@ class MainWindow(QMainWindow):
         dialog.setModal(True)
         if dialog.exec() == QDialog.DialogCode.Accepted and dialog.should_proceed:
             on_proceed()
+            return True
+        return False
 
     def _start_allocate(self) -> None:
         """اجرای سناریوی تخصیص با فراخوانی CLI."""
@@ -2184,6 +2316,19 @@ class MainWindow(QMainWindow):
         if not self._ensure_filled(required_inputs):
             return
 
+        profile_path = self._picker_sabt_profile_alloc.text().strip()
+        if not profile_path or not Path(profile_path).is_file():
+            QMessageBox.warning(
+                self,
+                self._t("sabt.profile.required.title", "پروفایل Sabt آماده نیست"),
+                self._t(
+                    "sabt.profile.required.detail",
+                    "برای تخصیص، فایل پروفایل مجاز Sabt (Sheet1) را انتخاب کنید. "
+                    "این فایل در بسته تمیز uv توزیع نمی‌شود.",
+                ),
+            )
+            return
+
         capacity = self._edit_capacity.text().strip() or "remaining_capacity"
         self._edit_capacity.setText(capacity)
         policy_path = (
@@ -2214,6 +2359,47 @@ class MainWindow(QMainWindow):
         # Re-read output-dependent overrides after automatic workspace commitment
         # so optional Sabt paths resolve inside the same run directory.
         overrides = self._build_allocate_overrides()
+        sabt_output = str(overrides.get("sabt_output") or "")
+        sabt_template = str(overrides.get("sabt_template") or "")
+        allocation_output = Path(self._picker_alloc_out.text()).expanduser()
+        report_path = self._unknown_report_path(self._picker_alloc_out.text())
+        # The CLI writes the main workbook, QA workbook and Sabt workbook;
+        # preflight writes its JSON report. An explicit Sabt template is ALSO
+        # mutated by ensure_template_workbook; this is its existing contract.
+        writes: dict[str, str | Path] = {
+            "files.alloc_output": allocation_output,
+            "files.qa_validation_output": allocation_output.with_name(
+                f"{allocation_output.stem}_validation.xlsx"
+            ),
+            "files.unknowns_report": report_path,
+        }
+        if sabt_output:
+            writes["files.sabt_output"] = sabt_output
+            if sabt_template:
+                writes["files.sabt_template"] = sabt_template
+        reads: dict[str, str | Path] = {
+            "files.students": self._picker_students.text(),
+            "files.pool": self._picker_pool.text(),
+            "group.policy": policy_path,
+            "files.prior_roster": prior_path,
+            "files.current_roster": current_path,
+            "files.sabt_profile": profile_path,
+            "files.sabt_config": str(overrides.get("sabt_config") or self._default_sabt_config_path or "config/SmartAlloc_Exporter_Config_v1.json"),
+        }
+        if self._local_db is not None:
+            reads["files.local_database"] = str(self._local_db.path)
+        conflict = _first_unsafe_path_overlap(writes=writes, reads=reads)
+        if conflict is not None:
+            role_a, role_b = conflict
+            message = self._t(
+                "error.files.path_collision",
+                "مسیر فایل‌های {first} و {second} یکسان است؛ ورودی‌ها را از خروجی‌ها جدا کنید.",
+            ).format(
+                first=self._t(role_a, role_a),
+                second=self._t(role_b, role_b),
+            )
+            QMessageBox.warning(self, self._t("status.error", "خطا"), message)
+            return
         overrides["history_metrics_callback"] = self._capture_history_metrics
 
         alloc_argv = [
@@ -2266,13 +2452,31 @@ class MainWindow(QMainWindow):
             "--policy",
             policy_path,
         ]
-        report_path = self._unknown_report_path(self._picker_alloc_out.text())
-
         def _run_allocation() -> None:
+            run_overrides = dict(overrides)
+            if sabt_output and not sabt_template:
+                try:
+                    output_parent = Path(sabt_output).expanduser().parent
+                    output_parent.mkdir(parents=True, exist_ok=True)
+                    # mkdir is exclusive: even an explicitly chosen existing
+                    # output directory cannot collide with a user's workbook.
+                    template_dir = Path(mkdtemp(prefix="sabt-template-", dir=output_parent))
+                    run_overrides["sabt_template"] = str(template_dir / "sabt-template.xlsx")
+                except OSError as exc:
+                    message = self._t(
+                        "error.sabt.template_creation",
+                        "ساخت قالب ایمن Sabt ممکن نشد: {error}",
+                    ).format(error=exc)
+                    self._show_async_message(QMessageBox.Icon.Critical, self._t("status.error", "خطا"), message)
+                    self._status.setText(self._t("status.error", "خطا"))
+                    self._set_stage(self._t("status.error", "خطا"), message)
+                    self._update_status_bar_state("failed")
+                    self._update_progress_caption(None, None)
+                    return
             self._launch_cli(
                 alloc_argv,
                 "تخصیص",
-                overrides=overrides,
+                overrides=run_overrides,
                 on_success=_remember_allocate_outputs,
             )
 
@@ -2397,6 +2601,8 @@ class MainWindow(QMainWindow):
         sabt_template = self._picker_sabt_template_alloc.text().strip()
         if sabt_template:
             overrides["sabt_template"] = sabt_template
+
+        overrides["export_profile_path"] = self._picker_sabt_profile_alloc.text().strip()
 
         center_overrides = self.get_center_manager_map()
         if center_overrides:
