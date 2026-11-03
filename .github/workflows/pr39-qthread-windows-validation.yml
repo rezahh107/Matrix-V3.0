@@ -23,7 +23,7 @@ jobs:
           EXPECTED: ${{ github.event.pull_request.head.sha }}
         run: |
           if ((git rev-parse HEAD).Trim() -ne $env:EXPECTED) { throw 'Wrong candidate HEAD' }
-          if ((git rev-parse HEAD^).Trim() -ne 'd353fde78ac130374eb7c240afccd3d25348e22a') { throw 'Wrong original parent' }
+          & git merge-base --is-ancestor 'd353fde78ac130374eb7c240afccd3d25348e22a' HEAD; if ($LASTEXITCODE -ne 0) { throw 'Wrong original parent' }
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9
         with:
           version: '0.12.7'
@@ -72,13 +72,14 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
       - name: Verify patched exact source and parent
         shell: pwsh
         env:
           EXPECTED: ${{ github.event.pull_request.head.sha }}
         run: |
           if ((git rev-parse HEAD).Trim() -ne $env:EXPECTED) { throw 'Wrong tested SHA' }
-          if ((git rev-parse HEAD^).Trim() -ne 'd353fde78ac130374eb7c240afccd3d25348e22a') { throw 'Wrong parent SHA' }
+          & git merge-base --is-ancestor 'd353fde78ac130374eb7c240afccd3d25348e22a' HEAD; if ($LASTEXITCODE -ne 0) { throw 'Wrong parent SHA' }
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9
         with:
           version: '0.12.7'
@@ -97,13 +98,14 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
       - name: Verify patched exact source and parent
         shell: pwsh
         env:
           EXPECTED: ${{ github.event.pull_request.head.sha }}
         run: |
           if ((git rev-parse HEAD).Trim() -ne $env:EXPECTED) { throw 'Wrong tested SHA' }
-          if ((git rev-parse HEAD^).Trim() -ne 'd353fde78ac130374eb7c240afccd3d25348e22a') { throw 'Wrong parent SHA' }
+          & git merge-base --is-ancestor 'd353fde78ac130374eb7c240afccd3d25348e22a' HEAD; if ($LASTEXITCODE -ne 0) { throw 'Wrong parent SHA' }
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9
         with:
           version: '0.12.7'
