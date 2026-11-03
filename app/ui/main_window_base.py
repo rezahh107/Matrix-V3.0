@@ -467,6 +467,13 @@ class MainWindow(QMainWindow):
         self._ensure_year_loaded()
 
         self._worker: Worker | None = None
+        self._handoff_failed_worker: Worker | None = None
+        self._pending_worker_result: tuple[bool, object | None] | None = None
+        # Worker.finished(bool, object) is a result signal, not native QThread
+        # termination. Poll wait(0) on the GUI event loop before releasing it.
+        self._worker_termination_timer = QTimer(self)
+        self._worker_termination_timer.setInterval(10)
+        self._worker_termination_timer.timeout.connect(self._poll_worker_termination)
         self._worker_stop_event: threading.Event | None = None
         self._success_hook: Callable[[], None] | None = None
         self._btn_open_output_folder: QPushButton | None = None
@@ -2108,7 +2115,41 @@ class MainWindow(QMainWindow):
         on_proceed: Callable[[], None],
     ) -> None:
         def _finish_preflight(preflight: UnknownsPreflightResult) -> None:
-            if self._handle_preflight_result(preflight, on_proceed=on_proceed):
+            try:
+                proceeded = self._handle_preflight_result(preflight, on_proceed=on_proceed)
+            except Exception as exc:
+                # Retain any Worker that actually started for its queued finish.
+                # A failed start can leave the UI busy and the Worker assigned.
+                worker = self._worker
+                started = worker is not None and (worker.isRunning() or worker.isFinished())
+                if started:
+                    self._handoff_failed_worker = worker
+                    self._success_hook = None
+                    worker.request_cancel()
+                else:
+                    self._worker = None
+                    self._success_hook = None
+                    self._disable_controls(False)
+                    self._set_busy_cursor(False)
+                # Exception details might contain student data or local paths.
+                logger.warning("Preflight continuation failed (%s)", type(exc).__name__)
+                label = self._t("status.error", "خطا")
+                detail = self._t(
+                    "error.unknowns.continuation_failed",
+                    "ادامهٔ تخصیص پس از پیش‌بررسی با خطا مواجه شد. پیش از تلاش دوباره خروجی‌ها را بررسی کنید.",
+                )
+                self._status.setText(label)
+                self._set_stage(label, detail)
+                self._progress.setRange(0, 100)
+                self._progress.reset()
+                self._progress.setProperty("busy", False)
+                self._update_status_bar_state("failed")
+                self._update_progress_caption(None, None)
+                self._append_log(f"❌ {detail}")
+                if not started:
+                    self._show_async_message(QMessageBox.Icon.Critical, label, detail)
+                return
+            if proceeded:
                 return
             # Only a *valid issues report* can lead to an operator cancellation.
             # Missing/malformed summaries, blocking reports and abnormal exit
@@ -3279,6 +3320,8 @@ class MainWindow(QMainWindow):
     ) -> Worker:
         """اجرای تابع در Worker با آماده‌سازی UI."""
 
+        if self._worker is not None:
+            raise RuntimeError("A previous Worker is still owned by MainWindow")
         self._last_progress_pct = None
         self._last_progress_message = None
         self._current_action = action
@@ -3595,6 +3638,8 @@ class MainWindow(QMainWindow):
     def _on_progress(self, pct: int, message: str) -> None:
         """به‌روزرسانی نوار پیشرفت و ثبت لاگ."""
 
+        if self._handoff_failed_worker is not None:
+            return  # Never show post-failure progress from a partially started Worker.
         # Values outside [0, 100] are unknown, not a number to clamp into a
         # plausible-looking progress report.
         pct_value: int | None = pct if 0 <= pct <= 100 else None
@@ -3624,7 +3669,46 @@ class MainWindow(QMainWindow):
 
     @Slot(bool, object)
     def _on_finished(self, success: bool, error: object | None) -> None:
-        """پایان عملیات را مدیریت کرده و پیام مناسب را نمایش می‌دهد."""
+        """Receive the application result; native QThread termination is separate."""
+
+        worker = self._worker
+        if worker is None:
+            # Retain the previous behavior for direct status-only UI updates.
+            self._apply_worker_result(success, error)
+            return
+        if self._pending_worker_result is not None:
+            return  # A single Worker result must never be finalized twice.
+        if self._handoff_failed_worker is worker:
+            success = False
+            error = RuntimeError(
+                self._t(
+                    "error.unknowns.continuation_failed",
+                    "ادامهٔ تخصیص پس از پیش‌بررسی با خطا مواجه شد. پیش از تلاش دوباره خروجی‌ها را بررسی کنید.",
+                )
+            )
+        self._pending_worker_result = (success, error)
+        self._poll_worker_termination()
+
+    @Slot()
+    def _poll_worker_termination(self) -> None:
+        """Join without blocking the GUI; keep the Worker owned until wait(0) succeeds."""
+
+        worker = self._worker
+        pending = self._pending_worker_result
+        if worker is None or pending is None:
+            self._worker_termination_timer.stop()
+            return
+        if not worker.wait(0):
+            if not self._worker_termination_timer.isActive():
+                self._worker_termination_timer.start()
+            return
+        self._worker_termination_timer.stop()
+        self._pending_worker_result = None
+        self._handoff_failed_worker = None
+        self._apply_worker_result(*pending)
+
+    def _apply_worker_result(self, success: bool, error: object | None) -> None:
+        """Finalize UI state only after a real Worker's native thread is joined."""
 
         self._worker_stop_event = None
         if self._is_closing or not self._is_widget_valid(self):
@@ -3722,11 +3806,17 @@ class MainWindow(QMainWindow):
         """در صورت اجرای تسک فعال، تلاش برای لغو امن و سپس بستن."""
 
         self._is_closing = True
-        if self._worker is not None and self._worker.isRunning():
+        # isRunning() may already be false while native thread cleanup remains.
+        # Only a successful wait(0) proves the owned QThread has terminated.
+        if self._worker is not None and not self._worker.wait(0):
             if self._worker_stop_event is not None:
                 self._worker_stop_event.set()
             self._worker.request_cancel()
-            self._worker.wait(3000)
+            if not self._worker.wait(3000):
+                # Preserve ownership: the task has not responded to cancellation.
+                self._is_closing = False
+                event.ignore()
+                return
         if hasattr(self, "_splitter") and self._splitter is not None:
             settings = QSettings()
             settings.setValue("ui/main_splitter", self._splitter.saveState())
