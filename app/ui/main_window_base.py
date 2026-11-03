@@ -2108,7 +2108,39 @@ class MainWindow(QMainWindow):
         on_proceed: Callable[[], None],
     ) -> None:
         def _finish_preflight(preflight: UnknownsPreflightResult) -> None:
-            if self._handle_preflight_result(preflight, on_proceed=on_proceed):
+            try:
+                proceeded = self._handle_preflight_result(preflight, on_proceed=on_proceed)
+            except Exception as exc:
+                # Preflight completion may have handed off to a Worker whose
+                # start() failed after its UI busy state and ownership were set.
+                # Reclaim only a non-running Worker; never orphan a live thread.
+                worker = self._worker
+                if worker is None or not worker.isRunning():
+                    self._worker = None
+                    self._success_hook = None
+                    self._disable_controls(False)
+                    self._set_busy_cursor(False)
+                # The generic Worker hook runs after its successful terminal
+                # update. Translate ONLY this preflight→allocation handoff
+                # failure back into Failed, without changing other hooks.
+                # Exception messages may contain student data; log the type only.
+                logger.warning("Preflight continuation failed (%s)", type(exc).__name__)
+                label = self._t("status.error", "خطا")
+                detail = self._t(
+                    "error.unknowns.continuation_failed",
+                    "ادامهٔ تخصیص پس از پیش‌بررسی ناموفق بود. دوباره تلاش کنید.",
+                )
+                self._status.setText(label)
+                self._set_stage(label, detail)
+                self._progress.setRange(0, 100)
+                self._progress.reset()
+                self._progress.setProperty("busy", False)
+                self._update_status_bar_state("failed")
+                self._update_progress_caption(None, None)
+                self._append_log(f"❌ {detail}")
+                self._show_async_message(QMessageBox.Icon.Critical, label, detail)
+                return
+            if proceeded:
                 return
             # Only a *valid issues report* can lead to an operator cancellation.
             # Missing/malformed summaries, blocking reports and abnormal exit
