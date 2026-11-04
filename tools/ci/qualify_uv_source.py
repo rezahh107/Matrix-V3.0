@@ -18,7 +18,8 @@ import tomllib
 import zipfile
 from pathlib import Path
 
-# Only version-controlled runtime sources/configuration and minimal launch/docs.
+# Only version-controlled runtime sources/configuration and directly linked
+# operator/QA guides; do not include the full docs tree.
 # In particular, never archive tracked personal/sample Excel files in the root.
 RUNTIME_PATHS = (
     "app",
@@ -34,6 +35,9 @@ RUNTIME_PATHS = (
     "uv.lock",
     "README.md",
     "CHANGELOG.md",
+    "docs/SmartAlloc_GUI_Operator_Guide.fa.md",
+    "docs/SmartAlloc_E2E_QA_Checklist.fa.md",
+    "docs/SmartAlloc_Dev_QA_Notes.md",
     "run_gui.py",
     "Launch_Matrix3.cmd",
     "tools/ci",
@@ -54,6 +58,9 @@ REQUIRED_FILES = {
     ".python-version",
     "README.md",
     "CHANGELOG.md",
+    "docs/SmartAlloc_GUI_Operator_Guide.fa.md",
+    "docs/SmartAlloc_E2E_QA_Checklist.fa.md",
+    "docs/SmartAlloc_Dev_QA_Notes.md",
     "tests/test_excel_export_smoke.py",
     "tests/infra/test_cli_database_preparation.py",
     "tests/integration/test_build_matrix_school_expansion.py",
