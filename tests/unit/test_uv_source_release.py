@@ -23,6 +23,8 @@ def _git(root: Path, *args: str) -> None:
 
 def _synthetic_repo(root: Path) -> None:
     _git(root, "init")
+    # Avoid host-level core.autocrlf rewriting the disposable fixture on Windows.
+    _git(root, "config", "core.autocrlf", "false")
     _git(root, "config", "user.email", "candidate-test@example.invalid")
     _git(root, "config", "user.name", "Synthetic CI")
     required = set(REQUIRED_FILES)
