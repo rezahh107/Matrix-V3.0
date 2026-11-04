@@ -10,6 +10,7 @@ import hashlib
 import json
 import re
 import subprocess
+import tempfile
 import tomllib
 import zipfile
 from pathlib import Path
@@ -99,9 +100,22 @@ def validate_version_identity(
         raise RuntimeError("uv.lock project version disagrees with pyproject.toml")
     if lock.get("requires-python") != project.get("requires-python"):
         raise RuntimeError("uv.lock Python requirement disagrees with pyproject.toml")
+    requirement = project.get("requires-python")
+    match = (
+        re.fullmatch(r">=(0|[1-9]\d*)\.(0|[1-9]\d*)", requirement)
+        if isinstance(requirement, str) else None
+    )
+    if match is None:
+        raise RuntimeError("Unsupported requires-python (expected >=major.minor)")
     python_version = python_bytes.decode("utf-8").strip()
-    if not re.fullmatch(r"\d+\.\d+(?:\.\d+)?", python_version):
+    pin = re.fullmatch(
+        r"(0|[1-9]\d*)\.(0|[1-9]\d*)(?:\.(0|[1-9]\d*))?",
+        python_version,
+    )
+    if pin is None:
         raise RuntimeError("Pinned .python-version is missing or ambiguous")
+    if (int(pin[1]), int(pin[2])) < (int(match[1]), int(match[2])):
+        raise RuntimeError("Pinned .python-version does not satisfy requires-python")
     changelog = changelog_bytes.decode("utf-8")
     if "## [Unreleased]" not in changelog:
         raise RuntimeError("Changelog needs an Unreleased section")
@@ -119,10 +133,10 @@ def git(*args: str) -> bytes:
     return subprocess.check_output(["git", *args])
 
 
-def build_candidate(
+def _build_candidate_in_staging(
     output_dir: Path, *, required_release_version: str | None = None
 ) -> dict[str, object]:
-    output_dir.mkdir(parents=True, exist_ok=True)
+    """Construct and validate both candidate files before they are visible."""
     source_sha = git("rev-parse", "HEAD").decode().strip()
     # Compare archive bytes against exact Git *blob objects*, not git-show text
     # streams (which can differ under Windows console newline translation).
@@ -216,6 +230,25 @@ def build_candidate(
     (output_dir / "candidate-manifest.json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
+    return manifest
+
+
+def build_candidate(
+    output_dir: Path, *, required_release_version: str | None = None
+) -> dict[str, object]:
+    """Promote only a fully verified archive and manifest to a fresh directory."""
+    if output_dir.exists() or output_dir.is_symlink():
+        raise FileExistsError(f"Candidate destination already exists: {output_dir}")
+    output_dir.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(
+        prefix=f".{output_dir.name}.staging-", dir=output_dir.parent
+    ) as staging:
+        manifest = _build_candidate_in_staging(
+            Path(staging), required_release_version=required_release_version
+        )
+        if output_dir.exists() or output_dir.is_symlink():
+            raise FileExistsError(f"Candidate destination became occupied: {output_dir}")
+        Path(staging).rename(output_dir)
     return manifest
 
 
