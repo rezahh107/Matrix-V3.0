@@ -171,6 +171,15 @@ def test_missing_license_notice_blocks_incomplete_source_candidate(
     assert not (tmp_path / "candidate").exists()
 
 
+def test_tracked_qt_lgpl_text_matches_reviewed_spdx_copy() -> None:
+    """Detect a truncated/modified license text in the actual source tree."""
+    repo_root = Path(__file__).resolve().parents[2]
+    license_bytes = (repo_root / "licenses/LGPL-3.0-only.txt").read_bytes()
+    assert hashlib.sha256(license_bytes).hexdigest() == (
+        "996af0513df21f7496288951c41428a03c174e9e4a9d63665c57d670f845ccb1"
+    )
+
+
 def test_lock_package_version_drift_blocks_candidate(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
