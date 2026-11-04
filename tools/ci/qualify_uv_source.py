@@ -65,6 +65,15 @@ REJECTED_NAMES = {".env", "id_rsa", "id_ed25519"}
 # does NOT constitute an approval to expose them in an official release.
 PRIVACY_REVIEW_PATHS = ("config/policy.json", "policy.yaml", "policy_sample.yaml")
 
+# High-confidence, non-exhaustive credential signatures. Never log matched bytes.
+CREDENTIAL_PATTERNS = (
+    re.compile(rb"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
+    re.compile(rb"(?<![A-Za-z0-9])ghp_[A-Za-z0-9]{36}(?![A-Za-z0-9])"),
+    re.compile(rb"(?<![A-Za-z0-9])github_pat_[A-Za-z0-9_]{50,}(?![A-Za-z0-9])"),
+    re.compile(rb"(?<![A-Z0-9])AKIA[A-Z0-9]{16}(?![A-Z0-9])"),
+)
+
+
 
 def validate_version_identity(
     pyproject_bytes: bytes,
@@ -168,6 +177,8 @@ def build_candidate(
                     f"Archive blob differs from reviewed Git tree: {name} "
                     f"(archive {archive_blob}; tree {expected_blobs[name]})"
                 )
+            if any(pattern.search(data) for pattern in CREDENTIAL_PATTERNS):
+                raise RuntimeError(f"Potential credential in archive source: {name}")
 
     with zipfile.ZipFile(archive) as source:
         pyproject_bytes = source.read("pyproject.toml")
@@ -199,6 +210,7 @@ def build_candidate(
             path for path in PRIVACY_REVIEW_PATHS if path in expected_paths
         ],
         "privacy_status": "REVIEW_REQUIRED_BEFORE_PUBLICATION",
+        "credential_scan": "HIGH_CONFIDENCE_PASS_NOT_PRIVACY_APPROVAL",
         "publication": "NOT_AUTHORIZED",
     }
     (output_dir / "candidate-manifest.json").write_text(

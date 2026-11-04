@@ -128,3 +128,16 @@ def test_historical_version_cannot_pass_official_release_gate() -> None:
         project, lock, b"3.11\n", approved_section,
         required_release_version="0.1.0"
     ) == ("0.1.0", "3.11")
+
+
+def test_secret_inside_allowed_python_file_blocks_candidate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _synthetic_repo(tmp_path)
+    # Synthetic, deliberately PAT-shaped bytes; no real credential.
+    (tmp_path / "app/main.py").write_bytes(b"key = 'ghp_" + b"A" * 36 + b"'\n")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-m", "Unsafe secret fixture")
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(RuntimeError, match="Potential credential in archive source"):
+        build_candidate(tmp_path / "candidate")
