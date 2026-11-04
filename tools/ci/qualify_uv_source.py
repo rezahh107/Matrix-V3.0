@@ -52,6 +52,8 @@ REQUIRED_FILES = {
     "app/main.py",
     "app/ui/main_window.py",
     "app/ui/assets/font_data_vazirmatn.py",
+    "app/ui/assets/fonts/LICENSE.md",
+    "app/ui/assets/fonts/README.md",
     "app/ui/styles.qss",
     "config/policy.json",
     "resources/translations/ui_texts.json",
