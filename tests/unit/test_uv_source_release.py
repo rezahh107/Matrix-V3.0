@@ -122,6 +122,7 @@ def test_archive_provenance_version_and_privacy_handoff(
         assert "THIRD_PARTY_NOTICES.md" in zipped.namelist()
         assert "licenses/LGPL-3.0-only.txt" in zipped.namelist()
         assert "app/ui/assets/fonts/LICENSE.md" in zipped.namelist()
+        assert "app/ui/assets/fonts/README.md" in zipped.namelist()
         license_terms = zipped.read("licenses/LGPL-3.0-only.txt")
         assert b"GNU LESSER GENERAL PUBLIC LICENSE" in license_terms
         assert b"GNU GENERAL PUBLIC LICENSE" in license_terms
@@ -151,7 +152,12 @@ def test_missing_operator_guide_blocks_incomplete_source_candidate(
 
 @pytest.mark.parametrize(
     "missing_notice",
-    ["THIRD_PARTY_NOTICES.md", "licenses/LGPL-3.0-only.txt"],
+    [
+        "THIRD_PARTY_NOTICES.md",
+        "licenses/LGPL-3.0-only.txt",
+        "app/ui/assets/fonts/LICENSE.md",
+        "app/ui/assets/fonts/README.md",
+    ],
 )
 def test_missing_license_notice_blocks_incomplete_source_candidate(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, missing_notice: str
