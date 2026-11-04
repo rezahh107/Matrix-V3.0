@@ -2,8 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+Application package version is sourced from `pyproject.toml`. Historical entries below are not evidence of published GitHub Releases; the first official release version is not yet approved.
+
 ## [Unreleased]
 ### Added
+- Governed uv source-candidate identity, version/lock checks and review-only privacy signaling; no official version or publication selected.
 - **سیستم مدیریت مراکز پیشرفته**: پشتیبانی از مراکز پویا و مبتنی بر Policy
   - تعریف مراکز در فایل `policy.yaml` با قابلیت افزودن مراکز جدید بدون تغییر کد
   - UI پویا که به طور خودکار با مراکز تعریف شده در Policy به‌روز می‌شود
@@ -41,6 +44,6 @@ All notable changes to this project will be documented in this file.
 - رفع مشکل handle کردن مقادیر center نامعتبر
 - بهبود پیام‌های خطا و هشدار به کاربر
 
-## [1.0.0] - 2024-01-01
+## Historical entry: 1.0.0 (2024-01-01; not an established GitHub Release)
 ### Added
 - اولین نسخه پایه سیستم تخصیص پشتیبان

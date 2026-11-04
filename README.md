@@ -148,3 +148,14 @@ uv run --locked python -m app.cli allocate \
 - چک‌لیست QA سرتاسری: [docs/SmartAlloc_E2E_QA_Checklist.fa.md](docs/SmartAlloc_E2E_QA_Checklist.fa.md)
 - نکات QA برای تیم توسعه: [docs/SmartAlloc_Dev_QA_Notes.md](docs/SmartAlloc_Dev_QA_Notes.md)
 - خروجی آرتیفکت QA برای خطای `QA_RULE_MENTOR_TYPE_01` در مسیر `artifacts/qa_offenders.json` کنار خروجی اجرا ذخیره می‌شود.
+
+### نسخهٔ برنامه و چرخهٔ کنترل‌شدهٔ انتشار سورس
+
+- **منبع یگانهٔ نسخهٔ برنامه**: فیلد `project.version` در `pyproject.toml`. اجرای `app.main` نسخه را از متادیتای بستهٔ نصب‌شده می‌خواند. سازندهٔ کاندید، برابر بودن نسخهٔ پروژه در `uv.lock` و الزام Python را کنترل می‌کند؛ تست ویندوز نیز نسخهٔ نصب‌شده را با مانیفست تطبیق می‌دهد. نسخه‌های LAW، Policy، schema و Technical SSoT مستقل هستند.
+- `0.1.0` در وضعیت فعلی **فقط نسخهٔ متادیتای توسعه/بسته** است، نه نسخهٔ رسمی تأییدشده. بخش تاریخی `1.0.0` در Changelog سند انتشار رسمی GitHub نیست. اولین نسخهٔ رسمی به تصمیم صریح Owner نیاز دارد.
+
+**Prepare → Qualify (بدون انتشار):** از شاخهٔ قابل‌بررسی، PR به `main` بسازید. CI در همان SHA سورس ZIP، `candidate-manifest.json` و آزمایش‌های Windows را ایجاد می‌کند. `source_sha`، `candidate_identity`، `archive_sha256`، `uv_lock_sha256`، فهرست `archive_files`، نتیجهٔ تست‌ها و `privacy_status` را بازبینی کنید. کاندید از فایل‌های Git *همان commit* استخراج می‌شود؛ فایل‌های Excel، Golden و فایل‌های محلی وارد ZIP نمی‌شوند. چند الگوی معتبر و شناخته‌شدهٔ کلید خصوصی/توکن نیز در محتوای آرشیو مسدود می‌شوند؛ این بررسی محدود جای ممیزی کامل محرمانگی را نمی‌گیرد. وجود نام مدیران مراکز در تنظیمات `config/policy.json` / `policy.yaml` / `policy_sample.yaml` فعلاً نیازمند بازبینی و تصمیم محرمانگی پیش از انتشار عمومی است. `REVIEW_REQUIRED_BEFORE_PUBLICATION` هرگز معادل تأیید انتشار نیست.
+
+**انتشار صرفاً پس از اجازهٔ جداگانهٔ Owner:** نسخهٔ رسمی انتخاب‌شده را در `pyproject.toml` وارد کنید، `uv lock` را برای نسخهٔ ریشه به‌روز کنید، بخش جدید `## [VERSION] - YYYY-MM-DD` در Changelog ثبت کنید و در PR جداگانه همان سورس را اعتبارسنجی کنید. `python tools/ci/qualify_uv_source.py --output-dir <new-directory> --require-release-version VERSION` فقط سازگاری نسخه را بررسی می‌کند و چیزی منتشر نمی‌کند. ابتدا نتیجهٔ CI دقیقاً بر Head تأییدشده و گزارش محرمانگی فایل‌ها را بازبینی کنید؛ **فقط بعد از مجوز انتشار** می‌توان Tag و GitHub Release را دستی بر همان SHA ایجاد و فایل ZIP/manifest بررسی‌شده را به آن متصل کرد. هیچ Push/PR/CI خودکار مجوز Tag یا Release نیست.
+
+**Verify → Recover:** نسخهٔ Tag، SHA، هش ZIP و `uv.lock` را با مانیفست و فایل منتشرشده تطبیق دهید، در Windows تمیز `uv sync --locked` و `uv run --locked python -m app.main` را اجرا و خروجی مصنوعی Build/Allocate/QA/Sabt را کنترل کنید. در انتشار ناقص، لینک‌ها/دانلودها را از معرفی عملیاتی خارج و علت را اعلام کنید؛ پس از رفع مشکل، نسخهٔ اصلاحی جدید با SHA و نسخهٔ تازه بسازید. تاریخچهٔ Tag/Release منتشرشده را بازنویسی یا جایگزین نکنید. سازگاری واقعی Profile سازمانی، دیالوگ/کیبورد فیزیکی ویندوز و پذیرش اپراتور تا مشاهدهٔ مستقل **NOT_PROVEN** هستند.

@@ -65,6 +65,9 @@ def main() -> None:
     if os.name != "nt":
         raise RuntimeError("Windows-only runtime qualification")
     assert __version__ == version("smart-student-allocation")
+    expected_version = os.environ.get("MATRIX_EXPECTED_PACKAGE_VERSION")
+    if expected_version and __version__ != expected_version:
+        raise RuntimeError("Windows installed application version differs from candidate")
     for path in (
         resource_path("config", "policy.json"),
         resource_path("resources", "translations", "ui_texts.json"),
