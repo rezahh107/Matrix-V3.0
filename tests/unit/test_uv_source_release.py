@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
+import sys
 import zipfile
 from pathlib import Path
 
@@ -309,6 +310,37 @@ def test_destination_occupied_during_atomic_promotion_is_not_replaced(
         build_candidate(destination)
     assert destination.is_dir()
     assert list(destination.iterdir()) == []
+    assert not list(tmp_path.glob(".candidate.staging-*"))
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="requires native Linux renameat2")
+@pytest.mark.parametrize("occupant_kind", ["file", "symlink"])
+def test_linux_noreplace_preserves_racing_file_or_symlink(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, occupant_kind: str
+) -> None:
+    """Exercise the real Linux syscall after the initial destination check."""
+    _synthetic_repo(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    destination = tmp_path / "candidate"
+    original_promote = candidate_builder._promote_staging
+    sentinel = b"synthetic competing owner"
+
+    def occupy_then_promote(staging: Path, target: Path) -> None:
+        if occupant_kind == "file":
+            target.write_bytes(sentinel)
+        else:
+            target.symlink_to("missing-synthetic-target")
+        original_promote(staging, target)
+
+    monkeypatch.setattr(candidate_builder, "_promote_staging", occupy_then_promote)
+    with pytest.raises(FileExistsError):
+        build_candidate(destination)
+    if occupant_kind == "file":
+        assert destination.is_file()
+        assert destination.read_bytes() == sentinel
+    else:
+        assert destination.is_symlink()
+        assert destination.readlink() == Path("missing-synthetic-target")
     assert not list(tmp_path.glob(".candidate.staging-*"))
 
 

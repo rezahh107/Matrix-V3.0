@@ -50,6 +50,13 @@ jobs:
         env:
           EXPECTED_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
         run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.7"
+      - name: Focused Linux source and no-clobber regressions
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: uvx --from pytest==9.1.1 pytest -q tests/unit/test_uv_source_release.py
       - name: Build and validate Git-blob-identical source archive
         run: python3 tools/ci/qualify_uv_source.py --output-dir "${RUNNER_TEMP}/matrix-uv-candidate"
       - name: Upload reviewable candidate (not a release)
