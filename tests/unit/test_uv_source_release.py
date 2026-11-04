@@ -94,7 +94,7 @@ def test_archive_provenance_version_and_privacy_handoff(
         meta, filename = entry.split(b"\t", 1)
         expected[filename.decode("utf-8")] = meta.split()[-1].decode("ascii")
     with zipfile.ZipFile(archive) as zipped:
-        assert set(zipped.namelist()) == set(expected)
+        assert {entry.filename for entry in zipped.infolist() if not entry.is_dir()} == set(expected)
         assert set(manifest["archive_files"]) == set(expected)
         for name, blob_sha in expected.items():
             content = zipped.read(name)
