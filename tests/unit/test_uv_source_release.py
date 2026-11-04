@@ -59,6 +59,14 @@ def test_archive_provenance_version_and_privacy_handoff(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _synthetic_repo(tmp_path)
+    # Even when intentionally tracked, root inputs and Golden fixtures are not
+    # runtime sources and must not leak into the downloadable candidate.
+    (tmp_path / "students.xlsx").write_bytes(b"synthetic spreadsheet placeholder")
+    golden = tmp_path / "tests/golden/personal.csv"
+    golden.parent.mkdir(parents=True, exist_ok=True)
+    golden.write_text("synthetic,data\n", encoding="utf-8")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-m", "Private-looking data outside allowlist")
     monkeypatch.chdir(tmp_path)
     manifest = build_candidate(tmp_path / "candidate")
     archive = tmp_path / "candidate" / str(manifest["archive"])
@@ -74,6 +82,7 @@ def test_archive_provenance_version_and_privacy_handoff(
         assert zipped.testzip() is None
         assert "app/main.py" in zipped.namelist()
         assert "students.xlsx" not in zipped.namelist()
+        assert "tests/golden/personal.csv" not in zipped.namelist()
 
 
 def test_lock_package_version_drift_blocks_candidate(
