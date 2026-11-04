@@ -50,6 +50,10 @@ def _synthetic_repo(root: Path) -> None:
         'version = "0.1.0"\nsource = { editable = "." }\n', encoding="utf-8"
     )
     (root / ".python-version").write_text("3.11\n", encoding="utf-8")
+    (root / "licenses/LGPL-3.0-only.txt").write_text(
+        "GNU LESSER GENERAL PUBLIC LICENSE\nGNU GENERAL PUBLIC LICENSE\n",
+        encoding="utf-8",
+    )
     (root / "CHANGELOG.md").write_text(
         "# Changelog\n## [Unreleased]\n"
         "## Historical entry: 1.0.0 (unverified)\n", encoding="utf-8"
@@ -115,6 +119,12 @@ def test_archive_provenance_version_and_privacy_handoff(
             "docs/SmartAlloc_Dev_QA_Notes.md",
         ):
             assert guide in zipped.namelist()
+        assert "THIRD_PARTY_NOTICES.md" in zipped.namelist()
+        assert "licenses/LGPL-3.0-only.txt" in zipped.namelist()
+        assert "app/ui/assets/fonts/LICENSE.md" in zipped.namelist()
+        license_terms = zipped.read("licenses/LGPL-3.0-only.txt")
+        assert b"GNU LESSER GENERAL PUBLIC LICENSE" in license_terms
+        assert b"GNU GENERAL PUBLIC LICENSE" in license_terms
         assert "students.xlsx" not in zipped.namelist()
         assert "tests/golden/personal.csv" not in zipped.namelist()
 
@@ -133,6 +143,22 @@ def test_missing_operator_guide_blocks_incomplete_source_candidate(
     _synthetic_repo(tmp_path)
     _git(tmp_path, "rm", "--", missing_guide)
     _git(tmp_path, "commit", "-m", "Remove a README-linked guide")
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(RuntimeError, match="Required runtime files missing"):
+        build_candidate(tmp_path / "candidate")
+    assert not (tmp_path / "candidate").exists()
+
+
+@pytest.mark.parametrize(
+    "missing_notice",
+    ["THIRD_PARTY_NOTICES.md", "licenses/LGPL-3.0-only.txt"],
+)
+def test_missing_license_notice_blocks_incomplete_source_candidate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, missing_notice: str
+) -> None:
+    _synthetic_repo(tmp_path)
+    _git(tmp_path, "rm", "--", missing_notice)
+    _git(tmp_path, "commit", "-m", "Remove required licensing notice")
     monkeypatch.chdir(tmp_path)
     with pytest.raises(RuntimeError, match="Required runtime files missing"):
         build_candidate(tmp_path / "candidate")
