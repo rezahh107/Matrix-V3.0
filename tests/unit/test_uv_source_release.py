@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import subprocess
 import zipfile
 from pathlib import Path
@@ -76,6 +77,29 @@ def test_archive_provenance_version_and_privacy_handoff(
         ["git", "rev-parse", "HEAD"], cwd=tmp_path, text=True
     ).strip()
     assert manifest["archive_sha256"] == hashlib.sha256(archive.read_bytes()).hexdigest()
+    assert sorted(p.name for p in (tmp_path / "candidate").iterdir()) == sorted(
+        [archive.name, "candidate-manifest.json"]
+    )
+    on_disk = json.loads((tmp_path / "candidate" / "candidate-manifest.json").read_text(
+        encoding="utf-8"
+    ))
+    assert on_disk == manifest
+    expected = {}
+    tracked = subprocess.check_output(
+        ["git", "ls-tree", "-r", "-z", "HEAD", "--", *RUNTIME_PATHS], cwd=tmp_path
+    )
+    for entry in tracked.split(b"\0"):
+        if not entry:
+            continue
+        meta, filename = entry.split(b"\t", 1)
+        expected[filename.decode("utf-8")] = meta.split()[-1].decode("ascii")
+    with zipfile.ZipFile(archive) as zipped:
+        assert set(zipped.namelist()) == set(expected)
+        assert set(manifest["archive_files"]) == set(expected)
+        for name, blob_sha in expected.items():
+            content = zipped.read(name)
+            assert hashlib.sha1(f"blob {len(content)}\0".encode() + content).hexdigest() == blob_sha
+
     assert manifest["publication"] == "NOT_AUTHORIZED"
     assert manifest["privacy_status"] == "REVIEW_REQUIRED_BEFORE_PUBLICATION"
     with zipfile.ZipFile(archive) as zipped:
@@ -99,6 +123,9 @@ def test_lock_package_version_drift_blocks_candidate(
     monkeypatch.chdir(tmp_path)
     with pytest.raises(RuntimeError, match="uv.lock project version"):
         build_candidate(tmp_path / "candidate")
+    assert not (tmp_path / "candidate").exists()
+    assert not list(tmp_path.glob(".candidate.staging-*"))
+
 
 
 @pytest.mark.parametrize("unsafe_name", ["app/students.xlsx", "app/.env", "app/id_rsa"])
@@ -150,3 +177,137 @@ def test_secret_inside_allowed_python_file_blocks_candidate(
     monkeypatch.chdir(tmp_path)
     with pytest.raises(RuntimeError, match="Potential credential in archive source"):
         build_candidate(tmp_path / "candidate")
+    assert not (tmp_path / "candidate").exists()
+    assert not list(tmp_path.glob(".candidate.staging-*"))
+
+
+
+def test_failed_post_archive_version_gate_leaves_no_candidate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _synthetic_repo(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(RuntimeError, match="no dated changelog entry"):
+        build_candidate(tmp_path / "candidate", required_release_version="0.1.0")
+    assert not (tmp_path / "candidate").exists()
+    assert not list(tmp_path.glob(".candidate.staging-*"))
+
+
+@pytest.mark.parametrize(
+    ("python_pin", "should_pass"),
+    [
+        ("3.10", False),
+        ("3.10.12", False),
+        ("3.11", True),
+        ("3.11.0", True),
+        ("3.12", True),
+        ("3.12.4", True),
+    ],
+)
+def test_python_pin_satisfies_minimum_requirement(
+    python_pin: str, should_pass: bool
+) -> None:
+    project, lock, history = _version_fixture()
+    if should_pass:
+        assert validate_version_identity(
+            project, lock, python_pin.encode(), history
+        ) == ("0.1.0", python_pin)
+    else:
+        with pytest.raises(RuntimeError, match="does not satisfy"):
+            validate_version_identity(project, lock, python_pin.encode(), history)
+
+
+@pytest.mark.parametrize(
+    "requires_python",
+    [">3.11", "~=3.11", ">=3.11,<4", ">=3.11.0", ">= 3.11", ">=3.*", ">=03.11", ">=3.11;os_name"],
+)
+def test_unsupported_or_ambiguous_requirement_rejected(requires_python: str) -> None:
+    project, lock, history = _version_fixture(requires_python)
+    with pytest.raises(RuntimeError, match="Unsupported requires-python"):
+        validate_version_identity(project, lock, b"3.12", history)
+
+
+def _version_fixture(
+    minimum: str = ">=3.11",
+) -> tuple[bytes, bytes, bytes]:
+    project = (
+        '[project]\nname = "smart-student-allocation"\n'
+        'version = "0.1.0"\nrequires-python = "' + minimum + '"\n'
+    )
+    lock = (
+        'version = 1\nrequires-python = "' + minimum + '"\n'
+        '[[package]]\nname = "smart-student-allocation"\n'
+        'version = "0.1.0"\n'
+    )
+    return project.encode(), lock.encode(), b"## [Unreleased]\n"
+
+
+def test_python_pin_failure_after_archive_removes_staging(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _synthetic_repo(tmp_path)
+    (tmp_path / ".python-version").write_text("3.10\n", encoding="utf-8")
+    _git(tmp_path, "add", ".python-version")
+    _git(tmp_path, "commit", "-m", "Unsupported Python pin")
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(RuntimeError, match="does not satisfy"):
+        build_candidate(tmp_path / "candidate")
+    assert not (tmp_path / "candidate").exists()
+    assert not list(tmp_path.glob(".candidate.staging-*"))
+
+
+def test_manifest_write_interruption_cleans_staging(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _synthetic_repo(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    real_write = Path.write_text
+
+    def interrupt_manifest(self: Path, data: str, *args: object, **kwargs: object) -> int:
+        if self.name == "candidate-manifest.json":
+            raise OSError("synthetic manifest interruption")
+        return real_write(self, data, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "write_text", interrupt_manifest)
+    with pytest.raises(OSError, match="synthetic manifest interruption"):
+        build_candidate(tmp_path / "candidate")
+    assert not (tmp_path / "candidate").exists()
+    assert not list(tmp_path.glob(".candidate.staging-*"))
+
+
+def test_stage_promotion_interruption_cleans_staging(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _synthetic_repo(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    real_rename = Path.rename
+
+    def reject_rename(self: Path, target: Path) -> Path:
+        if self.name.startswith(".candidate.staging-"):
+            raise OSError("synthetic rename interruption")
+        return real_rename(self, target)
+
+    monkeypatch.setattr(Path, "rename", reject_rename)
+    with pytest.raises(OSError, match="synthetic rename interruption"):
+        build_candidate(tmp_path / "candidate")
+    assert not (tmp_path / "candidate").exists()
+    assert not list(tmp_path.glob(".candidate.staging-*"))
+
+
+@pytest.mark.parametrize("occupied", [False, True])
+def test_destination_is_never_overwritten(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, occupied: bool
+) -> None:
+    _synthetic_repo(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    destination = tmp_path / "candidate"
+    destination.mkdir()
+    if occupied:
+        (destination / "keep.txt").write_text("DO NOT OVERWRITE", encoding="utf-8")
+    with pytest.raises(FileExistsError):
+        build_candidate(destination)
+    assert destination.is_dir()
+    assert sorted(p.name for p in destination.iterdir()) == (
+        ["keep.txt"] if occupied else []
+    )
+    assert not list(tmp_path.glob(".candidate.staging-*"))
