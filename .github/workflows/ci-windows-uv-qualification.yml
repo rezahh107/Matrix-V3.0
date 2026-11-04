@@ -90,6 +90,15 @@ jobs:
           New-Item -ItemType Directory -Force $source | Out-Null
           Expand-Archive -Path $archive -DestinationPath $source
           Set-Location $source
+          $lockHash = (Get-FileHash -Algorithm SHA256 "uv.lock").Hash.ToLowerInvariant()
+          if ($lockHash -ne $manifest.uv_lock_sha256) { throw "Extracted lock SHA256 mismatch" }
+          $pythonHash = (Get-FileHash -Algorithm SHA256 ".python-version").Hash.ToLowerInvariant()
+          if ($pythonHash -ne $manifest.python_version_file_sha256) { throw "Python pin SHA256 mismatch" }
+          if ($manifest.privacy_status -ne "REVIEW_REQUIRED_BEFORE_PUBLICATION" -or
+              $manifest.publication -ne "NOT_AUTHORIZED") {
+            throw "Candidate publication/privacy status was not preserved"
+          }
+          $env:MATRIX_EXPECTED_PACKAGE_VERSION = $manifest.candidate_package_version_not_official_release
           uv python install
           if ($LASTEXITCODE -ne 0) { throw "Pinned Python install failed" }
           uv sync --locked
