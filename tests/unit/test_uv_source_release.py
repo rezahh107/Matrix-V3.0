@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 
+from tools.ci import qualify_uv_source as candidate_builder
 from tools.ci.qualify_uv_source import (
     REQUIRED_FILES,
     RUNTIME_PATHS,
@@ -280,17 +281,34 @@ def test_stage_promotion_interruption_cleans_staging(
 ) -> None:
     _synthetic_repo(tmp_path)
     monkeypatch.chdir(tmp_path)
-    real_rename = Path.rename
 
-    def reject_rename(self: Path, target: Path) -> Path:
-        if self.name.startswith(".candidate.staging-"):
-            raise OSError("synthetic rename interruption")
-        return real_rename(self, target)
+    def reject_promotion(source: Path, destination: Path) -> None:
+        raise OSError("synthetic rename interruption")
 
-    monkeypatch.setattr(Path, "rename", reject_rename)
+    monkeypatch.setattr(candidate_builder, "_promote_staging", reject_promotion)
     with pytest.raises(OSError, match="synthetic rename interruption"):
         build_candidate(tmp_path / "candidate")
     assert not (tmp_path / "candidate").exists()
+    assert not list(tmp_path.glob(".candidate.staging-*"))
+
+
+def test_destination_occupied_during_atomic_promotion_is_not_replaced(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _synthetic_repo(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    destination = tmp_path / "candidate"
+    real_promote = candidate_builder._promote_staging
+
+    def occupy_destination(source: Path, target: Path) -> None:
+        target.mkdir()  # Another process creates the target after the last check.
+        real_promote(source, target)
+
+    monkeypatch.setattr(candidate_builder, "_promote_staging", occupy_destination)
+    with pytest.raises(FileExistsError):
+        build_candidate(destination)
+    assert destination.is_dir()
+    assert list(destination.iterdir()) == []
     assert not list(tmp_path.glob(".candidate.staging-*"))
 
 

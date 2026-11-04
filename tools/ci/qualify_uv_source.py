@@ -6,10 +6,13 @@ This is preparation only. It never creates a tag or GitHub Release.
 from __future__ import annotations
 
 import argparse
+import ctypes
 import hashlib
 import json
+import os
 import re
 import subprocess
+import sys
 import tempfile
 import tomllib
 import zipfile
@@ -233,6 +236,28 @@ def _build_candidate_in_staging(
     return manifest
 
 
+def _promote_staging(staging: Path, destination: Path) -> None:
+    """Atomically install a fresh directory without replacing another occupant."""
+    if os.name == "nt":
+        staging.rename(destination)  # Win32 rename rejects an existing target.
+        return
+    if sys.platform != "linux":
+        raise RuntimeError("Atomic no-replace directory promotion is unsupported")
+    libc = ctypes.CDLL(None, use_errno=True)
+    try:
+        renameat2 = libc.renameat2
+    except AttributeError as exc:
+        raise RuntimeError("Atomic no-replace directory promotion unavailable") from exc
+    renameat2.argtypes = [
+        ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint
+    ]
+    renameat2.restype = ctypes.c_int
+    # renameat2(AT_FDCWD, source, AT_FDCWD, destination, RENAME_NOREPLACE)
+    if renameat2(-100, os.fsencode(staging), -100, os.fsencode(destination), 1) != 0:
+        err = ctypes.get_errno()
+        raise OSError(err, os.strerror(err), str(destination))
+
+
 def build_candidate(
     output_dir: Path, *, required_release_version: str | None = None
 ) -> dict[str, object]:
@@ -248,7 +273,7 @@ def build_candidate(
         )
         if output_dir.exists() or output_dir.is_symlink():
             raise FileExistsError(f"Candidate destination became occupied: {output_dir}")
-        Path(staging).rename(output_dir)
+        _promote_staging(Path(staging), output_dir)
     return manifest
 
 
