@@ -107,8 +107,36 @@ def test_archive_provenance_version_and_privacy_handoff(
     with zipfile.ZipFile(archive) as zipped:
         assert zipped.testzip() is None
         assert "app/main.py" in zipped.namelist()
+        # The clean uv source distribution must resolve every README-linked
+        # operator/QA guide locally, not only in the GitHub working tree.
+        for guide in (
+            "docs/SmartAlloc_GUI_Operator_Guide.fa.md",
+            "docs/SmartAlloc_E2E_QA_Checklist.fa.md",
+            "docs/SmartAlloc_Dev_QA_Notes.md",
+        ):
+            assert guide in zipped.namelist()
         assert "students.xlsx" not in zipped.namelist()
         assert "tests/golden/personal.csv" not in zipped.namelist()
+
+
+@pytest.mark.parametrize(
+    "missing_guide",
+    [
+        "docs/SmartAlloc_GUI_Operator_Guide.fa.md",
+        "docs/SmartAlloc_E2E_QA_Checklist.fa.md",
+        "docs/SmartAlloc_Dev_QA_Notes.md",
+    ],
+)
+def test_missing_operator_guide_blocks_incomplete_source_candidate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, missing_guide: str
+) -> None:
+    _synthetic_repo(tmp_path)
+    _git(tmp_path, "rm", "--", missing_guide)
+    _git(tmp_path, "commit", "-m", "Remove a README-linked guide")
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(RuntimeError, match="Required runtime files missing"):
+        build_candidate(tmp_path / "candidate")
+    assert not (tmp_path / "candidate").exists()
 
 
 def test_lock_package_version_drift_blocks_candidate(
