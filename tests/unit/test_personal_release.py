@@ -172,6 +172,27 @@ def test_invalid_unqualified_version_and_missing_rollback(checkout: Path, fake_u
         release.rollback(checkout)
 
 
+def test_reentrant_operation_guard_refuses_parallel_updates(checkout: Path, fake_uv) -> None:
+    """A second invocation cannot read old state and concurrently overwrite it."""
+    with release.operation_guard(checkout):
+        with pytest.raises(release.ReleaseError, match="Another Matrix operation"):
+            release.activate(checkout, "v1.0.0")
+        with pytest.raises(release.ReleaseError, match="Another Matrix operation"):
+            release.rollback(checkout)
+        assert not (checkout / ".matrix-personal" / "state.json").exists()
+    assert not (checkout / ".matrix-personal" / ".operation-lock").exists()
+    release.activate(checkout, "v1.0.0")
+    assert _state(checkout)["current"]["tag"] == "v1.0.0"
+
+
+def test_stale_lock_fails_closed_without_deletion(checkout: Path, fake_uv) -> None:
+    marker = checkout / ".matrix-personal" / ".operation-lock"
+    marker.mkdir(parents=True)
+    with pytest.raises(release.ReleaseError, match="stale operation lock"):
+        release.activate(checkout, "v1.0.0")
+    assert marker.is_dir()
+    assert not (checkout / ".matrix-personal" / "state.json").exists()
+
 def test_dirty_initial_checkout_blocks_git_write(checkout: Path, fake_uv) -> None:
     (checkout / "config" / "policy.json").write_text('{"changed":true}')
     with pytest.raises(release.ReleaseError, match="Local edits"):
