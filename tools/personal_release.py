@@ -16,7 +16,7 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from tools.ci.qualify_uv_source import validate_version_identity
@@ -49,7 +49,7 @@ def check_clean(repo: Path) -> None:
 
 
 def validate_checkout(repo: Path) -> None:
-    if git(repo, "rev-parse", "--show-toplevel") != str(repo.resolve()):
+    if Path(git(repo, "rev-parse", "--show-toplevel")).resolve() != repo.resolve():
         raise ReleaseError("--repo must name the top-level Git checkout")
     if git(repo, "remote", "get-url", "origin").strip() == "":
         raise ReleaseError("Git origin is missing")
@@ -148,7 +148,7 @@ def atomic_state(path: Path, state: dict) -> None:
 def backup_local_data(repo: Path, old_tag: str, new_tag: str) -> Path:
     """Non-destructive pre-activation snapshot of known DB/settings paths."""
     root = Path.home() / ".smart_alloc"
-    name = f"{datetime.now(timezone.utc):%Y%m%dT%H%M%S%fZ}_{old_tag}_to_{new_tag}"
+    name = f"{datetime.now(UTC):%Y%m%dT%H%M%S%fZ}_{old_tag}_to_{new_tag}"
     dest = repo / ".matrix-personal" / "backups" / name
     dest.mkdir(parents=True, exist_ok=False)
     years = root / "years"
@@ -160,9 +160,11 @@ def backup_local_data(repo: Path, old_tag: str, new_tag: str) -> Path:
                 continue
             if source.is_symlink() or not source.is_file():
                 raise ReleaseError("Unexpected database entry; snapshot incomplete")
-            with sqlite3.connect(f"{source.resolve().as_uri()}?mode=ro", uri=True) as src:
-                with sqlite3.connect(dest / source.name) as snapshot:
-                    src.backup(snapshot)
+            with (
+                sqlite3.connect(f"{source.resolve().as_uri()}?mode=ro", uri=True) as src,
+                sqlite3.connect(dest / source.name) as snapshot,
+            ):
+                src.backup(snapshot)
     settings = root / "user_settings.json"
     if settings.exists():
         if settings.is_symlink() or not settings.is_file():
@@ -183,10 +185,7 @@ def activate(repo: Path, tag: str) -> None:
     check_clean(repo)
     control, state_file = paths(repo)
     state = read_state(state_file)
-    if state["current"]:
-        current_dir = verify_record(repo, state["current"])
-    else:
-        current_dir = None
+    current_dir = verify_record(repo, state["current"]) if state["current"] else None
     candidate = validate_tag(repo, tag, fetch=True)
     if state["current"] == candidate:
         print("Already active:", tag, candidate["sha"])
