@@ -16,7 +16,7 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
-from contextlib import closing
+from contextlib import closing, contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -88,6 +88,31 @@ def paths(repo: Path) -> tuple[Path, Path]:
     if any((control / name).is_symlink() for name in ("versions", "backups")):
         raise ReleaseError("Refusing symlinked personal release versions/backups")
     return control, control / "state.json"
+
+
+@contextmanager
+def operation_guard(repo: Path):
+    """Exclude overlapping activate, rollback and start operations.
+
+    A crashed process may leave the lock directory behind. Deliberately do not
+    remove it automatically: an operator must confirm no process remains.
+    """
+    validate_checkout(repo)
+    control, _ = paths(repo)
+    control.mkdir(parents=True, exist_ok=True)
+    marker = control / ".operation-lock"
+    try:
+        marker.mkdir()
+    except FileExistsError as exc:
+        raise ReleaseError(
+            "Another Matrix operation is running, or a stale operation lock exists. "
+            "Close Matrix, verify no helper is running, then inspect "
+            ".matrix-personal/.operation-lock before removing it manually."
+        ) from exc
+    try:
+        yield
+    finally:
+        marker.rmdir()
 
 
 def read_state(state_file: Path) -> dict:
@@ -184,6 +209,11 @@ def backup_local_data(repo: Path, old_tag: str, new_tag: str) -> Path:
 
 
 def activate(repo: Path, tag: str) -> None:
+    with operation_guard(repo):
+        _activate_locked(repo, tag)
+
+
+def _activate_locked(repo: Path, tag: str) -> None:
     validate_checkout(repo)
     check_clean(repo)
     control, state_file = paths(repo)
@@ -218,6 +248,11 @@ def activate(repo: Path, tag: str) -> None:
 
 
 def rollback(repo: Path) -> None:
+    with operation_guard(repo):
+        _rollback_locked(repo)
+
+
+def _rollback_locked(repo: Path) -> None:
     validate_checkout(repo)
     check_clean(repo)
     _, state_file = paths(repo)
@@ -245,6 +280,11 @@ def status(repo: Path) -> None:
 
 
 def start(repo: Path) -> None:
+    with operation_guard(repo):
+        _start_locked(repo)
+
+
+def _start_locked(repo: Path) -> None:
     validate_checkout(repo)
     _, state_file = paths(repo)
     current = read_state(state_file)["current"]
