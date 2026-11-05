@@ -113,7 +113,12 @@ def test_selected_upgrade_rollback_and_preserved_data(checkout: Path, fake_uv) -
                          "smart_alloc_1405.sqlite") as conn:
         assert conn.execute("SELECT value FROM personal").fetchone()[0] == "synthetic-kept"
     assert any(e[0] == "uv sync" for e in events)
-    assert len(list((checkout / ".matrix-personal" / "backups").iterdir())) == 2
+    backups = list((checkout / ".matrix-personal" / "backups").iterdir())
+    assert len(backups) == 2
+    for directory in backups:
+        with sqlite3.connect(directory / "smart_alloc_1405.sqlite") as conn:
+            assert conn.execute("SELECT value FROM personal").fetchone()[0] == "synthetic-kept"
+        assert (directory / "user_settings.json").read_text() == '{"synthetic":"kept"}'
 
 
 def test_dirty_worktree_blocks_activation_without_data_loss(checkout: Path, fake_uv) -> None:
@@ -145,6 +150,17 @@ def test_sync_failure_retains_old_version(checkout: Path, fake_uv) -> None:
     fail["value"] = False
     release.activate(checkout, "v1.1.0")
     assert _state(checkout)["previous"] == before["current"]
+
+
+def test_broken_sqlite_backup_does_not_activate_new_version(checkout: Path, fake_uv) -> None:
+    release.activate(checkout, "v1.0.0")
+    original = _state(checkout)
+    invalid = Path.home() / ".smart_alloc" / "years" / "broken.sqlite"
+    invalid.write_bytes(b"not a valid SQLite database")
+    with pytest.raises(sqlite3.DatabaseError):
+        release.activate(checkout, "v1.1.0")
+    assert _state(checkout) == original
+    assert invalid.read_bytes() == b"not a valid SQLite database"
 
 
 def test_invalid_unqualified_version_and_missing_rollback(checkout: Path, fake_uv) -> None:
