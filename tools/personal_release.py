@@ -115,28 +115,60 @@ def operation_guard(repo: Path):
         marker.rmdir()
 
 
-def read_state(state_file: Path) -> dict:
-    if not state_file.exists():
-        return {"current": None, "previous": None}
-    if state_file.is_symlink():
-        raise ReleaseError("Refusing symlinked personal release state")
-    try:
-        state = json.loads(state_file.read_text(encoding="utf-8"))
-    except (ValueError, OSError) as exc:
-        raise ReleaseError("Release state is invalid; no change made") from exc
-    if not isinstance(state, dict) or set(state) != {"current", "previous"}:
-        raise ReleaseError("Release state has unexpected keys")
-    return state
-
-
-def record_dir(repo: Path, record: dict) -> Path:
+def validate_release_record(record: object) -> None:
+    """Validate persisted release identity without accessing Git or user files."""
     if not isinstance(record, dict) or set(record) != {"tag", "sha", "version", "python"}:
         raise ReleaseError("Invalid installed release record")
-    tag, sha = record["tag"], record["sha"]
+    tag, sha, version, python = (record[key] for key in ("tag", "sha", "version", "python"))
     if not isinstance(tag, str) or TAG_PATTERN.fullmatch(tag) is None:
         raise ReleaseError("Invalid installed tag")
     if not isinstance(sha, str) or re.fullmatch(r"[a-f0-9]{40}", sha) is None:
         raise ReleaseError("Invalid installed SHA")
+    if not isinstance(version, str) or version != tag[1:]:
+        raise ReleaseError("Invalid installed version")
+    if not isinstance(python, str) or re.fullmatch(
+        r"(0|[1-9]\d*)\.(0|[1-9]\d*)(?:\.(0|[1-9]\d*))?", python
+    ) is None:
+        raise ReleaseError("Invalid installed Python pin")
+
+
+def _unique_state_object(pairs: list[tuple[str, object]]) -> dict:
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("Duplicate release state key")
+        result[key] = value
+    return result
+
+
+def read_state(state_file: Path) -> dict:
+    if state_file.is_symlink():
+        raise ReleaseError("Refusing symlinked personal release state")
+    if not state_file.exists():
+        return {"current": None, "previous": None}
+    try:
+        state = json.loads(state_file.read_text(encoding="utf-8"),
+                           object_pairs_hook=_unique_state_object)
+    except (ValueError, OSError) as exc:
+        raise ReleaseError("Release state is invalid; no change made") from exc
+    if not isinstance(state, dict) or set(state) != {"current", "previous"}:
+        raise ReleaseError("Release state has unexpected keys")
+    for key in ("current", "previous"):
+        if state[key] is not None:
+            validate_release_record(state[key])
+    if state["current"] is None and state["previous"] is not None:
+        raise ReleaseError("Previous release requires a current release")
+    if state["previous"] is not None and (
+        state["current"]["tag"] == state["previous"]["tag"]
+        or state["current"]["sha"] == state["previous"]["sha"]
+    ):
+        raise ReleaseError("Current and previous must identify distinct releases")
+    return state
+
+
+def record_dir(repo: Path, record: dict) -> Path:
+    validate_release_record(record)
+    tag, sha = record["tag"], record["sha"]
     name = f"{tag}--{sha[:12]}"
     if not RECORD_PATTERN.fullmatch(name):
         raise ReleaseError("Unsafe installed worktree name")

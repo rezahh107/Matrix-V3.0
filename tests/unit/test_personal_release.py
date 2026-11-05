@@ -214,3 +214,172 @@ def test_real_windows_uv_upgrade_rollback(checkout: Path) -> None:
     assert _state(checkout)["current"] == initial
     assert (release.record_dir(checkout, initial) / ".venv").is_dir()
     assert (release.record_dir(checkout, initial) / "app/main.py").read_text() == "VERSION = 1\n"
+
+
+@pytest.mark.parametrize("malformed", [{}, [], False, 0, ""])
+def test_read_state_rejects_falsy_current_records(tmp_path: Path, malformed) -> None:
+    """Only explicit JSON null can mean no installed release."""
+    path = tmp_path / "state.json"
+    payload = {"current": malformed, "previous": None}
+    original = json.dumps(payload).encode("utf-8")
+    path.write_bytes(original)
+    with pytest.raises(release.ReleaseError, match="Invalid installed release record"):
+        release.read_state(path)
+    assert path.read_bytes() == original
+
+
+@pytest.mark.parametrize("malformed", [{}, [], False, 0, "", {"tag": "v1.0.0"},
+                                       {"tag": "v1.0.0", "sha": "bad", "version": "1.0.0", "python": "3.11"},
+                                       {"tag": "v1.0.0", "sha": "a" * 40, "version": "1.0.0", "python": []}])
+def test_read_state_rejects_malformed_previous(tmp_path: Path, malformed) -> None:
+    path = tmp_path / "state.json"
+    current = {"tag": "v1.1.0", "sha": "b" * 40, "version": "1.1.0", "python": "3.11"}
+    path.write_text(json.dumps({"current": current, "previous": malformed}), encoding="utf-8")
+    with pytest.raises(release.ReleaseError, match="Invalid installed"):
+        release.read_state(path)
+
+
+@pytest.mark.parametrize("record", [
+    {"tag": "v1.0.0", "sha": "a" * 40, "version": "9.0.0", "python": "3.11"},
+    {"tag": "v1.0.0", "sha": "a" * 40, "version": "1.0.0", "python": "anything"},
+    {"tag": "v01.0.0", "sha": "a" * 40, "version": "01.0.0", "python": "3.11"},
+    {"tag": "v1.0.0", "sha": "A" * 40, "version": "1.0.0", "python": "3.11"},
+    {"tag": "v1.0.0", "sha": "a" * 40, "version": "1.0.0", "python": "3.11", "extra": 1},
+])
+def test_read_state_rejects_invalid_record_fields(tmp_path: Path, record) -> None:
+    path = tmp_path / "state.json"
+    path.write_text(json.dumps({"current": record, "previous": None}), encoding="utf-8")
+    with pytest.raises(release.ReleaseError, match="Invalid installed"):
+        release.read_state(path)
+
+
+def test_read_state_rejects_previous_without_current(tmp_path: Path) -> None:
+    path = tmp_path / "state.json"
+    previous = {"tag": "v1.0.0", "sha": "a" * 40, "version": "1.0.0", "python": "3.11"}
+    path.write_text(json.dumps({"current": None, "previous": previous}), encoding="utf-8")
+    with pytest.raises(release.ReleaseError, match="Previous.*current"):
+        release.read_state(path)
+
+
+@pytest.mark.parametrize("same_field", ["tag", "sha"])
+def test_read_state_rejects_indistinguishable_releases(tmp_path: Path, same_field: str) -> None:
+    path = tmp_path / "state.json"
+    current = {"tag": "v1.0.0", "sha": "a" * 40, "version": "1.0.0", "python": "3.11"}
+    previous = {"tag": "v1.1.0", "sha": "b" * 40, "version": "1.1.0", "python": "3.11"}
+    if same_field == "tag":
+        previous["tag"] = current["tag"]
+        previous["version"] = current["version"]
+    else:
+        previous["sha"] = current["sha"]
+    path.write_text(json.dumps({"current": current, "previous": previous}), encoding="utf-8")
+    with pytest.raises(release.ReleaseError, match="distinct"):
+        release.read_state(path)
+
+
+def test_read_state_accepts_only_supported_state_relations(tmp_path: Path) -> None:
+    path = tmp_path / "state.json"
+    current = {"tag": "v1.1.0", "sha": "b" * 40, "version": "1.1.0", "python": "3.11.8"}
+    previous = {"tag": "v1.0.0", "sha": "a" * 40, "version": "1.0.0", "python": "3.11"}
+    assert release.read_state(path) == {"current": None, "previous": None}
+    for state in ({"current": None, "previous": None},
+                  {"current": current, "previous": None},
+                  {"current": current, "previous": previous},
+                  {"current": previous, "previous": current}):
+        path.write_text(json.dumps(state), encoding="utf-8")
+        assert release.read_state(path) == state
+
+
+@pytest.mark.parametrize("malformed_target", ["current", "previous"])
+def test_malformed_state_blocks_activation_without_mutations(
+    checkout: Path, fake_uv, malformed_target: str
+) -> None:
+    events, _ = fake_uv
+    release.activate(checkout, "v1.0.0")
+    initial = _state(checkout)
+    corrupted = {**initial, malformed_target: {}}
+    state_path = checkout / ".matrix-personal" / "state.json"
+    raw = (json.dumps(corrupted, sort_keys=True) + "\n").encode()
+    state_path.write_bytes(raw)
+    db = Path.home() / ".smart_alloc" / "years" / "smart_alloc_1405.sqlite"
+    settings = Path.home() / ".smart_alloc" / "user_settings.json"
+    db_bytes, settings_bytes = db.read_bytes(), settings.read_bytes()
+    before_versions = sorted(x.name for x in (checkout / ".matrix-personal" / "versions").iterdir())
+    before_backups = sorted(x.name for x in (checkout / ".matrix-personal" / "backups").iterdir())
+    before_events = list(events)
+    with pytest.raises(release.ReleaseError, match="Invalid installed release record"):
+        release.activate(checkout, "v1.1.0")
+    assert state_path.read_bytes() == raw
+    assert db.read_bytes() == db_bytes
+    assert settings.read_bytes() == settings_bytes
+    assert sorted(x.name for x in (checkout / ".matrix-personal" / "versions").iterdir()) == before_versions
+    assert sorted(x.name for x in (checkout / ".matrix-personal" / "backups").iterdir()) == before_backups
+    assert events == before_events
+    assert not (checkout / ".matrix-personal" / ".operation-lock").exists()
+
+
+def test_malformed_state_rejected_by_status_and_rollback(checkout: Path, fake_uv) -> None:
+    release.activate(checkout, "v1.0.0")
+    release.activate(checkout, "v1.1.0")
+    state_path = checkout / ".matrix-personal" / "state.json"
+    state = _state(checkout)
+    state["previous"] = []
+    raw = json.dumps(state).encode()
+    state_path.write_bytes(raw)
+    with pytest.raises(release.ReleaseError, match="Invalid installed release record"):
+        release.status(checkout)
+    with pytest.raises(release.ReleaseError, match="Invalid installed release record"):
+        release.rollback(checkout)
+    assert state_path.read_bytes() == raw
+
+
+def test_dangling_state_symlink_is_not_uninitialized(tmp_path: Path) -> None:
+    path = tmp_path / "state.json"
+    try:
+        path.symlink_to(tmp_path / "missing.json")
+    except (OSError, NotImplementedError):
+        pytest.skip("OS does not allow creating a test symlink")
+    with pytest.raises(release.ReleaseError, match="symlinked personal release state"):
+        release.read_state(path)
+    assert path.is_symlink()
+
+
+@pytest.mark.parametrize("payload", [
+    '{"current":{}, "current":null, "previous":null}',
+    '{"current":{"tag":"v1.0.0","tag":"v1.0.0","sha":"' + 'a' * 40
+    + '","version":"1.0.0","python":"3.11"},"previous":null}',
+])
+def test_read_state_rejects_ambiguous_duplicate_json_keys(tmp_path: Path, payload: str) -> None:
+    path = tmp_path / "state.json"
+    path.write_text(payload, encoding="utf-8")
+    with pytest.raises(release.ReleaseError, match="Release state is invalid"):
+        release.read_state(path)
+    assert path.read_text(encoding="utf-8") == payload
+
+
+def test_malformed_initial_state_is_not_reinitialized(checkout: Path, fake_uv) -> None:
+    state_path = checkout / ".matrix-personal" / "state.json"
+    state_path.parent.mkdir()
+    original = b'{"current":{},"previous":null}\n'
+    state_path.write_bytes(original)
+    db = Path.home() / ".smart_alloc" / "years" / "smart_alloc_1405.sqlite"
+    before_data = db.read_bytes()
+    with pytest.raises(release.ReleaseError, match="Invalid installed release record"):
+        release.activate(checkout, "v1.0.0")
+    assert state_path.read_bytes() == original
+    assert db.read_bytes() == before_data
+    assert not (checkout / ".matrix-personal" / "versions").exists()
+    assert not (checkout / ".matrix-personal" / "backups").exists()
+    assert not (checkout / ".matrix-personal" / ".operation-lock").exists()
+
+
+def test_valid_status_does_not_mutate_state(checkout: Path, fake_uv, capsys) -> None:
+    release.status(checkout)
+    assert json.loads(capsys.readouterr().out) == {"current": None, "previous": None}
+    assert not (checkout / ".matrix-personal" / "state.json").exists()
+    release.activate(checkout, "v1.0.0")
+    state_path = checkout / ".matrix-personal" / "state.json"
+    before = state_path.read_bytes()
+    capsys.readouterr()
+    release.status(checkout)
+    assert json.loads(capsys.readouterr().out) == _state(checkout)
+    assert state_path.read_bytes() == before
