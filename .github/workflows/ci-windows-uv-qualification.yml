@@ -35,6 +35,9 @@ jobs:
         run: uv run --locked pytest tests/unit/test_windows_uv_runtime_probe.py -q
       - name: Synthetic personal Git version upgrade and rollback (Windows)
         run: uv run --locked pytest tests/unit/test_personal_release.py -q
+      - name: Owner CMD wrapper smoke on Windows
+        shell: cmd
+        run: call Matrix-Personal.cmd status
       - name: Reproduce existing scheduled flaky UI smoke
         run: uv run --locked python -m tools.ci.run_flaky_ui_smoke
 
