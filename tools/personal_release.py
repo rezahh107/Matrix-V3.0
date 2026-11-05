@@ -209,6 +209,8 @@ def backup_local_data(repo: Path, old_tag: str, new_tag: str) -> Path:
 
 
 def activate(repo: Path, tag: str) -> None:
+    # Do not even create the ignored operation directory for a dirty checkout.
+    check_clean(repo)
     with operation_guard(repo):
         _activate_locked(repo, tag)
 
