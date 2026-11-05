@@ -16,6 +16,7 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -84,6 +85,8 @@ def paths(repo: Path) -> tuple[Path, Path]:
     control = repo / ".matrix-personal"
     if control.is_symlink():
         raise ReleaseError("Refusing symlinked personal release state directory")
+    if any((control / name).is_symlink() for name in ("versions", "backups")):
+        raise ReleaseError("Refusing symlinked personal release versions/backups")
     return control, control / "state.json"
 
 
@@ -161,8 +164,8 @@ def backup_local_data(repo: Path, old_tag: str, new_tag: str) -> Path:
             if source.is_symlink() or not source.is_file():
                 raise ReleaseError("Unexpected database entry; snapshot incomplete")
             with (
-                sqlite3.connect(f"{source.resolve().as_uri()}?mode=ro", uri=True) as src,
-                sqlite3.connect(dest / source.name) as snapshot,
+                closing(sqlite3.connect(f"{source.resolve().as_uri()}?mode=ro", uri=True)) as src,
+                closing(sqlite3.connect(dest / source.name)) as snapshot,
             ):
                 src.backup(snapshot)
     settings = root / "user_settings.json"
