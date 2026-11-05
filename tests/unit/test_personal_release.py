@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -160,3 +161,19 @@ def test_dirty_initial_checkout_blocks_git_write(checkout: Path, fake_uv) -> Non
     with pytest.raises(release.ReleaseError, match="Local edits"):
         release.activate(checkout, "v1.0.0")
     assert not (checkout / ".matrix-personal").exists()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Real Windows Git+uv integration")
+def test_real_windows_uv_upgrade_rollback(checkout: Path) -> None:
+    """Exercise actual Git fetch, uv Python setup, uv locked sync and import on Windows."""
+    release.activate(checkout, "v1.0.0")
+    initial = _state(checkout)["current"]
+    assert (release.record_dir(checkout, initial) / ".venv").is_dir()
+    release.activate(checkout, "v1.1.0")
+    second = _state(checkout)["current"]
+    assert second["tag"] == "v1.1.0" and second["sha"] != initial["sha"]
+    assert (release.record_dir(checkout, second) / ".venv").is_dir()
+    release.rollback(checkout)
+    assert _state(checkout)["current"] == initial
+    assert (release.record_dir(checkout, initial) / ".venv").is_dir()
+    assert (release.record_dir(checkout, initial) / "app/main.py").read_text() == "VERSION = 1\n"
