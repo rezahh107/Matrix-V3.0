@@ -6,8 +6,8 @@ import io
 import json
 import subprocess
 import tarfile
-import zipfile
 import warnings
+import zipfile
 from pathlib import Path
 
 import pytest
