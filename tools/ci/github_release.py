@@ -198,7 +198,9 @@ def notes_for(version: str, sha: str) -> str:
         raise PublicationError("Missing or repeated version changelog section")
     index = sections[0]
     begin = headings[index].end()
-    end = headings[index + 1].start() if index + 1 < len(headings) else len(text)
+    # Non-versioned level-two headings (historical notes) also end a release.
+    next_heading = re.search(r"(?m)^## ", text[begin:])
+    end = begin + next_heading.start() if next_heading else len(text)
     section = text[begin:end].strip()
     if not section or re.search(
         r"proposed first|NOT an approved or published release|"

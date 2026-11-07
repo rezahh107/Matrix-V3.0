@@ -84,6 +84,14 @@ def test_manifest_rejects_duplicate_version_and_candidate_words(checkout: str) -
         release.notes_for("1.2.3", checkout)
 
 
+def test_release_notes_do_not_include_unrelated_historical_section(checkout: str) -> None:
+    with Path("CHANGELOG.md").open("a", encoding="utf-8") as log:
+        log.write("\\n## Historical entry: 9.9.9\\n- Historical, not part of 1.2.3.\\n")
+    notes = release.notes_for("1.2.3", checkout)
+    assert "Verified synthetic changes" in notes
+    assert "Historical entry: 9.9.9" not in notes
+
+
 def test_public_snapshot_detects_tracked_data_and_secret_without_exposing_bytes(
     checkout: str,
 ) -> None:

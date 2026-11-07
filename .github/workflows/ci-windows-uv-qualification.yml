@@ -92,6 +92,29 @@ jobs:
           PY
       - name: Build and validate Git-blob-identical source archive
         run: python3 tools/ci/qualify_uv_source.py --output-dir "${RUNNER_TEMP}/matrix-uv-candidate"
+      - name: Prepare actual version and release notes (audit-only, no publication)
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
+          SHA="$(git rev-parse HEAD)"
+          python3 -m tools.ci.github_release prepare --version "$VERSION" \
+            --sha "$SHA" --audit-only --directory "$RUNNER_TEMP/matrix-release-audit"
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          root = Path(os.environ["RUNNER_TEMP"]) / "matrix-release-audit"
+          metadata = json.loads((root / "release-provenance.json").read_text())
+          assert metadata["preparation_state"] == "CREATED_BEFORE_PUBLICATION"
+          assert metadata["full_source_snapshot_risk_count"] == 0
+          assert metadata["candidate_files_checked_against_git_tree"] > 0
+          notes = (root / "release-notes.md").read_text()
+          assert "## Historical entry:" not in notes
+          assert "## Changes" in notes
+          print("ACTUAL_RELEASE_PREPARE_AUDIT_ONLY_SUCCESS", metadata["tag"],
+                metadata["source_sha"])
+          PY
       - name: Upload reviewable candidate (not a release)
         uses: actions/upload-artifact@v4
         with:
