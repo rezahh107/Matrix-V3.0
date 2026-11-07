@@ -106,6 +106,9 @@ def main() -> None:
 
         # Invalid selection and dirty checkout must fail before new state.
         personal("activate", "not-an-approved-tag", ok=False)
+        # Also reject a well-formed version absent from the disposable remote.
+        missing_tag = f"v{int(version.split('.')[0]) + 1}.0.0"
+        personal("activate", missing_tag, ok=False)
         assert not (client / ".matrix-personal" / "state.json").exists()
         readme = client / "README.md"
         readme.write_bytes(readme.read_bytes() + b"\nDISPOSABLE_DIRTY_FILE\n")
