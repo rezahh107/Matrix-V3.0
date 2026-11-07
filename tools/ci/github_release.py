@@ -144,11 +144,8 @@ def verify_candidate(directory: Path, version: str, sha: str) -> tuple[Path, dic
     if sha256(archive) != manifest["archive_sha256"]:
         raise PublicationError("Candidate archive checksum mismatch")
     with zipfile.ZipFile(archive) as source:
-        if source.testzip() or set(source.namelist()) - {
-            p + "/" for p in manifest["archive_files"]
-        } - set(manifest["archive_files"]):
-            # Directory records are harmless; all files must match.
-            raise PublicationError("Candidate archive CRC or path mismatch")
+        if source.testzip():
+            raise PublicationError("Candidate archive CRC invalid")
         files = {i.filename for i in source.infolist() if not i.is_dir()}
         if files != set(manifest["archive_files"]):
             raise PublicationError("Candidate manifest does not match archive paths")
@@ -202,7 +199,7 @@ def prepare(version: str, sha: str, directory: Path, *, enforce: bool,
             "full_source_snapshot_files_reviewed": len(objects),
             "full_source_snapshot_risk_count": len(risks),
             "publication_method": "EXPLICIT_MANUAL_GITHUB_WORKFLOW_ONLY",
-            "publication_state": "PREPARED_NOT_PUBLISHED",
+            "preparation_state": "CREATED_BEFORE_PUBLICATION",
         }
         (directory / "release-provenance.json").write_text(
             json.dumps(provenance, ensure_ascii=False, indent=2) + "\n", encoding="utf-8",
@@ -320,6 +317,7 @@ def verify_published(tag: str, sha: str, directory: Path) -> str:
         raise PublicationError("Published tag is missing, lightweight or moved")
     with TemporaryDirectory(prefix="matrix-release-verify-") as temp:
         root = Path(temp)
+        (root / "assets").mkdir()
         run("gh", "release", "download", tag, "-R", REPO, "-p", asset.name,
             "-D", str(root / "assets"))
         run("gh", "release", "download", tag, "-R", REPO,
@@ -354,7 +352,7 @@ def publish(version: str, sha: str, directory: Path, *, mode: str,
     if snapshot_risks(tree_blobs()):
         raise PublicationError("Public source snapshot still has unreviewed paths")
     if (provenance.get("full_source_snapshot_risk_count") != 0
-            or provenance.get("publication_state") != "PREPARED_NOT_PUBLISHED"):
+            or provenance.get("preparation_state") != "CREATED_BEFORE_PUBLICATION"):
         raise PublicationError("Prepared provenance is not a cleared publication candidate")
     archive, _ = verify_candidate(directory, version, sha)
     if archive.name != provenance["archive"] or sha256(archive) != provenance["archive_sha256"]:
