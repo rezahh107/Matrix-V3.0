@@ -180,8 +180,10 @@ def test_existing_release_and_tag_recovery_gate(monkeypatch: pytest.MonkeyPatch)
     with pytest.raises(release.PublicationError, match="already exists"):
         release.check_remote("v1.2.3", "a" * 40, "new")
     release.check_remote("v1.2.3", "a" * 40, "resume-tag-only")
+    monkeypatch.setattr(release, "gh_api", lambda path: {"object": {"sha": "b" * 40}})
     with pytest.raises(release.PublicationError, match="exact-source"):
         release.check_remote("v1.2.3", "b" * 40, "resume-tag-only")
+    monkeypatch.setattr(release, "gh_api", lambda path: {"object": {"sha": "a" * 40}})
     monkeypatch.setattr(release, "gh_optional", lambda path: {"id": 1})
     with pytest.raises(release.PublicationError, match="Release already exists"):
         release.check_remote("v1.2.3", "a" * 40, "resume-tag-only")
