@@ -113,6 +113,9 @@ def test_archive_provenance_version_and_privacy_handoff(
             "docs/SmartAlloc_GUI_Operator_Guide.fa.md",
             "docs/SmartAlloc_E2E_QA_Checklist.fa.md",
             "docs/SmartAlloc_Dev_QA_Notes.md",
+            "docs/PERSONAL_RELEASE_GIT_UV.fa.md",
+            "tools/personal_release.py",
+            "Matrix-Personal.cmd",
         ):
             assert guide in zipped.namelist()
         assert "students.xlsx" not in zipped.namelist()

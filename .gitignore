@@ -35,3 +35,6 @@ artifacts/
 
 # Runtime logs
 logs/
+
+# Versioned, owner-local worktrees/state/backups (never commit private state)
+.matrix-personal/
