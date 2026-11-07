@@ -1,0 +1,143 @@
+name: Owner-controlled GitHub Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Approved MAJOR.MINOR.PATCH application version"
+        required: true
+        type: string
+      source_sha:
+        description: "Exact approved current main SHA (40 lowercase hex)"
+        required: true
+        type: string
+      publish_confirmation:
+        description: "Enter PUBLISH-vMAJOR.MINOR.PATCH"
+        required: true
+        type: string
+      public_rights_confirmation:
+        description: "After full ZIP/TAR and asset review enter PUBLIC-SNAPSHOT-AND-RIGHTS-REVIEWED"
+        required: true
+        type: string
+      recovery_mode:
+        description: "Use resume-tag-only only for an inspected exact-source orphan tag"
+        type: choice
+        options: [new, resume-tag-only]
+        default: new
+
+permissions:
+  contents: read
+
+concurrency:
+  group: matrix-github-release-publication
+  cancel-in-progress: false
+
+jobs:
+  owner-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Refuse non-owner, other branch, stale or malformed selection
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ inputs.source_sha }}
+          VERSION: ${{ inputs.version }}
+          CONFIRM: ${{ inputs.publish_confirmation }}
+          RIGHTS: ${{ inputs.public_rights_confirmation }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "rezahh107/Matrix-V3.0"
+          test "$GITHUB_ACTOR" = "rezahh107"
+          test "$GITHUB_REF" = "refs/heads/main"
+          [[ "$EXPECTED_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$GITHUB_SHA" = "$EXPECTED_SHA"
+          [[ "$VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+          test "$CONFIRM" = "PUBLISH-v$VERSION"
+          test "$RIGHTS" = "PUBLIC-SNAPSHOT-AND-RIGHTS-REVIEWED"
+
+  windows-uv:
+    needs: owner-gate
+    uses: ./.github/workflows/ci-windows-uv-qualification.yml
+    permissions:
+      contents: read
+
+  windows-core-ui:
+    needs: owner-gate
+    uses: ./.github/workflows/ci-main.yml
+    permissions:
+      contents: read
+
+  golden:
+    needs: owner-gate
+    uses: ./.github/workflows/golden-regression.yml
+    permissions:
+      contents: read
+
+  prepare:
+    needs: [windows-uv, windows-core-ui, golden]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Build source candidate and block unreviewed public snapshot
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
+          EXPECTED_SHA: ${{ inputs.source_sha }}
+          CONFIRM: ${{ inputs.publish_confirmation }}
+          RIGHTS: ${{ inputs.public_rights_confirmation }}
+        run: |
+          set -euo pipefail
+          python -m tools.ci.github_release prepare --version "$VERSION" \
+            --sha "$EXPECTED_SHA" --publish-confirmation "$CONFIRM" \
+            --rights-confirmation "$RIGHTS" --directory "$RUNNER_TEMP/matrix-release"
+      - name: Preserve candidate and risk report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: matrix-github-release-prepared
+          path: ${{ runner.temp }}/matrix-release/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  publish:
+    needs: prepare
+    runs-on: ubuntu-latest
+    environment: matrix-public-release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/download-artifact@v4
+        with:
+          name: matrix-github-release-prepared
+          path: ${{ runner.temp }}/matrix-release
+      - name: Publish and verify approved exact-source Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ inputs.version }}
+          EXPECTED_SHA: ${{ inputs.source_sha }}
+          CONFIRM: ${{ inputs.publish_confirmation }}
+          RIGHTS: ${{ inputs.public_rights_confirmation }}
+          RECOVERY_MODE: ${{ inputs.recovery_mode }}
+        run: |
+          set -euo pipefail
+          python -m tools.ci.github_release publish --version "$VERSION" \
+            --sha "$EXPECTED_SHA" --publish-confirmation "$CONFIRM" \
+            --rights-confirmation "$RIGHTS" --mode "$RECOVERY_MODE" \
+            --directory "$RUNNER_TEMP/matrix-release"
