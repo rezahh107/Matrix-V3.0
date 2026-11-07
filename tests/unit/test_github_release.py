@@ -31,6 +31,8 @@ def checkout(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
     _git("init", "-b", "main")
     _git("config", "user.name", "Synthetic Release Test")
     _git("config", "user.email", "synthetic@example.invalid")
+    # Do not inherit Windows core.autocrlf when creating synthetic Git archives.
+    _git("config", "core.autocrlf", "false")
     _write("pyproject.toml", '[project]\nname = "smart-student-allocation"\n'
            'version = "1.2.3"\nrequires-python = ">=3.11"\n')
     _write("uv.lock", 'version = 1\nrequires-python = ">=3.11"\n'
