@@ -41,7 +41,7 @@ class PublicationError(RuntimeError):
 def run(*args: str, data: bytes | None = None) -> bytes:
     try:
         return subprocess.run(
-            args, input=data, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True
+            args, input=data, capture_output=True, check=True
         ).stdout
     except subprocess.CalledProcessError as exc:
         # Never echo potential secrets returned by external tools.
@@ -222,7 +222,7 @@ def gh_api(path: str, *, fields: tuple[str, ...] = ()) -> dict:
 def gh_optional(path: str) -> dict | None:
     result = subprocess.run(
         ["gh", "api", f"repos/{REPO}/{path}"],
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
+        capture_output=True, check=False,
     )
     if result.returncode == 0:
         return json.loads(result.stdout.decode("utf-8"))
