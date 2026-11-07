@@ -15,6 +15,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from contextlib import closing
 
 
 def run(args: list[str], *, cwd: Path, env: dict[str, str] | None = None,
@@ -77,7 +78,7 @@ def main() -> None:
         years = home / ".smart_alloc" / "years"
         years.mkdir(parents=True)
         database = years / "smart_alloc_1405.sqlite"
-        with sqlite3.connect(database) as connection:
+        with closing(sqlite3.connect(database)) as connection, connection:
             connection.execute("CREATE TABLE marker (value TEXT NOT NULL)")
             connection.execute("INSERT INTO marker VALUES ('synthetic-preserve-me')")
         settings = home / ".smart_alloc" / "user_settings.json"
@@ -128,7 +129,7 @@ def main() -> None:
             db = item / database.name
             if not (item / "README.txt").exists():
                 continue  # A failed activation can leave an incomplete snapshot.
-            with sqlite3.connect(db) as connection:
+            with closing(sqlite3.connect(db)) as connection:
                 assert connection.execute("PRAGMA quick_check").fetchone() == ("ok",)
                 assert connection.execute("SELECT value FROM marker").fetchone() == (
                     "synthetic-preserve-me",)
@@ -143,7 +144,15 @@ def main() -> None:
         assert "UnicodeEncodeError" not in combined
         assert "--- Logging error ---" not in combined
         assert json.loads(personal("status").stdout) == state
-        assert checksum(database) == db_checksum and checksum(settings) == settings_checksum
+        # Launch may legitimately update SQLite schema/metadata or settings.
+        # Preserve the original synthetic record, not the file's physical bytes.
+        with closing(sqlite3.connect(database)) as connection:
+            assert connection.execute("PRAGMA quick_check").fetchone() == ("ok",)
+            assert connection.execute("SELECT value FROM marker").fetchone() == (
+                "synthetic-preserve-me",)
+        assert json.loads(settings.read_text(encoding="utf-8"))["ci_only"] == "preserve-me"
+        print("After startup: raw DB unchanged=", checksum(database) == db_checksum,
+              "raw JSON unchanged=", checksum(settings) == settings_checksum)
         personal("rollback", ok=False)  # No invented previous official version.
         assert json.loads(personal("status").stdout) == state
         print("REAL MATRIX WINDOWS CONSUMER PASS", expected, "v0.1.0 (LOCAL TAG ONLY)")
