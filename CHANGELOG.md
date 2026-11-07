@@ -2,11 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
-Application package version is sourced from `pyproject.toml`. Historical entries below are not evidence of published GitHub Releases. The first v0.1.0 personal candidate is prepared but no official Tag or GitHub Release exists.
+Application package version is sourced from `pyproject.toml`. Historical entries alone do not establish that GitHub published any Release. The first prepared personal release target is v0.1.0; check GitHub Tag/Release for the actual publication state.
 
 ## [Unreleased]
-- قابلیت زیرساختی انتشار دستی GitHub Release با تأیید Owner، کنترل SHA/نسخه و آرشیو کامل عمومی، CI دقیق Windows و بازیابی بدون تغییر تاریخچه؛ **پیاده‌سازی در PR، بدون انتخاب نسخهٔ نخست و بدون انتشار**.
-- مسیر شخصی Git+uv برای انتخاب صریح تگ مصوب، نسخه‌های worktree مجزا، rollback بدون حذف داده و مستندسازی بکاپ/مرز انتشار؛ بدون انتخاب نخستین نسخهٔ رسمی.
+- قابلیت انتشار دستی GitHub Release با تأیید Owner، کنترل SHA/نسخه و آرشیو عمومی بررسی‌شده، CI Windows و بازیابی بدون بازنویسی تاریخچه؛ انتشار با Merge یا CI خودکار انجام نمی‌شود.
+- مسیر شخصی Git+uv برای تگ منتخب Owner، worktree نسخه‌های جدا، rollback بدون حذف داده و مستندسازی بکاپ؛ نسخهٔ نخست `v0.1.0` برای تأیید انتشار دستی آماده شده است.
 ### Added
 - Governed uv source-candidate identity, version/lock checks and review-only privacy signaling; no official version or publication selected.
 - **سیستم مدیریت مراکز پیشرفته**: پشتیبانی از مراکز پویا و مبتنی بر Policy
@@ -55,7 +55,7 @@ Application package version is sourced from `pyproject.toml`. Historical entries
 - Candidate qualification through locked Windows Core/UI and exact-source archive checks, with an additional real-Matrix, local-only annotated-tag Git+uv integration probe.
 - On activation, back up known annual SQLite databases and the user JSON settings file; preserve prior worktrees and reject dirty or unqualified installations. Windows Registry/QSettings, external Sabt Profiles, user-chosen output paths and database-schema downgrades are **not** automatically backed up or reversed.
 - Prepared exact-content admission for five inspected synthetic/header-only CSVs, exact Git-archive omissions for review-pending test data, and prepublication comparison of hosted GitHub ZIP/TAR with the reviewed commit.
-- No EXE/installer, automatic update or official Tag/Release was created by this change. Publication remains explicitly Owner-controlled.
+- No EXE/installer or automatic update. The immutable official Tag/Release is created only by the explicit Owner-controlled manual GitHub workflow.
 
 ## Historical entry: 1.0.0 (2024-01-01; not an established GitHub Release)
 ### Added
