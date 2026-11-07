@@ -17,8 +17,7 @@ import tarfile
 import zipfile
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from urllib import error as url_error
-from urllib import request as url_request
+from urllib import error as url_error, request as url_request
 from urllib.parse import quote, urlparse
 
 from tools.ci.qualify_uv_source import (

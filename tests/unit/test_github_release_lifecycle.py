@@ -427,7 +427,7 @@ def test_hosted_binary_download_uses_authenticated_https_and_saves_exact_bytes(
         def __init__(self) -> None:
             self.parts = [b"exact-hosted-payload", b""]
 
-        def __enter__(self) -> "Response":
+        def __enter__(self) -> Response:
             return self
 
         def __exit__(self, *_: object) -> None:
