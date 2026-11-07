@@ -7,11 +7,12 @@ import json
 import subprocess
 import tarfile
 import zipfile
+import warnings
 from pathlib import Path
 
 import pytest
 
-from tools.ci import github_release as release
+from tools.ci import github_release as release, qualify_uv_source as candidate_source
 
 
 def _git(*args: str) -> str:
@@ -39,6 +40,15 @@ def checkout(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
     _write("CHANGELOG.md", "# Changelog\n## [Unreleased]\n"
            "## [1.2.3] - 2026-11-07\n- Verified synthetic changes.\n")
     _write("app/main.py", "VERSION = 'synthetic'\n")
+    for required in sorted(candidate_source.REQUIRED_FILES):
+        if not Path(required).exists():
+            _write(required, "synthetic source fixture\n")
+    for included in candidate_source.RUNTIME_PATHS:
+        if not Path(included).exists():
+            if included in {"policy", "tools/ci"}:  # directory selections
+                _write(f"{included}/synthetic.py", "synthetic source fixture\n")
+            else:
+                _write(included, "synthetic source fixture\n")
     _git("add", ".")
     _git("commit", "-m", "synthetic fixtures only")
     return _git("rev-parse", "HEAD")
@@ -126,31 +136,122 @@ def test_owner_confirmations_mandatory(checkout: str, tmp_path: Path) -> None:
                         rights_confirmation="")
 
 
-def test_candidate_archive_and_manifest_checks(tmp_path: Path) -> None:
-    home = tmp_path / "prepared" / "candidate"
-    home.mkdir(parents=True)
-    archive = home / ("matrix-uv-source-" + "a" * 12 + ".zip")
-    with zipfile.ZipFile(archive, "w") as z:
-        z.writestr("app/", b"")
-        z.writestr("uv.lock", b"lock")
-        z.writestr(".python-version", b"3.11\n")
-    def digest(data: bytes) -> str:
-        return hashlib.sha256(data).hexdigest()
-    manifest = {
-        "archive": archive.name, "source_sha": "a" * 40,
-        "candidate_package_version_not_official_release": "1.2.3",
-        "archive_sha256": digest(archive.read_bytes()), "publication": "NOT_AUTHORIZED",
-        "privacy_status": "REVIEW_REQUIRED_BEFORE_PUBLICATION",
-        "archive_files": [".python-version", "uv.lock"],
-        "uv_lock_sha256": digest(b"lock"),
-        "python_version_file_sha256": digest(b"3.11\n"),
-    }
-    (home / "candidate-manifest.json").write_text(json.dumps(manifest))
-    path, _ = release.verify_candidate(tmp_path / "prepared", "1.2.3", "a" * 40)
-    assert path == archive
+def _build_synthetic_candidate(checkout: str, root: Path) -> Path:
+    candidate_source.build_candidate(root / "candidate", required_release_version="1.2.3")
+    return root
+
+
+def _rewrite_candidate(root: Path, change: str) -> None:
+    """Coherently edit both archive and manifest to exercise the trust boundary."""
+    manifest_path = root / "candidate" / "candidate-manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    archive_path = root / "candidate" / manifest["archive"]
+    with zipfile.ZipFile(archive_path) as original:
+        entries = [(item.filename, original.read(item)) for item in original.infolist()
+                   if not item.is_dir()]
+    if change in {"app", "lock", "python"}:
+        target = {"app": "app/main.py", "lock": "uv.lock",
+                  "python": ".python-version"}[change]
+        entries = [(name, contents + b"\nTAMPERED" if name == target else contents)
+                   for name, contents in entries]
+    elif change == "missing":
+        entries = [(name, data) for name, data in entries if name != "app/main.py"]
+    elif change == "extra":
+        entries.append(("app/unauthorized.py", b"synthetic extra"))
+    elif change == "duplicate":
+        entries.append(("app/main.py", dict(entries)["app/main.py"]))
+    elif change == "unexpected-dir":
+        entries.append(("unexpected-path/", b""))
+    else:
+        raise AssertionError(change)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        with zipfile.ZipFile(archive_path, "w") as output:
+            for name, data in entries:
+                output.writestr(name, data)
+    manifest["archive_files"] = sorted({name for name, _ in entries if not name.endswith("/")})
+    if change == "lock":
+        manifest["uv_lock_sha256"] = hashlib.sha256(dict(entries)["uv.lock"]).hexdigest()
+    if change == "python":
+        manifest["python_version_file_sha256"] = hashlib.sha256(
+            dict(entries)[".python-version"]).hexdigest()
+    manifest["archive_sha256"] = hashlib.sha256(archive_path.read_bytes()).hexdigest()
+    manifest_path.write_text(json.dumps(manifest))
+    provenance_path = root / "release-provenance.json"
+    if provenance_path.exists():
+        provenance = json.loads(provenance_path.read_text())
+        provenance["archive_sha256"] = manifest["archive_sha256"]
+        provenance_path.write_text(json.dumps(provenance))
+
+
+def test_candidate_archive_and_manifest_checks(checkout: str, tmp_path: Path) -> None:
+    root = _build_synthetic_candidate(checkout, tmp_path / "prepared")
+    archive, manifest = release.verify_candidate(root, "1.2.3", checkout)
+    assert archive.is_file()
+    assert manifest["files_checked_against_git_tree"] == len(manifest["archive_files"])
+    assert manifest["archive_files"] == sorted(candidate_source._selected_git_blobs(checkout))
     archive.write_bytes(b"tampered")
     with pytest.raises(release.PublicationError, match="checksum"):
-        release.verify_candidate(tmp_path / "prepared", "1.2.3", "a" * 40)
+        release.verify_candidate(root, "1.2.3", checkout)
+
+
+@pytest.mark.parametrize("mutation", ["app", "lock", "python", "missing", "extra",
+                                     "duplicate", "unexpected-dir"])
+def test_consumer_rejects_consistent_but_non_git_candidate(
+    checkout: str, tmp_path: Path, mutation: str,
+) -> None:
+    root = _build_synthetic_candidate(checkout, tmp_path / "prepared")
+    assert release.verify_candidate(root, "1.2.3", checkout)[0].exists()
+    _rewrite_candidate(root, mutation)
+    with pytest.raises(release.PublicationError, match="Git|archive|Duplicate|[Uu]nexpected|mismatch|missing"):
+        release.verify_candidate(root, "1.2.3", checkout)
+
+
+def test_candidate_wrong_approved_head_rejected(checkout: str, tmp_path: Path) -> None:
+    root = _build_synthetic_candidate(checkout, tmp_path / "prepared")
+    with pytest.raises((release.PublicationError, RuntimeError), match="HEAD|Git|SHA|provenance"):
+        release.verify_candidate(root, "1.2.3", "a" * 40)
+    with pytest.raises(RuntimeError, match="Checkout HEAD"):
+        candidate_source._selected_git_blobs("a" * 40)
+
+
+def test_publish_integrity_gate_before_any_remote_write(
+    checkout: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = tmp_path / "prepared"
+    release.prepare("1.2.3", checkout, root, enforce=True,
+                    publish_confirmation="PUBLISH-v1.2.3",
+                    rights_confirmation="PUBLIC-SNAPSHOT-AND-RIGHTS-REVIEWED")
+    remote: list[str] = []
+
+    def remote_gate(*args: object, **kwargs: object) -> None:
+        remote.append("preflight")
+        raise release.PublicationError("mock read-only remote preflight stopped")
+
+    monkeypatch.setattr(release, "check_remote", remote_gate)
+    monkeypatch.setattr(release, "create_tag", lambda *args: pytest.fail("tag write attempted"))
+    original_run = release.run
+
+    def no_remote_run(*args: str, data: bytes | None = None) -> bytes:
+        if args[0] != "git":
+            pytest.fail("remote write attempted")
+        return original_run(*args, data=data)
+
+    monkeypatch.setattr(release, "run", no_remote_run)
+    monkeypatch.setattr(release, "gh_api", lambda *args, **kw: pytest.fail("API called"))
+    with pytest.raises(release.PublicationError, match="mock read-only remote"):
+        release.publish("1.2.3", checkout, root, mode="new",
+                        publish_confirmation="PUBLISH-v1.2.3",
+                        rights_confirmation="PUBLIC-SNAPSHOT-AND-RIGHTS-REVIEWED")
+    assert remote == ["preflight"]  # positive proof: valid archive crossed integrity gate
+
+    _rewrite_candidate(root, "app")
+    remote.clear()
+    with pytest.raises(release.PublicationError, match="Git|blob|mismatch"):
+        release.publish("1.2.3", checkout, root, mode="new",
+                        publish_confirmation="PUBLISH-v1.2.3",
+                        rights_confirmation="PUBLIC-SNAPSHOT-AND-RIGHTS-REVIEWED")
+    assert remote == []  # tampered archive stopped before any remote preflight/write
 
 
 def test_github_full_source_zip_and_tar_match_exact_blobs(tmp_path: Path) -> None:

@@ -149,14 +149,16 @@ def git(*args: str) -> bytes:
     return subprocess.check_output(["git", *args])
 
 
-def _build_candidate_in_staging(
-    output_dir: Path, *, required_release_version: str | None = None
-) -> dict[str, object]:
-    """Construct and validate both candidate files before they are visible."""
-    source_sha = git("rev-parse", "HEAD").decode().strip()
+def _selected_git_blobs(source_sha: str) -> dict[str, str]:
+    """Canonical selected-file inventory for the exact checked-out Git commit.
+
+    The tree, not the prepared ZIP/manifest, owns each file's identity.
+    """
+    if git("rev-parse", "HEAD").decode().strip() != source_sha:
+        raise RuntimeError("Checkout HEAD differs from approved source SHA")
     # Compare archive bytes against exact Git *blob objects*, not git-show text
     # streams (which can differ under Windows console newline translation).
-    entries = git("ls-tree", "-r", "-z", "HEAD", "--", *RUNTIME_PATHS)
+    entries = git("ls-tree", "-r", "-z", source_sha, "--", *RUNTIME_PATHS)
     expected_blobs: dict[str, str] = {}
     for entry in entries.split(b"\0"):
         if not entry:
@@ -181,6 +183,17 @@ def _build_candidate_in_staging(
     )
     if forbidden:
         raise RuntimeError(f"Unsafe source candidate entries: {forbidden}")
+
+    return expected_blobs
+
+
+def _build_candidate_in_staging(
+    output_dir: Path, *, required_release_version: str | None = None
+) -> dict[str, object]:
+    """Construct and validate both candidate files before they are visible."""
+    source_sha = git("rev-parse", "HEAD").decode().strip()
+    expected_blobs = _selected_git_blobs(source_sha)
+    expected_paths = set(expected_blobs)
 
     archive = output_dir / f"matrix-uv-source-{source_sha[:12]}.zip"
     subprocess.run(

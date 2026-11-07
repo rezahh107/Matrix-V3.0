@@ -20,6 +20,7 @@ from tempfile import TemporaryDirectory
 from urllib import error as url_error, request as url_request
 from urllib.parse import quote, urlparse
 
+from tools.ci import qualify_uv_source
 from tools.ci.qualify_uv_source import (
     CREDENTIAL_PATTERNS,
     build_candidate,
@@ -137,24 +138,59 @@ def notes_for(version: str, sha: str) -> str:
 
 
 def verify_candidate(directory: Path, version: str, sha: str) -> tuple[Path, dict]:
+    """Revalidate the published candidate against Git, not its own manifest."""
     manifest_file = directory / "candidate" / "candidate-manifest.json"
     manifest = json.loads(manifest_file.read_text(encoding="utf-8"))
-    archive = directory / "candidate" / str(manifest["archive"])
     if (manifest["source_sha"] != sha
             or manifest["candidate_package_version_not_official_release"] != version
             or manifest["publication"] != "NOT_AUTHORIZED"
             or manifest["privacy_status"] != "REVIEW_REQUIRED_BEFORE_PUBLICATION"):
         raise PublicationError("Candidate provenance or review-only status mismatch")
-    if archive.name != f"matrix-uv-source-{sha[:12]}.zip":
+    archive_name = f"matrix-uv-source-{sha[:12]}.zip"
+    if manifest["archive"] != archive_name:
         raise PublicationError("Unexpected candidate archive name")
+    archive = directory / "candidate" / archive_name
     if sha256(archive) != manifest["archive_sha256"]:
         raise PublicationError("Candidate archive checksum mismatch")
+
+    try:
+        expected_blobs = qualify_uv_source._selected_git_blobs(sha)
+    except (RuntimeError, subprocess.CalledProcessError) as exc:
+        raise PublicationError("Exact approved Git tree selection cannot be verified") from exc
+    expected_paths = set(expected_blobs)
+    if (manifest["archive_files"] != sorted(expected_paths)
+            or manifest["files_checked_against_git_tree"] != len(expected_paths)):
+        raise PublicationError("Candidate manifest differs from approved selected Git tree")
+
+    allowed_directories = {
+        f"{ancestor.as_posix()}/"
+        for path in expected_paths
+        for ancestor in Path(path).parents
+        if ancestor != Path(".")
+    }
     with zipfile.ZipFile(archive) as source:
         if source.testzip():
             raise PublicationError("Candidate archive CRC invalid")
-        files = {i.filename for i in source.infolist() if not i.is_dir()}
-        if files != set(manifest["archive_files"]):
-            raise PublicationError("Candidate manifest does not match archive paths")
+        seen: set[str] = set()
+        files: set[str] = set()
+        for entry in source.infolist():
+            name = entry.filename
+            if name in seen:
+                raise PublicationError(f"Duplicate candidate ZIP entry: {name}")
+            seen.add(name)
+            if entry.is_dir():
+                if name not in allowed_directories or entry.file_size != 0:
+                    raise PublicationError(f"Unexpected candidate ZIP directory: {name}")
+                continue
+            if name not in expected_blobs:
+                raise PublicationError(f"Unexpected candidate ZIP file: {name}")
+            files.add(name)
+            content = source.read(entry)
+            actual_blob = hashlib.sha1(f"blob {len(content)}\0".encode() + content).hexdigest()
+            if actual_blob != expected_blobs[name]:
+                raise PublicationError(f"Candidate ZIP differs from approved Git blob: {name}")
+        if files != expected_paths:
+            raise PublicationError("Candidate ZIP missing selected Git files")
         for name, expected in (("uv.lock", "uv_lock_sha256"),
                                (".python-version", "python_version_file_sha256")):
             if hashlib.sha256(source.read(name)).hexdigest() != manifest[expected]:
