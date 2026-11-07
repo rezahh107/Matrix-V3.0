@@ -38,6 +38,10 @@ jobs:
       - name: Owner CMD wrapper smoke on Windows
         shell: cmd
         run: call Matrix-Personal.cmd status
+      - name: Real Matrix disposable-tag Git+uv install and startup (Windows)
+        env:
+          MATRIX_EXPECTED_SOURCE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: uv run --locked python -m tools.ci.probe_personal_release_actual_windows
       - name: Reproduce existing scheduled flaky UI smoke
         run: uv run --locked python -m tools.ci.run_flaky_ui_smoke
 
