@@ -2,6 +2,7 @@ name: Golden Regression (MentorPipelineV3)
 
 on:
   workflow_dispatch:
+  workflow_call:
   pull_request:
     branches: ["main"]
     paths:
