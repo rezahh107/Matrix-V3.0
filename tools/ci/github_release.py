@@ -244,6 +244,9 @@ def remote_tag(tag: str) -> tuple[bool, str | None]:
 
 
 def check_remote(tag: str, sha: str, mode: str) -> None:
+    main = gh_api("git/ref/heads/main")
+    if main.get("object", {}).get("sha") != sha:
+        raise PublicationError("Remote main advanced or differs from approved source SHA")
     exists, target = remote_tag(tag)
     existing_release = gh_optional(f"releases/tags/{tag}")
     if existing_release is not None:
@@ -277,7 +280,10 @@ def verify_full_snapshot(archive: Path, expected: dict[str, str]) -> None:
             for entry in source.infolist():
                 if entry.is_dir():
                     continue
-                records[entry.filename.split("/", 1)[-1]] = source.read(entry)
+                name = entry.filename.split("/", 1)[-1]
+                if name in records:
+                    raise PublicationError("Duplicate file in GitHub automatic source ZIP")
+                records[name] = source.read(entry)
     else:
         with tarfile.open(archive, "r:gz") as source:
             for entry in source:
@@ -288,7 +294,10 @@ def verify_full_snapshot(archive: Path, expected: dict[str, str]) -> None:
                 data = source.extractfile(entry)
                 if data is None:
                     raise PublicationError("Cannot read GitHub source TAR entry")
-                records[entry.name.split("/", 1)[-1]] = data.read()
+                name = entry.name.split("/", 1)[-1]
+                if name in records:
+                    raise PublicationError("Duplicate file in GitHub automatic source TAR")
+                records[name] = data.read()
     if set(records) != set(expected):
         raise PublicationError("GitHub automatic source archive differs from exact Git tree")
     for path, blob in records.items():
