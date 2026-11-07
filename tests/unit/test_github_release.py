@@ -175,19 +175,28 @@ def test_github_full_source_zip_and_tar_match_exact_blobs(tmp_path: Path) -> Non
 
 def test_existing_release_and_tag_recovery_gate(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(release, "remote_tag", lambda tag: (True, "a" * 40))
-    monkeypatch.setattr(release, "gh_api", lambda path: {"object": {"sha": "a" * 40}})
-    monkeypatch.setattr(release, "gh_optional", lambda path: None)
-    with pytest.raises(release.PublicationError, match="already exists"):
+    listings: list[dict] = []
+    main_sha = {"value": "a" * 40}
+
+    def fake_api(path: str) -> object:
+        if path == "releases?per_page=100":
+            return listings
+        assert path == "git/ref/heads/main"
+        return {"object": {"sha": main_sha["value"]}}
+
+    monkeypatch.setattr(release, "gh_api", fake_api)
+    with pytest.raises(release.PublicationError, match="Tag already exists"):
         release.check_remote("v1.2.3", "a" * 40, "new")
     release.check_remote("v1.2.3", "a" * 40, "resume-tag-only")
-    monkeypatch.setattr(release, "gh_api", lambda path: {"object": {"sha": "b" * 40}})
+    main_sha["value"] = "b" * 40
     with pytest.raises(release.PublicationError, match="exact-source"):
         release.check_remote("v1.2.3", "b" * 40, "resume-tag-only")
-    monkeypatch.setattr(release, "gh_api", lambda path: {"object": {"sha": "a" * 40}})
-    monkeypatch.setattr(release, "gh_optional", lambda path: {"id": 1})
-    with pytest.raises(release.PublicationError, match="Release already exists"):
+    main_sha["value"] = "a" * 40
+    listings.append({"tag_name": "v1.2.3", "draft": True, "id": 101})
+    with pytest.raises(release.PublicationError, match="Existing Draft"):
         release.check_remote("v1.2.3", "a" * 40, "resume-tag-only")
-    monkeypatch.setattr(release, "gh_api", lambda path: {"object": {"sha": "b" * 40}})
+    listings.clear()
+    main_sha["value"] = "b" * 40
     with pytest.raises(release.PublicationError, match="Remote main advanced"):
         release.check_remote("v1.2.3", "a" * 40, "resume-tag-only")
 
@@ -219,6 +228,12 @@ def _mock_prepared_publish(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     monkeypatch.setattr(release, "sha256", lambda x: "fake")
     monkeypatch.setattr(release, "notes_for", lambda *x: "approved notes")
     monkeypatch.setattr(release, "check_remote", lambda *x: None)
+    monkeypatch.setattr(release, "remote_tag", lambda *x: (True, "a" * 40))
+    # Hosted ZIP/TAR and asset-byte verification are exercised by the independent
+    # lifecycle tests; this regression isolates the existing partial-state behavior.
+    monkeypatch.setattr(release, "verify_hosted_archives", lambda *x: None)
+    monkeypatch.setattr(release, "verify_draft", lambda *x: (101, {}))
+    monkeypatch.setattr(release, "check_publication_preconditions", lambda *x: None)
     events: list[str] = []
     monkeypatch.setattr(release, "create_tag", lambda *x: events.append("tag"))
     if verification_fails:
@@ -226,12 +241,14 @@ def _mock_prepared_publish(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
         def fail(*args: object) -> str:
             raise release.PublicationError("synthetic verification failure")
         monkeypatch.setattr(release, "verify_published", fail)
+        monkeypatch.setattr(release, "gh_api", lambda *x, **kw:
+                            {"id": 101, "draft": False})
     else:
         def fail_run(*args: str) -> bytes:
-            raise release.PublicationError("synthetic permission or network failure")
+            raise release.PublicationError("synthetic draft upload failure")
         monkeypatch.setattr(release, "run", fail_run)
     with pytest.raises(release.PublicationError, match=(
-        "RELEASE_CREATED_VERIFICATION_FAILED" if verification_fails else "TAG_ONLY_POSSIBLE"
+        "PUBLISHED_UNVERIFIED" if verification_fails else "DRAFT_CREATION_UNCERTAIN"
     )):
         release.publish("1.2.3", "a" * 40, directory, mode="new",
                         publish_confirmation="PUBLISH-v1.2.3",
@@ -271,6 +288,7 @@ def test_annotated_tag_write_failure_is_reported_as_uncertain(
     monkeypatch.setattr(release, "verify_candidate", lambda *x: (
         directory / "candidate" / "fixture.zip", {}))
     monkeypatch.setattr(release, "check_remote", lambda *x: None)
+    monkeypatch.setattr(release, "verify_hosted_archives", lambda *x: None)
 
     def uncertain_tag(*args: str) -> None:
         raise OSError("synthetic API interruption after possibly creating the tag")
@@ -288,98 +306,58 @@ def test_positive_mocked_publication_and_full_download_verification(
     directory = tmp_path / "prepared"
     candidate = directory / "candidate"
     candidate.mkdir(parents=True)
-    data = b"synthetic selected source candidate"
     asset = candidate / "fixture.zip"
-    asset.write_bytes(data)
-    checksum = hashlib.sha256(data).hexdigest()
-    source_blob = b"this is the entire synthetic Git-tracked README"
-    git_oid = hashlib.sha1(
-        f"blob {len(source_blob)}\0".encode() + source_blob
-    ).hexdigest()
-    sha = "a" * 40
-    tag = "v1.2.3"
-    provenance = {
-        "tag": tag,
-        "source_sha": sha,
-        "archive": asset.name,
-        "archive_sha256": checksum,
+    asset.write_bytes(b"synthetic candidate")
+    (directory / "release-provenance.json").write_text(json.dumps({
+        "tag": "v1.2.3", "source_sha": "a" * 40, "archive": asset.name,
+        "archive_sha256": "hash", "preparation_state": "CREATED_BEFORE_PUBLICATION",
         "full_source_snapshot_risk_count": 0,
-        "preparation_state": "CREATED_BEFORE_PUBLICATION",
-    }
-    (directory / "release-provenance.json").write_text(json.dumps(provenance))
-    notes = (
-        f"Matrix v1.2.3\n"
-        f"Commit: https://github.com/{release.REPO}/commit/{sha}\n"
-        f"Tag: https://github.com/{release.REPO}/tree/{tag}\n"
-    )
-    (directory / "release-notes.md").write_text(notes)
-    link = "https://github.com/rezahh107/Matrix-V3.0/releases/tag/v1.2.3"
-    release_record = {
-        "tag_name": tag, "target_commitish": sha, "draft": False,
-        "prerelease": False, "body": notes, "html_url": link,
-        "assets": [{"name": "fixture.zip"}, {"name": "release-provenance.json"}],
-    }
-    monkeypatch.setattr(release, "checked_identity", lambda *x: tag)
-    monkeypatch.setattr(release, "snapshot_risks", lambda x: [])
-    monkeypatch.setattr(release, "tree_blobs", lambda: {"README.md": git_oid})
-    monkeypatch.setattr(release, "notes_for", lambda *x: notes)
+    }))
+    (directory / "release-notes.md").write_text("synthetic approved notes")
+    monkeypatch.setattr(release, "checked_identity", lambda *x: "v1.2.3")
+    monkeypatch.setattr(release, "snapshot_risks", lambda *x: [])
+    monkeypatch.setattr(release, "tree_blobs", lambda: {})
+    monkeypatch.setattr(release, "notes_for", lambda *x: "synthetic approved notes")
     monkeypatch.setattr(release, "verify_candidate", lambda *x: (asset, {}))
-    monkeypatch.setattr(release, "sha256", release.sha256)
+    monkeypatch.setattr(release, "sha256", lambda *x: "hash")
     monkeypatch.setattr(release, "check_remote", lambda *x: None)
-    monkeypatch.setattr(release, "create_tag", lambda *x: None)
-    monkeypatch.setattr(release, "gh_api", lambda *x: release_record)
-    monkeypatch.setattr(release, "remote_tag", lambda *x: (True, sha))
-
+    monkeypatch.setattr(release, "remote_tag", lambda *x: (True, "a" * 40))
     events: list[str] = []
+    monkeypatch.setattr(release, "create_tag", lambda *x: events.append("tag"))
+    monkeypatch.setattr(release, "verify_hosted_archives",
+                        lambda ref, objects: events.append(f"archive:{ref}"))
 
-    def fake_command(*args: str) -> bytes:
-        assert args[0] == "gh"
-        if args[1:3] == ("release", "create"):
-            events.append("created")
-            return b""
-        assert args[1:3] == ("release", "download")
-        dest = Path(args[args.index("-D") + 1])
-        dest.mkdir(exist_ok=True)
-        if "--archive" in args:
-            fmt = args[args.index("--archive") + 1]
-            if fmt == "zip":
-                output = dest / "github-auto-source.zip"
-                with zipfile.ZipFile(output, "w") as archive:
-                    archive.writestr("Matrix-V3.0-abc/README.md", source_blob)
-            else:
-                output = dest / "github-auto-source.tar.gz"
-                with tarfile.open(output, "w:gz") as archive:
-                    member = tarfile.TarInfo("Matrix-V3.0-abc/README.md")
-                    member.size = len(source_blob)
-                    archive.addfile(member, io.BytesIO(source_blob))
-            events.append(f"download-{fmt}")
-        else:
-            selected = args[args.index("-p") + 1]
-            (dest / selected).write_bytes(
-                (directory / "release-provenance.json").read_bytes()
-                if selected == "release-provenance.json" else asset.read_bytes()
-            )
-            events.append(f"download-{selected}")
+    def draft(tag: str, sha: str, output: Path) -> tuple[int, dict[str, int]]:
+        assert events[-1] == "draft-created"
+        events.append("verified-hosted-draft-assets")
+        return 101, {}
+
+    monkeypatch.setattr(release, "verify_draft", draft)
+    monkeypatch.setattr(release, "check_publication_preconditions",
+                        lambda *x: events.append("second-tag-and-draft-check"))
+
+    def api(path: str, *, method: str | None = None, fields: tuple[str, ...] = ()) -> dict:
+        assert (path, method, fields) == ("releases/101", "PATCH", ("-F", "draft=false"))
+        assert events[-1] == "second-tag-and-draft-check"
+        events.append("draft-to-public")
+        return {"id": 101, "draft": False}
+
+    monkeypatch.setattr(release, "gh_api", api)
+    def gh_run(*args: str) -> bytes:
+        assert "--draft" in args and "--verify-tag" in args
+        assert args[:3] == ("gh", "release", "create")
+        assert events[-1] == "archive:v1.2.3"
+        events.append("draft-created")
         return b""
 
-    monkeypatch.setattr(release, "run", fake_command)
-    release.publish(
-        "1.2.3", sha, directory, mode="new",
-        publish_confirmation="PUBLISH-v1.2.3",
-        rights_confirmation="PUBLIC-SNAPSHOT-AND-RIGHTS-REVIEWED",
-    )
+    monkeypatch.setattr(release, "run", gh_run)
+    monkeypatch.setattr(release, "verify_published",
+                        lambda *x: events.append("post-public-readback") or "verified")
+    release.publish("1.2.3", "a" * 40, directory, mode="new",
+                    publish_confirmation="PUBLISH-v1.2.3",
+                    rights_confirmation="PUBLIC-SNAPSHOT-AND-RIGHTS-REVIEWED")
     assert events == [
-        "created", "download-fixture.zip", "download-release-provenance.json",
-        "download-zip", "download-tar.gz",
-    ]
-    events.clear()
-    # Tag-only recovery skips tag creation; the same verification still runs.
-    release.publish(
-        "1.2.3", sha, directory, mode="resume-tag-only",
-        publish_confirmation="PUBLISH-v1.2.3",
-        rights_confirmation="PUBLIC-SNAPSHOT-AND-RIGHTS-REVIEWED",
-    )
-    assert events == [
-        "created", "download-fixture.zip", "download-release-provenance.json",
-        "download-zip", "download-tar.gz",
+        "archive:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "tag",
+        "archive:v1.2.3", "draft-created", "verified-hosted-draft-assets",
+        "second-tag-and-draft-check", "draft-to-public", "post-public-readback",
     ]

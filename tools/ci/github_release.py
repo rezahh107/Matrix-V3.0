@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import subprocess
 import sys
@@ -16,6 +17,9 @@ import tarfile
 import zipfile
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from urllib import error as url_error
+from urllib import request as url_request
+from urllib.parse import quote, urlparse
 
 from tools.ci.qualify_uv_source import (
     CREDENTIAL_PATTERNS,
@@ -214,10 +218,13 @@ def prepare(version: str, sha: str, directory: Path, *, enforce: bool,
         raise
 
 
-def gh_api(path: str, *, fields: tuple[str, ...] = ()) -> dict:
+def gh_api(path: str, *, fields: tuple[str, ...] = (), method: str | None = None) -> dict:
     argv = ["gh", "api", f"repos/{REPO}/{path}"]
-    if fields:
-        argv += ["-X", "POST", *fields]
+    if method is not None:
+        argv += ["-X", method]
+    elif fields:
+        argv += ["-X", "POST"]
+    argv += list(fields)
     result = run(*argv)
     return json.loads(result.decode("utf-8"))
 
@@ -246,14 +253,32 @@ def remote_tag(tag: str) -> tuple[bool, str | None]:
     return True, annotated["object"]["sha"]
 
 
+def find_release(tag: str) -> dict | None:
+    """Authenticated list includes Drafts; never mistake a Draft for no Release.
+
+    Stop if one response page cannot prove uniqueness. An existing Draft is not
+    silently resumed, modified, or deleted by this workflow.
+    """
+    releases = gh_api("releases?per_page=100")
+    if not isinstance(releases, list) or len(releases) >= 100:
+        raise PublicationError("Cannot exhaustively inspect existing GitHub Releases")
+    matches = [item for item in releases if item.get("tag_name") == tag]
+    if len(matches) > 1:
+        raise PublicationError("Multiple Releases claim the same version tag")
+    return matches[0] if matches else None
+
+
 def check_remote(tag: str, sha: str, mode: str) -> None:
     main = gh_api("git/ref/heads/main")
     if main.get("object", {}).get("sha") != sha:
         raise PublicationError("Remote main advanced or differs from approved source SHA")
     exists, target = remote_tag(tag)
-    existing_release = gh_optional(f"releases/tags/{tag}")
+    existing_release = find_release(tag)
     if existing_release is not None:
-        raise PublicationError("A Release already exists: never reupload or overwrite assets")
+        state = "Draft" if existing_release.get("draft") is True else "published Release"
+        raise PublicationError(
+            f"Existing {state} for {tag}; do not overwrite, delete or auto-resume"
+        )
     if mode == "new":
         if exists:
             raise PublicationError("Tag already exists (use explicit tag-only recovery if valid)")
@@ -309,25 +334,160 @@ def verify_full_snapshot(archive: Path, expected: dict[str, str]) -> None:
             raise PublicationError(f"GitHub automatic source blob mismatch: {path}")
 
 
+# GitHub's API may redirect binary downloads to codeload or release-assets.
+# Verify redirect destinations BEFORE forwarding the job token.
+ALLOWED_DOWNLOAD_HOSTS = {
+    "api.github.com", "codeload.github.com", "github.com",
+    "release-assets.githubusercontent.com", "objects.githubusercontent.com",
+}
+
+
+class _GitHubRedirects(url_request.HTTPRedirectHandler):
+    def redirect_request(self, request: url_request.Request, fp: object, code: int,
+                         msg: str, headers: object, newurl: str) -> url_request.Request:
+        target = urlparse(newurl)
+        if target.scheme != "https" or target.hostname not in ALLOWED_DOWNLOAD_HOSTS:
+            raise PublicationError("GitHub binary download redirected to an untrusted host")
+        result = super().redirect_request(request, fp, code, msg, headers, newurl)
+        if result is None:
+            raise PublicationError("Unsupported GitHub archive/asset redirect")
+        return result
+
+
+def download_hosted(path: str, destination: Path, *, accept: str) -> None:
+    """Download *hosted* bytes, not local copies or optimistic metadata digests."""
+    token = os.environ.get("GH_TOKEN")
+    if not token:
+        raise PublicationError("GitHub write-job authentication is missing")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if destination.exists():
+        raise PublicationError("Refusing to overwrite previously downloaded evidence")
+    request = url_request.Request(
+        f"https://api.github.com/repos/{REPO}/{path}",
+        headers={"Authorization": f"Bearer {token}", "Accept": accept,
+                 "X-GitHub-Api-Version": "2022-11-28"},
+    )
+    try:
+        with url_request.build_opener(_GitHubRedirects()).open(request, timeout=90) as response:
+            actual = urlparse(response.geturl())
+            if actual.scheme != "https" or actual.hostname not in ALLOWED_DOWNLOAD_HOSTS:
+                raise PublicationError("Untrusted GitHub binary-download destination")
+            if response.status != 200:
+                raise PublicationError("GitHub binary download did not return HTTP 200")
+            with destination.open("xb") as output:
+                total = 0
+                while chunk := response.read(1024 * 1024):
+                    total += len(chunk)
+                    if total > 256 * 1024 * 1024:
+                        raise PublicationError("Hosted source/asset exceeds bounded download size")
+                    output.write(chunk)
+                if not total:
+                    raise PublicationError("GitHub returned an empty source/asset download")
+    except (url_error.URLError, OSError) as exc:
+        raise PublicationError("GitHub hosted source/asset download unavailable") from exc
+
+
+def verify_hosted_archives(ref: str, expected: dict[str, str]) -> None:
+    """Fetch official GitHub ZIP and TAR endpoints before public publication."""
+    if not (SOURCE_SHA.fullmatch(ref) or re.fullmatch(r"v" + VERSION.pattern, ref)):
+        raise PublicationError("Unsafe source archive reference")
+    with TemporaryDirectory(prefix="matrix-prepublish-sources-") as root:
+        for fmt, suffix in (("zipball", "zip"), ("tarball", "tar.gz")):
+            path = Path(root) / f"source.{suffix}"
+            download_hosted(f"{fmt}/{quote(ref, safe='')}", path,
+                            accept="application/vnd.github+json")
+            verify_full_snapshot(path, expected)
+
+
+def verify_release_identity(release: dict, tag: str, sha: str, directory: Path,
+                            *, draft: bool) -> None:
+    """Release metadata is a checklist; the annotated tag object owns source identity."""
+    notes = (directory / "release-notes.md").read_text(encoding="utf-8")
+    if (release.get("tag_name") != tag or release.get("draft") is not draft
+            or release.get("prerelease") is not False
+            or release.get("body") != notes
+            or release.get("name") != f"Matrix {tag}"
+            or f"https://github.com/{REPO}/commit/{sha}" not in notes
+            or f"https://github.com/{REPO}/tree/{tag}" not in notes):
+        raise PublicationError("Release identity or notes do not match the approved candidate")
+    # target_commitish may be a branch name even for an existing annotated tag.
+    exists, target = remote_tag(tag)
+    if not exists or target != sha:
+        raise PublicationError("Release's authoritative annotated tag target changed")
+
+
+def verified_asset_records(release: dict, directory: Path) -> dict[str, Path]:
+    provenance = json.loads((directory / "release-provenance.json").read_text())
+    archive = directory / "candidate" / provenance["archive"]
+    originals = {archive.name: archive, "release-provenance.json": directory / "release-provenance.json"}
+    assets = release.get("assets")
+    if not isinstance(assets, list) or len(assets) != len(originals):
+        raise PublicationError("Draft/Release is missing assets or has unexpected extras")
+    names: set[str] = set()
+    for item in assets:
+        name = item.get("name")
+        if name not in originals or name in names:
+            raise PublicationError("Duplicate or unrecognized hosted Release asset")
+        names.add(name)
+        if (not isinstance(item.get("id"), int) or item["id"] <= 0
+                or item.get("state") != "uploaded"
+                or item.get("size") != originals[name].stat().st_size):
+            raise PublicationError("Hosted asset is incomplete or differs in size/state")
+        digest = item.get("digest")
+        if digest is not None and digest != f"sha256:{sha256(originals[name])}":
+            raise PublicationError("Hosted asset digest differs from prepared bytes")
+    if names != set(originals):
+        raise PublicationError("Hosted Release asset list is incomplete")
+    return originals
+
+
+def verify_draft(tag: str, sha: str, directory: Path) -> tuple[int, dict[str, int]]:
+    """Assert hosted Draft and every downloaded asset BEFORE draft=false."""
+    release = find_release(tag)
+    if release is None:
+        raise PublicationError("Created Draft is not visible through authenticated API")
+    verify_release_identity(release, tag, sha, directory, draft=True)
+    release_id = release.get("id")
+    if not isinstance(release_id, int) or release_id <= 0:
+        raise PublicationError("Draft has no valid GitHub release ID")
+    originals = verified_asset_records(release, directory)
+    with TemporaryDirectory(prefix="matrix-draft-asset-check-") as root:
+        for item in release["assets"]:
+            name = item["name"]
+            downloaded = Path(root) / name
+            download_hosted(f"releases/assets/{item['id']}", downloaded,
+                            accept="application/octet-stream")
+            if sha256(downloaded) != sha256(originals[name]):
+                raise PublicationError(f"Hosted Draft asset checksum mismatch: {name}")
+    asset_ids = {item["name"]: item["id"] for item in release["assets"]}
+    return release_id, asset_ids
+
+
+def check_publication_preconditions(tag: str, sha: str, release_id: int,
+                                    directory: Path, asset_ids: dict[str, int]) -> None:
+    """Second read directly before the one-way public transition."""
+    main = gh_api("git/ref/heads/main")
+    if main.get("object", {}).get("sha") != sha:
+        raise PublicationError("Remote main changed before publishing Draft")
+    visible = find_release(tag)
+    if visible is None or visible.get("id") != release_id:
+        raise PublicationError("Draft was removed or replaced since verification")
+    verify_release_identity(visible, tag, sha, directory, draft=True)
+    verified_asset_records(visible, directory)
+    if {item["name"]: item["id"] for item in visible["assets"]} != asset_ids:
+        raise PublicationError("Draft uploaded assets were replaced after verification")
+
+
 def verify_published(tag: str, sha: str, directory: Path) -> str:
     provenance = json.loads((directory / "release-provenance.json").read_text())
     asset = directory / "candidate" / provenance["archive"]
     if sha256(asset) != provenance["archive_sha256"]:
         raise PublicationError("Local release asset checksum changed")
     release = gh_api(f"releases/tags/{tag}")
-    expected_names = {asset.name, "release-provenance.json"}
-    names = {a["name"] for a in release.get("assets", [])}
-    if (release.get("tag_name") != tag or release.get("draft") is not False
-            or release.get("prerelease") is not False
-            or release.get("target_commitish") != sha
-            or names != expected_names
-            or f"https://github.com/{REPO}/commit/{sha}" not in release.get("body", "")
-            or f"https://github.com/{REPO}/tree/{tag}" not in release.get("body", "")
-            or not release.get("html_url", "").endswith(f"/releases/tag/{tag}")):
-        raise PublicationError("Published Release identity, body, target or asset list differs")
-    exists, target = remote_tag(tag)
-    if not exists or target != sha:
-        raise PublicationError("Published tag is missing, lightweight or moved")
+    verify_release_identity(release, tag, sha, directory, draft=False)
+    verified_asset_records(release, directory)
+    if not release.get("html_url", "").endswith(f"/releases/tag/{tag}"):
+        raise PublicationError("Published Release has an unexpected URL")
     with TemporaryDirectory(prefix="matrix-release-verify-") as temp:
         root = Path(temp)
         (root / "assets").mkdir()
@@ -373,31 +533,65 @@ def publish(version: str, sha: str, directory: Path, *, mode: str,
     if (directory / "release-notes.md").read_text() != notes_for(version, sha):
         raise PublicationError("Release notes changed since preparation")
     check_remote(tag, sha, mode)
+    objects = tree_blobs()
+    # This endpoint works without a tag. A failing SHA archive never reaches Git writes.
+    verify_hosted_archives(sha, objects)
     if mode == "new":
         try:
             create_tag(tag, sha)
         except (PublicationError, OSError) as exc:
             raise PublicationError(
-                f"TAG_CREATION_UNCERTAIN: inspect refs/tags/{tag} and GitHub Releases "
+                f"TAG_CREATION_UNCERTAIN: inspect refs/tags/{tag} and Releases "
                 "before any retry. Never delete or move a possible tag."
             ) from exc
-    # No catch-and-delete: partial visible state must remain inspectable.
+    try:
+        # This *tag* endpoint is exactly what GitHub's automatic source links use.
+        # Verify the hosted ZIP and TAR without creating a public Release.
+        exists, target = remote_tag(tag)
+        if not exists or target != sha:
+            raise PublicationError("Annotated tag is absent or no longer at approved SHA")
+        verify_hosted_archives(tag, objects)
+    except Exception as exc:
+        raise PublicationError(
+            f"TAG_ONLY_PREPUBLICATION_FAILED: {tag}; inspect tag and archive evidence. "
+            "No Draft or public Release was created by this step."
+        ) from exc
     try:
         run("gh", "release", "create", tag, str(archive),
             str(directory / "release-provenance.json"), "-R", REPO,
-            "--verify-tag", "--target", sha, "--title", f"Matrix {tag}",
+            "--draft", "--verify-tag", "--target", sha,
+            "--title", f"Matrix {tag}",
             "--notes-file", str(directory / "release-notes.md"))
     except (PublicationError, OSError) as exc:
         raise PublicationError(
-            f"TAG_ONLY_POSSIBLE: {tag} may exist at {sha}; inspect remote tag and "
-            "Release before explicit resume-tag-only. No tag deletion or force update."
+            f"DRAFT_CREATION_UNCERTAIN: {tag}; inspect authenticated Release list "
+            "for an incomplete Draft. Never auto-reupload, delete or publish it."
+        ) from exc
+    try:
+        release_id, asset_ids = verify_draft(tag, sha, directory)
+        check_publication_preconditions(tag, sha, release_id, directory, asset_ids)
+    except Exception as exc:
+        raise PublicationError(
+            f"DRAFT_UNPUBLISHED_VERIFICATION_FAILED: {tag}; preserve Draft and "
+            "assets for independent inspection. Do not publish or overwrite."
+        ) from exc
+    try:
+        # This is the ONE deliberate public transition after source + hosted asset proof.
+        result = gh_api(f"releases/{release_id}", method="PATCH",
+                        fields=("-F", "draft=false"))
+        if result.get("id") != release_id or result.get("draft") is not False:
+            raise PublicationError("Publication response did not confirm selected Draft")
+    except (PublicationError, OSError) as exc:
+        raise PublicationError(
+            f"PUBLICATION_TRANSITION_UNCERTAIN: {tag}; check Release by ID "
+            "before any further action, never replay draft=false blindly."
         ) from exc
     try:
         url = verify_published(tag, sha, directory)
     except Exception as exc:
         raise PublicationError(
-            f"RELEASE_CREATED_VERIFICATION_FAILED: {tag}; do not advertise, "
-            "overwrite assets or auto-retry. Inspect release and downloaded assets."
+            f"PUBLISHED_UNVERIFIED: {tag}; do not advertise, overwrite assets, "
+            "move tag or auto-retry. Inspect the live Release read-only."
         ) from exc
     print("PUBLISHED_AND_VERIFIED", url, sha)
 
