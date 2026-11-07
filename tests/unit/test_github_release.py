@@ -134,7 +134,8 @@ def test_candidate_archive_and_manifest_checks(tmp_path: Path) -> None:
         z.writestr("app/", b"")
         z.writestr("uv.lock", b"lock")
         z.writestr(".python-version", b"3.11\n")
-    digest = lambda b: hashlib.sha256(b).hexdigest()
+    def digest(data: bytes) -> str:
+        return hashlib.sha256(data).hexdigest()
     manifest = {
         "archive": archive.name, "source_sha": "a" * 40,
         "candidate_package_version_not_official_release": "1.2.3",
@@ -174,6 +175,7 @@ def test_github_full_source_zip_and_tar_match_exact_blobs(tmp_path: Path) -> Non
 
 def test_existing_release_and_tag_recovery_gate(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(release, "remote_tag", lambda tag: (True, "a" * 40))
+    monkeypatch.setattr(release, "gh_api", lambda path: {"object": {"sha": "a" * 40}})
     monkeypatch.setattr(release, "gh_optional", lambda path: None)
     with pytest.raises(release.PublicationError, match="already exists"):
         release.check_remote("v1.2.3", "a" * 40, "new")
@@ -182,6 +184,9 @@ def test_existing_release_and_tag_recovery_gate(monkeypatch: pytest.MonkeyPatch)
         release.check_remote("v1.2.3", "b" * 40, "resume-tag-only")
     monkeypatch.setattr(release, "gh_optional", lambda path: {"id": 1})
     with pytest.raises(release.PublicationError, match="Release already exists"):
+        release.check_remote("v1.2.3", "a" * 40, "resume-tag-only")
+    monkeypatch.setattr(release, "gh_api", lambda path: {"object": {"sha": "b" * 40}})
+    with pytest.raises(release.PublicationError, match="Remote main advanced"):
         release.check_remote("v1.2.3", "a" * 40, "resume-tag-only")
 
 
