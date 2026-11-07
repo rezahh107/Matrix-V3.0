@@ -84,6 +84,14 @@ def test_manifest_rejects_duplicate_version_and_candidate_words(checkout: str) -
         release.notes_for("1.2.3", checkout)
 
 
+def test_release_notes_do_not_include_unrelated_historical_section(checkout: str) -> None:
+    with Path("CHANGELOG.md").open("a", encoding="utf-8") as log:
+        log.write("\n## Historical entry: 9.9.9\n- Historical, not part of 1.2.3.\n")
+    notes = release.notes_for("1.2.3", checkout)
+    assert "Verified synthetic changes" in notes
+    assert "Historical entry: 9.9.9" not in notes
+
+
 def test_public_snapshot_detects_tracked_data_and_secret_without_exposing_bytes(
     checkout: str,
 ) -> None:
@@ -91,7 +99,7 @@ def test_public_snapshot_detects_tracked_data_and_secret_without_exposing_bytes(
     _write("test/fixture.csv", "synthetic,only")
     _write("config/secret_token.txt", "PRIVATE-MARKER")
     _write("config/allowed_policy.json", '{"manager":"approved"}')
-    _write("app/credential_blob.py", "-----BEGIN PRIVATE KEY-----")
+    _write("app/credential_blob.py", "-----BEGIN " + "PRIVATE KEY-----")
     _git("add", ".")
     _git("commit", "-m", "synthetic unreviewed paths")
     risks = release.snapshot_risks(release.tree_blobs())
@@ -101,6 +109,53 @@ def test_public_snapshot_detects_tracked_data_and_secret_without_exposing_bytes(
     assert "app/credential_blob.py" in risks
     assert "config/allowed_policy.json" not in risks
     assert "synthetic-student-record" not in str(risks)
+
+
+def test_git_archive_omission_does_not_break_tracked_golden_inputs(
+    checkout: str, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write(".gitattributes", "/sample/private.xlsx export-ignore\n")
+    _write("sample/private.xlsx", "synthetic unreviewed placeholder")
+    _write("sample/reviewed.csv", "id\ns1\n")
+    _git("add", ".")
+    _git("commit", "-m", "synthetic archive policy")
+    objects = release.tree_blobs()
+    monkeypatch.setattr(release, "REVIEWED_ARCHIVE_OMISSIONS", {"sample/private.xlsx"})
+    monkeypatch.setattr(release, "REVIEWED_SAFE_DATA_BLOBS",
+                        {"sample/reviewed.csv": objects["sample/reviewed.csv"]})
+    archived = release.public_snapshot_blobs(objects)
+    assert "sample/private.xlsx" in objects
+    assert "sample/private.xlsx" not in archived
+    assert "sample/reviewed.csv" in archived
+    assert release.snapshot_risks(archived) == []
+    _write(".gitattributes",
+           "/sample/private.xlsx export-ignore\n/sample/reviewed.csv export-ignore\n")
+    _git("add", ".")
+    _git("commit", "-m", "synthetic unreviewed hidden file")
+    with pytest.raises(release.PublicationError, match="Unreviewed export-ignore"):
+        release.public_snapshot_blobs(release.tree_blobs())
+
+
+def test_content_changed_or_credential_in_reviewed_csv_fails_closed(
+    checkout: str, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write("sample/reviewed.csv", "id\ns1\n")
+    _git("add", ".")
+    _git("commit", "-m", "synthetic original CSV")
+    original = release.tree_blobs()
+    monkeypatch.setattr(release, "REVIEWED_SAFE_DATA_BLOBS",
+                        {"sample/reviewed.csv": original["sample/reviewed.csv"]})
+    assert "sample/reviewed.csv" not in release.snapshot_risks(original)
+    _write("sample/reviewed.csv", "id\ns2\n")
+    _git("add", ".")
+    _git("commit", "-m", "synthetic modified CSV")
+    assert "sample/reviewed.csv" in release.snapshot_risks(release.tree_blobs())
+    _write("sample/reviewed.csv", "-----BEGIN " + "PRIVATE KEY-----\n")
+    _git("add", ".")
+    _git("commit", "-m", "synthetic credential replacement")
+    monkeypatch.setattr(release, "REVIEWED_SAFE_DATA_BLOBS",
+                        {"sample/reviewed.csv": release.tree_blobs()["sample/reviewed.csv"]})
+    assert "sample/reviewed.csv" in release.snapshot_risks(release.tree_blobs())
 
 
 def test_strict_gate_stops_before_candidate_generation(
@@ -325,6 +380,7 @@ def _mock_prepared_publish(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     (directory / "candidate" / "fake.zip").write_bytes(b"fixture")
     monkeypatch.setattr(release, "checked_identity", lambda *x: "v1.2.3")
     monkeypatch.setattr(release, "tree_blobs", lambda: {})
+    monkeypatch.setattr(release, "public_snapshot_blobs", lambda objects: objects)
     monkeypatch.setattr(release, "snapshot_risks", lambda x: [])
     monkeypatch.setattr(release, "verify_candidate",
                         lambda *x: (directory / "candidate" / "fake.zip", {}))
@@ -385,6 +441,7 @@ def test_annotated_tag_write_failure_is_reported_as_uncertain(
     (directory / "release-notes.md").write_text("approved notes")
     monkeypatch.setattr(release, "checked_identity", lambda *x: "v1.2.3")
     monkeypatch.setattr(release, "tree_blobs", lambda: {})
+    monkeypatch.setattr(release, "public_snapshot_blobs", lambda objects: objects)
     monkeypatch.setattr(release, "snapshot_risks", lambda x: [])
     monkeypatch.setattr(release, "sha256", lambda x: "fake")
     monkeypatch.setattr(release, "notes_for", lambda *x: "approved notes")
@@ -420,6 +477,7 @@ def test_positive_mocked_publication_and_full_download_verification(
     monkeypatch.setattr(release, "checked_identity", lambda *x: "v1.2.3")
     monkeypatch.setattr(release, "snapshot_risks", lambda *x: [])
     monkeypatch.setattr(release, "tree_blobs", lambda: {})
+    monkeypatch.setattr(release, "public_snapshot_blobs", lambda objects: objects)
     monkeypatch.setattr(release, "notes_for", lambda *x: "synthetic approved notes")
     monkeypatch.setattr(release, "verify_candidate", lambda *x: (asset, {}))
     monkeypatch.setattr(release, "sha256", lambda *x: "hash")

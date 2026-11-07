@@ -194,6 +194,7 @@ def prepared(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Moc
     monkeypatch.setattr(release, "verify_candidate", lambda *args: (file, {}))
     monkeypatch.setattr(release, "snapshot_risks", lambda objects: [])
     monkeypatch.setattr(release, "tree_blobs", lambda: {"README.md": OID})
+    monkeypatch.setattr(release, "public_snapshot_blobs", lambda objects: objects)
     monkeypatch.setattr(release, "gh_api", mock.gh_api)
     monkeypatch.setattr(release, "remote_tag", mock.remote_tag)
     monkeypatch.setattr(release, "create_tag", mock.create_tag)
@@ -335,6 +336,7 @@ def test_preparation_does_not_write_remote(
 ) -> None:
     monkeypatch.setattr(release, "checked_identity", lambda *args: TAG)
     monkeypatch.setattr(release, "tree_blobs", lambda: {"README.md": OID})
+    monkeypatch.setattr(release, "public_snapshot_blobs", lambda objects: objects)
     monkeypatch.setattr(release, "snapshot_risks", lambda *args: [])
     monkeypatch.setattr(release, "notes_for", lambda *args: NOTES)
     monkeypatch.setattr(release, "gh_api", lambda *args, **kw: pytest.fail("GH API during prepare"))

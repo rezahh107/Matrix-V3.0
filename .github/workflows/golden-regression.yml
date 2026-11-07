@@ -7,6 +7,7 @@ on:
     branches: ["main"]
     paths:
       - .github/workflows/golden-regression.yml
+      - .gitattributes
       - scripts/run_golden_regression_phase01.py
       - scripts/run_golden_regression_phase02.py
       - ci/configs/golden_regression.yml

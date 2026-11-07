@@ -40,18 +40,21 @@ an executable bundle or other binaries, its exact contents and license
 obligations must be reviewed separately. This source-only notice is not a
 substitute for license texts or other required materials in a binary distribution.
 
-## Matrix project source — rights remain unverified
+## Matrix project source — Owner-controlled personal release
 
-`pyproject.toml` currently declares `license = { text = "MIT" }` and
-`Smart Allocation Team` as the author. The reviewed repository has no root
-Matrix `LICENSE` file or established evidence that all relevant source
-owners and contributors authorized publication under those terms. Neither
-this notice nor the metadata establishes those rights; do not invent a
-copyright holder, issue a project license or assert rights clearance.
+The Owner attests authority over Matrix assets and publication decisions
+within their own ownership and control. `pyproject.toml` declares
+`license = { text = "MIT" }` and `Smart Allocation Team` as the author,
+but the repository has no root Matrix `LICENSE` file. This metadata does
+not grant permission for identifiable third-party contributions or assets.
+Do not invent a copyright holder or represent this notice as their license.
+The embedded font's actual OFL license is preserved separately above.
 
-The public GitHub Release workflow creates automatic **whole-repository**
-source ZIP/TAR archives, which differ from the privacy-bounded selected uv
-candidate. This notice does not change the existing full-tree privacy gate,
-authorize the disclosure of student or organizational data, or select an
-official application version. Publication requires separate Owner approval
-and source-appropriate privacy/rights review.
+The public GitHub Release workflow creates GitHub `git archive` ZIP/TAR
+snapshots of the tagged commit. Reviewed exact-path `export-ignore` entries
+omit designated fixture data from these archives while retaining it in Git
+checkouts for regression tests. The selective uv candidate is separate.
+The release gate checks the exact export-filtered ZIP/TAR content and rejects
+unknown omissions, data-like content and credential signatures. Existing
+public Git history/clone contents are unchanged by `export-ignore`.
+No source-only asset check substitutes for actual Owner-controlled publication.

@@ -1,0 +1,32 @@
+# Matrix: exact source-archive omissions only; Git checkouts and Golden remain intact.
+# GitHub ZIP/TAR must exclude these files; release qualification checks omissions.
+/0918.xlsx export-ignore
+/ci/golden_datasets/mentors/golden_inspactor.csv export-ignore
+/ci/golden_snapshots/phase01_lock_current_behavior/mentor_pool.csv export-ignore
+"/docs/Report (4).xlsx" export-ignore
+/docs/golden_datasets/phase01_lock_current_behavior/InspactorReport-1404_09_15-3570.xlsx export-ignore
+/docs/golden_datasets/phase01_lock_current_behavior/SchoolReport-1404_09_15-3570.xlsx export-ignore
+/docs/golden_datasets/phase01_lock_current_behavior/expected_mentor_pool.csv export-ignore
+/evidence/ui/operational-status-correction-20261101/before/PR28_GIT_BLOB_SHA1.tsv export-ignore
+/students.xlsx export-ignore
+/tests/golden/outputs/output/allocation_vs_pool_audit.csv export-ignore
+/tests/golden/outputs/output/allocations.csv export-ignore
+/tests/golden/outputs/output/logs.csv export-ignore
+/tests/golden/outputs/output/updated_pool.csv export-ignore
+"/tests/golden/outputs/output/دلایل انتخاب پشتیبان.csv" export-ignore
+/tests/golden/outputs/output_validation/alloc_join_mismatches.csv export-ignore
+/tests/golden/outputs/output_validation/alloc_join_summary.csv export-ignore
+/tests/golden/outputs/output_validation/allocation_capacity.csv export-ignore
+/tests/golden/outputs/output_validation/join_keys.csv export-ignore
+/tests/golden/outputs/output_validation/pool_alignment_preflight.csv export-ignore
+/tests/golden/outputs/output_validation/pool_detection.csv export-ignore
+/tests/golden/outputs/output_validation/pool_join_conflicts.csv export-ignore
+/tests/golden/outputs/output_validation/pool_join_key_duplicates.csv export-ignore
+/tests/golden/outputs/output_validation/school_binding_issues.csv export-ignore
+/tests/golden/outputs/output_validation/student_counts.csv export-ignore
+/tests/golden/outputs/output_validation/students_per_mentor.csv export-ignore
+/tests/golden/outputs/output_validation/summary.csv export-ignore
+/tests/infra/excel/data/sabt_expected.csv export-ignore
+/tests/infra/excel/test_sabt_profile_validation.py export-ignore
+/tests/snapshots/reason_sheet_expected.csv export-ignore
+/tests/ui/test_sabt_profile_localization.py export-ignore
