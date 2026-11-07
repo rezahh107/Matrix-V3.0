@@ -107,6 +107,8 @@ def test_archive_provenance_version_and_privacy_handoff(
     with zipfile.ZipFile(archive) as zipped:
         assert zipped.testzip() is None
         assert "app/main.py" in zipped.namelist()
+        assert "THIRD_PARTY_NOTICES.md" in zipped.namelist()
+        assert "app/ui/assets/fonts/LICENSE.md" in zipped.namelist()
         # The clean uv source distribution must resolve every README-linked
         # operator/QA guide locally, not only in the GitHub working tree.
         for guide in (
@@ -128,14 +130,16 @@ def test_archive_provenance_version_and_privacy_handoff(
         "docs/SmartAlloc_GUI_Operator_Guide.fa.md",
         "docs/SmartAlloc_E2E_QA_Checklist.fa.md",
         "docs/SmartAlloc_Dev_QA_Notes.md",
+        "THIRD_PARTY_NOTICES.md",
+        "app/ui/assets/fonts/LICENSE.md",
     ],
 )
-def test_missing_operator_guide_blocks_incomplete_source_candidate(
+def test_missing_required_notice_or_guide_blocks_incomplete_source_candidate(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, missing_guide: str
 ) -> None:
     _synthetic_repo(tmp_path)
     _git(tmp_path, "rm", "--", missing_guide)
-    _git(tmp_path, "commit", "-m", "Remove a README-linked guide")
+    _git(tmp_path, "commit", "-m", "Remove a required source document")
     monkeypatch.chdir(tmp_path)
     with pytest.raises(RuntimeError, match="Required runtime files missing"):
         build_candidate(tmp_path / "candidate")
