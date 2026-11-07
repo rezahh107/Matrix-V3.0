@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 Application package version is sourced from `pyproject.toml`. Historical entries below are not evidence of published GitHub Releases; the first official release version is not yet approved.
 
 ## [Unreleased]
+- قابلیت زیرساختی انتشار دستی GitHub Release با تأیید Owner، کنترل SHA/نسخه و آرشیو کامل عمومی، CI دقیق Windows و بازیابی بدون تغییر تاریخچه؛ **پیاده‌سازی در PR، بدون انتخاب نسخهٔ نخست و بدون انتشار**.
 - مسیر شخصی Git+uv برای انتخاب صریح تگ مصوب، نسخه‌های worktree مجزا، rollback بدون حذف داده و مستندسازی بکاپ/مرز انتشار؛ بدون انتخاب نخستین نسخهٔ رسمی.
 ### Added
 - Governed uv source-candidate identity, version/lock checks and review-only privacy signaling; no official version or publication selected.
