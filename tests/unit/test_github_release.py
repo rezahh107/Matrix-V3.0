@@ -245,3 +245,137 @@ def test_partial_failure_never_moves_tag_or_overwrites_assets(
 ) -> None:
     assert _mock_prepared_publish(tmp_path, monkeypatch,
                                   verification_fails=verification_fails) == ["tag"]
+
+
+def test_version_rejects_non_ascii_numerals(checkout: str) -> None:
+    with pytest.raises(release.PublicationError, match="canonical"):
+        release.checked_identity("1.۲.3", checkout)
+
+
+def test_annotated_tag_write_failure_is_reported_as_uncertain(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    directory = tmp_path / "prepared"
+    (directory / "candidate").mkdir(parents=True)
+    (directory / "candidate" / "fixture.zip").write_bytes(b"candidate")
+    (directory / "release-provenance.json").write_text(
+        json.dumps({"tag": "v1.2.3", "source_sha": "a" * 40, "archive": "fixture.zip",
+                    "archive_sha256": "fake", "full_source_snapshot_risk_count": 0,
+                    "preparation_state": "CREATED_BEFORE_PUBLICATION"}))
+    (directory / "release-notes.md").write_text("approved notes")
+    monkeypatch.setattr(release, "checked_identity", lambda *x: "v1.2.3")
+    monkeypatch.setattr(release, "tree_blobs", lambda: {})
+    monkeypatch.setattr(release, "snapshot_risks", lambda x: [])
+    monkeypatch.setattr(release, "sha256", lambda x: "fake")
+    monkeypatch.setattr(release, "notes_for", lambda *x: "approved notes")
+    monkeypatch.setattr(release, "verify_candidate", lambda *x: (
+        directory / "candidate" / "fixture.zip", {}))
+    monkeypatch.setattr(release, "check_remote", lambda *x: None)
+
+    def uncertain_tag(*args: str) -> None:
+        raise OSError("synthetic API interruption after possibly creating the tag")
+
+    monkeypatch.setattr(release, "create_tag", uncertain_tag)
+    with pytest.raises(release.PublicationError, match="TAG_CREATION_UNCERTAIN"):
+        release.publish("1.2.3", "a" * 40, directory, mode="new",
+                        publish_confirmation="PUBLISH-v1.2.3",
+                        rights_confirmation="PUBLIC-SNAPSHOT-AND-RIGHTS-REVIEWED")
+
+
+def test_positive_mocked_publication_and_full_download_verification(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    directory = tmp_path / "prepared"
+    candidate = directory / "candidate"
+    candidate.mkdir(parents=True)
+    data = b"synthetic selected source candidate"
+    asset = candidate / "fixture.zip"
+    asset.write_bytes(data)
+    checksum = hashlib.sha256(data).hexdigest()
+    source_blob = b"this is the entire synthetic Git-tracked README"
+    git_oid = hashlib.sha1(
+        f"blob {len(source_blob)}\0".encode() + source_blob
+    ).hexdigest()
+    sha = "a" * 40
+    tag = "v1.2.3"
+    provenance = {
+        "tag": tag,
+        "source_sha": sha,
+        "archive": asset.name,
+        "archive_sha256": checksum,
+        "full_source_snapshot_risk_count": 0,
+        "preparation_state": "CREATED_BEFORE_PUBLICATION",
+    }
+    (directory / "release-provenance.json").write_text(json.dumps(provenance))
+    notes = f"Matrix v1.2.3\nCommit: {sha}"
+    (directory / "release-notes.md").write_text(notes)
+    link = "https://github.com/rezahh107/Matrix-V3.0/releases/tag/v1.2.3"
+    release_record = {
+        "tag_name": tag, "target_commitish": sha, "draft": False,
+        "prerelease": False, "body": notes, "html_url": link,
+        "assets": [{"name": "fixture.zip"}, {"name": "release-provenance.json"}],
+    }
+    monkeypatch.setattr(release, "checked_identity", lambda *x: tag)
+    monkeypatch.setattr(release, "snapshot_risks", lambda x: [])
+    monkeypatch.setattr(release, "tree_blobs", lambda: {"README.md": git_oid})
+    monkeypatch.setattr(release, "notes_for", lambda *x: notes)
+    monkeypatch.setattr(release, "verify_candidate", lambda *x: (asset, {}))
+    monkeypatch.setattr(release, "sha256", release.sha256)
+    monkeypatch.setattr(release, "check_remote", lambda *x: None)
+    monkeypatch.setattr(release, "create_tag", lambda *x: None)
+    monkeypatch.setattr(release, "gh_api", lambda *x: release_record)
+    monkeypatch.setattr(release, "remote_tag", lambda *x: (True, sha))
+
+    events: list[str] = []
+
+    def fake_command(*args: str) -> bytes:
+        assert args[0] == "gh"
+        if args[1:3] == ("release", "create"):
+            events.append("created")
+            return b""
+        assert args[1:3] == ("release", "download")
+        dest = Path(args[args.index("-D") + 1])
+        dest.mkdir(exist_ok=True)
+        if "--archive" in args:
+            fmt = args[args.index("--archive") + 1]
+            if fmt == "zip":
+                output = dest / "github-auto-source.zip"
+                with zipfile.ZipFile(output, "w") as archive:
+                    archive.writestr("Matrix-V3.0-abc/README.md", source_blob)
+            else:
+                output = dest / "github-auto-source.tar.gz"
+                with tarfile.open(output, "w:gz") as archive:
+                    member = tarfile.TarInfo("Matrix-V3.0-abc/README.md")
+                    member.size = len(source_blob)
+                    archive.addfile(member, io.BytesIO(source_blob))
+            events.append(f"download-{fmt}")
+        else:
+            selected = args[args.index("-p") + 1]
+            (dest / selected).write_bytes(
+                (directory / "release-provenance.json").read_bytes()
+                if selected == "release-provenance.json" else asset.read_bytes()
+            )
+            events.append(f"download-{selected}")
+        return b""
+
+    monkeypatch.setattr(release, "run", fake_command)
+    release.publish(
+        "1.2.3", sha, directory, mode="new",
+        publish_confirmation="PUBLISH-v1.2.3",
+        rights_confirmation="PUBLIC-SNAPSHOT-AND-RIGHTS-REVIEWED",
+    )
+    assert events == [
+        "created", "download-fixture.zip", "download-release-provenance.json",
+        "download-zip", "download-tar.gz",
+    ]
+    events.clear()
+    # Tag-only recovery skips tag creation; the same verification still runs.
+    release.publish(
+        "1.2.3", sha, directory, mode="resume-tag-only",
+        publish_confirmation="PUBLISH-v1.2.3",
+        rights_confirmation="PUBLIC-SNAPSHOT-AND-RIGHTS-REVIEWED",
+    )
+    assert events == [
+        "created", "download-fixture.zip", "download-release-provenance.json",
+        "download-zip", "download-tar.gz",
+    ]
