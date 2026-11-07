@@ -10,6 +10,8 @@ from pathlib import Path
 import pytest
 
 from tools import personal_release as release
+from tools.ci.probe_personal_release_actual_windows import select_candidate_identity
+from tools.ci.qualify_uv_source import validate_version_identity
 
 
 def _git(cwd: Path, *args: str) -> str:
@@ -383,3 +385,72 @@ def test_valid_status_does_not_mutate_state(checkout: Path, fake_uv, capsys) -> 
     release.status(checkout)
     assert json.loads(capsys.readouterr().out) == _state(checkout)
     assert state_path.read_bytes() == before
+
+
+# The real Windows probe must use the candidate HEAD version, not the first
+# proposed release's number. These fixtures never create Git tags or publish.
+def _candidate_metadata(
+    root: Path,
+    version: str,
+    *,
+    lock_version: str | None = None,
+    dated_entry: bool = True,
+    python_pin: str = "3.11",
+) -> None:
+    _write(root, "pyproject.toml",
+           '[project]\nname = "smart-student-allocation"\n'
+           f'version = "{version}"\nrequires-python = ">=3.11"\n')
+    _write(root, "uv.lock",
+           'version = 1\nrequires-python = ">=3.11"\n'
+           '[[package]]\nname = "smart-student-allocation"\n'
+           f'version = "{lock_version if lock_version is not None else version}"\n'
+           'source = { virtual = "." }\n')
+    _write(root, ".python-version", python_pin + "\n")
+    _write(root, "CHANGELOG.md", "## [Unreleased]\n"
+           + (f"## [{version}] - 2026-11-07\n" if dated_entry else ""))
+
+
+@pytest.mark.parametrize("version", ["0.1.0", "0.1.1"])
+def test_candidate_version_selection_uses_valid_metadata(
+    tmp_path: Path, version: str
+) -> None:
+    _candidate_metadata(tmp_path, version)
+    assert select_candidate_identity(tmp_path) == (version, "3.11", f"v{version}")
+
+
+def test_original_hardcoded_gate_rejects_valid_future_version(tmp_path: Path) -> None:
+    """Direct discriminator: the old literal rejects a properly qualified 0.1.1."""
+    _candidate_metadata(tmp_path, "0.1.1")
+    files = [(tmp_path / name).read_bytes() for name in (
+        "pyproject.toml", "uv.lock", ".python-version", "CHANGELOG.md"
+    )]
+    with pytest.raises(RuntimeError, match="Requested release version differs"):
+        validate_version_identity(*files, required_release_version="0.1.0")
+    assert select_candidate_identity(tmp_path) == ("0.1.1", "3.11", "v0.1.1")
+
+
+def test_candidate_version_selection_rejects_lock_mismatch(tmp_path: Path) -> None:
+    _candidate_metadata(tmp_path, "0.1.1", lock_version="0.1.0")
+    with pytest.raises(RuntimeError, match="uv.lock project version"):
+        select_candidate_identity(tmp_path)
+
+
+def test_candidate_version_selection_rejects_missing_dated_entry(tmp_path: Path) -> None:
+    _candidate_metadata(tmp_path, "0.1.1", dated_entry=False)
+    with pytest.raises(RuntimeError, match="no dated changelog entry"):
+        select_candidate_identity(tmp_path)
+
+
+@pytest.mark.parametrize("version", ["0.1.1rc1", "01.1.0"])
+def test_candidate_version_selection_rejects_controller_incompatible_tag(
+    tmp_path: Path, version: str
+) -> None:
+    _candidate_metadata(tmp_path, version)
+    with pytest.raises(RuntimeError, match="stable vX.Y.Z tag"):
+        select_candidate_identity(tmp_path)
+
+
+def test_candidate_version_selection_rejects_incompatible_python_pin(tmp_path: Path) -> None:
+    _candidate_metadata(tmp_path, "0.1.1", python_pin="3.10")
+    with pytest.raises(RuntimeError, match="does not satisfy requires-python"):
+        select_candidate_identity(tmp_path)
