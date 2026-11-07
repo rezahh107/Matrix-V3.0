@@ -71,8 +71,8 @@ jobs:
       - name: Read-only hosted GitHub ZIP/TAR source eligibility and exact-byte check
         shell: bash
         env:
-          GH_TOKEN: \${{ github.token }}
-          EXPECTED_SHA: \${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
           python3 - <<'PY'
