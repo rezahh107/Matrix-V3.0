@@ -307,7 +307,11 @@ def test_positive_mocked_publication_and_full_download_verification(
         "preparation_state": "CREATED_BEFORE_PUBLICATION",
     }
     (directory / "release-provenance.json").write_text(json.dumps(provenance))
-    notes = f"Matrix v1.2.3\nCommit: {sha}"
+    notes = (
+        f"Matrix v1.2.3\n"
+        f"Commit: https://github.com/{release.REPO}/commit/{sha}\n"
+        f"Tag: https://github.com/{release.REPO}/tree/{tag}\n"
+    )
     (directory / "release-notes.md").write_text(notes)
     link = "https://github.com/rezahh107/Matrix-V3.0/releases/tag/v1.2.3"
     release_record = {
