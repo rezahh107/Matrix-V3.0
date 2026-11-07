@@ -116,8 +116,11 @@ def notes_for(version: str, sha: str) -> str:
     begin = headings[index].end()
     end = headings[index + 1].start() if index + 1 < len(headings) else len(text)
     section = text[begin:end].strip()
-    if not section or re.search(r"proposed first|NOT an approved or published release",
-                                section, re.IGNORECASE):
+    if not section or re.search(
+        r"proposed first|NOT an approved or published release|"
+        r"no official tag|public downloadable release|not approved for publication",
+        section, re.IGNORECASE,
+    ):
         raise PublicationError("Changelog still labels this version an unapproved candidate")
     return (
         f"Matrix personal Windows application v{version}\n\n"
