@@ -321,7 +321,8 @@ def verify_published(tag: str, sha: str, directory: Path) -> str:
             or release.get("prerelease") is not False
             or release.get("target_commitish") != sha
             or names != expected_names
-            or sha not in release.get("body", "")
+            or f"https://github.com/{REPO}/commit/{sha}" not in release.get("body", "")
+            or f"https://github.com/{REPO}/tree/{tag}" not in release.get("body", "")
             or not release.get("html_url", "").endswith(f"/releases/tag/{tag}")):
         raise PublicationError("Published Release identity, body, target or asset list differs")
     exists, target = remote_tag(tag)
