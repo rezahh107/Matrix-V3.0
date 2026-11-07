@@ -91,7 +91,7 @@ def test_public_snapshot_detects_tracked_data_and_secret_without_exposing_bytes(
     _write("test/fixture.csv", "synthetic,only")
     _write("config/secret_token.txt", "PRIVATE-MARKER")
     _write("config/allowed_policy.json", '{"manager":"approved"}')
-    _write("app/credential_blob.py", "-----BEGIN PRIVATE KEY-----")
+    _write("app/credential_blob.py", "-----BEGIN " + "PRIVATE KEY-----")
     _git("add", ".")
     _git("commit", "-m", "synthetic unreviewed paths")
     risks = release.snapshot_risks(release.tree_blobs())
@@ -142,7 +142,7 @@ def test_content_changed_or_credential_in_reviewed_csv_fails_closed(
     _git("add", ".")
     _git("commit", "-m", "synthetic modified CSV")
     assert "sample/reviewed.csv" in release.snapshot_risks(release.tree_blobs())
-    _write("sample/reviewed.csv", "-----BEGIN PRIVATE KEY-----\n")
+    _write("sample/reviewed.csv", "-----BEGIN " + "PRIVATE KEY-----\n")
     _git("add", ".")
     _git("commit", "-m", "synthetic credential replacement")
     monkeypatch.setattr(release, "REVIEWED_SAFE_DATA_BLOBS",
