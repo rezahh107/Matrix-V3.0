@@ -14,8 +14,8 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
-from pathlib import Path
 from contextlib import closing
+from pathlib import Path
 
 
 def run(args: list[str], *, cwd: Path, env: dict[str, str] | None = None,
