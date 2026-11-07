@@ -45,6 +45,16 @@ Application package version is sourced from `pyproject.toml`. Historical entries
 - رفع مشکل handle کردن مقادیر center نامعتبر
 - بهبود پیام‌های خطا و هشدار به کاربر
 
+## [0.1.0] - 2026-11-07
+
+> **Proposed first Owner-only personal-release candidate; NOT an approved or published release.** The date above is the candidate preparation date, not the official release date. This section describes the already implemented baseline, not features all introduced today.
+
+- Windows PySide6 application with Policy/LAW-governed matrix building, allocation, QA/Trace/History and Excel/Sabt-oriented workflows; real organizational Sabt acceptance is not established.
+- Existing version-selectable Git+uv personal installer/controller: exact annotated-tag/source/lock/Python checks, isolated worktrees, explicit activation, status, launch and bounded code rollback.
+- Candidate qualification through locked Windows Core/UI and exact-source archive checks, with an additional real-Matrix, local-only annotated-tag Git+uv integration probe.
+- On activation, back up known annual SQLite databases and the user JSON settings file; preserve prior worktrees and reject dirty or unqualified installations. Windows Registry/QSettings, external Sabt Profiles, user-chosen output paths and database-schema downgrades are **not** automatically backed up or reversed.
+- No EXE/installer, public downloadable release, automatic update or official tag. Official version approval and any publication surface remain separate Owner decisions.
+
 ## Historical entry: 1.0.0 (2024-01-01; not an established GitHub Release)
 ### Added
 - اولین نسخه پایه سیستم تخصیص پشتیبان
