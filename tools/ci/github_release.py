@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import io
 import json
 import os
 import re
@@ -36,6 +37,54 @@ SENSITIVE_NAMES = re.compile(
     r"(^|[/_.-])(private|secret|credentials|student.records?|sabt.profile)([/_.-]|$)",
     re.IGNORECASE,
 )
+
+# Inspected synthetic/header-only CSVs; changing bytes changes the Git blob OID.
+# Never exempt a private-name path or credential signature from scanning.
+REVIEWED_SAFE_DATA_BLOBS = {
+    "tests/data/golden_perf/v1/students.csv": "df9b09f3b5c7430d06b4490d33281a018a6f7791",
+    "tests/data/golden_perf/v1/mentors.csv": "3b6410cfd497ef119bfaf9ee042cf54b90d0ffa6",
+    "tests/data/golden_perf/v1/decisions_baseline.csv": "5e44b2e537dcbbc8cbe110a8aa462b045c3c2571",
+    "ci/golden_snapshots/phase01_lock_current_behavior/mentor_join_key_issues.csv": "645cc6ed64a888b46533d0b339ecae3657e12715",
+    "docs/golden_datasets/phase01_lock_current_behavior/expected_mentor_issues.csv": "645cc6ed64a888b46533d0b339ecae3657e12715",
+}
+# Files preserved for full-checkout/Golden tests, but excluded from auto archives.
+# Any newly excluded path is an error, rather than a blanket extension waiver.
+REVIEWED_ARCHIVE_OMISSIONS = {
+    "0918.xlsx",
+    "ci/golden_datasets/mentors/golden_inspactor.csv",
+    "ci/golden_snapshots/phase01_lock_current_behavior/mentor_pool.csv",
+    "docs/Report (4).xlsx",
+    "docs/golden_datasets/phase01_lock_current_behavior/InspactorReport-1404_09_15-3570.xlsx",
+    "docs/golden_datasets/phase01_lock_current_behavior/SchoolReport-1404_09_15-3570.xlsx",
+    "docs/golden_datasets/phase01_lock_current_behavior/expected_mentor_pool.csv",
+    "evidence/ui/operational-status-correction-20261101/before/PR28_GIT_BLOB_SHA1.tsv",
+    "students.xlsx",
+    "tests/golden/outputs/output/allocation_vs_pool_audit.csv",
+    "tests/golden/outputs/output/allocations.csv",
+    "tests/golden/outputs/output/logs.csv",
+    "tests/golden/outputs/output/updated_pool.csv",
+    "tests/golden/outputs/output/دلایل انتخاب پشتیبان.csv",
+    "tests/golden/outputs/output_validation/alloc_join_mismatches.csv",
+    "tests/golden/outputs/output_validation/alloc_join_summary.csv",
+    "tests/golden/outputs/output_validation/allocation_capacity.csv",
+    "tests/golden/outputs/output_validation/join_keys.csv",
+    "tests/golden/outputs/output_validation/pool_alignment_preflight.csv",
+    "tests/golden/outputs/output_validation/pool_detection.csv",
+    "tests/golden/outputs/output_validation/pool_join_conflicts.csv",
+    "tests/golden/outputs/output_validation/pool_join_key_duplicates.csv",
+    "tests/golden/outputs/output_validation/school_binding_issues.csv",
+    "tests/golden/outputs/output_validation/student_counts.csv",
+    "tests/golden/outputs/output_validation/students_per_mentor.csv",
+    "tests/golden/outputs/output_validation/summary.csv",
+    "tests/infra/excel/data/sabt_expected.csv",
+    "tests/infra/excel/test_sabt_profile_validation.py",
+    "tests/snapshots/reason_sheet_expected.csv",
+    "tests/ui/test_sabt_profile_localization.py",
+}
+REQUIRED_PUBLIC_ARCHIVE_PATHS = {
+    "pyproject.toml", "uv.lock", ".python-version", "CHANGELOG.md",
+    "THIRD_PARTY_NOTICES.md", "app/ui/assets/fonts/LICENSE.md", "Matrix-Personal.cmd",
+}
 
 
 class PublicationError(RuntimeError):
@@ -89,19 +138,50 @@ def tree_blobs() -> dict[str, str]:
     return objects
 
 
+def public_snapshot_blobs(objects: dict[str, str]) -> dict[str, str]:
+    """Check the exact export-filtered contents of local Git source archives."""
+    archive_bytes = git("archive", "--format=tar", "HEAD")
+    archived: dict[str, str] = {}
+    with tarfile.open(fileobj=io.BytesIO(archive_bytes), mode="r:") as source:
+        for member in source:
+            if member.isdir():
+                continue
+            path = member.name
+            if not member.isfile() or path in archived or path not in objects:
+                raise PublicationError("Unexpected local source archive entry: " + path)
+            handle = source.extractfile(member)
+            if handle is None:
+                raise PublicationError("Unreadable local source archive entry: " + path)
+            blob = handle.read()
+            actual = hashlib.sha1(f"blob {len(blob)}\0".encode() + blob).hexdigest()
+            if actual != objects[path]:
+                raise PublicationError("Local source archive differs from Git blob: " + path)
+            archived[path] = objects[path]
+    unexpected = set(objects).difference(archived).difference(REVIEWED_ARCHIVE_OMISSIONS)
+    if unexpected:
+        raise PublicationError("Unreviewed export-ignore entries: "
+                               + ", ".join(sorted(unexpected)[:10]))
+    if not REQUIRED_PUBLIC_ARCHIVE_PATHS.intersection(objects).issubset(archived):
+        raise PublicationError("Required runtime/license file omitted from public source archive")
+    return archived
+
+
 def snapshot_risks(objects: dict[str, str]) -> list[str]:
-    """No content values are printed or stored in the report."""
+    """Fail closed on unknown data; inspect every admitted file for credentials."""
     risks: list[str] = []
     for path, oid in sorted(objects.items()):
         leaf = Path(path).name.lower()
-        if (Path(path).suffix.lower() in DATA_EXTENSIONS or leaf == ".env"
-                or leaf.startswith((".env.", "id_rsa", "id_ed25519"))
-                or SENSITIVE_NAMES.search(path)):
+        suffix = Path(path).suffix.lower()
+        private_name = (leaf == ".env"
+                        or leaf.startswith((".env.", "id_rsa", "id_ed25519"))
+                        or SENSITIVE_NAMES.search(path) is not None)
+        reviewed = (not private_name and suffix in {".csv", ".tsv", ".xlsx"}
+                    and REVIEWED_SAFE_DATA_BLOBS.get(path) == oid)
+        if (private_name or suffix in DATA_EXTENSIONS) and not reviewed:
             risks.append(path)
             continue
         size = int(git("cat-file", "-s", oid).decode())
         if size > 8_000_000:
-            # Large uninspected files must not be silently marked safe.
             risks.append(path)
             continue
         blob = git("cat-file", "blob", oid)
@@ -131,8 +211,9 @@ def notes_for(version: str, sha: str) -> str:
         f"Exact reviewed source: https://github.com/{REPO}/commit/{sha}\n"
         f"Immutable version tag: https://github.com/{REPO}/tree/v{version}\n\n"
         f"Installation/updates: Git + uv, with explicit Matrix-Personal.cmd activation.\n"
-        f"GitHub's automatic Source code ZIP/TAR contains the FULL repository tree; "
-        f"the attached matrix-uv-source ZIP is selective.\n\n"
+        f"GitHub's automatic ZIP/TAR uses the tagged Git tree with reviewed "
+        f"export-ignore exclusions; the attached matrix-uv-source ZIP is "
+        f"separately selective.\n\n"
         f"## Changes\n{section}\n"
     )
 
@@ -210,9 +291,12 @@ def prepare(version: str, sha: str, directory: Path, *, enforce: bool,
     directory.mkdir(parents=True)
     try:
         objects = tree_blobs()
-        risks = snapshot_risks(objects)
+        archive_objects = public_snapshot_blobs(objects)
+        risks = snapshot_risks(archive_objects)
         (directory / "public-snapshot-review.json").write_text(
             json.dumps({"source_sha": sha, "tracked_files": len(objects),
+                        "public_archive_files": len(archive_objects),
+                        "archive_omissions": sorted(set(objects) - set(archive_objects)),
                         "blocked_paths": risks, "rights_status": "OWNER_REVIEW_REQUIRED"},
                        ensure_ascii=False, indent=2) + "\n", encoding="utf-8",
         )
@@ -238,7 +322,8 @@ def prepare(version: str, sha: str, directory: Path, *, enforce: bool,
             "python_version": candidate["python_version"],
             "python_version_file_sha256": candidate["python_version_file_sha256"],
             "candidate_files_checked_against_git_tree": candidate["files_checked_against_git_tree"],
-            "full_source_snapshot_files_reviewed": len(objects),
+            "full_source_snapshot_files_reviewed": len(archive_objects),
+            "excluded_git_fixture_paths": len(objects) - len(archive_objects),
             "full_source_snapshot_risk_count": len(risks),
             "publication_method": "EXPLICIT_MANUAL_GITHUB_WORKFLOW_ONLY",
             "preparation_state": "CREATED_BEFORE_PUBLICATION",
@@ -534,7 +619,9 @@ def verify_published(tag: str, sha: str, directory: Path) -> str:
                 or (root / "assets" / "release-provenance.json").read_bytes()
                 != (directory / "release-provenance.json").read_bytes()):
             raise PublicationError("Downloaded published asset does not match prepared bytes")
-        blobs = tree_blobs()
+        blobs = public_snapshot_blobs(tree_blobs())
+        if snapshot_risks(blobs):
+            raise PublicationError("Published archive eligibility changed")
         for fmt in ("zip", "tar.gz"):
             folder = root / fmt.replace(".", "-")
             folder.mkdir()
@@ -557,8 +644,9 @@ def publish(version: str, sha: str, directory: Path, *, mode: str,
     provenance = json.loads((directory / "release-provenance.json").read_text())
     if provenance.get("tag") != tag or provenance.get("source_sha") != sha:
         raise PublicationError("Prepared release provenance refers to another source")
-    if snapshot_risks(tree_blobs()):
-        raise PublicationError("Public source snapshot still has unreviewed paths")
+    objects = public_snapshot_blobs(tree_blobs())
+    if snapshot_risks(objects):
+        raise PublicationError("Public source archive still has unreviewed paths")
     if (provenance.get("full_source_snapshot_risk_count") != 0
             or provenance.get("preparation_state") != "CREATED_BEFORE_PUBLICATION"):
         raise PublicationError("Prepared provenance is not a cleared publication candidate")
@@ -568,7 +656,6 @@ def publish(version: str, sha: str, directory: Path, *, mode: str,
     if (directory / "release-notes.md").read_text() != notes_for(version, sha):
         raise PublicationError("Release notes changed since preparation")
     check_remote(tag, sha, mode)
-    objects = tree_blobs()
     # This endpoint works without a tag. A failing SHA archive never reaches Git writes.
     verify_hosted_archives(sha, objects)
     if mode == "new":

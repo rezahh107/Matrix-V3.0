@@ -49,9 +49,10 @@ owners and contributors authorized publication under those terms. Neither
 this notice nor the metadata establishes those rights; do not invent a
 copyright holder, issue a project license or assert rights clearance.
 
-The public GitHub Release workflow creates automatic **whole-repository**
-source ZIP/TAR archives, which differ from the privacy-bounded selected uv
-candidate. This notice does not change the existing full-tree privacy gate,
+The public GitHub Release workflow creates GitHub `git archive` ZIP/TAR
+snapshots of the tagged commit. Reviewed exact-path `export-ignore` entries
+omit designated fixture data from these archives while retaining it in Git
+checkouts for regression tests. The selective uv candidate is separate. This notice does not change the existing full-tree privacy gate,
 authorize the disclosure of student or organizational data, or select an
 official application version. Publication requires separate Owner approval
 and source-appropriate privacy/rights review.

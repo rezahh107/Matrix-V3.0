@@ -67,7 +67,29 @@ jobs:
       - name: Focused Linux source and no-clobber regressions
         env:
           PYTHONPATH: ${{ github.workspace }}
-        run: uvx --from pytest==9.1.1 pytest -q --confcutdir=tests/unit tests/unit/test_uv_source_release.py tests/unit/test_personal_release.py
+        run: uvx --from pytest==9.1.1 pytest -q --confcutdir=tests/unit tests/unit/test_uv_source_release.py tests/unit/test_personal_release.py tests/unit/test_github_release.py tests/unit/test_github_release_lifecycle.py
+      - name: Read-only hosted GitHub ZIP/TAR source eligibility and exact-byte check
+        shell: bash
+        env:
+          GH_TOKEN: \${{ github.token }}
+          EXPECTED_SHA: \${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          from tools.ci.github_release import (
+              PublicationError, public_snapshot_blobs, snapshot_risks,
+              tree_blobs, verify_hosted_archives,
+          )
+          tracked = tree_blobs()
+          archive = public_snapshot_blobs(tracked)
+          risks = snapshot_risks(archive)
+          if risks:
+              raise PublicationError("Unreviewed source paths: " + ", ".join(risks[:10]))
+          verify_hosted_archives(os.environ["EXPECTED_SHA"], archive)
+          print(f"READ_ONLY_GITHUB_SOURCE_VERIFIED tracked={len(tracked)} "
+                f"archive={len(archive)} omitted={len(tracked) - len(archive)}")
+          PY
       - name: Build and validate Git-blob-identical source archive
         run: python3 tools/ci/qualify_uv_source.py --output-dir "${RUNNER_TEMP}/matrix-uv-candidate"
       - name: Upload reviewable candidate (not a release)

@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-Application package version is sourced from `pyproject.toml`. Historical entries below are not evidence of published GitHub Releases; the first official release version is not yet approved.
+Application package version is sourced from `pyproject.toml`. Historical entries below are not evidence of published GitHub Releases. The first v0.1.0 personal candidate is prepared but no official Tag or GitHub Release exists.
 
 ## [Unreleased]
 - قابلیت زیرساختی انتشار دستی GitHub Release با تأیید Owner، کنترل SHA/نسخه و آرشیو کامل عمومی، CI دقیق Windows و بازیابی بدون تغییر تاریخچه؛ **پیاده‌سازی در PR، بدون انتخاب نسخهٔ نخست و بدون انتشار**.
@@ -48,13 +48,14 @@ Application package version is sourced from `pyproject.toml`. Historical entries
 
 ## [0.1.0] - 2026-11-07
 
-> **Proposed first Owner-only personal-release candidate; NOT an approved or published release.** The date above is the candidate preparation date, not the official release date. This section describes the already implemented baseline, not features all introduced today.
+> **First Owner-controlled v0.1.0 release preparation.** The date above records candidate preparation, not an executed GitHub publication. This section describes the established baseline, not only features introduced today.
 
 - Windows PySide6 application with Policy/LAW-governed matrix building, allocation, QA/Trace/History and Excel/Sabt-oriented workflows; real organizational Sabt acceptance is not established.
 - Existing version-selectable Git+uv personal installer/controller: exact annotated-tag/source/lock/Python checks, isolated worktrees, explicit activation, status, launch and bounded code rollback.
 - Candidate qualification through locked Windows Core/UI and exact-source archive checks, with an additional real-Matrix, local-only annotated-tag Git+uv integration probe.
 - On activation, back up known annual SQLite databases and the user JSON settings file; preserve prior worktrees and reject dirty or unqualified installations. Windows Registry/QSettings, external Sabt Profiles, user-chosen output paths and database-schema downgrades are **not** automatically backed up or reversed.
-- No EXE/installer, public downloadable release, automatic update or official tag. Official version approval and any publication surface remain separate Owner decisions.
+- Prepared exact-content admission for five inspected synthetic/header-only CSVs, exact Git-archive omissions for review-pending test data, and prepublication comparison of hosted GitHub ZIP/TAR with the reviewed commit.
+- No EXE/installer, automatic update or official Tag/Release was created by this change. Publication remains explicitly Owner-controlled.
 
 ## Historical entry: 1.0.0 (2024-01-01; not an established GitHub Release)
 ### Added
