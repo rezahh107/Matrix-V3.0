@@ -24,7 +24,7 @@ from tools.ci.qualify_uv_source import (
 )
 
 REPO = "rezahh107/Matrix-V3.0"
-VERSION = re.compile(r"(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)\Z")
+VERSION = re.compile(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\Z")
 SOURCE_SHA = re.compile(r"[a-f0-9]{40}\Z")
 DATA_EXTENSIONS = {".xls", ".xlsx", ".xlsm", ".csv", ".tsv", ".sqlite", ".db",
                    ".pem", ".key", ".p12", ".pfx", ".env"}
@@ -373,14 +373,20 @@ def publish(version: str, sha: str, directory: Path, *, mode: str,
         raise PublicationError("Release notes changed since preparation")
     check_remote(tag, sha, mode)
     if mode == "new":
-        create_tag(tag, sha)
+        try:
+            create_tag(tag, sha)
+        except (PublicationError, OSError) as exc:
+            raise PublicationError(
+                f"TAG_CREATION_UNCERTAIN: inspect refs/tags/{tag} and GitHub Releases "
+                "before any retry. Never delete or move a possible tag."
+            ) from exc
     # No catch-and-delete: partial visible state must remain inspectable.
     try:
         run("gh", "release", "create", tag, str(archive),
             str(directory / "release-provenance.json"), "-R", REPO,
             "--verify-tag", "--target", sha, "--title", f"Matrix {tag}",
             "--notes-file", str(directory / "release-notes.md"))
-    except PublicationError as exc:
+    except (PublicationError, OSError) as exc:
         raise PublicationError(
             f"TAG_ONLY_POSSIBLE: {tag} may exist at {sha}; inspect remote tag and "
             "Release before explicit resume-tag-only. No tag deletion or force update."
