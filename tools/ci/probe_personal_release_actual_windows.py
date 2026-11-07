@@ -17,6 +17,24 @@ import tempfile
 from contextlib import closing
 from pathlib import Path
 
+from tools.ci.qualify_uv_source import validate_version_identity
+from tools.personal_release import TAG_PATTERN
+
+
+def select_candidate_identity(root: Path) -> tuple[str, str, str]:
+    """Select the current HEAD's validated, stable personal-release identity."""
+    inputs = tuple(
+        (root / name).read_bytes()
+        for name in ("pyproject.toml", "uv.lock", ".python-version", "CHANGELOG.md")
+    )
+    version, python_pin = validate_version_identity(*inputs)
+    tag = f"v{version}"
+    if TAG_PATTERN.fullmatch(tag) is None:
+        raise RuntimeError("Candidate version cannot be represented by a stable vX.Y.Z tag")
+    # The release consumer requires a dated entry for the selected version.
+    validate_version_identity(*inputs, required_release_version=version)
+    return version, python_pin, tag
+
 
 def run(args: list[str], *, cwd: Path, env: dict[str, str] | None = None,
         ok: bool = True, timeout: int = 420) -> subprocess.CompletedProcess[str]:
@@ -52,13 +70,7 @@ def main() -> None:
 
     # The proposed identity is not an officially approved release. A local
     # annotated tag is created *only* in a temp clone, never in the CI checkout.
-    from tools.ci.qualify_uv_source import validate_version_identity
-    version, python_pin = validate_version_identity(
-        (root / "pyproject.toml").read_bytes(), (root / "uv.lock").read_bytes(),
-        (root / ".python-version").read_bytes(), (root / "CHANGELOG.md").read_bytes(),
-        required_release_version="0.1.0",
-    )
-    assert (version, python_pin) == ("0.1.0", "3.11")
+    version, python_pin, tag = select_candidate_identity(root)
 
     with tempfile.TemporaryDirectory(prefix="matrix-real-personal-ci-") as tmp:
         base = Path(tmp)
@@ -68,8 +80,8 @@ def main() -> None:
         run(["git", "clone", str(remote), str(seed)], cwd=base)
         git(seed, "config", "user.name", "Disposable CI Tag")
         git(seed, "config", "user.email", "ci@example.invalid")
-        git(seed, "tag", "-a", "v0.1.0", "-m", "DISPOSABLE CI ONLY - not a release")
-        git(seed, "push", "origin", "refs/tags/v0.1.0")
+        git(seed, "tag", "-a", tag, "-m", "DISPOSABLE CI ONLY - not a release")
+        git(seed, "push", "origin", f"refs/tags/{tag}")
         run(["git", "clone", "--no-tags", str(remote), str(client)], cwd=base)
         assert git(client, "rev-parse", "HEAD") == expected
         assert git(client, "tag", "--list") == ""
@@ -93,32 +105,32 @@ def main() -> None:
                         operation, *args], cwd=client, env=env, ok=ok)
 
         # Invalid selection and dirty checkout must fail before new state.
-        personal("activate", "v9.9.9", ok=False)
+        personal("activate", "not-an-approved-tag", ok=False)
         assert not (client / ".matrix-personal" / "state.json").exists()
         readme = client / "README.md"
         readme.write_bytes(readme.read_bytes() + b"\nDISPOSABLE_DIRTY_FILE\n")
-        personal("activate", "v0.1.0", ok=False)
+        personal("activate", tag, ok=False)
         assert not (client / ".matrix-personal" / "state.json").exists()
         git(client, "restore", "--", "README.md")
 
         # A damaged annual DB prevents a valid snapshot and activation.
         broken = years / "broken.sqlite"
         broken.write_bytes(b"not-sqlite")
-        personal("activate", "v0.1.0", ok=False)
+        personal("activate", tag, ok=False)
         assert broken.read_bytes() == b"not-sqlite"
         assert not (client / ".matrix-personal" / "state.json").exists()
         broken.unlink()  # Only synthetic corruption, never real records.
 
-        activated = personal("activate", "v0.1.0")
-        assert "ACTIVE v0.1.0" in activated.stdout
+        activated = personal("activate", tag)
+        assert f"ACTIVE {tag}" in activated.stdout
         state = json.loads(personal("status").stdout)
         assert state["previous"] is None
         assert state["current"] == {
-            "tag": "v0.1.0", "sha": expected, "version": "0.1.0", "python": python_pin
+            "tag": tag, "sha": expected, "version": version, "python": python_pin
         }
-        assert git(client, "rev-parse", "refs/tags/v0.1.0^{commit}") == expected
-        assert git(client, "cat-file", "-t", "refs/tags/v0.1.0") == "tag"
-        installed = client / ".matrix-personal" / "versions" / f"v0.1.0--{expected[:12]}"
+        assert git(client, "rev-parse", f"refs/tags/{tag}^{{commit}}") == expected
+        assert git(client, "cat-file", "-t", f"refs/tags/{tag}") == "tag"
+        installed = client / ".matrix-personal" / "versions" / f"{tag}--{expected[:12]}"
         assert git(installed, "rev-parse", "HEAD") == expected
         assert (installed / ".venv" / "Scripts" / "python.exe").is_file()
         assert checksum(installed / "uv.lock") == checksum(root / "uv.lock")
@@ -155,7 +167,7 @@ def main() -> None:
               "raw JSON unchanged=", checksum(settings) == settings_checksum)
         personal("rollback", ok=False)  # No invented previous official version.
         assert json.loads(personal("status").stdout) == state
-        print("REAL MATRIX WINDOWS CONSUMER PASS", expected, "v0.1.0 (LOCAL TAG ONLY)")
+        print("REAL MATRIX WINDOWS CONSUMER PASS", expected, tag, "(LOCAL TAG ONLY)")
         print("real_uv_sync=yes; real_cmd_activate_status_start=yes; "
               "synthetic_sqlite_and_json_preserved=yes; actual_previous_version=no")
 
