@@ -12,12 +12,14 @@ from PySide6.QtCore import QAbstractTableModel, QModelIndex, QPersistentModelInd
 from PySide6.QtWidgets import (
     QApplication,
     QDialog,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QListWidget,
     QMessageBox,
     QPushButton,
+    QScrollArea,
     QTableView,
     QTabWidget,
     QVBoxLayout,
@@ -260,9 +262,14 @@ class HistoryDialog(QDialog):
         right_layout.addWidget(self._retry_button)
         right_layout.addWidget(right_tabs, 1)
 
+        # The dossier remains reachable with long messages, large fonts or a small screen.
+        right_scroll = QScrollArea(self)
+        right_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        right_scroll.setWidgetResizable(True)
+        right_scroll.setWidget(right_panel)
         layout = QHBoxLayout(self)
         layout.addWidget(self._run_list, 1)
-        layout.addWidget(right_panel, 3)
+        layout.addWidget(right_scroll, 3)
 
         self.resize(1024, 640)
         self._clear_views()
@@ -424,7 +431,12 @@ class HistoryDialog(QDialog):
         self._outcome_label.setText(
             self._t("history.dossier.execution", "Execution: {status}").format(
                 status=status_text
-            ) + (" · " + str(self._field(run_row, "message")) if self._field(run_row, "message") else "")
+            )
+            + (
+                " · " + str(self._field(run_row, "message"))
+                if self._field(run_row, "message")
+                else ""
+            )
         )
         self._times_label.setText(
             self._t("history.dossier.times", "Started: {start} · Finished: {end}").format(
@@ -463,8 +475,11 @@ class HistoryDialog(QDialog):
             ).format(
                 qa=self._availability(qa_summary),
                 trace=self._availability(trace),
-                metrics=self._availability(metrics) if not metrics.empty else
-                self._t("history.dossier.not_recorded", "Not recorded"),
+                metrics=(
+                    self._availability(metrics)
+                    if not metrics.empty
+                    else self._t("history.dossier.not_recorded", "Not recorded")
+                ),
             )
         )
         self._trace_empty.setText(self._availability(trace))
