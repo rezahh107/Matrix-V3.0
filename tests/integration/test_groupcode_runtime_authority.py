@@ -922,7 +922,9 @@ def test_mainwindow_real_gui_build_allocate_sabt_and_recovery(
         run_id = int(saved_run["id"])
         assert saved_run["run_uuid"]
         assert int(saved_run["total_allocated"]) == len(allocations)
-        assert json.loads(saved_run["input_hashes_json"])["students"] is not None
+        assert json.loads(saved_run["input_hashes_json"])["students"] == sha256(
+            students_file.read_bytes()
+        ).hexdigest()
 
         saved_trace, _saved_summary, _history_info = reopened_db.fetch_trace_snapshot(run_id)
         assert saved_trace is not None
