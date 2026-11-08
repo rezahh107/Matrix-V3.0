@@ -575,6 +575,9 @@ class HistoryDialog(QDialog):
                 and str(exc).startswith("Invalid stored snapshot:")
             )
             self._clear_views()
+            self._retry_button.setText(
+                self._t("history.dossier.retry", "Retry selected run")
+            )
             self._identity_label.setText(
                 self._t(
                     "history.dossier.snapshot_unreadable"
