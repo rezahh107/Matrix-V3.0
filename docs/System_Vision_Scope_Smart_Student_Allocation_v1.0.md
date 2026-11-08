@@ -63,7 +63,7 @@ Unified Smart Student Allocation ecosystem covering intake, matrix, allocation, 
 
 ## Invariants & Constraints
 - **6 Join Keys (int, immutable):** `کدرشته`, `جنسیت`, `دانش آموز فارغ`, `مرکز گلستان صدرا`, `مالی حکمت بنیاد`, `کد مدرسه`; used consistently across intake, matrix, allocation, exporter.
-- **Ranking policy (LAW v3.0 / Technical SSoT v3.0):** مرتب‌سازی صرفاً بر اساس `remaining_capacity` نزولی و سپس `mentor_id` صعودی (natural + stable). توضیحات قبلی بر پایهٔ `occupancy_ratio` LEGACY است و نباید برای اجرا استفاده شود.
+- **Ranking policy (LAW v3.0 / Technical SSoT v3.0; Owner GOAL_AUTHORITY §L, 2026-11-08):** مرتب‌سازی مصوب `remaining_capacity` نزولی، سپس `allocations_new` صعودی، سپس `mentor_sort_key = natural_key(mentor_id)` صعودی و پایدار است. رتبه‌بندی بر پایهٔ `occupancy_ratio` LEGACY است و نباید اجرا شود.
 - **حافظهٔ تخصیص:** تاریخچهٔ تخصیص‌ها با کلید ملی نگهداری می‌شود و قبل از ورود به رتبه‌بندی اعمال می‌شود؛ این مکانیسم صرفاً ورودی صف را مدیریت می‌کند و در هستهٔ سیاست رتبه‌بندی دخالتی ندارد.
 - **کانال‌های تخصیص:** مقدار `allocation_channel` برای هر دانش‌آموز به‌صورت سیاست‌محور و بدون هاردکد مرکز/مدرسه تعیین می‌شود و به‌عنوان متادیتای trace/خلاصه نگه داشته می‌شود.
 - **Determinism:** same inputs/policy versions yield the same outputs; stable sorts; explicit version tagging (policy_version, ssot_version, schema versions).
@@ -103,7 +103,7 @@ Unified Smart Student Allocation ecosystem covering intake, matrix, allocation, 
 - **AGENTS.md:** agent-facing operational guide aligned with agentsmd.net; includes Eligibility Matrix-specific and repo-level instructions.
 - **Join Keys:** six integer keys linking data across sources: `کدرشته`, `جنسیت`, `دانش آموز فارغ`, `مرکز گلستان صدرا`, `مالی حکمت بنیاد`, `کد مدرسه`.
 - **occupancy_ratio (LEGACY):** متریک تاریخی از نسخه‌های قبلی؛ از LAW/TECH v3.0 به بعد رتبه‌بندی بر اساس ظرفیت باقی‌مانده است.
-- **allocations_new:** count of new allocations per mentor historically used; در LAW/TECH v3.0 فقط ظرفیت باقی‌مانده و mentor_id معیار رتبه‌بندی‌اند.
+- **allocations_new:** شمار تخصیص‌های جدید منتور در اجرای جاری؛ معیار دومِ مصوب رتبه‌بندی پس از تساوی `remaining_capacity` است و پیش از tie-break نهایی `mentor_id` استفاده می‌شود (Owner GOAL_AUTHORITY §L).
 
 
 ## Owner-approved Matrix delivery outcomes — 2026-11-01

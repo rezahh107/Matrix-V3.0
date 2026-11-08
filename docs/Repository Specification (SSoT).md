@@ -165,7 +165,7 @@ All joins between students and mentors must use the six canonical integer join k
 Effective Join Keys are the only canonical join inputs for allocation/QA/export. Wildcard semantics are key-specific (mentor-only for `center_code`/`school_code`, none for other keys). JoinKeyResolver is the only allowed canonicalize+infer source, and parity guards between allocation vs audit/export are mandatory gates. (certain) [LAW][TECH][AGENTS.md]  
 
 **RANK-CORE**  
-Mentor ranking for selection must be based only on descending `remaining_capacity` plus a deterministic tie-breaker (`mentor_id` via `natural_key`). Any use of `occupancy_ratio` in ranking is a P0 violation. (certain) [LAW][TECH][AGENTS.md]  
+Mentor ranking uses the Owner-approved order: `remaining_capacity` DESC, then `allocations_new` ASC, then `mentor_sort_key = natural_key(mentor_id)` ASC (stable deterministic sort). The independent `allocations_new` tie-break is intentional. `occupancy_ratio` must not influence selection; violation of the approved ranking order is P0. (certain) [LAW][TECH][AGENTS.md]  
 
 **TRACE-CORE**  
 Each allocation must be explainable via an 8-stage trace in the fixed order `type → group → gender → graduation_status → center → finance → school → capacity_gate`. (certain) [LAW][TECH][app/core/common/trace.py][app/core/allocate_students.py]
@@ -279,7 +279,7 @@ According to LAW/Technical SSoT: (certain) [LAW][TECH]
 
 Examples:  
 - `CAPACITY-01 — remaining_capacity must always be ≥ 0 (P0).` (certain) [LAW][TECH]  
-- `RANK-CORE — ranking is capacity-only; occupancy_ratio-based ranking is a P0 violation.` (certain) [LAW][TECH][AGENTS.md]  
+- `RANK-CORE — approved capacity-first ordering is remaining_capacity DESC, allocations_new ASC, mentor_id natural ASC; occupancy_ratio-based ranking violates RANK-CORE (P0).` (certain) [LAW][TECH][AGENTS.md]  
 - `SCHOOL-01 — school join correctness and wildcard handling are P0.5-major.` (certain) [LAW]
 
 ---
@@ -333,8 +333,10 @@ This section summarizes the roles and responsibilities of key modules. For line-
 - **Role**: Builds mentor capacity state and sorts the pool for allocation. (certain) [code][TECH]
 - **Key APIs**:
   - `build_mentor_state`, capacity and sorting helpers. (certain)
-- **Confirmed Discrepancy (P0)**:
-  - LAW/TECH demand capacity-only ranking, but the implementation still uses `occupancy_ratio` as a leading sort key when present. (certain) [LAW][TECH][AGENTS.md][app/core/common/ranking.py]
+- **Current RANK-CORE contract (Owner-approved, 2026-11-08)**:
+  - `remaining_capacity` DESC → `allocations_new` ASC → `mentor_sort_key = natural_key(mentor_id)` ASC (stable); `occupancy_ratio` must not influence mentor selection. [LAW][TECH][AGENTS.md][config/policy.json]
+- **Historical RANK-CORE audit (SUPERSEDED; not a current P0)**:
+  - The 2025-11-28 claim that `occupancy_ratio` was a leading runtime ranking key is historical, not a confirmed current defect. See §4.1 for the supersession and evidence boundary.
 
 #### 3.1.4 `common/trace.py`
 
@@ -451,10 +453,10 @@ This section summarizes the roles and responsibilities of key modules. For line-
 
 ### 4.1 Confirmed Discrepancies (LAW/TECH vs Code)
 
-1. **RANK-CORE vs `common/ranking.py` (P0-Critical)**  
-   - LAW/TECH explicitly require capacity-only ranking with deterministic tie-breaking; `occupancy_ratio` is labelled LEGACY and forbidden for ranking. (certain) [LAW][TECH][AGENTS.md]  
-   - The current implementation still uses `occupancy_ratio` as a leading sort key when the column is present. (certain) [app/core/common/ranking.py]  
-   - **Spec position**: This is a clear P0 violation and must be fixed by removing `occupancy_ratio` from the sort keys and enforcing capacity-only ranking.
+1. **Historical RANK-CORE audit claim — SUPERSEDED (2026-11-08)**
+   - The 2025-11-28 audit classified the old two-key LAW/TECH vs implementation discrepancy as P0 and claimed `occupancy_ratio` or `allocations_new` sorting was an algorithm defect. This is a **historical claim, not a confirmed current P0**.
+   - Owner GOAL_AUTHORITY section L affirms the existing `remaining_capacity` DESC → `allocations_new` ASC → `mentor_sort_key = natural_key(mentor_id)` ASC ordering; independent `allocations_new` is approved. The previous proposal to remove this tie-break is withdrawn.
+   - Any separate claim that ratio data affects runtime selection requires specific evidence; the approved three-key ranking itself is not such a defect.
 
 2. **QA workbook sheet mapping (Partial Spec, P1)**  
    - LAW/Policy-Eligibility-Matrix defines exact sheet structures; exporter functions implement matching sheets but there is no formal mapping table in docs. (likely) [app/infra/excel/export_qa_validation.py][Policy-Eligibility-Matrix-v1.0.3.md]  
@@ -498,7 +500,7 @@ These are primarily suggested inspection points for CodeSurgeon:
 - The repository implements a **Policy-First Smart Student Allocation system** with a clear Core/Infra/UI separation and uses pandas, Excel, SQLite, and PySide6 to provide an end-to-end pipeline from Excel + Policy to allocations + QA + history. (certain) [TECH][AGENTS.md][code]
 - LAW v3.0 and Technical SSoT v3.0-TECH invariants (JOIN-CORE, RANK-CORE, TRACE-CORE, CAPACITY-01, SCHOOL-01, CENTER-01, POOL-GOVERNANCE-01, ALIAS-CONSISTENCY-01, HISTORY-GOVERNANCE-01, etc.) are mapped here to concrete modules and behaviors, so tools like CodeSurgeon can use this document as the repository-level SSoT. (certain) [LAW][TECH][code]
 - Core relies on six integer join keys, an 8-stage trace, and non-negative capacity gates as the logical backbone; Infra connects this logic to Excel/SQLite/CLI; UI makes it usable and auditable for end users. (certain) [app/core/*][app/infra/*][app/ui/*]
-- The main known discrepancy is the **Legacy `occupancy_ratio` usage in `common/ranking.py`**, which conflicts with RANK-CORE and is classified as P0. (certain) [LAW][TECH][AGENTS.md][app/core/common/ranking.py]
+- The historical RANK-CORE P0 claim against the three-key ranking is **superseded** by Owner GOAL_AUTHORITY §L (2026-11-08). The normative order is `remaining_capacity` DESC → `allocations_new` ASC → `mentor_sort_key` (`natural_key(mentor_id)`) ASC; no present ranking bug is established by the old audit. [LAW][TECH][AGENTS.md][app/core/common/ranking.py]
 - Aside from that and some P1/P2 gaps in observability and documentation (QA mapping, center management mapping, fine-grained logging), the implementation is broadly aligned (≈98%) with LAW/Technical SSoT v3.0, and this document can serve as the **canonical `Repository_Spec_SSoT.md`** for long-term development, audits, and CodeSurgeon-style debugging. (likely) [LAW][TECH][AGENTS.md][code]
 
 ## REPO/ARCH-EXPORT-SPINE-01 — Export spine ownership

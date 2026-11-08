@@ -338,12 +338,12 @@ def invariant_join_core(df: pd.DataFrame) -> None:
 
 ---
 
-### 5.2. RANK-CORE — Ranking بر اساس ظرفیت
+### 5.2. RANK-CORE — رتبه‌بندی ظرفیت‌محور با سه معیار مصوب
 
-**مطابق LAW:**  
-هیچ occupancy_ratio در طراحی نهایی نداریم؛ فقط ظرفیت مهم است.
+**مطابق LAW §5.4 و تصمیم Owner (2026-11-08، GOAL_AUTHORITY بخش L):**
+`occupancy_ratio` معیار انتخاب منتور نیست. ترتیب مصوب: `remaining_capacity` نزولی؛ در تساوی، `allocations_new` صعودی؛ سپس `mentor_id` با مقایسهٔ طبیعی/قطعی موجود.
 
-تعاریف عملی:
+تعاریف عملی ظرفیت (همان نمونهٔ قبلی؛ بدون تغییر قانون baseline):
 
 ```python
 def compute_remaining_capacity(row: pd.Series) -> int:
@@ -353,27 +353,31 @@ def compute_remaining_capacity(row: pd.Series) -> int:
 
 **رتبه‌بندی:**
 
-1. `remaining_capacity` بزرگ‌تر بهتر است (sort نزولی)
-2. در حالت مساوی ⇒ `mentor_id` کوچک‌تر (sort صعودی)
+1. `remaining_capacity` بزرگ‌تر بهتر است (نزولی).
+2. هنگام تساوی ظرفیت، `allocations_new` کمتر بهتر است (صعودی).
+3. هنگام تساوی دو مقدار قبلی، `mentor_sort_key = natural_key(mentor_id)` صعودی و پایدار است.
 
-پیاده‌سازی نمونه:
+نمونهٔ توضیحی (نه جایگزین پیاده‌سازی Policy-driven):
 
 ```python
-RANK_COLUMNS = ["remaining_capacity", "mentor_id"]
+from app.core.common.types import natural_key
+
+RANK_COLUMNS = ["remaining_capacity", "allocations_new", "mentor_sort_key"]
 
 
 def rank_candidates(pool: pd.DataFrame) -> pd.DataFrame:
     pool = pool.assign(
-        remaining_capacity=pool.apply(compute_remaining_capacity, axis=1)
+        remaining_capacity=pool.apply(compute_remaining_capacity, axis=1),
+        mentor_sort_key=pool["mentor_id"].map(natural_key),
     )
     return pool.sort_values(
         RANK_COLUMNS,
-        ascending=[False, True],
+        ascending=[False, True, True],
         kind="mergesort",
     )
 ```
 
-هر تغییری در این ترتیب بدون آپدیت LAW ⇒ شکست تست و نقض RANK-CORE.
+ناسازگاری احتمالی تعریف ظرفیت در §4.5.1 (`capacity_limit - allocations_new` در برابر حالت دارای `assigned_baseline`) **موضوعی جداگانه** است؛ با این تطبیق رتبه‌بندی نه تفسیر و نه اصلاح می‌شود. هر تغییر رفتاری در ترتیب مصوب به تصمیم جدید و بررسی LAW/Policy/تست‌ها نیاز دارد.
 
 ---
 
