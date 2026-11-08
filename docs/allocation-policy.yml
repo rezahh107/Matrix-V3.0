@@ -1,3 +1,7 @@
+# HISTORICAL reference only (not the executable Matrix ranking Policy).
+# Preserved as an old scoring example; its occupancy-ratio rule is superseded.
+# Current approved order: remaining_capacity DESC, allocations_new ASC,
+# mentor_sort_key = natural_key(mentor_id) ASC (LAW v3.0 §5.4; config/policy.json).
 # Allocation Policy (FINAL)
 version: 1
 defaults:
