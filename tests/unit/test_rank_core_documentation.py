@@ -62,3 +62,55 @@ def test_old_ratio_policy_example_is_explicitly_historical() -> None:
     text = (ROOT / "docs/allocation-policy.yml").read_text(encoding="utf-8")
     assert text.startswith("# HISTORICAL reference only")
     assert "remaining_capacity DESC, allocations_new ASC" in text
+
+
+
+@pytest.mark.parametrize(
+    ("doc_path", "section_start"),
+    [
+        (Path("docs/LAW_Smart_Student_Allocation_v3.0.md"), "**ترتیب قطعی انتخاب منتور:**"),
+        (Path("docs/Technical_SSoT_Smart_Student_Allocation_v3.0-TECH.md"), "**رتبه‌بندی:**"),
+    ],
+)
+def test_rank_core_direction_in_law_and_technical(
+    doc_path: Path, section_start: str
+) -> None:
+    """Reject reversed ranking directions in the normative enumerated steps."""
+    text = (ROOT / doc_path).read_text(encoding="utf-8")
+    assert section_start in text, doc_path
+    section = text.split(section_start, 1)[1].split("\n---", 1)[0]
+    expectations = (
+        ("1.", "`remaining_capacity`", "نزولی", "صعودی"),
+        ("2.", "`allocations_new`", "صعودی", "نزولی"),
+        ("3.", "`mentor_sort_key = natural_key(mentor_id)`", "صعودی", "نزولی"),
+    )
+    for number, key, expected, forbidden in expectations:
+        lines = [line.strip() for line in section.splitlines() if line.strip().startswith(number)]
+        assert len(lines) == 1, (doc_path, number, lines)
+        line = lines[0]
+        assert key in line, (doc_path, number, key)
+        assert expected in line and forbidden not in line, (doc_path, number, line)
+
+
+def test_rank_core_repository_spec_preserves_current_and_historical_status() -> None:
+    """The module overview must not resurrect the superseded P0 claim."""
+    text = (ROOT / "docs/Repository Specification (SSoT).md").read_text(
+        encoding="utf-8"
+    )
+    module_start = "#### 3.1.3 `common/ranking.py`"
+    module_stop = "#### 3.1.4 `common/trace.py`"
+    assert module_start in text and module_stop in text
+    module = text.split(module_start, 1)[1].split(module_stop, 1)[0]
+    current_order = (
+        "`remaining_capacity` DESC → `allocations_new` ASC → "
+        "`mentor_sort_key = natural_key(mentor_id)` ASC"
+    )
+    assert current_order in module
+    assert "SUPERSEDED" in module and "not a current P0" in module
+    assert "Confirmed Discrepancy (P0)" not in module
+    assert "Historical RANK-CORE audit claim — SUPERSEDED" in text
+    invariant = text.split("**RANK-CORE**", 1)[1].split("**TRACE-CORE**", 1)[0]
+    assert (
+        "`remaining_capacity` DESC, then `allocations_new` ASC, then "
+        "`mentor_sort_key = natural_key(mentor_id)` ASC"
+    ) in invariant

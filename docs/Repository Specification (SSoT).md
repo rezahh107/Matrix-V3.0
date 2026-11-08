@@ -333,8 +333,10 @@ This section summarizes the roles and responsibilities of key modules. For line-
 - **Role**: Builds mentor capacity state and sorts the pool for allocation. (certain) [code][TECH]
 - **Key APIs**:
   - `build_mentor_state`, capacity and sorting helpers. (certain)
-- **Confirmed Discrepancy (P0)**:
-  - LAW/TECH demand capacity-only ranking, but the implementation still uses `occupancy_ratio` as a leading sort key when present. (certain) [LAW][TECH][AGENTS.md][app/core/common/ranking.py]
+- **Current RANK-CORE contract (Owner-approved, 2026-11-08)**:
+  - `remaining_capacity` DESC → `allocations_new` ASC → `mentor_sort_key = natural_key(mentor_id)` ASC (stable); `occupancy_ratio` must not influence mentor selection. [LAW][TECH][AGENTS.md][config/policy.json]
+- **Historical RANK-CORE audit (SUPERSEDED; not a current P0)**:
+  - The 2025-11-28 claim that `occupancy_ratio` was a leading runtime ranking key is historical, not a confirmed current defect. See §4.1 for the supersession and evidence boundary.
 
 #### 3.1.4 `common/trace.py`
 
