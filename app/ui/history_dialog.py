@@ -160,7 +160,9 @@ class HistoryDialog(QDialog):
         self._qa_extras_view.setEditTriggers(QTableView.EditTrigger.NoEditTriggers)
         self._qa_extras_view.horizontalHeader().setStretchLastSection(True)
         self._qa_extras_view.verticalHeader().setVisible(False)
-        self._qa_extras_empty = QLabel(self._t("history.dossier.not_recorded", "Not recorded"), self)
+        self._qa_extras_empty = QLabel(
+            self._t("history.dossier.not_recorded", "Not recorded"), self
+        )
         self._qa_extras_empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self._metrics_model = DataFrameTableModel()
