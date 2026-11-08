@@ -388,27 +388,24 @@ remaining_capacity = capacity_limit - (assigned_baseline + allocations_new)
 
 ------
 
-### 5.4 RANK-CORE — رتبه‌بندی فقط بر اساس ظرفیت
+### 5.4 RANK-CORE — رتبه‌بندی ظرفیت‌محور سه‌معیاره
 
-**خلاصه قانون:**
+**خلاصه قانون جاری (تطبیق مستندات Owner، 2026-11-08):**
 
-- ranking بر اساس:
-  1. `remaining_capacity` (نزولی)
-  2. `mentor_id` (صعودی)
-- هیچ occupancy_ratio یا معیار اضافی مجاز نیست؛ نقض قانون ⇒ P0.
+- ترتیب انتخاب منتور:
+  1. `remaining_capacity` نزولی
+  2. در تساوی ظرفیت، `allocations_new` صعودی
+  3. در تساوی هر دو، `mentor_id` با `mentor_sort_key = natural_key(mentor_id)` صعودی و sort پایدار
+- `occupancy_ratio` معیار رتبه‌بندی نیست؛ `allocations_new` tie-break مصوب است. نقض ترتیب سه‌معیاره یا رتبه‌بندی بر اساس نسبت اشغال می‌تواند P0 باشد.
 
 **Layerها:** Core
 
 **Core:**
 
-- `app/core/common/ranking.py`
-  - `RANK_COLUMNS = ["remaining_capacity", "mentor_id"]` و sort پایدار (`mergesort`).
-- `app/core/allocate_students.py`
-  - فراخوانی `rank_candidates(pool)` قبل از انتخاب mentor.
+- `app/core/common/ranking.py`: مرتب‌سازی معمولی با `RANK_COLUMNS = ["remaining_capacity", "allocations_new", "mentor_sort_key"]` و `mergesort`، و مسیر heap با همین ترتیب
+- `app/core/allocate_students.py`: فراخوانی `apply_ranking_policy` پیش از انتخاب منتور
 
-**Infra/UI:**
-
-- حق ندارند ranking جدید تعریف کنند؛ فقط از خروجی Core استفاده می‌کنند (طبق Tech SSoT).
+**Infra/UI:** حق بازتعریف رتبه‌بندی را ندارند و فقط خروجی Core را مصرف می‌کنند.
 
 ------
 
@@ -635,7 +632,7 @@ remaining_capacity = capacity_limit - (assigned_baseline + allocations_new)
 | **CAPACITY-DEFINITION**       | remaining_capacity = capacity_limit - (assigned_baseline + allocations_new) | Core + Infra + QA      | `app/core/common/ranking.py`, `app/core/allocation/mentor_pool.py`, `app/core/allocation/history_metrics.py` | `app/infra/excel/export_qa_validation.py` (ستون‌های capacity در QA)، `app/infra/history_store.py` | -                                                            | `tests/core/test_ranking_rules.py`, `tests/integration/test_rule_engine_ranking_capacity.py`, `tests/integration/test_allocator_policy_capacity_guarantees.py`, `tests/unit/test_capacity_gate.py` | Tech SSoT صراحتاً این تعریف را تثبیت کرده است.                |
 | **CAPACITY-01**               | remaining_capacity نباید منفی شود (P0)                       | Core + QA              | `app/core/common/ranking.py`, `app/core/allocation/mentor_pool.py` | `app/infra/excel/export_qa_validation.py` (highlight ظرفیت‌های منفی) | -                                                            | همان تست‌های capacity + `tests/core/test_allocate_student_capacity_trace.py` | violationها در QA Workbook دیده می‌شود؛ و trace capacity_gate نیز آن را نشان می‌دهد. |
 | **R0-CAPACITY-GATE-01**       | پیش از build_matrix، منتورهای بدون ظرفیت مؤثر از استخر حذف و در QA گزارش شوند | Infra + QA             | -                                                            | `app/infra/matrix/build_matrix_v1_0_2.py`, `app/infra/excel/export_qa_validation.py` | -                                                            | `tests/unit/test_capacity_gate.py`, `tests/infra/test_cli_build_matrix.py` | پیاده‌سازی R0 در Tech SSoT آمده؛ History doc هم به این گیت اشاره دارد. |
-| **RANK-CORE**                 | sort بر اساس remaining_capacity (نزولی)، سپس mentor_id (صعودی)، sort پایدار | Core                   | `app/core/common/ranking.py`, `app/core/allocation/mentor_pool.py` | -                                                            | -                                                            | `tests/core/test_ranking_rules.py`, `tests/property/test_ranking_properties.py`, `tests/unit/test_ranking_determinism.py`, `tests/integration/test_allocate_ranking_capacity.py` | occupancy_ratio در هیچ‌جا به عنوان معیار ranking استفاده نمی‌شود (اسناد قدیمی Legacy). |
+| **RANK-CORE**                 | sort بر اساس remaining_capacity (نزولی)، سپس allocations_new (صعودی)، سپس mentor_id (natural_key صعودی)، sort پایدار | Core                   | `app/core/common/ranking.py`, `app/core/allocation/mentor_pool.py` | -                                                            | -                                                            | `tests/core/test_ranking_rules.py`, `tests/property/test_ranking_properties.py`, `tests/unit/test_ranking_determinism.py`, `tests/integration/test_allocate_ranking_capacity.py` | occupancy_ratio در هیچ‌جا به عنوان معیار ranking استفاده نمی‌شود (اسناد قدیمی Legacy). |
 | **TRACE-CORE**                | ۸ مرحله‌ی ثابت trace (type, group, gender, graduation_status, center, finance, school, capacity_gate) با before/after | Core + Infra + UI      | `app/core/allocation/trace.py`, `app/core/common/trace.py`, `app/core/allocation/history_metrics.py` | `app/infra/history_store.py`, `app/infra/excel/export_qa_validation.py` (خروجی trace)، `debug_pool_alignment.py` | `app/ui/history_dialog.py`, `app/ui/history_metrics.py`, `app/ui/history_metrics_dialog.py` | `tests/core/allocation/test_trace_history_flags.py`, `tests/core/allocation/test_trace_history_snapshot.py`, `tests/unit/test_trace.py`, `tests/unit/test_allocation_trace.py`, `tests/integration/test_allocation_trace_pipeline.py` | لیبل‌ها و ترتیب stages در Tech SSoT قفل شده‌اند.               |
 | **QA-OUTPUT-01**              | دو Workbook QA با شیت‌های ثابت: eligibility_matrix و matrix_vs_students_validation | Infra                  | -                                                            | `app/infra/excel/export_qa_validation.py`, `app/infra/excel/qa_export.py` | -                                                            | `tests/infra/excel/test_qa_validation_export.py`, `tests/infra/test_cli_qa_validation_integration.py` | نام شیت‌ها در Law و Tech SSoT آمده و در این exporter حفظ شده است. |
 | **QA-DEBUG-ENGINE-01**        | QA Debug Engine (observe-only) برای QA_RULE_MENTOR_TYPE_01، با story و law_refs | Core + Infra + UI      | `app/core/qa/rules.py`, `app/core/qa/invariants.py` (QaReport/QaRuleResult) | `app/infra/debug/qa_debug_engine.py`, `app/infra/debug/qa_debug_presenter.py` | `app/ui/dialogs/qa_dashboard_dialog.py` (نمایش خلاصه و لینک دیباگ) | `tests/core/test_qa_debug_context.py`, `tests/core/test_qa_debug_engine.py`, `tests/infra/test_qa_debug_engine.py` | نسخه v0 فقط explainer کامل برای mentor_type دارد؛ بقیه Ruleها فقط meta. |

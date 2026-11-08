@@ -15,7 +15,7 @@
 ### 2.2 کانال‌های تخصیص سیاست‌محور
 - **FR-CHAN-01 — پشتیبانی AllocationChannelConfig:** PolicyConfig باید شامل بخش AllocationChannelConfig باشد و Core موظف است بدون هاردکد شناسه، مقدار `allocation_channel` را از بین چهار مقدار SCHOOL / GOLESTAN / SADRA / GENERIC برای هر دانش‌آموز محاسبه کند. قواعد تصمیم‌گیری می‌تواند از ترکیب `کد مدرسه`, `مرکز گلستان صدرا`, `مرکز ثبت‌نام` و وضعیت تحصیلی استفاده کند ولی باید همگی از PolicyConfig خوانده شوند.
 - **FR-CHAN-02 — کانال در trace/export:** مقدار `allocation_channel` برای تمام دانش‌آموزان (چه تخصیص‌یافته چه ردشده) باید در trace، خلاصهٔ مدیریتی و خروجی ImportToSabt/Excel قابل مشاهده باشد تا تحلیل جریان‌ها و مقایسهٔ کانال‌ها ممکن شود.
-- **FR-CHAN-03 — همزیستی با سیاست رتبه‌بندی:** اجرای کانال‌ها نباید ترتیب رتبه‌بندی را تغییر دهد؛ پس از تعیین کانال، سیاست RANK-CORE مبتنی بر LAW/TECH (`remaining_capacity` نزولی سپس `mentor_id` natural/stable) اجرا می‌شود. ذکر `occupancy_ratio` در نسخه‌های قبلی LEGACY است؛ هر استثناء باید در PolicyConfig تعریف شود، نه در Core.
+- **FR-CHAN-03 — همزیستی با سیاست رتبه‌بندی:** اجرای کانال‌ها نباید ترتیب رتبه‌بندی را تغییر دهد؛ پس از تعیین کانال، سیاست RANK-CORE مصوب مبتنی بر LAW/TECH (`remaining_capacity` نزولی، سپس `allocations_new` صعودی، سپس `mentor_sort_key = natural_key(mentor_id)` صعودی و پایدار) اجرا می‌شود. ذکر `occupancy_ratio` در نسخه‌های قبلی LEGACY است؛ هر استثناء باید در PolicyConfig تعریف شود، نه در Core.
 
 ### 2.3 گزارش‌پذیری و خروجی‌ها
 - **FR-TRACE-01 — غنی‌سازی Trace:** trace هشت‌مرحله‌ای باید علاوه‌بر شمارش‌های استاندارد، ستون‌های `allocation_channel`, `dedupe_reason`, `allocated_before` را شامل شود تا اپراتور بتواند تصمیم تاریخچه/کانال را در کنار فیلترهای اصلی مشاهده کند.

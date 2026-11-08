@@ -77,7 +77,7 @@
     {
       "id": "RANK-CORE",
       "severity": "P0",
-      "description": "Mentor ranking must be based only on remaining_capacity in descending order plus a deterministic tie-breaker (mentor_id natural sort). occupancy_ratio must not influence ranking.",
+      "description": "Owner-approved ranking: remaining_capacity DESC, allocations_new ASC, mentor_sort_key = natural_key(mentor_id) ASC (stable). occupancy_ratio must not influence selection.",
       "responsible_modules": [
         "app/core/common/ranking.py",
         "app/core/allocate_students.py",
@@ -292,9 +292,11 @@
     {
       "id": "DISC-RANK-CORE-OCCUPANCY",
       "severity": "P0",
-      "description": "Ranking still uses occupancy_ratio (and allocations_new) as sort keys when present, violating RANK-CORE which requires capacity-only ranking.",
+      "description": "Historical 2025-11-28 audit claim, superseded by Owner GOAL_AUTHORITY section L (2026-11-08): remaining_capacity DESC, allocations_new ASC, natural mentor_id ASC is approved, not a current P0. Independent occupancy_ratio concerns require separate evidence.",
       "location": "app/core/common/ranking.py",
-      "violated_invariants": ["RANK-CORE"]
+      "violated_invariants": ["RANK-CORE"],
+      "status": "historical_superseded",
+      "superseded_by": "Owner GOAL_AUTHORITY section L (2026-11-08)"
     }
   ],
   "gaps": [
