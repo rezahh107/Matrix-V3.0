@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
         (Path("docs/LAW v3.0 — Regulatory Coverage Map v1.0.md"), "- ترتیب انتخاب منتور:", "\n------"),
         (Path("docs/Repository Specification (SSoT).md"), "Mentor ranking uses the Owner-approved order:", "\n\n**TRACE-CORE**"),
         (Path("docs/Phase_0_System_Requirements_v2.5_Final.md"), "**FR-CHAN-03", "\n"),
+        (Path("docs/System_Vision_Scope_Smart_Student_Allocation_v1.0.md"), "**Ranking policy (LAW v3.0", "\n"),
     ],
 )
 def test_rank_core_three_criterion_docs(doc_path: Path, start: str, stop: str) -> None:
