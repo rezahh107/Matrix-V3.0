@@ -726,7 +726,7 @@ def test_dossier_field_uses_sqlite_column_names_not_row_value_membership() -> No
 
     assert row is not None
     assert "missing_column" in row  # This is a value, not a column name.
-    assert "missing_column" not in row.keys()
+    assert row.keys() == ["id", "message", "status", "total_allocated"]
     assert HistoryDialog._field(row, "id") == 17
     assert HistoryDialog._field(row, "message") == "missing_column"
     assert HistoryDialog._field(row, "status") is None
