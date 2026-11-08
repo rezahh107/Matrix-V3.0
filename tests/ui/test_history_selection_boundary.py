@@ -281,6 +281,8 @@ def test_corrupt_snapshot_json_signals_failure_without_clobbering_persistent_row
             conn.commit()
         dialog._run_list.setCurrentRow(1)
         assert len(errors) == 1
+        assert "QA/Trace evidence is unreadable" in dialog._identity_label.text()
+        assert not dialog._copy_path_button.isEnabled()
         assert dialog.trace_model.rowCount() == 0
         assert dialog.qa_summary_model.rowCount() == 0
         assert dialog.metrics_model.rowCount() == 0
@@ -541,6 +543,7 @@ def test_retry_after_transient_selection_failure_never_copies_stale_run_path(
         assert not dialog._copy_path_button.isEnabled()
         assert dialog._output_path_edit.text() == ""
         assert dialog.trace_model.rowCount() == 0
+        assert "selected run could not be read" in dialog._identity_label.text()
         dialog._retry_button.click()
         assert dialog._output_path_edit.text() == r"C:\\synthetic\\B.xlsx"
         assert dialog._copy_path_button.isEnabled()
