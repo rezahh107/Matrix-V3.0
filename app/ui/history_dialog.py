@@ -382,9 +382,11 @@ class HistoryDialog(QDialog):
             return self._t("history.dossier.unreadable", "Unreadable recorded data")
         if not isinstance(payload, dict):
             return self._t("history.dossier.unreadable", "Unreadable recorded data")
-        passed = payload.get("passed")
-        if not isinstance(passed, bool):
+        if "passed" not in payload:
             return self._t("history.dossier.unknown", "Result not recorded")
+        passed = payload["passed"]
+        if not isinstance(passed, bool):
+            return self._t("history.dossier.unreadable", "Unreadable recorded data")
         verdict = self._t(
             "history.dossier.qa_pass" if passed else "history.dossier.qa_fail",
             "Passed" if passed else "Failed",
@@ -394,6 +396,10 @@ class HistoryDialog(QDialog):
             verdict += " · " + self._t(
                 "history.dossier.violations", "Violations: {count}"
             ).format(count=count)
+        elif "violation_count" in payload:
+            verdict += " · " + self._t(
+                "history.dossier.invalid_count", "Recorded violation count is unreadable"
+            )
         return verdict
 
     def _stored_output(self, raw_json: object) -> tuple[str | None, bool]:
@@ -584,8 +590,11 @@ class HistoryDialog(QDialog):
             else:
                 QMessageBox.warning(
                     self,
-                    "Run history unavailable",
-                    "Stored runs could not be loaded. Check the local database and retry.",
+                    self._t("history.load_failed.title", "Run history unavailable"),
+                    self._t(
+                        "history.load_failed.detail",
+                        "Stored runs could not be loaded. Check the local database and retry.",
+                    ),
                 )
         except Exception:
             logger.exception("Failed to report a history selection error")
