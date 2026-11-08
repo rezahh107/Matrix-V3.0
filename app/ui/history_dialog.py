@@ -278,6 +278,11 @@ class HistoryDialog(QDialog):
         return self._translator.text(key, fallback)
 
     @staticmethod
+    def _field(row: Row, key: str) -> object:
+        # Old history test adapters may provide only a subset of run fields.
+        return row[key] if key in row.keys() else None
+
+    @staticmethod
     def _value(value: object) -> str:
         if value is None or value == "":
             return "—"
@@ -393,13 +398,13 @@ class HistoryDialog(QDialog):
         metrics: pd.DataFrame,
     ) -> None:
         run_id = int(run_row["id"])
-        operation = self._value(run_row["entrypoint"])
+        operation = self._value(self._field(run_row, "entrypoint"))
         self._identity_label.setText(
             self._t("history.dossier.identity", "Run #{id} · {operation}").format(
                 id=run_id, operation=operation
-            ) + " · " + self._ltr(self._value(run_row["run_uuid"]))
+            ) + " · " + self._ltr(self._value(self._field(run_row, "run_uuid")))
         )
-        status = run_row["status"]
+        status = self._field(run_row, "status")
         status_text = {
             "success": self._t("history.dossier.execution_success", "Recorded success"),
             "failed": self._t("history.dossier.execution_failure", "Recorded failure"),
@@ -407,12 +412,12 @@ class HistoryDialog(QDialog):
         self._outcome_label.setText(
             self._t("history.dossier.execution", "Execution: {status}").format(
                 status=status_text
-            ) + (" · " + str(run_row["message"]) if run_row["message"] else "")
+            ) + (" · " + str(self._field(run_row, "message")) if self._field(run_row, "message") else "")
         )
         self._times_label.setText(
             self._t("history.dossier.times", "Started: {start} · Finished: {end}").format(
-                start=self._ltr(self._value(run_row["started_at"])),
-                end=self._ltr(self._value(run_row["finished_at"])),
+                start=self._ltr(self._value(self._field(run_row, "started_at"))),
+                end=self._ltr(self._value(self._field(run_row, "finished_at"))),
             )
         )
         self._counts_label.setText(
@@ -420,9 +425,9 @@ class HistoryDialog(QDialog):
                 "history.dossier.counts",
                 "Students: {students} · Allocated: {allocated} · Unallocated: {unallocated}",
             ).format(
-                students=self._value(run_row["total_students"]),
-                allocated=self._value(run_row["total_allocated"]),
-                unallocated=self._value(run_row["total_unallocated"]),
+                students=self._value(self._field(run_row, "total_students")),
+                allocated=self._value(self._field(run_row, "total_allocated")),
+                unallocated=self._value(self._field(run_row, "total_unallocated")),
             )
         )
         self._versions_label.setText(
@@ -430,13 +435,13 @@ class HistoryDialog(QDialog):
                 "history.dossier.versions",
                 "Recorded policy: {policy} · SSoT: {ssot}",
             ).format(
-                policy=self._ltr(self._value(run_row["policy_version"])),
-                ssot=self._ltr(self._value(run_row["ssot_version"])),
+                policy=self._ltr(self._value(self._field(run_row, "policy_version"))),
+                ssot=self._ltr(self._value(self._field(run_row, "ssot_version"))),
             )
         )
         self._qa_outcome_label.setText(
             self._t("history.dossier.qa_outcome", "Recorded QA result: {value}").format(
-                value=self._qa_result(run_row["qa_summary_json"])
+                value=self._qa_result(self._field(run_row, "qa_summary_json"))
             )
         )
         self._evidence_label.setText(
@@ -459,7 +464,7 @@ class HistoryDialog(QDialog):
         self._qa_extras_empty.setText(
             self._t("history.dossier.not_recorded", "Not recorded")
         )
-        path, invalid = self._stored_output(run_row["input_files_json"])
+        path, invalid = self._stored_output(self._field(run_row, "input_files_json"))
         if invalid:
             self._output_path_edit.setPlaceholderText(
                 self._t("history.dossier.unreadable", "Unreadable recorded data")
