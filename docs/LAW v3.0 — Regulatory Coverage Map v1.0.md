@@ -402,7 +402,7 @@ remaining_capacity = capacity_limit - (assigned_baseline + allocations_new)
 
 **Core:**
 
-- `app/core/common/ranking.py`: مرتب‌سازی معمولی با `RANK_COLUMNS = ["remaining_capacity", "allocations_new", "mentor_sort_key"]` و `mergesort`، و مسیر heap با همین ترتیب
+- `app/core/common/ranking.py`: مرتب‌سازی معمولی با ستون‌های `ranking_rules` در `config/policy.json` (به‌ترتیب `remaining_capacity`, `allocations_new`, `mentor_sort_key`) و sort پایدار `mergesort`، و مسیر heap با همان ترتیب
 - `app/core/allocate_students.py`: فراخوانی `apply_ranking_policy` پیش از انتخاب منتور
 
 **Infra/UI:** حق بازتعریف رتبه‌بندی را ندارند و فقط خروجی Core را مصرف می‌کنند.
