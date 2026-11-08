@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.infra.errors import DatabaseOperationError
 from app.infra.local_database import LocalDatabase
 from app.ui.fonts import get_heading_font
 from app.ui.i18n import Language
@@ -568,11 +569,20 @@ class HistoryDialog(QDialog):
             self._update_empty_states()
         except Exception as exc:
             logger.exception("Failed to read selected history run %s", row)
+            # A strict snapshot decoding failure is different from a DB read error.
+            unreadable_snapshot = (
+                isinstance(exc, DatabaseOperationError)
+                and str(exc).startswith("Invalid stored snapshot:")
+            )
             self._clear_views()
             self._identity_label.setText(
                 self._t(
-                    "history.dossier.read_failed",
-                    "The selected run could not be read. Retry or select another run.",
+                    "history.dossier.snapshot_unreadable"
+                    if unreadable_snapshot
+                    else "history.dossier.read_failed",
+                    "Stored QA/Trace evidence is unreadable; retry or select another run."
+                    if unreadable_snapshot
+                    else "The selected run could not be read. Retry or select another run.",
                 )
             )
             self._report_selection_error(exc)
