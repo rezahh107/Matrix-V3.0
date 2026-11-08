@@ -625,3 +625,47 @@ def test_invalid_qa_metadata_types_are_disclosed_without_inferred_success(
     finally:
         dialog.close()
         qapp.processEvents()
+
+
+def test_failed_run_row_fetch_revokes_previous_evidence_and_copy_then_recovers(
+    qapp: QApplication, history_db: LocalDatabase, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with sqlite3.connect(history_db.path) as conn:
+        conn.execute(
+            "UPDATE runs SET input_files_json = ? WHERE id = 1",
+            (json.dumps({"output": r"C:\\synthetic\\A.xlsx"}),),
+        )
+        conn.execute(
+            "UPDATE runs SET input_files_json = ? WHERE id = 2",
+            (json.dumps({"output": r"C:\\synthetic\\B.xlsx"}),),
+        )
+        conn.commit()
+    errors: list[Exception] = []
+    dialog = HistoryDialog(history_db, on_selection_error=errors.append)
+    try:
+        dialog._run_list.setCurrentRow(0)
+        assert dialog._recorded_output_path == r"C:\\synthetic\\A.xlsx"
+        original = history_db.fetch_run_by_id
+
+        def fail_run_b(run_id: int) -> object:
+            if run_id == 2:
+                raise sqlite3.OperationalError("synthetic single-run read failure")
+            return original(run_id)
+
+        monkeypatch.setattr(history_db, "fetch_run_by_id", fail_run_b)
+        dialog._run_list.setCurrentRow(1)
+        assert len(errors) == 1
+        assert not dialog._copy_path_button.isEnabled()
+        assert dialog._recorded_output_path is None
+        assert dialog._output_path_edit.text() == ""
+        assert dialog.trace_model.rowCount() == 0
+        assert dialog._retry_button.text() == "Retry selected run"
+        monkeypatch.setattr(history_db, "fetch_run_by_id", original)
+        dialog._retry_button.click()
+        assert dialog._run_list.currentRow() == 1
+        assert dialog._recorded_output_path == r"C:\\synthetic\\B.xlsx"
+        assert dialog._copy_path_button.isEnabled()
+        assert _cell(dialog.trace_model) == "student-B"
+    finally:
+        dialog.close()
+        qapp.processEvents()
