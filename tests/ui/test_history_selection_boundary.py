@@ -669,3 +669,47 @@ def test_failed_run_row_fetch_revokes_previous_evidence_and_copy_then_recovers(
     finally:
         dialog.close()
         qapp.processEvents()
+
+
+def test_empty_history_refresh_loads_newly_recorded_run(
+    qapp: QApplication, tmp_path: Path
+) -> None:
+    db = LocalDatabase(tmp_path / "synthetic-empty-history.sqlite")
+    db.initialize()
+    dialog = HistoryDialog(db, translator=UiTranslator("en"))
+    try:
+        assert dialog._run_list.count() == 0
+        assert not dialog._copy_path_button.isEnabled()
+        assert dialog._retry_button.text() == "Refresh history"
+        started = datetime(2026, 11, 8, tzinfo=UTC)
+        db.insert_run(
+            RunRecord(
+                run_uuid="synthetic-new",
+                started_at=started,
+                finished_at=started,
+                policy_version="1.0.3",
+                ssot_version="1.0.2",
+                entrypoint="allocate",
+                cli_args=None,
+                db_path=None,
+                input_files_json=json.dumps({"output": None}),
+                input_hashes_json="{}",
+                total_students=1,
+                total_allocated=0,
+                total_unallocated=1,
+                history_metrics_json=None,
+                qa_summary_json=None,
+                status="failed",
+                message="synthetic failure",
+            )
+        )
+        dialog._retry_button.click()
+        assert dialog._run_list.count() == 1
+        assert dialog._selected_run_id == 1
+        assert "Recorded failure" in dialog._outcome_label.text()
+        assert "Not recorded" in dialog._qa_outcome_label.text()
+        assert dialog._retry_button.text() == "Retry selected run"
+    finally:
+        dialog.close()
+        db.close_all_connections()
+        qapp.processEvents()
