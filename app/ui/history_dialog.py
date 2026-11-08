@@ -307,7 +307,10 @@ class HistoryDialog(QDialog):
     @staticmethod
     def _field(row: Row, key: str) -> object:
         # Old history test adapters may provide only a subset of run fields.
-        return row[key] if key in row.keys() else None
+        try:
+            return row[key]
+        except (KeyError, IndexError):
+            return None
 
     @staticmethod
     def _value(value: object) -> str:

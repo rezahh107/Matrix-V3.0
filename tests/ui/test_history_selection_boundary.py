@@ -713,3 +713,47 @@ def test_empty_history_refresh_loads_newly_recorded_run(
         dialog.close()
         db.close_all_connections()
         qapp.processEvents()
+
+
+def test_dossier_field_uses_sqlite_column_names_not_row_value_membership() -> None:
+    # sqlite3.Row implements membership over values, not column names.
+    with sqlite3.connect(":memory:") as conn:
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT 17 AS id, 'missing_column' AS message, "
+            "NULL AS status, 0 AS total_allocated"
+        ).fetchone()
+
+    assert row is not None
+    assert "missing_column" in row  # This is a value, not a column name.
+    assert "missing_column" not in row.keys()
+    assert HistoryDialog._field(row, "id") == 17
+    assert HistoryDialog._field(row, "message") == "missing_column"
+    assert HistoryDialog._field(row, "status") is None
+    assert HistoryDialog._field(row, "total_allocated") == 0
+    assert HistoryDialog._field(row, "missing_column") is None
+
+
+@pytest.mark.parametrize(
+    ("row", "key", "expected"),
+    [
+        pytest.param({"id": 0}, "id", 0, id="zero-remains-present"),
+        pytest.param({"status": None}, "status", None, id="stored-null"),
+        pytest.param({"status": "success"}, "status", "success", id="valid-value"),
+        pytest.param({"message": "status"}, "status", None, id="value-is-not-a-key"),
+        pytest.param({}, "status", None, id="sparse-adapter"),
+    ],
+)
+def test_dossier_field_supports_sparse_dictionary_adapters(
+    row: dict[str, object], key: str, expected: object
+) -> None:
+    assert HistoryDialog._field(row, key) == expected
+
+
+def test_dossier_field_does_not_mask_unexpected_read_errors() -> None:
+    class BrokenRow:
+        def __getitem__(self, key: str) -> object:
+            raise RuntimeError("unexpected read failure")
+
+    with pytest.raises(RuntimeError, match="unexpected read failure"):
+        HistoryDialog._field(BrokenRow(), "status")
