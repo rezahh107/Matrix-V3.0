@@ -426,7 +426,8 @@ def test_run_specific_output_reference_never_uses_global_last_output(
     window = MainWindow()
     try:
         window._local_db = history_db
-        window._prefs.last_output_dir = path_b
+        # Do not persist a synthetic path into the developer/runner QSettings.
+        monkeypatch.setattr(type(window._prefs), "last_output_dir", property(lambda _s: path_b))
         window._support_toolbar_actions["run_history"].trigger()
         dialog = window._run_history_dialog
         assert dialog is not None
