@@ -11,6 +11,7 @@ import pandas as pd
 import pytest
 
 try:
+    from PySide6.QtCore import Qt
     from PySide6.QtWidgets import QApplication, QMessageBox
 except ImportError as exc:  # pragma: no cover - PySide6 provided on Windows UI runner
     pytest.skip(f"PySide6 unavailable: {exc}", allow_module_level=True)
@@ -359,6 +360,186 @@ def test_corrupt_explicit_nested_qa_extra_clears_selection_and_allows_retry(
         assert dialog.metrics_model.rowCount() == 1
         assert len(errors) == 1
         _assert_saved_rows_unchanged(history_db.path)
+    finally:
+        dialog.close()
+        qapp.processEvents()
+
+
+@pytest.mark.parametrize("language", ["fa", "en"])
+def test_dossier_bilingual_identity_direction_and_qa_independence(
+    qapp: QApplication, history_db: LocalDatabase, language: str
+) -> None:
+    with sqlite3.connect(history_db.path) as conn:
+        conn.execute(
+            """
+            UPDATE runs SET status = ?, qa_summary_json = ?, total_allocated = ?,
+                total_unallocated = ? WHERE id = ?
+            """,
+            ("success", json.dumps({"passed": False, "violation_count": 2}), None, 1, 1),
+        )
+        conn.commit()
+    dialog = HistoryDialog(history_db, translator=UiTranslator(language))
+    try:
+        dialog._run_list.setCurrentRow(0)
+        assert dialog.layoutDirection() == (
+            Qt.LayoutDirection.RightToLeft if language == "fa"
+            else Qt.LayoutDirection.LeftToRight
+        )
+        assert "synthetic-A" in dialog._identity_label.text()
+        assert dialog._qa_outcome_label.text().find(
+            "ناموفق" if language == "fa" else "Failed"
+        ) >= 0
+        assert ("ثبت شده" if language == "fa" else "Recorded success") in (
+            dialog._outcome_label.text()
+        )
+        assert "—" in dialog._counts_label.text()  # unknown is never silently zero
+        dialog._run_list.setCurrentRow(1)
+        assert ("ثبت نشده" if language == "fa" else "Not recorded") in (
+            dialog._qa_outcome_label.text()
+        )
+        assert "synthetic-A" not in dialog._identity_label.text()
+    finally:
+        dialog.close()
+        qapp.processEvents()
+
+
+def test_run_specific_output_reference_never_uses_global_last_output(
+    qapp: QApplication, history_db: LocalDatabase, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path
+) -> None:
+    path_a = r"C:\\synthetic\\run-A.xlsx"
+    path_b = r"C:\\synthetic\\run-B.xlsx"
+    with sqlite3.connect(history_db.path) as conn:
+        conn.execute(
+            "UPDATE runs SET input_files_json = ? WHERE id = 1",
+            (json.dumps({"output": path_a}),),
+        )
+        conn.execute(
+            "UPDATE runs SET input_files_json = ? WHERE id = 2",
+            (json.dumps({"output": path_b}),),
+        )
+        conn.commit()
+    monkeypatch.setattr(
+        main_window_base, "YearDatabaseManager",
+        lambda _root: YearDatabaseManager(tmp_path / "years"),
+    )
+    window = MainWindow()
+    try:
+        window._local_db = history_db
+        window._prefs.last_output_dir = path_b
+        window._support_toolbar_actions["run_history"].trigger()
+        dialog = window._run_history_dialog
+        assert dialog is not None
+        dialog._run_list.setCurrentRow(0)
+        assert dialog._output_path_edit.text() == path_a
+        assert dialog._copy_path_button.isEnabled()
+        dialog._copy_path_button.click()
+        assert QApplication.clipboard().text() == path_a
+        dialog._run_list.setCurrentRow(1)
+        assert dialog._output_path_edit.text() == path_b
+        with sqlite3.connect(history_db.path) as conn:
+            conn.execute(
+                "UPDATE runs SET input_files_json = ? WHERE id = 2",
+                (json.dumps({"output": None}),),
+            )
+            conn.commit()
+        dialog._run_list.setCurrentRow(0)
+        dialog._run_list.setCurrentRow(1)
+        assert dialog._output_path_edit.text() == ""
+        assert not dialog._copy_path_button.isEnabled()
+        assert dialog._recorded_output_path is None
+        assert path_b != QApplication.clipboard().text()
+    finally:
+        window.close()
+        qapp.processEvents()
+
+
+def test_missing_and_valid_empty_snapshots_are_not_conflated(
+    qapp: QApplication, history_db: LocalDatabase
+) -> None:
+    dialog = HistoryDialog(history_db, translator=UiTranslator("en"))
+    try:
+        with sqlite3.connect(history_db.path) as conn:
+            conn.execute("DELETE FROM trace_snapshots WHERE run_id = 2")
+            conn.execute("DELETE FROM qa_snapshots WHERE run_id = 2")
+            conn.commit()
+        dialog._run_list.setCurrentRow(0)
+        dialog._run_list.setCurrentRow(1)
+        assert dialog._trace_empty.text() == "Not recorded"
+        assert dialog._qa_summary_empty.text() == "Not recorded"
+        history_db.insert_trace_snapshot(run_id=2, trace_df=pd.DataFrame())
+        history_db.insert_qa_snapshot(
+            run_id=2, qa_summary_df=pd.DataFrame(), qa_details_df=pd.DataFrame()
+        )
+        dialog._retry_button.click()  # retry the selected row without a selection change
+        assert dialog._trace_empty.text() == "Recorded, but empty"
+        assert dialog._qa_summary_empty.text() == "Recorded, but empty"
+        assert dialog.trace_model.rowCount() == 0
+    finally:
+        dialog.close()
+        qapp.processEvents()
+
+
+def test_unreadable_reference_disables_copy_and_does_not_corrupt_qa_disclosure(
+    qapp: QApplication, history_db: LocalDatabase
+) -> None:
+    with sqlite3.connect(history_db.path) as conn:
+        conn.execute(
+            "UPDATE runs SET input_files_json = ?, qa_summary_json = ? WHERE id = 1",
+            ("{synthetic-bad-json", "{synthetic-bad-qa"),
+        )
+        conn.commit()
+    dialog = HistoryDialog(history_db, translator=UiTranslator("en"))
+    try:
+        dialog._run_list.setCurrentRow(0)
+        assert dialog._output_path_edit.text() == ""
+        assert dialog._output_path_edit.placeholderText() == "Unreadable recorded data"
+        assert not dialog._copy_path_button.isEnabled()
+        assert "Unreadable recorded data" in dialog._qa_outcome_label.text()
+        assert dialog.trace_model.rowCount() == 1  # corrupted run metadata != missing Trace
+    finally:
+        dialog.close()
+        qapp.processEvents()
+
+
+def test_retry_after_transient_selection_failure_never_copies_stale_run_path(
+    qapp: QApplication, history_db: LocalDatabase, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with sqlite3.connect(history_db.path) as conn:
+        conn.execute(
+            "UPDATE runs SET input_files_json = ? WHERE id = 1",
+            (json.dumps({"output": r"C:\\synthetic\\A.xlsx"}),),
+        )
+        conn.execute(
+            "UPDATE runs SET input_files_json = ? WHERE id = 2",
+            (json.dumps({"output": r"C:\\synthetic\\B.xlsx"}),),
+        )
+        conn.commit()
+    errors: list[Exception] = []
+    dialog = HistoryDialog(history_db, on_selection_error=errors.append)
+    try:
+        dialog._run_list.setCurrentRow(0)
+        assert dialog._copy_path_button.isEnabled()
+        original = history_db.fetch_trace_snapshot
+        call_count = 0
+
+        def fail_once(run_id: int, *, strict: bool = False) -> object:
+            nonlocal call_count
+            if run_id == 2 and call_count == 0:
+                call_count += 1
+                raise sqlite3.OperationalError("synthetic transient read error")
+            return original(run_id, strict=strict)
+
+        monkeypatch.setattr(history_db, "fetch_trace_snapshot", fail_once)
+        dialog._run_list.setCurrentRow(1)
+        assert len(errors) == 1
+        assert not dialog._copy_path_button.isEnabled()
+        assert dialog._output_path_edit.text() == ""
+        assert dialog.trace_model.rowCount() == 0
+        dialog._retry_button.click()
+        assert dialog._output_path_edit.text() == r"C:\\synthetic\\B.xlsx"
+        assert dialog._copy_path_button.isEnabled()
+        assert _cell(dialog.trace_model) == "student-B"
     finally:
         dialog.close()
         qapp.processEvents()
