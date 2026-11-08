@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from argparse import Namespace
 from pathlib import Path
 
@@ -901,6 +902,75 @@ def test_mainwindow_real_gui_build_allocate_sabt_and_recovery(
         assert len(sheet2) == 1
         assert sheet2.loc[0, "شناسه دانش آموز"] == student_id
         assert sheet2.loc[0, "کد ملی"] == "0000000001"
+
+        # Reuse this actual GUI -> Worker -> CLI allocation. Verify its audit
+        # across an independently reopened SQLite connection and the operator
+        # toolbar, rather than constructing a second E2E fixture.
+        assert window._local_db is not None
+        history_db_path = window._local_db.path
+        window._local_db.close_all_connections()
+        reopened_db = LocalDatabase(history_db_path)
+        matching_runs = [
+            row
+            for row in reopened_db.fetch_runs()
+            if row["entrypoint"] == "allocate"
+            and row["status"] == "success"
+            and json.loads(row["input_files_json"])["output"] == str(allocation)
+        ]
+        assert len(matching_runs) == 1
+        saved_run = matching_runs[0]
+        run_id = int(saved_run["id"])
+        assert saved_run["run_uuid"]
+        assert int(saved_run["total_allocated"]) == len(allocations)
+        assert json.loads(saved_run["input_hashes_json"])["students"] == sha256(
+            students_file.read_bytes()
+        ).hexdigest()
+
+        saved_trace, _saved_summary, _history_info = reopened_db.fetch_trace_snapshot(run_id)
+        assert saved_trace is not None
+        assert len(saved_trace) == len(trace)
+        assert saved_trace["student_id"].astype(str).eq(student_id).all()
+        assert saved_trace["stage"].tolist() == list(CANONICAL_TRACE_ORDER)
+        saved_qa, _saved_details, _saved_extras = reopened_db.fetch_qa_snapshot(run_id)
+        assert saved_qa is not None and not saved_qa.empty
+        # Metrics are a separate opt-in feature, disabled for this run.
+        assert reopened_db.fetch_metrics_for_run(run_id) == []
+
+        window._local_db = reopened_db
+        history_action = window._support_toolbar_actions["run_history"]
+        assert history_action.objectName() == "actionRunHistory"
+        assert history_action.isVisible()
+        history_action.trigger()
+        dialog = window._run_history_dialog
+        assert dialog is not None and dialog.isVisible()
+        index = next(i for i, row in enumerate(dialog._runs) if int(row["id"]) == run_id)
+        dialog._run_list.setCurrentRow(index)
+        assert dialog.trace_model.rowCount() == len(saved_trace)
+        assert dialog.qa_summary_model.rowCount() == len(saved_qa)
+        from PySide6.QtCore import Qt
+
+        trace_headers = [
+            dialog.trace_model.headerData(i, Qt.Orientation.Horizontal)
+            for i in range(dialog.trace_model.columnCount())
+        ]
+        assert "student_id" in trace_headers
+        student_column = trace_headers.index("student_id")
+        assert student_id in {
+            dialog.trace_model.data(dialog.trace_model.index(i, student_column))
+            for i in range(dialog.trace_model.rowCount())
+        }
+        dialog.close()
+
+        # Reenter through the same real action: no cached in-memory run list.
+        history_action.trigger()
+        second_dialog = window._run_history_dialog
+        assert second_dialog is not None and second_dialog is not dialog
+        index = next(i for i, row in enumerate(second_dialog._runs) if int(row["id"]) == run_id)
+        second_dialog._run_list.setCurrentRow(index)
+        assert second_dialog.trace_model.rowCount() == len(saved_trace)
+        assert second_dialog.qa_summary_model.rowCount() == len(saved_qa)
+        second_dialog.close()
+
         assert window._prefs.last_alloc_output == str(allocation)
         assert window._toolbar_actions["output"].isEnabled()
         from PySide6.QtGui import QDesktopServices

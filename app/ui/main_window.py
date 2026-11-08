@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QMessageBox,
     QPushButton,
     QScrollArea,
     QSizePolicy,
@@ -36,6 +37,7 @@ from PySide6.QtWidgets import (
 from app.infra.config_flags import save_user_settings
 
 from . import main_window_presentation_base as _v1
+from .history_dialog import HistoryDialog
 from .preferences.settings_dialog import UnifiedSettingsDialog
 from .run_output import RunOutputWorkspace, create_run_workspace
 from .widgets.combo_chevron import install_combo_chevrons
@@ -82,6 +84,7 @@ class MainWindow(_v1.MainWindow):
         self._diagnostics_toggle: QToolButton | None = None
         self._diagnostics_expanded = False
         self._support_toolbar_actions: dict[str, QAction] = {}
+        self._run_history_dialog: HistoryDialog | None = None
         self._polish_text_labels: dict[str, QLabel] = {}
         self._output_summary_labels: dict[str, QLabel] = {}
         self._active_run_workspace: RunOutputWorkspace | None = None
@@ -360,14 +363,19 @@ class MainWindow(_v1.MainWindow):
         settings_action = QAction(self)
         settings_action.setObjectName("actionPresentationSettings")
         settings_action.triggered.connect(self._open_settings_dialog)
+        run_history_action = QAction(self)
+        run_history_action.setObjectName("actionRunHistory")
+        run_history_action.triggered.connect(self._show_run_history)
         history_action = QAction(self)
         history_action.setObjectName("actionHistoryMetrics")
         history_action.triggered.connect(self._show_history_metrics)
         self._toolbar.addSeparator()
         self._toolbar.addAction(settings_action)
+        self._toolbar.addAction(run_history_action)
         self._toolbar.addAction(history_action)
         self._support_toolbar_actions = {
             "settings": settings_action,
+            "run_history": run_history_action,
             "history": history_action,
         }
         self._refresh_support_action_texts()
@@ -382,6 +390,51 @@ class MainWindow(_v1.MainWindow):
         history_action = self._support_toolbar_actions.get("history")
         if history_action is not None:
             history_action.setText(self._t("settings.history_metrics", "History Metrics"))
+        run_history_action = self._support_toolbar_actions.get("run_history")
+        if run_history_action is not None:
+            run_history_action.setText(self._t("action.run_history", "Run History"))
+
+    def _report_run_history_selection_error(self, error: Exception) -> None:
+        """Present a localized error without treating failed snapshots as empty history."""
+
+        self._append_log(f"Run history snapshot retrieval failed: {error}")
+        QMessageBox.warning(
+            self,
+            self._t("history.load_failed.title", "Run history unavailable"),
+            self._t(
+                "history.load_failed.detail",
+                "Stored runs could not be loaded. Check the local database and retry.",
+            ),
+        )
+
+    def _show_run_history(self) -> None:
+        """Open stored run audit records from the active annual database."""
+
+        if self._run_history_dialog is not None:
+            self._run_history_dialog.close()
+            self._run_history_dialog.deleteLater()
+            self._run_history_dialog = None
+        try:
+            self._ensure_year_loaded()
+            if self._local_db is None:
+                raise RuntimeError("No active local database")
+            dialog = HistoryDialog(
+                self._local_db, self, on_selection_error=self._report_run_history_selection_error
+            )
+        except Exception as exc:
+            self._append_log(f"Run history read failed: {exc}")
+            QMessageBox.warning(
+                self,
+                self._t("history.load_failed.title", "Run history unavailable"),
+                self._t(
+                    "history.load_failed.detail",
+                    "Stored runs could not be loaded. Check the local database and retry.",
+                ),
+            )
+            return
+        self._run_history_dialog = dialog
+        dialog.show()
+        dialog.raise_()
 
     def _open_settings_dialog(self) -> None:
         dialog = UnifiedSettingsDialog(self._prefs, self._user_settings, self._translator, self)

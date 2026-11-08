@@ -66,6 +66,9 @@ def test_history_store_persists_run_and_metrics(tmp_path) -> None:
         db=db,
     )
 
+    # A new LocalDatabase instance must recover the complete persisted record.
+    db.close_all_connections()
+    db = LocalDatabase(tmp_path / "history.db")
     runs = db.fetch_runs()
     assert len(runs) == 1
     run_row = runs[0]

@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+import logging
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any, cast
 
 import pandas as pd
@@ -12,6 +13,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QListWidget,
+    QMessageBox,
     QTableView,
     QTabWidget,
     QVBoxLayout,
@@ -21,6 +23,7 @@ from PySide6.QtWidgets import (
 from app.infra.local_database import LocalDatabase
 
 Row = Mapping[str, Any]
+logger = logging.getLogger(__name__)
 
 
 class DataFrameTableModel(QAbstractTableModel):
@@ -87,9 +90,16 @@ class DataFrameTableModel(QAbstractTableModel):
 class HistoryDialog(QDialog):
     """دیالوگ برای انتخاب اجرا و مشاهدهٔ Snapshot های QA/Trace."""
 
-    def __init__(self, db: LocalDatabase, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        db: LocalDatabase,
+        parent: QWidget | None = None,
+        *,
+        on_selection_error: Callable[[Exception], None] | None = None,
+    ) -> None:
         super().__init__(parent)
         self._db = db
+        self._on_selection_error = on_selection_error
         self._runs: Sequence[Row] = []
         self._metrics_by_run: dict[int, Sequence[Row]] = {}
         self.setWindowTitle("History Snapshots")
@@ -196,27 +206,47 @@ class HistoryDialog(QDialog):
         self._update_empty_states()
 
     def _on_run_selected(self, row: int) -> None:
+        # Selection changes invalidate all previous run views immediately.
+        self._clear_views()
         if row < 0 or row >= len(self._runs):
-            self._clear_views()
             return
-        run_row = self._runs[row]
-        run_id = int(run_row["id"])
-        metrics_rows = self._metrics_by_run.get(run_id, [])
-        metrics_df = self._rows_to_dataframe(cast(Sequence[Row], metrics_rows))
-        trace_df, qa_summary_df, qa_details_df, qa_extras = self._load_snapshots(run_id)
-        self._metrics_model.update(metrics_df)
-        self._trace_model.update(trace_df)
-        self._qa_summary_model.update(qa_summary_df)
-        self._qa_details_model.update(qa_details_df)
-        self._qa_extras = qa_extras or {}
-        self._qa_extras_list.clear()
-        for key in sorted(self._qa_extras):
-            self._qa_extras_list.addItem(str(key))
-        if self._qa_extras:
-            self._qa_extras_list.setCurrentRow(0)
-        else:
-            self._qa_extras_model.update(pd.DataFrame())
-        self._update_empty_states()
+        try:
+            run_row = self._runs[row]
+            run_id = int(run_row["id"])
+            metrics_rows = self._metrics_by_run.get(run_id, [])
+            metrics_df = self._rows_to_dataframe(cast(Sequence[Row], metrics_rows))
+            trace_df, qa_summary_df, qa_details_df, qa_extras = self._load_snapshots(run_id)
+            self._metrics_model.update(metrics_df)
+            self._trace_model.update(trace_df)
+            self._qa_summary_model.update(qa_summary_df)
+            self._qa_details_model.update(qa_details_df)
+            self._qa_extras = qa_extras or {}
+            self._qa_extras_list.clear()
+            for key in sorted(self._qa_extras):
+                self._qa_extras_list.addItem(str(key))
+            if self._qa_extras:
+                self._qa_extras_list.setCurrentRow(0)
+            else:
+                self._qa_extras_model.update(pd.DataFrame())
+            self._update_empty_states()
+        except Exception as exc:
+            logger.exception("Failed to load stored snapshots for selected history row %s", row)
+            self._clear_views()
+            self._report_selection_error(exc)
+
+    def _report_selection_error(self, error: Exception) -> None:
+        """Keep Qt signal callbacks safe even if error presentation itself fails."""
+        try:
+            if self._on_selection_error is not None:
+                self._on_selection_error(error)
+            else:
+                QMessageBox.warning(
+                    self,
+                    "Run history unavailable",
+                    "Stored runs could not be loaded. Check the local database and retry.",
+                )
+        except Exception:
+            logger.exception("Failed to report a history selection error")
 
     def _update_empty_states(self) -> None:
         is_trace_empty = self._trace_model.rowCount() == 0
@@ -234,8 +264,19 @@ class HistoryDialog(QDialog):
     ) -> tuple[
         pd.DataFrame | None, pd.DataFrame | None, pd.DataFrame | None, dict[str, pd.DataFrame]
     ]:
-        trace_df, _summary_df, _history_df = self._db.fetch_trace_snapshot(run_id)
-        qa_summary_df, qa_details_df, qa_extras = self._db.fetch_qa_snapshot(run_id)
+        # Real LocalDatabase can report corrupt serialized snapshots. Keep the
+        # older one-argument duck-typed test adapters usable without weakening
+        # the production read path.
+        if isinstance(self._db, LocalDatabase):
+            trace_df, _summary_df, _history_df = self._db.fetch_trace_snapshot(
+                run_id, strict=True
+            )
+            qa_summary_df, qa_details_df, qa_extras = self._db.fetch_qa_snapshot(
+                run_id, strict=True
+            )
+        else:
+            trace_df, _summary_df, _history_df = self._db.fetch_trace_snapshot(run_id)
+            qa_summary_df, qa_details_df, qa_extras = self._db.fetch_qa_snapshot(run_id)
         return trace_df, qa_summary_df, qa_details_df, qa_extras
 
     def _on_extra_selected(self, row: int) -> None:
