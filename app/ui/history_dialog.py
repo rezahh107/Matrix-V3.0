@@ -120,6 +120,9 @@ class HistoryDialog(QDialog):
         )
 
         self._run_list = QListWidget(self)
+        self._run_list.setAccessibleName(
+            self._t("history.dossier.run_list", "Recorded runs")
+        )
         self._run_list.currentRowChanged.connect(self._on_run_selected)
 
         self._trace_model = DataFrameTableModel()
@@ -211,6 +214,7 @@ class HistoryDialog(QDialog):
             label = QLabel(self)
             label.setObjectName(name)
             label.setWordWrap(True)
+            label.setTextFormat(Qt.TextFormat.PlainText)
             label.setTextInteractionFlags(
                 Qt.TextInteractionFlag.TextSelectableByMouse
                 | Qt.TextInteractionFlag.TextSelectableByKeyboard
@@ -263,6 +267,7 @@ class HistoryDialog(QDialog):
         self.resize(1024, 640)
         self._clear_views()
         self._load_runs()
+        self._run_list.setFocus()
 
     # Helpers -----------------------------------------------------------
     def _wrap_widget(self, *widgets: QWidget) -> QWidget:
@@ -310,9 +315,16 @@ class HistoryDialog(QDialog):
         metrics = self._db.fetch_metrics_for_runs([int(r["id"]) for r in runs])
         self._runs, self._metrics_by_run = runs, metrics
         for row in self._runs:
+            status = self._field(row, "status")
+            status_text = {
+                "success": self._t("history.dossier.execution_success", "Recorded success"),
+                "failed": self._t("history.dossier.execution_failure", "Recorded failure"),
+            }.get(status, self._value(status))
             self._run_list.addItem(
-                f"#{row['id']} · {self._value(row['entrypoint'] if 'entrypoint' in row.keys() else None)}"
-                f" · {self._value(row['started_at'])}"
+                self._ltr(f"#{row['id']}") + " · "
+                + self._value(self._field(row, "entrypoint")) + " · "
+                + self._ltr(self._value(self._field(row, "started_at"))) + " · "
+                + status_text
             )
         if self._runs:
             self._run_list.setCurrentRow(len(self._runs) - 1)
@@ -358,14 +370,14 @@ class HistoryDialog(QDialog):
         if not isinstance(payload, dict):
             return self._t("history.dossier.unreadable", "Unreadable recorded data")
         passed = payload.get("passed")
-        if type(passed) is not bool:
+        if not isinstance(passed, bool):
             return self._t("history.dossier.unknown", "Result not recorded")
         verdict = self._t(
             "history.dossier.qa_pass" if passed else "history.dossier.qa_fail",
             "Passed" if passed else "Failed",
         )
         count = payload.get("violation_count")
-        if type(count) is int and count >= 0:
+        if isinstance(count, int) and not isinstance(count, bool) and count >= 0:
             verdict += " · " + self._t(
                 "history.dossier.violations", "Violations: {count}"
             ).format(count=count)
@@ -385,7 +397,7 @@ class HistoryDialog(QDialog):
             return None, False
         if not isinstance(path, str):
             return None, True
-        if not path.strip() or "\\x00" in path:
+        if not path.strip() or "\x00" in path:
             return None, True
         return path, False
 
