@@ -416,8 +416,8 @@ def test_run_specific_output_reference_never_uses_global_last_output(
             (json.dumps({"output": path_a}),),
         )
         conn.execute(
-            "UPDATE runs SET input_files_json = ? WHERE id = 2",
-            (json.dumps({"output": path_b}),),
+            "UPDATE runs SET input_files_json = ?, status = ? WHERE id = 2",
+            (json.dumps({"output": path_b}), "failed"),
         )
         conn.commit()
     monkeypatch.setattr(
@@ -434,10 +434,13 @@ def test_run_specific_output_reference_never_uses_global_last_output(
         assert dialog is not None
         dialog._run_list.setCurrentRow(0)
         assert dialog._output_path_edit.text() == path_a
+        assert "Recorded success" in dialog._outcome_label.text()
+        assert "not verification" in dialog._path_note.text()
         assert dialog._copy_path_button.isEnabled()
         dialog._copy_path_button.click()
         assert QApplication.clipboard().text() == path_a
         dialog._run_list.setCurrentRow(1)
+        assert "Recorded failure" in dialog._outcome_label.text()
         assert dialog._output_path_edit.text() == path_b
         with sqlite3.connect(history_db.path) as conn:
             conn.execute(
@@ -567,4 +570,27 @@ def test_dossier_keyboard_selection_and_retry_accessibility(
         assert _cell(dialog.trace_model) == "student-A"
     finally:
         dialog.close()
+        qapp.processEvents()
+
+
+def test_recorded_output_reference_survives_database_reopen(
+    qapp: QApplication, history_db: LocalDatabase
+) -> None:
+    recorded = r"C:\\synthetic\\archive.xlsx"
+    with sqlite3.connect(history_db.path) as conn:
+        conn.execute(
+            "UPDATE runs SET input_files_json = ? WHERE id = 1",
+            (json.dumps({"output": recorded}),),
+        )
+        conn.commit()
+    history_db.close_all_connections()
+    reopened = LocalDatabase(history_db.path)
+    dialog = HistoryDialog(reopened, translator=UiTranslator("en"))
+    try:
+        dialog._run_list.setCurrentRow(0)
+        assert dialog._output_path_edit.text() == recorded
+        assert "not verification" in dialog._path_note.text()
+    finally:
+        dialog.close()
+        reopened.close_all_connections()
         qapp.processEvents()
