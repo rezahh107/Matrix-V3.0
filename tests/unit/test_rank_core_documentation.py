@@ -40,3 +40,14 @@ def test_rank_core_machine_spec_preserves_historical_audit_as_superseded() -> No
     )
     assert historical["status"] == "historical_superseded"
     assert "not a current P0" in historical["description"]
+
+
+def test_rank_core_spec_matches_executable_policy_priority() -> None:
+    """Ensure documentary approval and shipped policy specify identical sort keys."""
+    policy = json.loads((ROOT / "config/policy.json").read_text(encoding="utf-8"))
+    actual = [(rule["column"], rule["ascending"]) for rule in policy["ranking_rules"]]
+    assert actual == [
+        ("remaining_capacity", False),
+        ("allocations_new", True),
+        ("mentor_sort_key", True),
+    ]
