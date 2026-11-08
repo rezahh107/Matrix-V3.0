@@ -74,9 +74,7 @@ def test_corrupt_snapshot_requires_strict_failure_without_changing_record(
         reader(run_id, strict=True)
     # Existing readers remain compatible: invalid snapshot was historically absent.
     without_strict = reader(run_id)
-    if table == "trace_snapshots":
-        assert without_strict[0] is None
-    elif column == "qa_summary_json":
+    if table == "trace_snapshots" or column == "qa_summary_json":
         assert without_strict[0] is None
     else:
         assert without_strict[2] == {}
