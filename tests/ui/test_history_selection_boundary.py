@@ -594,3 +594,31 @@ def test_recorded_output_reference_survives_database_reopen(
         dialog.close()
         reopened.close_all_connections()
         qapp.processEvents()
+
+
+def test_invalid_qa_metadata_types_are_disclosed_without_inferred_success(
+    qapp: QApplication, history_db: LocalDatabase
+) -> None:
+    with sqlite3.connect(history_db.path) as conn:
+        conn.execute(
+            "UPDATE runs SET qa_summary_json = ? WHERE id = 1",
+            (json.dumps({"passed": "false", "violation_count": 0}),),
+        )
+        conn.commit()
+    dialog = HistoryDialog(history_db, translator=UiTranslator("en"))
+    try:
+        dialog._run_list.setCurrentRow(0)
+        assert "Unreadable recorded data" in dialog._qa_outcome_label.text()
+        assert "Recorded success" in dialog._outcome_label.text()
+        with sqlite3.connect(history_db.path) as conn:
+            conn.execute(
+                "UPDATE runs SET qa_summary_json = ? WHERE id = 1",
+                (json.dumps({"passed": False, "violation_count": "bad"}),),
+            )
+            conn.commit()
+        dialog._retry_button.click()
+        assert "Failed" in dialog._qa_outcome_label.text()
+        assert "Recorded violation count is unreadable" in dialog._qa_outcome_label.text()
+    finally:
+        dialog.close()
+        qapp.processEvents()
