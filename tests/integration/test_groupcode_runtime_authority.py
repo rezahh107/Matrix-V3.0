@@ -945,8 +945,10 @@ def test_mainwindow_real_gui_build_allocate_sabt_and_recovery(
         dialog._run_list.setCurrentRow(index)
         assert dialog.trace_model.rowCount() == len(saved_trace)
         assert dialog.qa_summary_model.rowCount() == len(saved_qa)
+        from PySide6.QtCore import Qt
+
         trace_headers = [
-            dialog.trace_model.headerData(i, 1)  # Qt.Horizontal
+            dialog.trace_model.headerData(i, Qt.Orientation.Horizontal)
             for i in range(dialog.trace_model.columnCount())
         ]
         assert "student_id" in trace_headers
