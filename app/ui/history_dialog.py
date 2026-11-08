@@ -312,6 +312,22 @@ class HistoryDialog(QDialog):
             return self._t("history.dossier.recorded_empty", "Recorded, but empty")
         return self._t("history.dossier.available", "Available")
 
+    def _run_item_text(self, row: Row) -> str:
+        status = self._field(row, "status")
+        status_text = {
+            "success": self._t("history.dossier.execution_success", "Recorded success"),
+            "failed": self._t("history.dossier.execution_failure", "Recorded failure"),
+        }.get(status, self._value(status))
+        return (
+            self._ltr(f"#{row['id']}")
+            + " · "
+            + self._value(self._field(row, "entrypoint"))
+            + " · "
+            + self._ltr(self._value(self._field(row, "started_at")))
+            + " · "
+            + status_text
+        )
+
     def _load_runs(self) -> None:
         # Clearing first also makes a failed refresh safe: no prior run remains actionable.
         self._runs = []
@@ -322,17 +338,7 @@ class HistoryDialog(QDialog):
         metrics = self._db.fetch_metrics_for_runs([int(r["id"]) for r in runs])
         self._runs, self._metrics_by_run = runs, metrics
         for row in self._runs:
-            status = self._field(row, "status")
-            status_text = {
-                "success": self._t("history.dossier.execution_success", "Recorded success"),
-                "failed": self._t("history.dossier.execution_failure", "Recorded failure"),
-            }.get(status, self._value(status))
-            self._run_list.addItem(
-                self._ltr(f"#{row['id']}") + " · "
-                + self._value(self._field(row, "entrypoint")) + " · "
-                + self._ltr(self._value(self._field(row, "started_at"))) + " · "
-                + status_text
-            )
+            self._run_list.addItem(self._run_item_text(row))
         if self._runs:
             self._run_list.setCurrentRow(len(self._runs) - 1)
         else:
@@ -517,6 +523,8 @@ class HistoryDialog(QDialog):
                 run_row: Row = fresh_row
             else:
                 run_row = self._runs[row]
+            # The list and the dossier must describe the same refreshed record.
+            self._run_list.item(row).setText(self._run_item_text(run_row))
             metrics_df = self._rows_to_dataframe(
                 cast(Sequence[Row], self._metrics_by_run.get(run_id, []))
             )
