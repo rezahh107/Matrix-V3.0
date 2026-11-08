@@ -473,8 +473,9 @@ class HistoryDialog(QDialog):
         self._metrics_empty.setText(
             self._t("history.dossier.not_recorded", "Not recorded")
         )
+        # Empty extras can also mean a stored empty map; the API cannot tell which.
         self._qa_extras_empty.setText(
-            self._t("history.dossier.not_recorded", "Not recorded")
+            self._t("history.dossier.no_extra_rows", "No additional QA rows available")
         )
         path, invalid = self._stored_output(self._field(run_row, "input_files_json"))
         if invalid:
