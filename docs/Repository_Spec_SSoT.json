@@ -207,7 +207,7 @@
       "layer": "core",
       "role": "Building mentor capacity state and sorting candidate pools.",
       "implements_invariants": ["RANK-CORE", "CAPACITY-01", "R0-CAPACITY-GATE-01", "DET-CORE"],
-      "known_discrepancies": ["DISC-RANK-CORE-OCCUPANCY"]
+      "known_discrepancies": []
     },
     {
       "path": "app/core/common/trace.py",
