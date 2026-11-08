@@ -234,6 +234,15 @@ class HistoryDialog(QDialog):
             self._evidence_label,
         ) = self._dossier_lines
         self._identity_label.setFont(get_heading_font())
+        self._evidence_note = QLabel(
+            self._t(
+                "history.dossier.absence_note",
+                "Missing saved evidence does not prove that execution or QA did not occur.",
+            ), self
+        )
+        self._evidence_note.setWordWrap(True)
+        self._evidence_note.setProperty("guidanceLevel", "field")
+        right_layout.addWidget(self._evidence_note)
 
         self._path_label = QLabel(
             self._t("history.dossier.output", "Recorded output path for this run"), self
