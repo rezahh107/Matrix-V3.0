@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.infra.local_database import LocalDatabase
+from app.ui.fonts import get_heading_font
 from app.ui.i18n import Language
 from app.ui.texts import UiTranslator
 
@@ -209,6 +210,7 @@ class HistoryDialog(QDialog):
         right_layout.setSpacing(6)
         self._dossier_header = QLabel(self._t("history.dossier.title", "Run Review Dossier"), self)
         self._dossier_header.setObjectName("runDossierHeading")
+        self._dossier_header.setFont(get_heading_font())
         right_layout.addWidget(self._dossier_header)
         self._dossier_lines: list[QLabel] = []
         for name in (
@@ -230,6 +232,7 @@ class HistoryDialog(QDialog):
             self._counts_label, self._versions_label, self._qa_outcome_label,
             self._evidence_label,
         ) = self._dossier_lines
+        self._identity_label.setFont(get_heading_font())
 
         self._path_label = QLabel(
             self._t("history.dossier.output", "Recorded output path for this run"), self
@@ -330,7 +333,7 @@ class HistoryDialog(QDialog):
             + status_text
         )
 
-    def _load_runs(self) -> None:
+    def _load_runs(self, *, preferred_run_id: int | None = None) -> None:
         # Clearing first also makes a failed refresh safe: no prior run remains actionable.
         self._runs = []
         self._metrics_by_run = {}
@@ -342,7 +345,15 @@ class HistoryDialog(QDialog):
         for row in self._runs:
             self._run_list.addItem(self._run_item_text(row))
         if self._runs:
-            self._run_list.setCurrentRow(len(self._runs) - 1)
+            selected_index = next(
+                (
+                    index
+                    for index, run in enumerate(self._runs)
+                    if int(run["id"]) == preferred_run_id
+                ),
+                len(self._runs) - 1,
+            )
+            self._run_list.setCurrentRow(selected_index)
         else:
             self._identity_label.setText(
                 self._t("history.dossier.no_runs", "No historical runs recorded")
@@ -351,6 +362,9 @@ class HistoryDialog(QDialog):
     def _clear_views(self) -> None:
         self._selected_run_id = None
         self._recorded_output_path = None
+        self._retry_button.setText(
+            self._t("history.dossier.refresh", "Refresh history")
+        )
         self._copy_path_button.setEnabled(False)
         self._output_path_edit.clear()
         self._output_path_edit.setPlaceholderText(
@@ -522,6 +536,7 @@ class HistoryDialog(QDialog):
         self._clear_views()
         if row < 0 or row >= len(self._runs):
             return
+        self._retry_button.setText(self._t("history.dossier.retry", "Retry selected run"))
         try:
             run_id = int(self._runs[row]["id"])
             if isinstance(self._db, LocalDatabase):
@@ -564,15 +579,17 @@ class HistoryDialog(QDialog):
 
     def _retry_read(self) -> None:
         row = self._run_list.currentRow()
-        if row >= 0:
-            self._on_run_selected(row)
-        else:
-            try:
-                self._load_runs()
-            except Exception as exc:
-                logger.exception("Failed to refresh historical run list")
-                self._clear_views()
-                self._report_selection_error(exc)
+        selected_id = (
+            int(self._runs[row]["id"])
+            if 0 <= row < len(self._runs)
+            else None
+        )
+        try:
+            self._load_runs(preferred_run_id=selected_id)
+        except Exception as exc:
+            logger.exception("Failed to refresh historical run list")
+            self._clear_views()
+            self._report_selection_error(exc)
 
     def _copy_recorded_path(self) -> None:
         row = self._run_list.currentRow()
