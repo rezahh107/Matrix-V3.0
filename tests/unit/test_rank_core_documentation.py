@@ -40,6 +40,10 @@ def test_rank_core_machine_spec_preserves_historical_audit_as_superseded() -> No
     )
     assert historical["status"] == "historical_superseded"
     assert "not a current P0" in historical["description"]
+    ranking_module = next(
+        item for item in spec["modules"] if item["path"] == "app/core/common/ranking.py"
+    )
+    assert "DISC-RANK-CORE-OCCUPANCY" not in ranking_module["known_discrepancies"]
 
 
 def test_rank_core_spec_matches_executable_policy_priority() -> None:
@@ -51,3 +55,9 @@ def test_rank_core_spec_matches_executable_policy_priority() -> None:
         ("allocations_new", True),
         ("mentor_sort_key", True),
     ]
+
+
+def test_old_ratio_policy_example_is_explicitly_historical() -> None:
+    text = (ROOT / "docs/allocation-policy.yml").read_text(encoding="utf-8")
+    assert text.startswith("# HISTORICAL reference only")
+    assert "remaining_capacity DESC, allocations_new ASC" in text
