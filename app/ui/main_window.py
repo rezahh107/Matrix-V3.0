@@ -394,6 +394,19 @@ class MainWindow(_v1.MainWindow):
         if run_history_action is not None:
             run_history_action.setText(self._t("action.run_history", "Run History"))
 
+    def _report_run_history_selection_error(self, error: Exception) -> None:
+        """Present a localized error without treating failed snapshots as empty history."""
+
+        self._append_log(f"Run history snapshot retrieval failed: {error}")
+        QMessageBox.warning(
+            self,
+            self._t("history.load_failed.title", "Run history unavailable"),
+            self._t(
+                "history.load_failed.detail",
+                "Stored runs could not be loaded. Check the local database and retry.",
+            ),
+        )
+
     def _show_run_history(self) -> None:
         """Open stored run audit records from the active annual database."""
 
@@ -405,7 +418,9 @@ class MainWindow(_v1.MainWindow):
             self._ensure_year_loaded()
             if self._local_db is None:
                 raise RuntimeError("No active local database")
-            dialog = HistoryDialog(self._local_db, self)
+            dialog = HistoryDialog(
+                self._local_db, self, on_selection_error=self._report_run_history_selection_error
+            )
         except Exception as exc:
             self._append_log(f"Run history read failed: {exc}")
             QMessageBox.warning(

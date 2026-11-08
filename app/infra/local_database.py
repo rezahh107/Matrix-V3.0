@@ -868,9 +868,9 @@ class LocalDatabase:
             raise DatabaseOperationError("ثبت Snapshot تریس با خطا روبه‌رو شد.") from exc
 
     def fetch_trace_snapshot(
-        self, run_id: int
+        self, run_id: int, *, strict: bool = False
     ) -> tuple[pd.DataFrame | None, pd.DataFrame | None, pd.DataFrame | None]:
-        """بازیابی Snapshot تریس برای یک اجرای مشخص."""
+        """بازیابی Trace؛ در حالت strict خرابی JSON به خطای قابل‌گزارش تبدیل می‌شود."""
 
         with self._open_connection() as conn:
             cursor = conn.execute(
@@ -883,10 +883,12 @@ class LocalDatabase:
             row = cursor.fetchone()
         if row is None:
             return None, None, None
-        trace_df = _safe_deserialize_dataframe(row["trace_json"], label="trace_json")
-        summary_df = _safe_deserialize_dataframe(row["summary_json"], label="summary_json")
+        trace_df = _safe_deserialize_dataframe(row["trace_json"], label="trace_json", strict=strict)
+        summary_df = _safe_deserialize_dataframe(
+            row["summary_json"], label="summary_json", strict=strict
+        )
         history_df = _safe_deserialize_dataframe(
-            row["history_info_json"], label="history_info_json"
+            row["history_info_json"], label="history_info_json", strict=strict
         )
         return trace_df, summary_df, history_df
 
@@ -921,9 +923,9 @@ class LocalDatabase:
             raise DatabaseOperationError("ثبت Snapshot QA با خطا مواجه شد.") from exc
 
     def fetch_qa_snapshot(
-        self, run_id: int
+        self, run_id: int, *, strict: bool = False
     ) -> tuple[pd.DataFrame | None, pd.DataFrame | None, dict[str, pd.DataFrame]]:
-        """بازیابی Snapshot QA برای یک اجرا."""
+        """بازیابی QA؛ strict خرابی JSON را بدون تغییر رفتار قدیمی آشکار می‌کند."""
 
         with self._open_connection() as conn:
             cursor = conn.execute(
@@ -936,9 +938,13 @@ class LocalDatabase:
             row = cursor.fetchone()
         if row is None:
             return None, None, {}
-        summary_df = _safe_deserialize_dataframe(row["qa_summary_json"], label="qa_summary_json")
-        details_df = _safe_deserialize_dataframe(row["qa_details_json"], label="qa_details_json")
-        extras = _safe_deserialize_dataframe_map(row["qa_extras_json"])
+        summary_df = _safe_deserialize_dataframe(
+            row["qa_summary_json"], label="qa_summary_json", strict=strict
+        )
+        details_df = _safe_deserialize_dataframe(
+            row["qa_details_json"], label="qa_details_json", strict=strict
+        )
+        extras = _safe_deserialize_dataframe_map(row["qa_extras_json"], strict=strict)
         return summary_df, details_df, extras
 
     # ------------------------------------------------------------------
@@ -2456,8 +2462,10 @@ def _serialize_dataframe_map(
     return json.dumps(payload, ensure_ascii=False)
 
 
-def _safe_deserialize_dataframe(payload: str | bytes | None, *, label: str) -> pd.DataFrame | None:
-    """بازسازی امن دیتافریم از JSON ذخیره‌شده به‌صورت split."""
+def _safe_deserialize_dataframe(
+    payload: str | bytes | None, *, label: str, strict: bool = False
+) -> pd.DataFrame | None:
+    """بازسازی JSON؛ strict برای بازبینی قابل‌اعتماد آرشیو خطا را برمی‌گرداند."""
 
     if payload in (None, b"", ""):
         return None
@@ -2465,13 +2473,15 @@ def _safe_deserialize_dataframe(payload: str | bytes | None, *, label: str) -> p
         if isinstance(payload, bytes):
             payload = payload.decode("utf-8")
         return pd.read_json(io.StringIO(payload), orient="split")
-    except Exception:
+    except Exception as exc:
+        if strict:
+            raise DatabaseOperationError(f"Invalid stored snapshot: {label}") from exc
         logger.exception("Failed to deserialize DataFrame payload for %s", label)
         return None
 
 
 def _safe_deserialize_dataframe_map(
-    payload: str | bytes | None,
+    payload: str | bytes | None, *, strict: bool = False
 ) -> dict[str, pd.DataFrame]:
     """بازسازی نگاشت دیتافریم‌ها از JSON ذخیره‌شده."""
 
@@ -2485,11 +2495,19 @@ def _safe_deserialize_dataframe_map(
         raw = json.loads(decoded_payload)
         result: dict[str, pd.DataFrame] = {}
         for key, df_payload in raw.items():
-            frame = _safe_deserialize_dataframe(df_payload, label=f"qa_extras.{key}")
+            frame = _safe_deserialize_dataframe(
+                df_payload, label=f"qa_extras.{key}", strict=strict
+            )
+            if strict and frame is None:
+                raise DatabaseOperationError(f"Invalid stored snapshot: qa_extras.{key}")
             if isinstance(frame, pd.DataFrame):
                 result[str(key)] = frame
         return result
-    except Exception:
+    except Exception as exc:
+        if strict:
+            if isinstance(exc, DatabaseOperationError):
+                raise
+            raise DatabaseOperationError("Invalid stored snapshot: qa_extras_json") from exc
         logger.exception("Failed to deserialize QA extras payload")
         return {}
 
