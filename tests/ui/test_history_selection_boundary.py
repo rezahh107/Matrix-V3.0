@@ -12,6 +12,7 @@ import pytest
 
 try:
     from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
     from PySide6.QtWidgets import QApplication, QMessageBox
 except ImportError as exc:  # pragma: no cover - PySide6 provided on Windows UI runner
     pytest.skip(f"PySide6 unavailable: {exc}", allow_module_level=True)
@@ -541,6 +542,29 @@ def test_retry_after_transient_selection_failure_never_copies_stale_run_path(
         assert dialog._output_path_edit.text() == r"C:\\synthetic\\B.xlsx"
         assert dialog._copy_path_button.isEnabled()
         assert _cell(dialog.trace_model) == "student-B"
+    finally:
+        dialog.close()
+        qapp.processEvents()
+
+
+def test_dossier_keyboard_selection_and_retry_accessibility(
+    qapp: QApplication, history_db: LocalDatabase
+) -> None:
+    dialog = HistoryDialog(history_db, translator=UiTranslator("en"))
+    try:
+        dialog.show()
+        qapp.processEvents()
+        assert dialog._run_list.accessibleName() == "Recorded runs"
+        assert dialog._output_path_edit.accessibleName() == "Recorded output path for this run"
+        dialog._run_list.setCurrentRow(1)
+        dialog._run_list.setFocus()
+        QTest.keyClick(dialog._run_list, Qt.Key.Key_Up)
+        assert dialog._run_list.currentRow() == 0
+        assert dialog._selected_run_id == 1
+        dialog._retry_button.setFocus()
+        QTest.keyClick(dialog._retry_button, Qt.Key.Key_Space)
+        assert dialog._selected_run_id == 1
+        assert _cell(dialog.trace_model) == "student-A"
     finally:
         dialog.close()
         qapp.processEvents()
