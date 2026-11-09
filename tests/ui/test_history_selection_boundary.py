@@ -566,13 +566,13 @@ def test_long_run_operation_wrap_is_display_only_and_selection_stays_native(
         rendered = dialog._run_list.itemDelegate().displayText(
             original, dialog._run_list.locale()
         )
-        painted_operation = rendered.split("\n")[1]
+        painted_operation = rendered.split("\u2028")[1]
         assert "\u200b" in painted_operation
         assert painted_operation.startswith("\u2066")
         assert painted_operation.endswith("\u2069")
         assert painted_operation[1:-1].replace("\u200b", "") == operation
-        assert rendered.split("\n")[0] == original.split("\n")[0]
-        assert rendered.split("\n")[2] == original.split("\n")[2]
+        assert rendered.split("\u2028")[0] == original.split("\n")[0]
+        assert rendered.split("\u2028")[2] == original.split("\n")[2]
         dialog._run_list.setCurrentRow(0)
         dialog._run_list.setFocus()
         QTest.keyClick(dialog._run_list, Qt.Key.Key_Down)
