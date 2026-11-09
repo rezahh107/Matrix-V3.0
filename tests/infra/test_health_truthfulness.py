@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 import pandas as pd
 import pytest
 
-from app.infra.health import build_llm_debug_report, compute_run_health
+from app.infra.health import _deduce_severity, build_llm_debug_report, compute_run_health
 from app.infra.local_database import LocalDatabase, QaSummaryRow, RunRecord
 
 
@@ -203,3 +203,64 @@ def test_corrupt_overall_cannot_hide_separate_p0_violation(db):
     health = compute_run_health(str(run_id), db=db)
     assert health.status == "ERROR"
     assert health.counts["P0"] == 2
+
+@pytest.mark.parametrize(
+    ("level", "expected"),
+    [
+        ("P0", "P0"),
+        ("critical", "P0"),
+        ("error", "P0"),
+        ("  CRITICAL  ", "P0"),
+        ("P1", "P1"),
+        ("warn", "P1"),
+        ("warning", "P1"),
+        ("  WARN  ", "P1"),
+        ("P2", "P2"),
+        ("info", "P2"),
+        ("informational", "P2"),
+        ("notice", "P2"),
+        (None, "P2"),
+        (42, "P2"),
+    ],
+)
+def test_persisted_health_severity_aliases(level: object, expected: str):
+    """Same QA severity language as runtime; non-string records stay safe."""
+    assert _deduce_severity(level) == expected
+
+
+@pytest.mark.parametrize(
+    ("level", "expected_status", "expected_bucket"),
+    [
+        ("P0", "ERROR", "P0"),
+        ("critical", "ERROR", "P0"),
+        ("error", "ERROR", "P0"),
+        ("P1", "WARN", "P1"),
+        ("warn", "WARN", "P1"),
+        ("warning", "WARN", "P1"),
+    ],
+)
+def test_persisted_health_material_detail_outweighs_warn_summary(
+    db, level: str, expected_status: str, expected_bucket: str
+):
+    """Persisted summary WARN must not downgrade a material P0 detail.
+
+    An overall recorded PASS is deliberately contradictory to the detail:
+    issue severity, not the green aggregate, must determine health.
+    """
+    run_id = _run(db, outcome={"passed": True, "violation_count": 1})
+    _snapshot(db, run_id, rule_status="WARN", violations=1, level=level)
+
+    health = compute_run_health(str(run_id), db=db)
+
+    assert health.status == expected_status
+    assert health.counts[expected_bucket] == 1
+    assert health.issues_summary[0].severity == expected_bucket
+    assert health.issues_summary[0].count == 1
+
+
+@pytest.mark.parametrize("raw_level", [None, 42])
+def test_non_string_persisted_detail_does_not_claim_clean_qa(db, raw_level: object):
+    run_id = _run(db, outcome={"passed": True, "violation_count": 1})
+    _snapshot(db, run_id, rule_status="WARN", violations=1, level=raw_level)
+    health = compute_run_health(str(run_id), db=db)
+    assert health.status != "OK"
