@@ -22,7 +22,7 @@ from unittest.mock import patch
 import pandas as pd
 from PySide6 import __version__ as pyside_version
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QTextLayout, QTextOption
+from PySide6.QtGui import QFont, QTextLayout, QTextOption
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QScrollArea, QStyle, QStyleOptionViewItem
 
@@ -354,9 +354,8 @@ def _seven_run_case(
         db.close_all_connections()
 
 
-
 def _layout_metrics(
-    text: str, width: int, font: object, direction: Qt.LayoutDirection
+    text: str, width: int, font: QFont, direction: Qt.LayoutDirection
 ) -> tuple[float, float, int, float]:
     option = QTextOption()
     option.setWrapMode(QTextOption.WrapMode.WordWrap)
