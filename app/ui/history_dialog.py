@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any, cast
 
 import pandas as pd
-from PySide6.QtCore import QAbstractTableModel, QModelIndex, QPersistentModelIndex, Qt
+from PySide6.QtCore import QAbstractTableModel, QLocale, QModelIndex, QPersistentModelIndex, Qt
 from PySide6.QtWidgets import (
     QApplication,
     QDialog,
@@ -21,6 +22,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QScrollArea,
+    QStyledItemDelegate,
     QTableView,
     QTabWidget,
     QVBoxLayout,
@@ -98,6 +100,25 @@ class DataFrameTableModel(QAbstractTableModel):
         return None
 
 
+class _RunListTextDelegate(QStyledItemDelegate):
+    """Add display-only wrap points; the model keeps the exact recorded text."""
+
+    def displayText(self, value: object, locale: QLocale) -> str:  # noqa: N802 - Qt override
+        text = super().displayText(value, locale)
+        lines = text.split("\n")
+        if len(lines) != 3:
+            return text
+
+        def split_ascii_run(match: re.Match[str]) -> str:
+            token = match.group(0)
+            return "\u200b".join(token[i:i + 10] for i in range(0, len(token), 10))
+
+        operation = re.sub(r"[A-Za-z0-9]{11,}", split_ascii_run, lines[1])
+        # '_' and long ASCII runs become breakable; isolates keep mixed bidi stable.
+        lines[1] = "\u2066" + operation.replace("_", "_\u200b") + "\u2069"
+        return "\n".join(lines)
+
+
 class HistoryDialog(QDialog):
     """دیالوگ برای انتخاب اجرا و مشاهدهٔ Snapshot های QA/Trace."""
 
@@ -129,6 +150,7 @@ class HistoryDialog(QDialog):
             self._t("history.dossier.run_list", "Recorded runs")
         )
         # Keep the native list and selection behavior; wrap complete recorded facts.
+        self._run_list.setItemDelegate(_RunListTextDelegate(self._run_list))
         self._run_list.setWordWrap(True)
         self._run_list.setTextElideMode(Qt.TextElideMode.ElideNone)
         self._run_list.setResizeMode(QListView.ResizeMode.Adjust)
