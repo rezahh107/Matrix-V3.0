@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from numbers import Integral
 from datetime import datetime
 from pathlib import Path
 from typing import Literal
@@ -16,9 +17,11 @@ from typing import Literal
 import pandas as pd
 
 from app.core.qa.law_mapping import all_law_mappings
+from app.infra.errors import DatabaseOperationError
 from app.infra.local_database import LocalDatabase
 
-HealthStatus = Literal["OK", "WARN", "ERROR"]
+HealthStatus = Literal["OK", "WARN", "ERROR", "UNVERIFIED"]
+HealthReason = Literal["missing_run", "not_recorded", "invalid", "incomplete", "run_failed"]
 
 
 @dataclass(frozen=True)
@@ -39,6 +42,7 @@ class HealthSummary:
     summary_text: str
     counts: dict[str, int]
     issues_summary: list[IssueSummary]
+    reason: HealthReason | None = None
 
 
 def _deduce_severity(raw_level: object) -> str:
@@ -113,32 +117,141 @@ def _summarize_issues(
     return counts, issues
 
 
+def _read_recorded_qa_outcome(run_row: dict[str, object]) -> tuple[bool, int] | None:
+    """Only the persisted overall QaOutcome is positive QA evidence.
+
+    This is written by history_store._build_run_record; the separate
+    qa_summary table and issue-free detail frames do not prove QA PASS.
+    """
+    raw = run_row.get("qa_summary_json")
+    if raw is None:
+        return None
+    try:
+        value = json.loads(raw) if isinstance(raw, str) else None
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Invalid recorded overall QA outcome") from exc
+    if not isinstance(value, dict):
+        raise ValueError("Overall QA outcome must be an object")
+    passed = value.get("passed")
+    count = value.get("violation_count")
+    if type(passed) is not bool or type(count) is not int or count < 0:
+        raise ValueError("Overall QA outcome has invalid or incomplete fields")
+    return passed, count
+
+
+def _check_snapshot_shape(
+    summary: pd.DataFrame | None, details: pd.DataFrame | None
+) -> tuple[bool, bool, int]:
+    """Validate the existing QaReport snapshot shape without inventing new QA rules.
+
+    A summary without a trustworthy overall outcome is diagnostic evidence,
+    not certification. Inconsistent counts or malformed rows cannot yield OK.
+    """
+    if summary is None or summary.empty:
+        return False, False, 0
+    if not {"rule_id", "status", "violations_count"}.issubset(summary.columns):
+        raise ValueError("QA snapshot summary is incomplete")
+    count = 0
+    has_failure = False
+    has_warning = False
+    for _, row in summary.iterrows():
+        rule_id = row["rule_id"]
+        status = str(row["status"]).strip().upper()
+        violations = row["violations_count"]
+        if (
+            pd.isna(rule_id)
+            or not str(rule_id).strip()
+            or status not in {"PASS", "WARN", "FAIL"}
+            or isinstance(violations, bool)
+            or not isinstance(violations, Integral)
+            or violations < 0
+        ):
+            raise ValueError("Malformed QA snapshot summary row")
+        if status == "FAIL":
+            has_failure = True
+        elif status == "WARN":
+            has_warning = True
+        count += int(violations)
+    if details is not None and not details.empty:
+        if not {"rule_id", "level"}.issubset(details.columns):
+            raise ValueError("Malformed QA details columns")
+        if details["rule_id"].isna().any() or details["level"].isna().any():
+            raise ValueError("Malformed QA details row")
+        if len(details) != count:
+            raise ValueError("QA summary and details violation counts disagree")
+    elif count:
+        raise ValueError("QA violation details are absent")
+    return has_failure, has_warning, count
+
+
 def compute_run_health(run_id: str, *, db: LocalDatabase) -> HealthSummary:
-    """محاسبهٔ وضعیت سلامت یک اجرا بر اساس Snapshot های QA ذخیره‌شده."""
+    """Describe stored Run and QA evidence, never infer PASS from zero issues.
+
+    The status describes *recorded QA evidence*, not output file existence,
+    authenticity or suitability for operator use.
+    """
+    counts = {"P0": 0, "P1": 0, "P2": 0}
+
+    def result(
+        status: HealthStatus, reason: HealthReason | None = None,
+        issues: list[IssueSummary] | None = None,
+    ) -> HealthSummary:
+        text = {
+            "OK": "Recorded QA passed; output file not independently verified.",
+            "WARN": "QA warnings recorded; review before using the output.",
+            "ERROR": "QA failed or material errors were recorded; do not use the output.",
+            "UNVERIFIED": "QA is not verified; review the recorded QA evidence.",
+        }[status]
+        if reason == "missing_run":
+            text = "Run not found; no QA result is available."
+        elif reason == "not_recorded":
+            text = "No QA result recorded; output is not verified."
+        elif reason == "invalid":
+            text = "Stored QA evidence is unreadable or invalid; output is not verified."
+        elif reason == "incomplete":
+            text = "Stored QA evidence is incomplete; output is not verified."
+        elif reason == "run_failed":
+            text = "Run failed; no assurance about its output is available."
+        return HealthSummary(
+            status=status, summary_text=text, counts=counts.copy(),
+            issues_summary=issues or [], reason=reason,
+        )
 
     run_row = _resolve_run_row(db, run_id)
-    qa_summary_df: pd.DataFrame | None = None
-    qa_details_df: pd.DataFrame | None = None
-    if run_row is not None:
-        summary_df, details_df, _ = db.fetch_qa_snapshot(int(run_row.get("id")))
-        qa_summary_df = summary_df
-        qa_details_df = details_df
+    if run_row is None:
+        return result("UNVERIFIED", "missing_run")
+    if str(run_row.get("status", "")).lower() == "failed":
+        return result("ERROR", "run_failed")
+    if str(run_row.get("status", "")).lower() != "success":
+        return result("UNVERIFIED", "incomplete")
 
-    counts, issues = _summarize_issues(qa_details_df, qa_summary_df)
-    status: HealthStatus = "OK"
-    if counts["P0"] > 0:
-        status = "ERROR"
-    elif counts["P1"] > 0:
-        status = "WARN"
+    try:
+        outcome = _read_recorded_qa_outcome(run_row)
+        summary_df, details_df, _ = db.fetch_qa_snapshot(int(run_row["id"]), strict=True)
+        summary_failed, summary_warned, detail_count = _check_snapshot_shape(
+            summary_df, details_df
+        )
+        counts, issues = _summarize_issues(details_df, summary_df)
+    except (ValueError, TypeError, KeyError, DatabaseOperationError):
+        return result("UNVERIFIED", "invalid")
 
-    summary_text = {
-        "ERROR": "System health: ERROR 🔴 (do NOT use this output)",
-        "WARN": "System health: WARNING 🟡 (review warnings before using output)",
-        "OK": "System health: OK ✅ (output is safe to use)",
-    }[status]
-    return HealthSummary(
-        status=status, summary_text=summary_text, counts=counts, issues_summary=issues
-    )
+    # Explicit recorded failure or P0 issue is never promoted to positive
+    # status by an empty or otherwise contradictory snapshot.
+    if counts["P0"] > 0 or summary_failed or (outcome is not None and not outcome[0]):
+        return result("ERROR", issues=issues)
+    if counts["P1"] > 0 or summary_warned:
+        return result("WARN", issues=issues)
+
+    if outcome is None:
+        return result("UNVERIFIED", "not_recorded" if summary_df is None else "incomplete", issues)
+    if summary_df is None or summary_df.empty:
+        return result("UNVERIFIED", "incomplete", issues)
+    if outcome[1] != detail_count:
+        return result("UNVERIFIED", "incomplete", issues)
+    if outcome[1] > 0:
+        # Recorded non-P0/P1 violations cannot certify a clean QA result.
+        return result("UNVERIFIED", "incomplete", issues)
+    return result("OK", issues=issues)
 
 
 def _coerce_timestamp() -> str:
@@ -228,6 +341,7 @@ def build_llm_debug_report(
         },
         "health": {
             "status": health.status,
+            "reason": health.reason,
             "summary_text": health.summary_text,
             "counts": health.counts,
         },
