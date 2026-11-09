@@ -537,6 +537,54 @@ def test_seven_run_list_is_wrapped_and_keyboard_selectable(
         qapp.processEvents()
 
 
+
+@pytest.mark.parametrize("language", ["fa", "en"])
+@pytest.mark.parametrize(
+    "operation",
+    [
+        "allocate_extra_long_technical_operation_identifier",
+        "allocateSuperLongTechnicalIdentifierWithoutSeparators",
+        "allocate_گزارش_technicalIdentifierWithoutSeparators",
+    ],
+)
+def test_long_run_operation_wrap_is_display_only_and_selection_stays_native(
+    qapp: QApplication, history_db: LocalDatabase, language: str, operation: str
+) -> None:
+    with sqlite3.connect(history_db.path) as conn:
+        conn.execute("UPDATE runs SET entrypoint = ? WHERE id = 1", (operation,))
+        conn.commit()
+    dialog = HistoryDialog(history_db, translator=UiTranslator(language))
+    try:
+        dialog.resize(760, 540)
+        dialog.show()
+        qapp.processEvents()
+        item = dialog._run_list.item(0)
+        assert item is not None
+        original = item.text()
+        assert original.split("\n")[1] == operation
+        assert item.data(Qt.ItemDataRole.DisplayRole) == original
+        rendered = dialog._run_list.itemDelegate().displayText(
+            original, dialog._run_list.locale()
+        )
+        painted_operation = rendered.split("\n")[1]
+        assert "\u200b" in painted_operation
+        assert painted_operation.startswith("\u2066")
+        assert painted_operation.endswith("\u2069")
+        assert painted_operation[1:-1].replace("\u200b", "") == operation
+        assert rendered.split("\n")[0] == original.split("\n")[0]
+        assert rendered.split("\n")[2] == original.split("\n")[2]
+        dialog._run_list.setCurrentRow(0)
+        dialog._run_list.setFocus()
+        QTest.keyClick(dialog._run_list, Qt.Key.Key_Down)
+        assert dialog._selected_run_id == 2
+        QTest.keyClick(dialog._run_list, Qt.Key.Key_Up)
+        assert dialog._selected_run_id == 1
+        assert dialog._run_list.item(0).text() == original
+    finally:
+        dialog.close()
+        qapp.processEvents()
+
+
 def test_run_specific_output_reference_never_uses_global_last_output(
     qapp: QApplication, history_db: LocalDatabase, monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path
