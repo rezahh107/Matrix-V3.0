@@ -19,6 +19,7 @@ import pandas as pd
 from app.core.qa.law_mapping import all_law_mappings
 from app.infra.errors import DatabaseOperationError
 from app.infra.local_database import LocalDatabase
+from app.infra.qa.health_status import _normalize_severity
 
 HealthStatus = Literal["OK", "WARN", "ERROR", "UNVERIFIED"]
 HealthReason = Literal["missing_run", "not_recorded", "invalid", "incomplete", "run_failed"]
@@ -46,12 +47,8 @@ class HealthSummary:
 
 
 def _deduce_severity(raw_level: object) -> str:
-    text = str(raw_level).lower().strip()
-    if text == "error":
-        return "P0"
-    if text == "warning":
-        return "P1"
-    return "P2"
+    """Share runtime QA severity semantics for persisted details."""
+    return _normalize_severity(str(raw_level))
 
 
 def _describe_rule(rule_id: str) -> str | None:
