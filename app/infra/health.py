@@ -232,6 +232,18 @@ def compute_run_health(run_id: str, *, db: LocalDatabase) -> HealthSummary:
             summary_df, details_df
         )
         counts, issues = _summarize_issues(details_df, summary_df)
+
+        # The legacy qa_summary table is not a source of positive QA PASS,
+        # but material violations stored there must not be ignored.
+        for row in db.fetch_qa_summary(int(run_row["id"])):
+            level = str(row["severity"]).strip().lower()
+            n = row["count"]
+            if isinstance(n, bool) or not isinstance(n, Integral) or n < 0:
+                raise ValueError("Invalid separately recorded QA violation count")
+            if level in {"error", "critical", "p0"}:
+                counts["P0"] = max(counts["P0"], int(n))
+            elif level in {"warning", "warn", "p1"}:
+                counts["P1"] = max(counts["P1"], int(n))
     except (ValueError, TypeError, KeyError, DatabaseOperationError):
         return result("UNVERIFIED", "invalid")
 
@@ -328,7 +340,14 @@ def build_llm_debug_report(
     run_row = _resolve_run_row(db, run_id)
     summary_df, details_df, extras = (None, None, {})
     if run_row is not None:
-        summary_df, details_df, extras = db.fetch_qa_snapshot(int(run_row.get("id")))
+        try:
+            summary_df, details_df, extras = db.fetch_qa_snapshot(
+                int(run_row["id"]), strict=True
+            )
+        except DatabaseOperationError:
+            # A malformed snapshot must not break diagnostic export or be
+            # silently presented as valid QA evidence.
+            summary_df, details_df, extras = None, None, {}
     health = compute_run_health(run_id, db=db)
     samples = _build_samples(details_df, health.issues_summary, sample_limit=sample_limit)
     return {
