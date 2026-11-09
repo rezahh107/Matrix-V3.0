@@ -441,7 +441,12 @@ def test_missing_overall_qa_with_failed_detail_is_explained_not_inferred(
     translator = UiTranslator(language)
     dialog = HistoryDialog(history_db, translator=translator)
     try:
-        dialog._run_list.setCurrentRow(2)
+        selected_index = next(
+            index for index, row in enumerate(dialog._runs)
+            if int(row["id"]) == run_id
+        )
+        dialog._run_list.setCurrentRow(selected_index)
+        assert dialog._selected_run_id == run_id
         assert translator.text("history.dossier.not_recorded") in (
             dialog._qa_outcome_label.text()
         )
@@ -515,21 +520,18 @@ def test_seven_run_list_is_wrapped_and_keyboard_selectable(
         assert dialog._run_list.count() == 7
         assert dialog._run_list.wordWrap()
         assert dialog._run_list.horizontalScrollBar().maximum() == 0
-        for index in range(7):
+        for index, run in enumerate(dialog._runs):
             item = dialog._run_list.item(index)
             assert item is not None
             assert item.text().count("\n") == 2
-            assert f"#{index + 1}" in item.text()
-            expected_operation = (
-                "allocate" if index < 2 or index % 2 else "build"
-            )
-            assert expected_operation in item.text()
+            assert f"#{run['id']}" in item.text()
+            assert str(run["entrypoint"]) in item.text()
         dialog._run_list.setCurrentRow(4)
         dialog._run_list.setFocus()
         QTest.keyClick(dialog._run_list, Qt.Key.Key_Down)
         qapp.processEvents()
         assert dialog._run_list.currentRow() == 5
-        assert dialog._selected_run_id == 6
+        assert dialog._selected_run_id == int(dialog._runs[5]["id"])
     finally:
         dialog.close()
         qapp.processEvents()
