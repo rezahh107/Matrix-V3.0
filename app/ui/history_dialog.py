@@ -105,7 +105,8 @@ class _RunListTextDelegate(QStyledItemDelegate):
 
     def displayText(self, value: object, locale: QLocale) -> str:  # noqa: N802 - Qt override
         text = super().displayText(value, locale)
-        lines = text.split("\n")
+        # Qt converts DisplayRole newlines to U+2028 before delegate painting.
+        lines = text.split("\u2028")
         if len(lines) != 3:
             return text
 
@@ -116,7 +117,7 @@ class _RunListTextDelegate(QStyledItemDelegate):
         operation = re.sub(r"[A-Za-z0-9]{11,}", split_ascii_run, lines[1])
         # '_' and long ASCII runs become breakable; isolates keep mixed bidi stable.
         lines[1] = "\u2066" + operation.replace("_", "_\u200b") + "\u2069"
-        return "\n".join(lines)
+        return "\u2028".join(lines)
 
 
 class HistoryDialog(QDialog):
