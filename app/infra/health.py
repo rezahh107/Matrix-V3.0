@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from numbers import Integral
 from datetime import datetime
+from numbers import Integral
 from pathlib import Path
 from typing import Literal
 
@@ -338,16 +338,16 @@ def build_llm_debug_report(
     """تولید گزارش فشرده برای دیباگ توسط پشتیبانی یا مدل زبانی."""
 
     run_row = _resolve_run_row(db, run_id)
-    summary_df, details_df, extras = (None, None, {})
+    _summary_df, details_df, extras = (None, None, {})
     if run_row is not None:
         try:
-            summary_df, details_df, extras = db.fetch_qa_snapshot(
+            _summary_df, details_df, extras = db.fetch_qa_snapshot(
                 int(run_row["id"]), strict=True
             )
         except DatabaseOperationError:
             # A malformed snapshot must not break diagnostic export or be
             # silently presented as valid QA evidence.
-            summary_df, details_df, extras = None, None, {}
+            _summary_df, details_df, extras = None, None, {}
     health = compute_run_health(run_id, db=db)
     samples = _build_samples(details_df, health.issues_summary, sample_limit=sample_limit)
     return {
