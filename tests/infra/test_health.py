@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from dataclasses import replace
+import json
 
 import pandas as pd
 
@@ -40,15 +42,26 @@ def _setup_run_with_details(tmp_path, details: pd.DataFrame) -> tuple[LocalDatab
 
 
 def test_compute_run_health_status_ok(tmp_path) -> None:
-    details = pd.DataFrame(
-        [
-            {"rule_id": "QA_RULE_SAMPLE", "level": "info", "student_id": 1},
-        ]
+    """An explicit persisted overall PASS and complete rule snapshot are required."""
+    db = LocalDatabase(tmp_path / "health.db")
+    db.initialize()
+    record = replace(
+        _sample_run_record(datetime.now(UTC)),
+        qa_summary_json=json.dumps({"passed": True, "violation_count": 0}),
     )
-    db, run_id = _setup_run_with_details(tmp_path, details)
+    run_id = db.insert_run(record)
+    db.insert_qa_snapshot(
+        run_id=run_id,
+        qa_summary_df=pd.DataFrame(
+            [{"rule_id": "QA_RULE_SAMPLE", "status": "PASS", "violations_count": 0}]
+        ),
+        qa_details_df=pd.DataFrame(columns=["rule_id", "level", "message"]),
+    )
     summary = compute_run_health(str(run_id), db=db)
     assert summary.status == "OK"
-    assert summary.counts["P2"] == 1
+    assert summary.reason is None
+    assert summary.counts == {"P0": 0, "P1": 0, "P2": 0}
+    assert "not independently verified" in summary.summary_text
 
 
 def test_compute_run_health_status_warn(tmp_path) -> None:
