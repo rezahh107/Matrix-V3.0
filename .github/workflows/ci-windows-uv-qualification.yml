@@ -183,3 +183,42 @@ jobs:
             throw "Console logging failed despite successful application exit"
           }
           Write-Output "Real app.main exited successfully with no console encoding exceptions."
+
+  windows-operator-signals-qualification:
+    name: Windows operator-signal evidence (A/B/C)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      QT_QPA_PLATFORM: offscreen
+      MATRIX_EXPECTED_SOURCE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+      - name: Confirm exact checkout
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$MATRIX_EXPECTED_SOURCE_SHA"
+      - name: Set up pinned uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.7"
+      - name: Install pinned Python
+        run: uv python install
+      - name: Sync locked environment
+        run: uv sync --locked
+      - name: Static check of test-only qualification script
+        run: uv run --locked ruff check tools/ci/qualify_matrix_windows_signals.py
+      - name: Run A/B/C against real Windows Qt and disposable SQLite
+        run: >
+          uv run --locked python -m tools.ci.qualify_matrix_windows_signals
+          --output-dir artifacts/matrix-windows-signals
+      - name: Upload sanitized A/B/C evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: matrix-windows-operator-signals
+          path: artifacts/matrix-windows-signals/
+          if-no-files-found: warn
