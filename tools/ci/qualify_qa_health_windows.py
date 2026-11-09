@@ -83,6 +83,7 @@ def main() -> int:
 
             from app.ui.i18n import Language
             from app.ui.main_window import MainWindow
+            from app.ui.widgets.health_indicator import HealthCallbacks, HealthIndicatorWidget
             from app.ui.texts import UiTranslator
 
             QCoreApplication.setOrganizationName("MatrixSyntheticQAQualification")
@@ -104,109 +105,127 @@ def main() -> int:
                 "MainWindow SQLite is not in the disposable profile"
             )
 
-            def check(label: str, *, status: str | None, reason: str | None,
-                      language: str, expected_text: str, screenshot: str):
-                window._apply_language(Language.FA if language == "fa" else Language.EN)
-                window._refresh_health_widget()
-                app.processEvents()
-                summary = window._health_widget._current_summary
-                visible = window._health_widget._status_label.text()
-                assert (summary.status if summary is not None else None) == status
-                assert (summary.reason if summary is not None else None) == reason
-                assert visible == expected_text, (label, visible, expected_text)
-                assert "safe to use" not in visible.lower()
-                assert "استفاده از خروجی ایمن است" not in visible
-                pix = window._health_widget.grab()
-                assert not pix.isNull() and pix.width() > 30 and pix.height() > 15
-                assert pix.save(str(target / screenshot), "PNG")
-                observations.append({
-                    "scenario": label, "status": status, "reason": reason,
-                    "language": language, "visible_text": visible,
-                    "qss_state": window._health_widget._status_label.property("health"),
-                    "image": screenshot,
-                })
-
-            t = datetime(2026, 11, 9, 12, tzinfo=UTC)
-            check(
-                "no_run", status=None, reason=None, language="en",
-                expected_text=UiTranslator("en").text("health.no_run"),
-                screenshot="no-run-en.png",
-            )
-            positive_id = db.insert_run(_record(
-                "synthetic-positive", t, qa={"passed": True, "violation_count": 0}
-            ))
-            db.insert_qa_snapshot(
-                run_id=positive_id,
-                qa_summary_df=pd.DataFrame([{
-                    "rule_id": "QA_RULE_SAMPLE",
-                    "status": "PASS",
-                    "violations_count": 0,
-                }]),
-                qa_details_df=pd.DataFrame(columns=["rule_id", "level", "message"]),
-            )
-            for lang in ("en", "fa"):
+            try:
+                def check(label: str, *, status: str | None, reason: str | None,
+                          language: str, expected_text: str, screenshot: str):
+                    window._apply_language(Language.FA if language == "fa" else Language.EN)
+                    window._refresh_health_widget()
+                    app.processEvents()
+                    summary = window._health_widget._current_summary
+                    visible = window._health_widget._status_label.text()
+                    assert (summary.status if summary is not None else None) == status
+                    assert (summary.reason if summary is not None else None) == reason
+                    assert visible == expected_text, (label, visible, expected_text)
+                    assert "safe to use" not in visible.lower()
+                    assert "استفاده از خروجی ایمن است" not in visible
+                    # The compact MainWindow status row may have tiny geometry in
+                    # Windows offscreen CI. Capture the same real Qt widget with
+                    # the same real callback in a separately sized evidence surface.
+                    visual = HealthIndicatorWidget(
+                        HealthCallbacks(
+                            fetch_summary=window._fetch_health_summary,
+                            export_report=lambda: None,
+                        ),
+                        translator=UiTranslator(language),
+                    )
+                    try:
+                        visual.resize(680, 64)
+                        visual.show()
+                        app.processEvents()
+                        assert visual._status_label.text() == visible
+                        pix = visual.grab()
+                        assert not pix.isNull() and pix.width() >= 400 and pix.height() >= 35
+                        assert pix.save(str(target / screenshot), "PNG")
+                    finally:
+                        visual.close()
+                    observations.append({
+                        "scenario": label, "status": status, "reason": reason,
+                        "language": language, "visible_text": visible,
+                        "qss_state": window._health_widget._status_label.property("health"),
+                        "image": screenshot,
+                    })
+    
+                t = datetime(2026, 11, 9, 12, tzinfo=UTC)
                 check(
-                    "valid_qa_pass", status="OK", reason=None, language=lang,
-                    expected_text=UiTranslator(lang).text("health.summary.ok"),
-                    screenshot=f"qa-pass-{lang}.png",
+                    "no_run", status=None, reason=None, language="en",
+                    expected_text=UiTranslator("en").text("health.no_run"),
+                    screenshot="no-run-en.png",
                 )
-
-            db.insert_run(_record("synthetic-qa-missing", t + timedelta(seconds=1)))
-            for lang in ("en", "fa"):
+                positive_id = db.insert_run(_record(
+                    "synthetic-positive", t, qa={"passed": True, "violation_count": 0}
+                ))
+                db.insert_qa_snapshot(
+                    run_id=positive_id,
+                    qa_summary_df=pd.DataFrame([{
+                        "rule_id": "QA_RULE_SAMPLE",
+                        "status": "PASS",
+                        "violations_count": 0,
+                    }]),
+                    qa_details_df=pd.DataFrame(columns=["rule_id", "level", "message"]),
+                )
+                for lang in ("en", "fa"):
+                    check(
+                        "valid_qa_pass", status="OK", reason=None, language=lang,
+                        expected_text=UiTranslator(lang).text("health.summary.ok"),
+                        screenshot=f"qa-pass-{lang}.png",
+                    )
+    
+                db.insert_run(_record("synthetic-qa-missing", t + timedelta(seconds=1)))
+                for lang in ("en", "fa"):
+                    check(
+                        "run_transition_to_missing_qa",
+                        status="UNVERIFIED", reason="not_recorded", language=lang,
+                        expected_text=UiTranslator(lang).text("health.summary.not_recorded"),
+                        screenshot=f"qa-missing-{lang}.png",
+                    )
+    
+                broken_id = db.insert_run(_record(
+                    "synthetic-invalid", t + timedelta(seconds=2),
+                    qa={"passed": True, "violation_count": 0},
+                ))
+                with db.connect() as conn:
+                    conn.execute(
+                        "INSERT INTO qa_snapshots (run_id, qa_summary_json) VALUES (?, ?)",
+                        (broken_id, "{malformed"),
+                    )
+                    conn.commit()
                 check(
-                    "run_transition_to_missing_qa",
-                    status="UNVERIFIED", reason="not_recorded", language=lang,
-                    expected_text=UiTranslator(lang).text("health.summary.not_recorded"),
-                    screenshot=f"qa-missing-{lang}.png",
+                    "unreadable_qa_snapshot", status="UNVERIFIED", reason="invalid",
+                    language="fa", expected_text=UiTranslator("fa").text("health.summary.invalid"),
+                    screenshot="qa-invalid-fa.png",
                 )
-
-            broken_id = db.insert_run(_record(
-                "synthetic-invalid", t + timedelta(seconds=2),
-                qa={"passed": True, "violation_count": 0},
-            ))
-            with db.connect() as conn:
-                conn.execute(
-                    "INSERT INTO qa_snapshots (run_id, qa_summary_json) VALUES (?, ?)",
-                    (broken_id, "{malformed"),
+    
+                db.insert_run(_record(
+                    "synthetic-failed-run", t + timedelta(seconds=3), status="failed",
+                ))
+                check(
+                    "failed_run", status="ERROR", reason="run_failed",
+                    language="fa", expected_text=UiTranslator("fa").text("health.summary.run_failed"),
+                    screenshot="failed-run-fa.png",
                 )
-                conn.commit()
-            check(
-                "unreadable_qa_snapshot", status="UNVERIFIED", reason="invalid",
-                language="fa", expected_text=UiTranslator("fa").text("health.summary.invalid"),
-                screenshot="qa-invalid-fa.png",
-            )
-
-            db.insert_run(_record(
-                "synthetic-failed-run", t + timedelta(seconds=3), status="failed",
-            ))
-            check(
-                "failed_run", status="ERROR", reason="run_failed",
-                language="fa", expected_text=UiTranslator("fa").text("health.summary.run_failed"),
-                screenshot="failed-run-fa.png",
-            )
-            assert len(observations) == 7
-            environment = {
-                "source_sha": actual_sha,
-                "platform": platform.platform(),
-                "python": sys.version.split()[0],
-                "pyside6": pyside_version,
-                "qt_platform": app.platformName(),
-                "synthetic_data_only": True,
-                "isolated_home_qsettings_sqlite": True,
-                "allocation_executed": False,
-            }
-            (target / "environment.json").write_text(
-                json.dumps(environment, ensure_ascii=False, indent=2), encoding="utf-8"
-            )
-            (target / "qa-health-results.json").write_text(
-                json.dumps({"environment": environment, "observations": observations},
-                           ensure_ascii=False, indent=2),
-                encoding="utf-8",
-            )
-            window.close()
-            db.close_all_connections()
-            app.processEvents()
-    print(json.dumps({
+                assert len(observations) == 7
+                environment = {
+                    "source_sha": actual_sha,
+                    "platform": platform.platform(),
+                    "python": sys.version.split()[0],
+                    "pyside6": pyside_version,
+                    "qt_platform": app.platformName(),
+                    "synthetic_data_only": True,
+                    "isolated_home_qsettings_sqlite": True,
+                    "allocation_executed": False,
+                }
+                (target / "environment.json").write_text(
+                    json.dumps(environment, ensure_ascii=False, indent=2), encoding="utf-8"
+                )
+                (target / "qa-health-results.json").write_text(
+                    json.dumps({"environment": environment, "observations": observations},
+                               ensure_ascii=False, indent=2),
+                    encoding="utf-8",
+                )
+            finally:
+                window.close()
+                db.close_all_connections()
+                app.processEvents()    print(json.dumps({
         "source_sha": actual_sha,
         "scenarios": len(observations),
         "verdict": "WINDOWS_QT_QA_TRUTHFULNESS_OBSERVED",
