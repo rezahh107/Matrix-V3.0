@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QListView,
     QListWidget,
     QMessageBox,
     QPushButton,
@@ -127,6 +128,13 @@ class HistoryDialog(QDialog):
         self._run_list.setAccessibleName(
             self._t("history.dossier.run_list", "Recorded runs")
         )
+        # Keep the native list and selection behavior; wrap complete recorded facts.
+        self._run_list.setWordWrap(True)
+        self._run_list.setTextElideMode(Qt.TextElideMode.ElideNone)
+        self._run_list.setResizeMode(QListView.ResizeMode.Adjust)
+        self._run_list.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
         self._run_list.currentRowChanged.connect(self._on_run_selected)
 
         self._trace_model = DataFrameTableModel()
@@ -215,8 +223,8 @@ class HistoryDialog(QDialog):
         right_layout.addWidget(self._dossier_header)
         self._dossier_lines: list[QLabel] = []
         for name in (
-            "runIdentity", "runOutcome", "runTimes", "runCounts", "runVersions",
-            "runQaOutcome", "runEvidence",
+            "runIdentity", "runOutcome", "runQaOutcome", "runEvidence",
+            "runTimes", "runCounts", "runVersions",
         ):
             label = QLabel(self)
             label.setObjectName(name)
@@ -229,11 +237,42 @@ class HistoryDialog(QDialog):
             right_layout.addWidget(label)
             self._dossier_lines.append(label)
         (
-            self._identity_label, self._outcome_label, self._times_label,
-            self._counts_label, self._versions_label, self._qa_outcome_label,
-            self._evidence_label,
+            self._identity_label, self._outcome_label, self._qa_outcome_label,
+            self._evidence_label, self._times_label, self._counts_label,
+            self._versions_label,
         ) = self._dossier_lines
         self._identity_label.setFont(get_heading_font())
+        for label in (self._times_label, self._counts_label, self._versions_label):
+            label.setProperty("guidanceLevel", "field")
+
+        self._qa_clarification = QLabel(
+            self._t(
+                "history.dossier.qa_detail_context",
+                "The overall QA result was not recorded. Detailed QA evidence "
+                "is available, but does not establish the final QA outcome.",
+            ),
+            self,
+        )
+        self._qa_clarification.setObjectName("runQaClarification")
+        self._qa_clarification.setWordWrap(True)
+        self._qa_clarification.setProperty("guidanceLevel", "field")
+        right_layout.insertWidget(
+            right_layout.indexOf(self._evidence_label), self._qa_clarification
+        )
+        self._qa_clarification.hide()
+
+        self._message_label = QLabel(self)
+        self._message_label.setWordWrap(True)
+        self._message_label.setTextFormat(Qt.TextFormat.PlainText)
+        self._message_label.setProperty("guidanceLevel", "field")
+        self._message_label.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+            | Qt.TextInteractionFlag.TextSelectableByKeyboard
+        )
+        right_layout.insertWidget(
+            right_layout.indexOf(self._evidence_label), self._message_label
+        )
+        self._message_label.hide()
         self._evidence_note = QLabel(
             self._t(
                 "history.dossier.absence_note",
@@ -242,7 +281,10 @@ class HistoryDialog(QDialog):
         )
         self._evidence_note.setWordWrap(True)
         self._evidence_note.setProperty("guidanceLevel", "field")
-        right_layout.addWidget(self._evidence_note)
+        right_layout.insertWidget(
+            right_layout.indexOf(self._times_label), self._evidence_note
+        )
+        right_layout.insertSpacing(right_layout.indexOf(self._times_label), 8)
 
         self._path_label = QLabel(
             self._t("history.dossier.output", "Recorded output path for this run"), self
@@ -339,11 +381,11 @@ class HistoryDialog(QDialog):
         return (
             self._ltr(f"#{row['id']}")
             + " · "
-            + self._value(self._field(row, "entrypoint"))
-            + " · "
-            + self._ltr(self._value(self._field(row, "started_at")))
-            + " · "
             + status_text
+            + "\n"
+            + self._value(self._field(row, "entrypoint"))
+            + "\n"
+            + self._ltr(self._value(self._field(row, "started_at")))
         )
 
     def _load_runs(self, *, preferred_run_id: int | None = None) -> None:
@@ -385,6 +427,9 @@ class HistoryDialog(QDialog):
         )
         for label in self._dossier_lines:
             label.clear()
+        self._qa_clarification.hide()
+        self._message_label.clear()
+        self._message_label.hide()
         self._identity_label.setText(
             self._t("history.dossier.select_run", "Select a run to review its record")
         )
@@ -431,6 +476,19 @@ class HistoryDialog(QDialog):
             )
         return verdict
 
+    @staticmethod
+    def _overall_qa_unrecorded(raw_json: object) -> bool:
+        """A missing overall verdict stays distinct from recorded QA detail rows."""
+        if raw_json is None or raw_json == "":
+            return True
+        if not isinstance(raw_json, str):
+            return False
+        try:
+            payload = json.loads(raw_json)
+        except (TypeError, ValueError):
+            return False
+        return isinstance(payload, dict) and "passed" not in payload
+
     def _stored_output(self, raw_json: object) -> tuple[str | None, bool]:
         if raw_json is None or raw_json == "":
             return None, False
@@ -473,12 +531,16 @@ class HistoryDialog(QDialog):
             self._t("history.dossier.execution", "Execution: {status}").format(
                 status=status_text
             )
-            + (
-                " · " + str(self._field(run_row, "message"))
-                if self._field(run_row, "message")
-                else ""
-            )
         )
+        message = self._field(run_row, "message")
+        self._message_label.setText(
+            self._t("history.dossier.message", "Recorded message: {value}").format(
+                value=message
+            )
+            if message
+            else ""
+        )
+        self._message_label.setVisible(bool(message))
         self._times_label.setText(
             self._t("history.dossier.times", "Started: {start} · Finished: {end}").format(
                 start=self._ltr(self._value(self._field(run_row, "started_at"))),
@@ -504,10 +566,16 @@ class HistoryDialog(QDialog):
                 ssot=self._ltr(self._value(self._field(run_row, "ssot_version"))),
             )
         )
+        overall_qa = self._field(run_row, "qa_summary_json")
         self._qa_outcome_label.setText(
             self._t("history.dossier.qa_outcome", "Recorded QA result: {value}").format(
-                value=self._qa_result(self._field(run_row, "qa_summary_json"))
+                value=self._qa_result(overall_qa)
             )
+        )
+        self._qa_clarification.setVisible(
+            self._overall_qa_unrecorded(overall_qa)
+            and qa_details is not None
+            and not qa_details.empty
         )
         self._evidence_label.setText(
             self._t(
