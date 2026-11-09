@@ -453,7 +453,7 @@ def main() -> int:
             all_cases = [f"A{i}" for i in range(1, 5)] + [f"B{i}" for i in range(1, 5)] + [f"C{i}" for i in range(1, 4)]
             missing = [name for name in all_cases if name not in results]
             inconclusive = [name for name, v in results.items() if v["verdict"] == "INCONCLUSIVE"]
-            failures.extend(missing)
+            failures.extend(missing + inconclusive)
             report = {
                 "brief_reference": "SCE-MATRIX-WINDOWS-QUALIFICATION-001",
                 "source_sha": actual_sha,
