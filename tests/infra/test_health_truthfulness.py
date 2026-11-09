@@ -182,3 +182,24 @@ def test_mismatched_overall_count_never_becomes_pass(db):
     _snapshot(db, run_id)
     health = compute_run_health(str(run_id), db=db)
     assert (health.status, health.reason) == ("UNVERIFIED", "incomplete")
+
+
+def test_corrupt_snapshot_does_not_erase_authoritative_qa_failure(db):
+    run_id = _run(db, outcome={"passed": False, "violation_count": 1})
+    with db.connect() as conn:
+        conn.execute(
+            "INSERT INTO qa_snapshots (run_id, qa_summary_json) VALUES (?, ?)",
+            (run_id, "{malformed"),
+        )
+        conn.commit()
+    assert compute_run_health(str(run_id), db=db).status == "ERROR"
+
+
+def test_corrupt_overall_cannot_hide_separate_p0_violation(db):
+    run_id = _run(db, outcome="{broken-aggregate")
+    db.insert_qa_summary([QaSummaryRow(
+        run_id=run_id, violation_code="SYNTHETIC", severity="P0", count=2
+    )])
+    health = compute_run_health(str(run_id), db=db)
+    assert health.status == "ERROR"
+    assert health.counts["P0"] == 2
