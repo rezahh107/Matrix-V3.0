@@ -83,8 +83,8 @@ def main() -> int:
 
             from app.ui.i18n import Language
             from app.ui.main_window import MainWindow
-            from app.ui.widgets.health_indicator import HealthCallbacks, HealthIndicatorWidget
             from app.ui.texts import UiTranslator
+            from app.ui.widgets.health_indicator import HealthCallbacks, HealthIndicatorWidget
 
             QCoreApplication.setOrganizationName("MatrixSyntheticQAQualification")
             QCoreApplication.setApplicationName("MatrixSyntheticQAQualification")
