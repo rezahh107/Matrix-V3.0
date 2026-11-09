@@ -597,7 +597,7 @@ class MainWindow(QMainWindow):
             fetch_summary=self._fetch_health_summary,
             export_report=self._export_health_report,
         )
-        self._health_widget = HealthIndicatorWidget(callbacks, self)
+        self._health_widget = HealthIndicatorWidget(callbacks, self, translator=self._translator)
         status_column.addWidget(self._health_widget)
         status_layout.addLayout(status_column, 1)
 
@@ -1011,6 +1011,8 @@ class MainWindow(QMainWindow):
         if self._database_status is not None:
             self._database_status.set_translator(self._translator)
         self._refresh_last_run_badge()
+        if self._health_widget is not None:
+            self._health_widget.update_translator(self._translator)
         if hasattr(self, "_log_panel"):
             self._log_panel.update_translator(self._translator)
         if hasattr(self, "_busy_label"):
