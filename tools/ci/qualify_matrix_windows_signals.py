@@ -100,26 +100,41 @@ def _reference_case(path: Path, prepare: str) -> dict:
                 conn.commit()
         db.close_all_connections()
         before = _sqlite_state(path)
-        ready = compute_reference_readiness(
-            school_repo=SchoolRepository(db),
-            groupcode_repo=GroupCodeRepository(db),
-        )
-        db.close_all_connections()
+        ready = None
+        error = None
+        try:
+            ready = compute_reference_readiness(
+                school_repo=SchoolRepository(db),
+                groupcode_repo=GroupCodeRepository(db),
+            )
+        except sqlite3.Error as exc:
+            # A fresh SQLite connection may create an empty file even when
+            # the missing reference_meta table prevents readiness evaluation.
+            error = {"type": type(exc).__name__, "message": str(exc)}
+        finally:
+            db.close_all_connections()
         after = _sqlite_state(path)
     changed = _logical(before) != _logical(after)
+    created_file = not before["files"]["main"]["exists"] and after["files"]["main"]["exists"]
+    verdict = (
+        "PERSISTENT_MUTATION_OBSERVED" if changed or created_file
+        else ("INCONCLUSIVE" if error else "NO_MUTATION_OBSERVED")
+    )
     return {
         "setup": prepare,
-        "readiness": {
+        "readiness": None if ready is None else {
             "schools_count": ready.schools.row_count,
             "groupcodes_count": ready.groupcodes.row_count,
             "ready": ready.is_ready_for_run,
         },
+        "error": error,
         "before": before,
         "after": after,
         "logical_change": changed,
-        "verdict": "PERSISTENT_MUTATION_OBSERVED" if changed else "NO_MUTATION_OBSERVED",
+        "created_persistent_database_file": created_file,
+        "verdict": verdict,
         "safety_property": "Readiness inspection must not persistently alter references",
-        "limit": "Synthetic isolated SQLite; physical-file bytes alone are not treated as logical writes",
+        "limit": "Synthetic isolated SQLite; auxiliary WAL/file-byte changes alone do not prove logical mutation",
     }
 
 
