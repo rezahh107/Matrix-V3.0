@@ -225,16 +225,34 @@ def compute_run_health(run_id: str, *, db: LocalDatabase) -> HealthSummary:
     if str(run_row.get("status", "")).lower() != "success":
         return result("UNVERIFIED", "incomplete")
 
+    # Independently readable negative evidence remains authoritative even if
+    # another QA representation is broken. Invalid evidence can never grant OK.
+    outcome: tuple[bool, int] | None = None
+    aggregate_invalid = False
     try:
         outcome = _read_recorded_qa_outcome(run_row)
+    except (ValueError, TypeError):
+        aggregate_invalid = True
+
+    summary_df: pd.DataFrame | None = None
+    details_df: pd.DataFrame | None = None
+    summary_failed = summary_warned = False
+    detail_count = 0
+    issues: list[IssueSummary] = []
+    snapshot_invalid = False
+    try:
         summary_df, details_df, _ = db.fetch_qa_snapshot(int(run_row["id"]), strict=True)
         summary_failed, summary_warned, detail_count = _check_snapshot_shape(
             summary_df, details_df
         )
         counts, issues = _summarize_issues(details_df, summary_df)
+    except (ValueError, TypeError, KeyError, DatabaseOperationError):
+        snapshot_invalid = True
 
-        # The legacy qa_summary table is not a source of positive QA PASS,
-        # but material violations stored there must not be ignored.
+    separate_invalid = False
+    try:
+        # The legacy qa_summary table is not proof of QA PASS, but explicitly
+        # recorded material violations must remain visible if other data is bad.
         for row in db.fetch_qa_summary(int(run_row["id"])):
             level = str(row["severity"]).strip().lower()
             n = row["count"]
@@ -245,7 +263,7 @@ def compute_run_health(run_id: str, *, db: LocalDatabase) -> HealthSummary:
             elif level in {"warning", "warn", "p1"}:
                 counts["P1"] = max(counts["P1"], int(n))
     except (ValueError, TypeError, KeyError, DatabaseOperationError):
-        return result("UNVERIFIED", "invalid")
+        separate_invalid = True
 
     # Explicit recorded failure or P0 issue is never promoted to positive
     # status by an empty or otherwise contradictory snapshot.
@@ -253,6 +271,8 @@ def compute_run_health(run_id: str, *, db: LocalDatabase) -> HealthSummary:
         return result("ERROR", issues=issues)
     if counts["P1"] > 0 or summary_warned:
         return result("WARN", issues=issues)
+    if aggregate_invalid or snapshot_invalid or separate_invalid:
+        return result("UNVERIFIED", "invalid", issues)
 
     if outcome is None:
         return result("UNVERIFIED", "not_recorded" if summary_df is None else "incomplete", issues)
