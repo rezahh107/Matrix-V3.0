@@ -85,7 +85,8 @@ def _summarize_issues(
                 else "P2"
             )
             count = int(len(frame.index))
-            counts[severity] += count
+            for level in severity_levels:
+                counts[level] += 1
             issues.append(
                 IssueSummary(
                     issue_code=str(rule_id),
@@ -181,6 +182,18 @@ def _check_snapshot_shape(
     return has_failure, has_warning, count
 
 
+def _observed_negative_rule_statuses(summary: pd.DataFrame | None) -> tuple[bool, bool]:
+    """Preserve readable FAIL/WARN signals even when a sibling row is invalid.
+
+    Only recorded QA statuses are interpreted here. This is *not* evidence
+    sufficient for OK; full snapshot shape validation remains mandatory.
+    """
+    if summary is None or "status" not in summary.columns:
+        return False, False
+    statuses = {str(value).strip().upper() for value in summary["status"]}
+    return "FAIL" in statuses, "WARN" in statuses
+
+
 def compute_run_health(run_id: str, *, db: LocalDatabase) -> HealthSummary:
     """Describe stored Run and QA evidence, never infer PASS from zero issues.
 
@@ -238,29 +251,47 @@ def compute_run_health(run_id: str, *, db: LocalDatabase) -> HealthSummary:
     issues: list[IssueSummary] = []
     snapshot_invalid = False
     try:
-        summary_df, details_df, _ = db.fetch_qa_snapshot(int(run_row["id"]), strict=True)
-        summary_failed, summary_warned, detail_count = _check_snapshot_shape(
+        summary_df, details_df, _, invalid_fields = db._fetch_qa_snapshot_evidence(
+            int(run_row["id"])
+        )
+        snapshot_invalid = bool(invalid_fields)
+    except (ValueError, TypeError, KeyError, DatabaseOperationError):
+        snapshot_invalid = True
+
+    # Collect negative signals independently. Invalid or inconsistent sibling
+    # evidence cannot erase a readable P0/P1 detail or explicit FAIL record.
+    summary_failed, summary_warned = _observed_negative_rule_statuses(summary_df)
+    try:
+        validated_failed, validated_warned, detail_count = _check_snapshot_shape(
             summary_df, details_df
         )
+        summary_failed |= validated_failed
+        summary_warned |= validated_warned
+    except (ValueError, TypeError, KeyError):
+        snapshot_invalid = True
+
+    try:
         counts, issues = _summarize_issues(details_df, summary_df)
-    except (ValueError, TypeError, KeyError, DatabaseOperationError):
+    except (ValueError, TypeError, KeyError):
         snapshot_invalid = True
 
     separate_invalid = False
     try:
-        # The legacy qa_summary table is not proof of QA PASS, but explicitly
-        # recorded material violations must remain visible if other data is bad.
-        for row in db.fetch_qa_summary(int(run_row["id"])):
-            level = str(row["severity"]).strip().lower()
+        # Legacy QA summary rows are independent negative evidence only.
+        separate_rows = db.fetch_qa_summary(int(run_row["id"]))
+    except (ValueError, TypeError, KeyError, DatabaseOperationError):
+        separate_rows = []
+        separate_invalid = True
+    for row in separate_rows:
+        try:
+            level = _deduce_severity(row["severity"])
             n = row["count"]
             if isinstance(n, bool) or not isinstance(n, Integral) or n < 0:
                 raise ValueError("Invalid separately recorded QA violation count")
-            if level in {"error", "critical", "p0"}:
-                counts["P0"] = max(counts["P0"], int(n))
-            elif level in {"warning", "warn", "p1"}:
-                counts["P1"] = max(counts["P1"], int(n))
-    except (ValueError, TypeError, KeyError, DatabaseOperationError):
-        separate_invalid = True
+            if level in {"P0", "P1"}:
+                counts[level] = max(counts[level], int(n))
+        except (ValueError, TypeError, KeyError):
+            separate_invalid = True
 
     # Explicit recorded failure or P0 issue is never promoted to positive
     # status by an empty or otherwise contradictory snapshot.
@@ -358,12 +389,12 @@ def build_llm_debug_report(
     _summary_df, details_df, extras = (None, None, {})
     if run_row is not None:
         try:
-            _summary_df, details_df, extras = db.fetch_qa_snapshot(
-                int(run_row["id"]), strict=True
+            _summary_df, details_df, extras, _invalid = db._fetch_qa_snapshot_evidence(
+                int(run_row["id"])
             )
         except DatabaseOperationError:
-            # A malformed snapshot must not break diagnostic export or be
-            # silently presented as valid QA evidence.
+            # A failed database read cannot authorize positive QA, and must
+            # not prevent exporting available run-level diagnostics.
             _summary_df, details_df, extras = None, None, {}
     health = compute_run_health(run_id, db=db)
     samples = _build_samples(details_df, health.issues_summary, sample_limit=sample_limit)

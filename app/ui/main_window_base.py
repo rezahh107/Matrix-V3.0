@@ -10,6 +10,7 @@ from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from html import escape, unescape
+from numbers import Integral
 from pathlib import Path
 from tempfile import mkdtemp
 from typing import Literal
@@ -1056,18 +1057,19 @@ class MainWindow(QMainWindow):
 
     def _latest_run_identifier(self) -> str | None:
         if self._local_db is None:
-            return None
-        try:
-            runs = self._local_db.fetch_runs()
-        except Exception:
-            return None
+            raise RuntimeError("Run history is unavailable")
+        # None means a successful, genuinely empty query. A failed read must
+        # reach HealthIndicator's localized unavailable branch instead.
+        runs = self._local_db.fetch_runs()
         if not runs:
             return None
-        latest = runs[-1]
         try:
-            return str(latest["id"])
-        except Exception:
-            return None
+            run_key = runs[-1]["id"]
+            if isinstance(run_key, bool) or not isinstance(run_key, Integral) or run_key <= 0:
+                raise ValueError("Invalid latest Run identity")
+        except (KeyError, IndexError, TypeError) as exc:
+            raise ValueError("Invalid latest Run identity") from exc
+        return str(run_key)
 
     def _fetch_health_summary(self) -> object:
         run_id = self._latest_run_identifier()

@@ -10,6 +10,7 @@ import argparse
 import json
 import os
 import platform
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -118,6 +119,10 @@ def main() -> int:
                     assert visible == expected_text, (label, visible, expected_text)
                     assert "safe to use" not in visible.lower()
                     assert "استفاده از خروجی ایمن است" not in visible
+                    if label.startswith("unavailable_run_history"):
+                        assert window._health_widget._status_label.property("health") == "none"
+                        assert not window._health_widget._btn_details.isEnabled()
+                        assert not window._health_widget._btn_export.isEnabled()
                     # The compact MainWindow status row may have tiny geometry in
                     # Windows offscreen CI. Capture the same real Qt widget with
                     # the same real callback in a separately sized evidence surface.
@@ -203,7 +208,101 @@ def main() -> int:
                     language="fa", expected_text=UiTranslator("fa").text("health.summary.run_failed"),
                     screenshot="failed-run-fa.png",
                 )
-                assert len(observations) == 7
+                # F1: one damaged QA sibling does not hide independently
+                # readable negative rule details in the real SQLite + GUI path.
+                p0_id = db.insert_run(_record(
+                    "synthetic-p0-broken-extras", t + timedelta(seconds=4),
+                    qa={"passed": True, "violation_count": 1},
+                ))
+                db.insert_qa_snapshot(
+                    run_id=p0_id,
+                    qa_summary_df=pd.DataFrame([{
+                        "rule_id": "QA_RULE_SAMPLE", "status": "WARN", "violations_count": 1,
+                    }]),
+                    qa_details_df=pd.DataFrame([{
+                        "rule_id": "QA_RULE_SAMPLE", "level": "critical",
+                    }]),
+                )
+                with db.connect() as conn:
+                    conn.execute(
+                        "UPDATE qa_snapshots SET qa_extras_json = ? WHERE run_id = ?",
+                        ("{malformed", p0_id),
+                    )
+                    conn.commit()
+                check(
+                    "damaged_extras_preserves_p0", status="ERROR", reason=None,
+                    language="en", expected_text=UiTranslator("en").text("health.summary.error"),
+                    screenshot="damaged-extras-p0-en.png",
+                )
+                p1_id = db.insert_run(_record(
+                    "synthetic-p1-broken-summary", t + timedelta(seconds=5),
+                    qa={"passed": True, "violation_count": 1},
+                ))
+                db.insert_qa_snapshot(
+                    run_id=p1_id,
+                    qa_summary_df=pd.DataFrame([{
+                        "rule_id": "QA_RULE_SAMPLE", "status": "WARN", "violations_count": 1,
+                    }]),
+                    qa_details_df=pd.DataFrame([{
+                        "rule_id": "QA_RULE_SAMPLE", "level": "warn",
+                    }]),
+                )
+                with db.connect() as conn:
+                    conn.execute(
+                        "UPDATE qa_snapshots SET qa_summary_json = ? WHERE run_id = ?",
+                        ("{malformed", p1_id),
+                    )
+                    conn.commit()
+                check(
+                    "damaged_summary_preserves_p1", status="WARN", reason=None,
+                    language="fa", expected_text=UiTranslator("fa").text("health.summary.warn"),
+                    screenshot="damaged-summary-p1-fa.png",
+                )
+
+                # F2: a genuine empty history was tested above. A real failed
+                # query must use the existing localized unavailable presentation.
+                db.insert_run(_record(
+                    "synthetic-positive-transition", t + timedelta(seconds=6),
+                    qa={"passed": True, "violation_count": 0},
+                ))
+                latest_id = db.fetch_runs()[-1]["id"]
+                db.insert_qa_snapshot(
+                    run_id=latest_id,
+                    qa_summary_df=pd.DataFrame([{
+                        "rule_id": "QA_RULE_SAMPLE", "status": "PASS", "violations_count": 0,
+                    }]),
+                    qa_details_df=pd.DataFrame(columns=["rule_id", "level"]),
+                )
+                check(
+                    "pass_before_history_failure", status="OK", reason=None,
+                    language="en", expected_text=UiTranslator("en").text("health.summary.ok"),
+                    screenshot="pass-before-history-failure-en.png",
+                )
+                unavailable_db = type(db)(root / "uninitialized-history.db")
+                try:
+                    try:
+                        unavailable_db.fetch_runs()
+                    except sqlite3.OperationalError as exc:
+                        assert "no such table" in str(exc)
+                    else:
+                        raise AssertionError("SQLite history query unexpectedly succeeded")
+                    window._local_db = unavailable_db
+                    for lang in ("en", "fa"):
+                        check(
+                            "unavailable_run_history", status=None, reason=None,
+                            language=lang,
+                            expected_text=UiTranslator(lang).text("health.unavailable"),
+                            screenshot=f"history-unavailable-{lang}.png",
+                        )
+                finally:
+                    window._local_db = db
+                    unavailable_db.close_all_connections()
+                check(
+                    "health_recovers_after_history_restored", status="OK", reason=None,
+                    language="fa", expected_text=UiTranslator("fa").text("health.summary.ok"),
+                    screenshot="history-restored-fa.png",
+                )
+                assert len(observations) == 13
                 environment = {
                     "source_sha": actual_sha,
                     "platform": platform.platform(),
