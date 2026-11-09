@@ -406,6 +406,135 @@ def test_dossier_bilingual_identity_direction_and_qa_independence(
         qapp.processEvents()
 
 
+@pytest.mark.parametrize("language", ["fa", "en"])
+def test_missing_overall_qa_with_failed_detail_is_explained_not_inferred(
+    qapp: QApplication, history_db: LocalDatabase, language: str
+) -> None:
+    # Persist independent overall and detailed QA sources in disposable SQLite.
+    started = datetime(2026, 11, 8, tzinfo=UTC)
+    run_id = history_db.insert_run(
+        RunRecord(
+            run_uuid="synthetic-unrecorded-overall-qa",
+            started_at=started,
+            finished_at=started,
+            policy_version="1.0.3",
+            ssot_version="1.0.2",
+            entrypoint="allocate",
+            cli_args=None,
+            db_path=None,
+            input_files_json="{}",
+            input_hashes_json="{}",
+            total_students=1,
+            total_allocated=0,
+            total_unallocated=1,
+            history_metrics_json=None,
+            qa_summary_json=None,
+            status="failed",
+            message=None,
+        )
+    )
+    history_db.insert_qa_snapshot(
+        run_id=run_id,
+        qa_summary_df=pd.DataFrame({"rule_id": ["synthetic"], "status": ["FAIL"]}),
+        qa_details_df=pd.DataFrame({"rule_id": ["synthetic"], "status": ["FAIL"]}),
+    )
+    translator = UiTranslator(language)
+    dialog = HistoryDialog(history_db, translator=translator)
+    try:
+        dialog._run_list.setCurrentRow(2)
+        assert translator.text("history.dossier.not_recorded") in (
+            dialog._qa_outcome_label.text()
+        )
+        assert dialog.qa_details_model.data(dialog.qa_details_model.index(0, 1)) == "FAIL"
+        assert dialog._qa_clarification.text() == translator.text(
+            "history.dossier.qa_detail_context"
+        )
+        assert not dialog._qa_clarification.isHidden()
+        # Positive control: a real overall PASS is not overridden by FAIL details.
+        with sqlite3.connect(history_db.path) as conn:
+            conn.execute(
+                "UPDATE runs SET qa_summary_json = ? WHERE id = ?",
+                (json.dumps({"passed": True}), run_id),
+            )
+            conn.commit()
+        dialog._retry_button.click()
+        assert translator.text("history.dossier.qa_pass") in (
+            dialog._qa_outcome_label.text()
+        )
+        assert dialog._qa_clarification.isHidden()
+        # Unreadable overall metadata is not misreported as merely missing.
+        with sqlite3.connect(history_db.path) as conn:
+            conn.execute(
+                "UPDATE runs SET qa_summary_json = ? WHERE id = ?",
+                ("{unreadable", run_id),
+            )
+            conn.commit()
+        dialog._retry_button.click()
+        assert translator.text("history.dossier.unreadable") in (
+            dialog._qa_outcome_label.text()
+        )
+        assert dialog._qa_clarification.isHidden()
+    finally:
+        dialog.close()
+        qapp.processEvents()
+
+
+@pytest.mark.parametrize("language", ["fa", "en"])
+def test_seven_run_list_is_wrapped_and_keyboard_selectable(
+    qapp: QApplication, history_db: LocalDatabase, language: str
+) -> None:
+    started = datetime(2026, 11, 8, tzinfo=UTC)
+    for index in range(5):
+        current = started + timedelta(minutes=index)
+        history_db.insert_run(
+            RunRecord(
+                run_uuid=f"synthetic-extra-{index}",
+                started_at=current,
+                finished_at=current,
+                policy_version="1.0.3",
+                ssot_version="1.0.2",
+                entrypoint="allocate" if index % 2 else "build",
+                cli_args=None,
+                db_path=None,
+                input_files_json="{}",
+                input_hashes_json="{}",
+                total_students=1,
+                total_allocated=0,
+                total_unallocated=1,
+                history_metrics_json=None,
+                qa_summary_json=None,
+                status="failed" if index % 2 else "success",
+                message=None,
+            )
+        )
+    dialog = HistoryDialog(history_db, translator=UiTranslator(language))
+    try:
+        dialog.resize(1024, 700)
+        dialog.show()
+        qapp.processEvents()
+        assert dialog._run_list.count() == 7
+        assert dialog._run_list.wordWrap()
+        assert dialog._run_list.horizontalScrollBar().maximum() == 0
+        for index in range(7):
+            item = dialog._run_list.item(index)
+            assert item is not None
+            assert item.text().count("\n") == 2
+            assert f"#{index + 1}" in item.text()
+            expected_operation = (
+                "allocate" if index < 2 or index % 2 else "build"
+            )
+            assert expected_operation in item.text()
+        dialog._run_list.setCurrentRow(4)
+        dialog._run_list.setFocus()
+        QTest.keyClick(dialog._run_list, Qt.Key.Key_Down)
+        qapp.processEvents()
+        assert dialog._run_list.currentRow() == 5
+        assert dialog._selected_run_id == 6
+    finally:
+        dialog.close()
+        qapp.processEvents()
+
+
 def test_run_specific_output_reference_never_uses_global_last_output(
     qapp: QApplication, history_db: LocalDatabase, monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path

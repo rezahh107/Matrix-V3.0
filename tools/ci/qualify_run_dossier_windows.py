@@ -223,6 +223,121 @@ def _case(
         db.close_all_connections()
 
 
+def _seven_run_case(
+    app: QApplication,
+    root: Path,
+    output_dir: Path,
+    language: str,
+    theme: str,
+    dpi: str,
+    report: dict[str, object],
+) -> None:
+    mode = f"{language}-{theme}-{dpi}-seven"
+    db = LocalDatabase(root / f"{mode}.sqlite")
+    db.initialize()
+    started = datetime(2026, 11, 8, tzinfo=UTC)
+    for index in range(7):
+        timestamp = started + timedelta(seconds=index)
+        run_id = db.insert_run(
+            RunRecord(
+                run_uuid=f"synthetic-seven-run-{index + 1}",
+                started_at=timestamp,
+                finished_at=timestamp,
+                policy_version="1.0.3",
+                ssot_version="1.0.2",
+                entrypoint=(
+                    "allocate_extra_long_technical_operation_identifier"
+                    if index == 3 else "allocate" if index % 2 else "build"
+                ),
+                cli_args=None,
+                db_path=None,
+                input_files_json="{}",
+                input_hashes_json="{}",
+                total_students=1,
+                total_allocated=0,
+                total_unallocated=1,
+                history_metrics_json=None,
+                qa_summary_json=(
+                    None if index == 4 else json.dumps({"passed": index % 2 == 0})
+                ),
+                status="failed" if index in (1, 4) else "success",
+                message=None,
+            )
+        )
+        if index == 4:
+            db.insert_qa_snapshot(
+                run_id=run_id,
+                qa_summary_df=pd.DataFrame(
+                    {"rule_id": ["synthetic-qa"], "status": ["FAIL"]}
+                ),
+                qa_details_df=pd.DataFrame(
+                    {"rule_id": ["synthetic-qa"], "status": ["FAIL"]}
+                ),
+            )
+    dialog = HistoryDialog(db, translator=UiTranslator(language))
+    try:
+        dialog.resize(1024, 700)
+        dialog.show()
+        app.processEvents()
+        items = dialog._run_list
+        _check(report, f"{mode}: seven runs", items.count() == 7)
+        _check(report, f"{mode}: wrapping enabled", items.wordWrap())
+        _check(report, f"{mode}: no horizontal run-list scrolling", (
+            items.horizontalScrollBar().maximum() == 0
+        ))
+        for index in range(7):
+            item = items.item(index)
+            expected_operation = (
+                "allocate_extra_long_technical_operation_identifier"
+                if index == 3 else "allocate" if index % 2 else "build"
+            )
+            expected_status = "failed" if index in (1, 4) else "success"
+            expected_status_text = dialog._t(
+                "history.dossier.execution_failure"
+                if expected_status == "failed" else "history.dossier.execution_success",
+                "Recorded failure" if expected_status == "failed" else "Recorded success",
+            )
+            _check(report, f"{mode}: item {index + 1} identity and status", (
+                item is not None
+                and item.text().count("\n") == 2
+                and f"#{index + 1}" in item.text()
+                and expected_operation in item.text()
+                and expected_status_text in item.text()
+            ))
+        _select(app, dialog, 4)
+        item = items.item(4)
+        assert item is not None
+        items.scrollToItem(item)
+        app.processEvents()
+        _check(report, f"{mode}: selected item visible", (
+            items.visualItemRect(item).intersects(items.viewport().rect())
+        ))
+        _check(report, f"{mode}: overall QA remains unrecorded", (
+            dialog._t("history.dossier.not_recorded", "Not recorded")
+            in dialog._qa_outcome_label.text()
+            and dialog.qa_details_model.data(dialog.qa_details_model.index(0, 1))
+            == "FAIL"
+        ))
+        _check(report, f"{mode}: conditional QA explanation visible", (
+            dialog._qa_clarification.isVisible()
+        ))
+        _capture(app, dialog, output_dir, f"{mode}-missing-overall-with-fail-detail", report)
+        items.setFocus()
+        QTest.keyClick(items, Qt.Key.Key_Down)
+        app.processEvents()
+        _check(report, f"{mode}: keyboard selects run six", (
+            items.currentRow() == 5 and dialog._selected_run_id == 6
+        ))
+        _check(report, f"{mode}: explanation not permanent", (
+            not dialog._qa_clarification.isVisible()
+        ))
+        _capture(app, dialog, output_dir, f"{mode}-run-six", report)
+    finally:
+        dialog.close()
+        app.processEvents()
+        db.close_all_connections()
+
+
 def _edge_cases(
     app: QApplication,
     dialog: HistoryDialog,
@@ -242,7 +357,7 @@ def _edge_cases(
     dialog._retry_button.click()
     app.processEvents()
     bar = scroll.verticalScrollBar()
-    _check(report, f"{mode}: long text rendered", len(dialog._outcome_label.text()) > 1000)
+    _check(report, f"{mode}: long text rendered", len(dialog._message_label.text()) > 1000)
     _check(report, f"{mode}: scroll reachable", bar.maximum() > 0)
     bar.setValue(bar.maximum())
     app.processEvents()
@@ -387,6 +502,9 @@ def main() -> int:
             for theme in ("light", "dark"):
                 for language in ("fa", "en"):
                     _case(app, Path(tmp), output_dir, language, theme, args.dpi, report)
+                    _seven_run_case(
+                        app, Path(tmp), output_dir, language, theme, args.dpi, report
+                    )
         report["status"] = "PASS"
         return 0
     except Exception as exc:
