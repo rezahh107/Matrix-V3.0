@@ -419,7 +419,8 @@ class MainWindow(_v1.MainWindow):
             if self._local_db is None:
                 raise RuntimeError("No active local database")
             dialog = HistoryDialog(
-                self._local_db, self, on_selection_error=self._report_run_history_selection_error
+                self._local_db, self, on_selection_error=self._report_run_history_selection_error,
+                translator=self._translator,
             )
         except Exception as exc:
             self._append_log(f"Run history read failed: {exc}")

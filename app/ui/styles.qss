@@ -34,6 +34,8 @@ QGroupBox[sectionRole="major"] { background-color: {surface_primary}; border: 1p
 QGroupBox[sectionRole="major"]::title { subcontrol-origin: padding; subcontrol-position: top left; background-color: transparent; color: {text_primary}; padding: 0 {major_section_padding}px; top: {major_section_padding}px; }
 QLabel[guidanceLevel="page"] { background-color: transparent; color: {text_secondary}; font-size: {body_size}pt; font-weight: 400; }
 QLabel[guidanceLevel="field"] { background-color: transparent; color: {text_secondary}; font-size: {caption_size}pt; font-weight: 400; }
+/* Independent execution and QA verdicts are primary Dossier facts. */
+QLabel#runOutcome, QLabel#runQaOutcome { color: {text_primary}; font-size: {subtitle_size}pt; font-weight: 600; }
 QLineEdit, QTextEdit, QPlainTextEdit, QComboBox { background-color: {control_surface}; color: {text_primary}; border: 1px solid {boundary_control}; border-radius: {control_radius}px; min-height: 32px; padding: 0 10px; selection-background-color: {selection}; selection-color: {text_primary}; }
 QTextEdit, QPlainTextEdit { padding: 6px 8px; }
 QLineEdit:hover, QTextEdit:hover, QPlainTextEdit:hover, QComboBox:hover { background-color: {control_hover}; }
