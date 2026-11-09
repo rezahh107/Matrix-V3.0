@@ -390,7 +390,7 @@ def _verify_long_identifier(
     _check(report, f"{mode}: canonical long identifier", original.split("\n")[1] == identifier)
     rendered = items.itemDelegate().displayText(original, items.locale())
     _check(report, f"{mode}: display-only identifier", (
-        rendered.split("\n")[1].replace("\u200b", "").strip("\u2066\u2069") == identifier
+        rendered.split("\u2028")[1].replace("\u200b", "").strip("\u2066\u2069") == identifier
         and original == item.data(Qt.ItemDataRole.DisplayRole)
     ))
     rect = items.visualItemRect(item)
@@ -411,7 +411,7 @@ def _verify_long_identifier(
     _check(report, f"{mode}: positive text width", text_width > 90)
     raw_width, _, _, raw_min = _layout_metrics(identifier, text_width, items.font(), opt.direction)
     actual_width, _, operation_lines, actual_min = _layout_metrics(
-        rendered.split("\n")[1], text_width, items.font(), opt.direction
+        rendered.split("\u2028")[1], text_width, items.font(), opt.direction
     )
     _, text_height, total_lines, _ = _layout_metrics(
         rendered, text_width, items.font(), opt.direction
