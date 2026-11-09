@@ -22,8 +22,9 @@ from unittest.mock import patch
 import pandas as pd
 from PySide6 import __version__ as pyside_version
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QTextLayout, QTextOption
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QScrollArea
+from PySide6.QtWidgets import QApplication, QScrollArea, QStyle, QStyleOptionViewItem
 
 from app.infra.local_database import LocalDatabase, RunMetricRow, RunRecord
 from app.ui.history_dialog import HistoryDialog
@@ -321,7 +322,22 @@ def _seven_run_case(
         _check(report, f"{mode}: conditional QA explanation visible", (
             dialog._qa_clarification.isVisible()
         ))
+        _verify_long_identifier(app, dialog, f"{mode}-standard-unselected", report)
         _capture(app, dialog, output_dir, f"{mode}-missing-overall-with-fail-detail", report)
+        _select(app, dialog, 3)
+        _verify_long_identifier(app, dialog, f"{mode}-standard-selected", report)
+        _capture(app, dialog, output_dir, f"{mode}-long-identifier-selected", report)
+        dialog.resize(760, 540)
+        app.processEvents()
+        _check(report, f"{mode}: narrow dialog width", dialog.width() <= 800)
+        _verify_long_identifier(app, dialog, f"{mode}-narrow-selected", report)
+        _capture(app, dialog, output_dir, f"{mode}-narrow-long-identifier-selected", report)
+        _select(app, dialog, 4)
+        _verify_long_identifier(app, dialog, f"{mode}-narrow-unselected", report)
+        _capture(app, dialog, output_dir, f"{mode}-narrow-long-identifier-unselected", report)
+        dialog.resize(1024, 700)
+        app.processEvents()
+        _select(app, dialog, 4)
         items.setFocus()
         QTest.keyClick(items, Qt.Key.Key_Down)
         app.processEvents()
@@ -336,6 +352,94 @@ def _seven_run_case(
         dialog.close()
         app.processEvents()
         db.close_all_connections()
+
+
+
+def _layout_metrics(
+    text: str, width: int, font: object, direction: Qt.LayoutDirection
+) -> tuple[float, float, int, float]:
+    option = QTextOption()
+    option.setWrapMode(QTextOption.WrapMode.WordWrap)
+    option.setTextDirection(direction)
+    layout = QTextLayout(text, font)
+    layout.setTextOption(option)
+    widths: list[float] = []
+    height = 0.0
+    layout.beginLayout()
+    while True:
+        line = layout.createLine()
+        if not line.isValid():
+            break
+        line.setLineWidth(width)
+        widths.append(line.naturalTextWidth())
+        height += line.height()
+    layout.endLayout()
+    return max(widths, default=0.0), height, len(widths), layout.minimumWidth()
+
+
+def _verify_long_identifier(
+    app: QApplication, dialog: HistoryDialog, mode: str, report: dict[str, object]
+) -> None:
+    items = dialog._run_list
+    items.doItemsLayout()
+    app.processEvents()
+    item = items.item(3)
+    assert item is not None
+    identifier = "allocate_extra_long_technical_operation_identifier"
+    original = item.text()
+    _check(report, f"{mode}: canonical long identifier", original.split("\n")[1] == identifier)
+    rendered = items.itemDelegate().displayText(original, items.locale())
+    _check(report, f"{mode}: display-only identifier", (
+        rendered.split("\n")[1].replace("\u200b", "").strip("\u2066\u2069") == identifier
+        and original == item.data(Qt.ItemDataRole.DisplayRole)
+    ))
+    rect = items.visualItemRect(item)
+    opt = QStyleOptionViewItem()
+    opt.initFrom(items)
+    opt.rect = rect
+    opt.widget = items
+    opt.text = rendered
+    opt.direction = items.layoutDirection()
+    opt.features = (
+        QStyleOptionViewItem.ViewItemFeature.HasDisplay
+        | QStyleOptionViewItem.ViewItemFeature.WrapText
+    )
+    style = items.style()
+    content_rect = style.subElementRect(QStyle.SubElement.SE_ItemViewItemText, opt, items)
+    margin = style.pixelMetric(QStyle.PixelMetric.PM_FocusFrameHMargin, opt, items) + 1
+    text_width = content_rect.width() - 2 * margin
+    _check(report, f"{mode}: positive text width", text_width > 90)
+    raw_width, _, _, raw_min = _layout_metrics(identifier, text_width, items.font(), opt.direction)
+    actual_width, _, operation_lines, actual_min = _layout_metrics(
+        rendered.split("\n")[1], text_width, items.font(), opt.direction
+    )
+    _, text_height, total_lines, _ = _layout_metrics(
+        rendered, text_width, items.font(), opt.direction
+    )
+    # Negative control: the original unbreakable value exceeds this very same Qt box.
+    _check(report, f"{mode}: original clipping detected", raw_min > text_width)
+    _check(report, f"{mode}: operation wraps and fits", (
+        operation_lines >= 2 and actual_min <= text_width and actual_width <= text_width + 1
+    ))
+    _check(report, f"{mode}: item accommodates all lines", (
+        total_lines >= 4 and rect.height() + 2 >= text_height
+    ))
+    measurements = report.setdefault("run_list_geometry", [])
+    assert isinstance(measurements, list)
+    measurements.append({
+        "scenario": mode,
+        "dialog_width": dialog.width(),
+        "list_width": items.viewport().width(),
+        "text_width": text_width,
+        "raw_minimum_width": round(raw_min, 2),
+        "raw_max_line_width": round(raw_width, 2),
+        "rendered_minimum_width": round(actual_min, 2),
+        "rendered_max_line_width": round(actual_width, 2),
+        "rendered_lines": total_lines,
+        "item_height": rect.height(),
+        "rendered_text_height": round(text_height, 2),
+        "selected": items.currentRow() == 3,
+    })
 
 
 def _edge_cases(
