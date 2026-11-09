@@ -187,3 +187,37 @@ def test_missing_invalid_or_failed_outcome_cannot_erase_p0(db, outcome):
 def test_failed_run_remains_error(db):
     run_id = _run(db, status="failed")
     assert compute_run_health(str(run_id), db=db).status == "ERROR"
+
+@pytest.mark.parametrize("missing_table", ["qa_summary", "qa_snapshots"])
+def test_sqlite_sibling_query_failure_does_not_hide_independent_p0(db, missing_table):
+    run_id = _run(db, {"passed": True, "violation_count": 1})
+    _snapshot(db, run_id)
+    db.insert_qa_summary([
+        QaSummaryRow(run_id=run_id, violation_code="P0", severity="P0", count=1),
+    ])
+    with db.connect() as connection:
+        connection.execute(f"DROP TABLE {missing_table}")
+        connection.commit()
+    health = compute_run_health(str(run_id), db=db)
+    assert health.status == "ERROR" and health.counts["P0"] == 1
+    report = build_llm_debug_report(str(run_id), db=db)
+    assert report["health"]["status"] == "ERROR"
+    assert report["health"]["counts"]["P0"] == 1
+
+
+@pytest.mark.parametrize("missing_table", ["qa_summary", "qa_snapshots"])
+def test_unreadable_sibling_table_never_earns_clean_pass(db, missing_table):
+    run_id = _run(db, {"passed": True, "violation_count": 0})
+    db.insert_qa_snapshot(
+        run_id=run_id,
+        qa_summary_df=pd.DataFrame([{
+            "rule_id": "SYNTHETIC_RULE", "status": "PASS", "violations_count": 0,
+        }]),
+        qa_details_df=pd.DataFrame(columns=["rule_id", "level"]),
+    )
+    assert compute_run_health(str(run_id), db=db).status == "OK"
+    with db.connect() as connection:
+        connection.execute(f"DROP TABLE {missing_table}")
+        connection.commit()
+    health = compute_run_health(str(run_id), db=db)
+    assert (health.status, health.reason) == ("UNVERIFIED", "invalid")

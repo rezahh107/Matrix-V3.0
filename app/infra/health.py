@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 from dataclasses import dataclass
 from datetime import datetime
 from numbers import Integral
@@ -255,7 +256,7 @@ def compute_run_health(run_id: str, *, db: LocalDatabase) -> HealthSummary:
             int(run_row["id"])
         )
         snapshot_invalid = bool(invalid_fields)
-    except (ValueError, TypeError, KeyError, DatabaseOperationError):
+    except (ValueError, TypeError, KeyError, DatabaseOperationError, sqlite3.Error):
         snapshot_invalid = True
 
     # Collect negative signals independently. Invalid or inconsistent sibling
@@ -279,7 +280,7 @@ def compute_run_health(run_id: str, *, db: LocalDatabase) -> HealthSummary:
     try:
         # Legacy QA summary rows are independent negative evidence only.
         separate_rows = db.fetch_qa_summary(int(run_row["id"]))
-    except (ValueError, TypeError, KeyError, DatabaseOperationError):
+    except (ValueError, TypeError, KeyError, DatabaseOperationError, sqlite3.Error):
         separate_rows = []
         separate_invalid = True
     for row in separate_rows:
@@ -392,7 +393,7 @@ def build_llm_debug_report(
             _summary_df, details_df, extras, _invalid = db._fetch_qa_snapshot_evidence(
                 int(run_row["id"])
             )
-        except DatabaseOperationError:
+        except (DatabaseOperationError, sqlite3.Error):
             # A failed database read cannot authorize positive QA, and must
             # not prevent exporting available run-level diagnostics.
             _summary_df, details_df, extras = None, None, {}
