@@ -225,7 +225,8 @@ def main() -> int:
             finally:
                 window.close()
                 db.close_all_connections()
-                app.processEvents()    print(json.dumps({
+                app.processEvents()
+    print(json.dumps({
         "source_sha": actual_sha,
         "scenarios": len(observations),
         "verdict": "WINDOWS_QT_QA_TRUTHFULNESS_OBSERVED",
