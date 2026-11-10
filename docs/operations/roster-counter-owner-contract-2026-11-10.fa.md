@@ -33,7 +33,7 @@
 | قالب شناسه | شناسهٔ ۹رقمی = `YY` (سال تحصیلی منهای ۱۳۵۰، دو رقم) + `MID3` جنسیت + `sequence` چهاررقمی. در Policy بررسی‌شده `357` برای پسر و `373` برای دختر است. | [Core: counter.py](../../app/core/counter.py)، [Policy](../../config/policy.json) |
 | عبور ورودی‌ها | GUI سال تأییدشده و هر مسیر Roster موجود را به `Allocate` می‌فرستد؛ CLI دو فایل را مستقل می‌خواند و به `assign_counters` می‌رساند. | [UI: main_window_base.py](../../app/ui/main_window_base.py)، [CLI: cli_legacy.py](../../app/infra/cli_legacy.py) |
 | انتخاب و بازیابی فایل سال قبل | فیلد در GUI اختیاری است و مقدار انتخاب‌شده تا زمانی که همان پنجره باز است باقی می‌ماند؛ اما در سورس فعلی **مسیر سال قبل در `AppPreferences` ذخیره و پس از بازکردن مجدد برنامه بازیابی نمی‌شود**. فعلاً برای حفظ شناسه‌های قبلی در نشست تازه باید همان فایل معتبر را دوباره انتخاب کرد. این با تداوم موردنظر Owner انطباق کامل ندارد (`MISSING_CAPABILITY`). | [UI: main_window_base.py](../../app/ui/main_window_base.py)، [Preferences](../../app/ui/app_preferences.py) |
-| الزام Roster سال جاری | سورس فعلی GUI/CLI مسیر Roster را اختیاری می‌خواند؛ تصمیم جدید Owner یک Checkbox در UI می‌خواهد که فقط هنگام خاموش‌بودن آن، حضور هر دو فایل را اجباری کند. هنگام روشن‌بودن، رفتار اختیاری فعلی حفظ می‌شود. بررسی تازگی/اجبار دانلود جدید عمداً جزو نیازمندی نیست. | [UI: main_window_base.py](../../app/ui/main_window_base.py)، [CLI: cli_legacy.py](../../app/infra/cli_legacy.py) |
+| الزام Roster سال جاری | **پس از ادغام PR #57:** Checkbox «حالت اختیاری Roster» در GUI پیاده‌سازی شده و در پنجرهٔ تازه بدون تیک است؛ در این حالت حضور هر دو مسیر Roster لازم است. با تیک، فقط نبودن ورودی‌ها مجاز می‌شود. الزام دانلود تازه/مقایسهٔ فایل وجود ندارد. مسیر CLI و Core تغییر نکرده است. | [UI: main_window_base.py](../../app/ui/main_window_base.py)، [CLI: cli_legacy.py](../../app/infra/cli_legacy.py) |
 | سال پیش‌نمایش | سال مبنای شمارندهٔ نمایشی ممکن است از `strict roster year` گرفته شود، اما صدور شناسهٔ جدید در `Allocate` بر مبنای **سال تأییدشدهٔ Allocate** است؛ برابر دانستن این دو مجاز نیست. | [UI: main_window_base.py](../../app/ui/main_window_base.py)، [Core: counter.py](../../app/core/counter.py) |
 
 **مرز اثبات:** رفتارهای جدول بر اساس بازرسی سورس `main` در SHA فوق است؛ آزمون‌های موجود در مخزن، شاهد اجرای مستقل این بازبینی نیستند. هیچ تخصیص با دادهٔ واقعی، تست تعاملی Windows یا اجرای آزمون جدید برای این سند انجام نشده است. هدف Owner با وضعیت فعلی اجرا یکسان نیست.
@@ -61,10 +61,18 @@
 
 ## ۶. شروط تغییر در آینده
 
-گام اجرایی بعدی باید **جدا از این PR مستنداتی** برنامه‌ریزی شود: (۱) نگه‌داری و بازیابی امنِ مرجع Roster سال قبل برای سال تخصیص، با بررسی وجود/اعتبار مسیر و رفتار تغییر سال؛ (۲) الزام ارائهٔ Roster جاری پیش از هر Allocate و کنترل متناسب برای جلوگیری از اتکای خاموش به نسخهٔ قبلی. روش تضمین تازگی واقعی در سامانهٔ رسمی هنوز انتخاب/اثبات نشده است؛ تأیید اپراتور به‌تنهایی اثبات تازگی نیست. هر پیشنهاد پیاده‌سازی یا تغییر الگوریتم شمارنده/حل تعارض باید با LAW/Technical SSoT، قرارداد Sabt، حریم داده و آزمون‌های تداوم شناسه هماهنگ شود. **این سند به‌تنهایی مجوز تغییر کد یا Merge/Release نیست.**
+**گام باقی‌مانده پس از PR #57:** Checkbox در کد اصلی ادغام شده؛ تکرار مأموریت پیاده‌سازی آن لازم نیست. بهبود مستقل بعدی، بازیابی امن Roster سال قبل در محدودهٔ سال تحصیلی پس از راه‌اندازی مجدد برنامه است، بدون تغییر حالت اختیاری یا الزام دانلود تازه. هماهنگی بین رایانه‌های مستقل و اثبات تازه‌بودن رسمی با این PR حل نشده و نباید ادعای آن مطرح شود. آزمون انسانی Windows و پذیرش Owner برای تجربهٔ نهایی همچنان NOT_PROVEN است.
 
 **برچسب‌های بازیابی:** `Matrix`، `Allocate`، `Roster`، `prior_roster`، `current_roster`، `student_id`، `assign_counters`، `owner-decision`، `۱۴۰۵`.
 
 
 ### OWNER-CONFIRMED AMENDMENT — OPTIONAL ROSTER PRESENCE ONLY, 2026-11-10
 This later Owner instruction overrides earlier statements requiring a newly downloaded/different current Roster for every Allocate. The single UI checkbox «حالت اختیاری Roster» has ONLY one effect: unchecked means prior/current Roster input presence is required; checked means both may be absent, exactly as existing optional GUI behavior. The operator may reuse the same current Roster file without checks of recency, file timestamps, hashes, comparisons, renewed selection, or freshness attestation. Do not modify validation of provided files, year confirmation, number/identity algorithms, duplicate behavior, CLI, QA/Trace, Sabt, threading or any other current controls. This is an approved future UX specification, not an implemented feature or authorization for code, PR, merge or release. Prior-year reference persistence remains a separately tracked improvement.
+
+
+## ثبت وضعیت فنی پس از PR #57 — ۲۰۲۶-۱۱-۱۰
+
+- PR #57 (https://github.com/rezahh107/Matrix-V3.0/pull/57) با Merge Commit 9b37c8f4d89104c47bb36770b965f192c09a0568 ادغام شد.
+- رفتار: Checkbox «حالت اختیاری Roster» در شروع بدون تیک است؛ در حالت عادی حضور هر دو Roster الزامی و در حالت اختیاری نبود هر دو مجاز است. فقط الزام حضور تغییر می‌کند.
+- آزمون‌ها: Windows Qt واقعیِ خودکار در QPA=windows و آزمون‌های مصنوعی GUI-to-CLI در CI موفق شدند؛ آزمون انسانی اپراتور و پذیرش تجربه هنوز NOT_PROVEN است.
+- باقی: بازیابی پایدار Roster سال قبل پس از Restart و بررسی اعتبار مرجع ذخیره‌شده؛ این بخش با Checkbox حل نشده است.
