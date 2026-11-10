@@ -215,6 +215,7 @@ jobs:
           app/infra/health.py app/ui/widgets/health_indicator.py
           app/ui/main_window_base.py
           tests/infra/test_health.py tests/infra/test_health_truthfulness.py
+          tests/infra/test_qa_evidence_independence.py
           tests/ui/test_health_indicator.py
           tools/ci/qualify_qa_health_windows.py
       - name: Execute QA/SQLite and Qt regression cases
@@ -222,6 +223,7 @@ jobs:
           uv run --locked pytest -q --maxfail=1
           tests/infra/test_health.py
           tests/infra/test_health_truthfulness.py
+          tests/infra/test_qa_evidence_independence.py
           tests/ui/test_health_indicator.py
           tests/infra/test_history_strict_snapshot_reads.py
           tests/infra/test_history_store_qa_snapshots.py

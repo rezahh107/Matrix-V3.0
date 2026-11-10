@@ -71,6 +71,27 @@ def _resolve_run_row(db: LocalDatabase, run_id: str) -> dict[str, object] | None
     return dict(by_uuid) if by_uuid is not None else None
 
 
+def _valid_rule_id(value: object) -> bool:
+    """Core QaViolation.rule_id is a non-empty string, not a coercible identifier."""
+    return isinstance(value, str) and bool(value.strip())
+
+
+def _usable_detail_rules(
+    details: pd.DataFrame | None,
+) -> tuple[pd.DataFrame | None, bool]:
+    """Keep independently valid detail rows; flag unsupported rule identities.
+
+    This is diagnostic-only filtering. Invalid siblings must block positive OK
+    through the caller's snapshot_invalid flag, never disappear as clean QA.
+    """
+    if details is None or details.empty:
+        return details, False
+    if list(details.columns).count("rule_id") != 1:
+        return None, True
+    valid = details["rule_id"].map(_valid_rule_id)
+    return details.loc[valid].copy(), not bool(valid.all())
+
+
 def _summarize_issues(
     qa_details_df: pd.DataFrame | None, qa_summary_df: pd.DataFrame | None
 ) -> tuple[dict[str, int], list[IssueSummary]]:
@@ -100,7 +121,9 @@ def _summarize_issues(
 
     if qa_summary_df is not None and not qa_summary_df.empty:
         for _, row in qa_summary_df.iterrows():
-            rule_id = str(row.get("rule_id", ""))
+            rule_id = row.get("rule_id")
+            if not _valid_rule_id(rule_id):
+                continue
             violations = int(row.get("violations_count", 0) or 0)
             status = str(row.get("status", "")).upper()
             severity = "P1" if status == "FAIL" and violations > 0 else "P2"
@@ -158,8 +181,7 @@ def _check_snapshot_shape(
         status = str(row["status"]).strip().upper()
         violations = row["violations_count"]
         if (
-            pd.isna(rule_id)
-            or not str(rule_id).strip()
+            not _valid_rule_id(rule_id)
             or status not in {"PASS", "WARN", "FAIL"}
             or isinstance(violations, bool)
             or not isinstance(violations, Integral)
@@ -174,7 +196,11 @@ def _check_snapshot_shape(
     if details is not None and not details.empty:
         if not {"rule_id", "level"}.issubset(details.columns):
             raise ValueError("Malformed QA details columns")
-        if details["rule_id"].isna().any() or details["level"].isna().any():
+        if (
+            list(details.columns).count("rule_id") != 1
+            or not details["rule_id"].map(_valid_rule_id).all()
+            or details["level"].isna().any()
+        ):
             raise ValueError("Malformed QA details row")
         if len(details) != count:
             raise ValueError("QA summary and details violation counts disagree")
@@ -271,8 +297,13 @@ def compute_run_health(run_id: str, *, db: LocalDatabase) -> HealthSummary:
     except (ValueError, TypeError, KeyError):
         snapshot_invalid = True
 
+    usable_details, invalid_rule_ids = _usable_detail_rules(details_df)
+    snapshot_invalid |= invalid_rule_ids
     try:
-        counts, issues = _summarize_issues(details_df, summary_df)
+        # Do not attribute rejected detail rows to an unrelated summary rule.
+        counts, issues = _summarize_issues(
+            usable_details, None if invalid_rule_ids else summary_df
+        )
     except (ValueError, TypeError, KeyError):
         snapshot_invalid = True
 
@@ -398,7 +429,8 @@ def build_llm_debug_report(
             # not prevent exporting available run-level diagnostics.
             _summary_df, details_df, extras = None, None, {}
     health = compute_run_health(run_id, db=db)
-    samples = _build_samples(details_df, health.issues_summary, sample_limit=sample_limit)
+    usable_details, _invalid_rule_ids = _usable_detail_rules(details_df)
+    samples = _build_samples(usable_details, health.issues_summary, sample_limit=sample_limit)
     return {
         "meta": {
             "run_id": run_id,

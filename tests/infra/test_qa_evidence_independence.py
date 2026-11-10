@@ -235,3 +235,170 @@ def test_unreadable_sibling_table_never_earns_clean_pass(
         connection.commit()
     health = compute_run_health(str(run_id), db=db)
     assert (health.status, health.reason) == ("UNVERIFIED", "invalid")
+
+
+def _grouping_snapshot(
+    db: LocalDatabase,
+    *,
+    details: list[dict[str, object]],
+    status: str = "WARN",
+    summary_rule: object = "R",
+    passed: bool = True,
+) -> int:
+    """Persist the real split-frame QA snapshot with the existing SQLite API."""
+    run_id = _run(db, outcome={"passed": passed, "violation_count": len(details)})
+    db.insert_qa_snapshot(
+        run_id=run_id,
+        qa_summary_df=pd.DataFrame([{
+            "rule_id": summary_rule, "status": status,
+            "violations_count": len(details),
+        }]),
+        qa_details_df=pd.DataFrame(
+            details, columns=["rule_id", "level", "student_id"]
+        ),
+    )
+    return run_id
+
+
+def _grouping_rows(bad_id: object, *, reversed_order: bool = False) -> list[dict[str, object]]:
+    valid = {"rule_id": "R", "level": "P0", "student_id": 11}
+    malformed = {"rule_id": bad_id, "level": "P2", "student_id": 12}
+    return [malformed, valid] if reversed_order else [valid, malformed]
+
+
+@pytest.mark.parametrize("reversed_order", [False, True])
+def test_grouping_valid_p0_survives_bad_identifier(
+    db: LocalDatabase, reversed_order: bool
+) -> None:
+    run_id = _grouping_snapshot(
+        db, details=_grouping_rows(["BROKEN"], reversed_order=reversed_order)
+    )
+    _, restored, _ = db.fetch_qa_snapshot(run_id, strict=True)
+    assert restored is not None
+    assert any(isinstance(value, list) for value in restored["rule_id"])
+
+    health = compute_run_health(str(run_id), db=db)
+    assert health.status == "ERROR"
+    assert health.counts["P0"] == 1
+    assert health.counts["P1"] == 0
+    assert len(health.issues_summary) == 1
+    assert (
+        health.issues_summary[0].issue_code,
+        health.issues_summary[0].severity,
+        health.issues_summary[0].count,
+    ) == ("R", "P0", 1)
+    report = build_llm_debug_report(str(run_id), db=db)
+    assert report["health"]["status"] == "ERROR"
+    assert report["health"]["counts"]["P0"] == 1
+    assert report["samples"] == [{"issue_code": "R", "rows": [{"student_id": 11}]}]
+
+
+@pytest.mark.parametrize("bad_id", [
+    {"nested": "BROKEN"}, 123, True, None, "", "   ", ["BROKEN", "NESTED"],
+])
+def test_grouping_unsupported_identities_do_not_hide_valid_p0(
+    db: LocalDatabase, bad_id: object
+) -> None:
+    run_id = _grouping_snapshot(db, details=_grouping_rows(bad_id))
+    health = compute_run_health(str(run_id), db=db)
+    assert health.status == "ERROR"
+    assert health.counts["P0"] == 1
+    assert [issue.issue_code for issue in health.issues_summary] == ["R"]
+
+
+def test_grouping_both_identifiers_valid_retains_all_counts_and_samples(
+    db: LocalDatabase,
+) -> None:
+    run_id = _grouping_snapshot(db, details=_grouping_rows("BROKEN"))
+    health = compute_run_health(str(run_id), db=db)
+    assert health.status == "ERROR"
+    assert health.counts == {"P0": 1, "P1": 0, "P2": 1}
+    assert {(i.issue_code, i.severity) for i in health.issues_summary} == {
+        ("R", "P0"), ("BROKEN", "P2"),
+    }
+    report = build_llm_debug_report(str(run_id), db=db)
+    assert {s["issue_code"] for s in report["samples"]} == {"R", "BROKEN"}
+
+
+def test_grouping_bad_identifier_and_corrupt_extras_keep_valid_p0(
+    db: LocalDatabase,
+) -> None:
+    run_id = _grouping_snapshot(db, details=_grouping_rows(["BROKEN"]))
+    _corrupt(db, run_id, "qa_extras_json", "{malformed")
+    health = compute_run_health(str(run_id), db=db)
+    assert health.status == "ERROR" and health.counts["P0"] == 1
+    report = build_llm_debug_report(str(run_id), db=db)
+    assert report["health"]["counts"]["P0"] == 1
+    assert report["samples"] == [{"issue_code": "R", "rows": [{"student_id": 11}]}]
+
+
+def test_grouping_malformed_only_cannot_earn_ok(db: LocalDatabase) -> None:
+    run_id = _grouping_snapshot(
+        db, details=[{"rule_id": ["BROKEN"], "level": "P2", "student_id": 12}],
+        status="PASS",
+    )
+    health = compute_run_health(str(run_id), db=db)
+    assert (health.status, health.reason) == ("UNVERIFIED", "invalid")
+    assert health.issues_summary == []
+
+
+def test_grouping_complete_qa_pass_stays_ok(db: LocalDatabase) -> None:
+    run_id = _grouping_snapshot(db, details=[], status="PASS")
+    health = compute_run_health(str(run_id), db=db)
+    assert (health.status, health.reason) == ("OK", None)
+    assert health.counts == {"P0": 0, "P1": 0, "P2": 0}
+
+
+def test_grouping_mixed_p0_p1_severities_stay_distinct(db: LocalDatabase) -> None:
+    run_id = _grouping_snapshot(db, details=[
+        {"rule_id": "R", "level": "critical", "student_id": 11},
+        {"rule_id": "R", "level": "warn", "student_id": 12},
+    ])
+    health = compute_run_health(str(run_id), db=db)
+    assert health.status == "ERROR"
+    assert health.counts == {"P0": 1, "P1": 1, "P2": 0}
+    assert health.issues_summary[0].count == 2
+
+
+def test_grouping_p1_survives_bad_identifier(db: LocalDatabase) -> None:
+    run_id = _grouping_snapshot(db, details=[
+        {"rule_id": "R", "level": "P1", "student_id": 11},
+        {"rule_id": {"nested": 5}, "level": "P2", "student_id": 12},
+    ])
+    health = compute_run_health(str(run_id), db=db)
+    assert health.status == "WARN"
+    assert health.counts["P1"] == 1
+    assert [i.issue_code for i in health.issues_summary] == ["R"]
+
+
+def test_grouping_invalid_summary_id_does_not_hide_valid_p0(
+    db: LocalDatabase,
+) -> None:
+    run_id = _grouping_snapshot(
+        db, details=[{"rule_id": "R", "level": "P0", "student_id": 11}],
+        summary_rule=["BROKEN"],
+    )
+    health = compute_run_health(str(run_id), db=db)
+    assert health.status == "ERROR"
+    assert health.counts["P0"] == 1
+    assert [i.issue_code for i in health.issues_summary] == ["R"]
+
+
+def test_grouping_invalid_summary_id_never_authorizes_pass(
+    db: LocalDatabase,
+) -> None:
+    run_id = _grouping_snapshot(
+        db, details=[], status="PASS", summary_rule={"bad": True}
+    )
+    health = compute_run_health(str(run_id), db=db)
+    assert (health.status, health.reason) == ("UNVERIFIED", "invalid")
+
+
+def test_grouping_explicit_fail_survives_bad_detail_identifier(
+    db: LocalDatabase,
+) -> None:
+    run_id = _grouping_snapshot(
+        db, details=[{"rule_id": ["BROKEN"], "level": "P2", "student_id": 12}],
+        status="FAIL", passed=False,
+    )
+    assert compute_run_health(str(run_id), db=db).status == "ERROR"

@@ -302,7 +302,53 @@ def main() -> int:
                     language="fa", expected_text=UiTranslator("fa").text("health.summary.ok"),
                     screenshot="history-restored-fa.png",
                 )
-                assert len(observations) == 13
+                # F1 grouping: malformed rule identity must not hide valid P0.
+                mixed_id = db.insert_run(_record(
+                    "synthetic-valid-p0-bad-rule-sibling", t + timedelta(seconds=7),
+                    qa={"passed": True, "violation_count": 2},
+                ))
+                db.insert_qa_snapshot(
+                    run_id=mixed_id,
+                    qa_summary_df=pd.DataFrame([{
+                        "rule_id": "R", "status": "WARN", "violations_count": 2,
+                    }]),
+                    qa_details_df=pd.DataFrame([
+                        {"rule_id": "R", "level": "P0", "student_id": 11},
+                        {"rule_id": ["BROKEN"], "level": "P2", "student_id": 12},
+                    ]),
+                )
+                for lang in ("en", "fa"):
+                    check(
+                        "valid_p0_with_malformed_rule_sibling", status="ERROR", reason=None,
+                        language=lang,
+                        expected_text=UiTranslator(lang).text("health.summary.error"),
+                        screenshot=f"valid-p0-malformed-rule-{lang}.png",
+                    )
+                    observed = window._fetch_health_summary()
+                    assert observed is not None and observed.counts["P0"] == 1
+                    assert [(i.issue_code, i.severity) for i in observed.issues_summary] == [
+                        ("R", "P0")
+                    ]
+
+                malformed_only_id = db.insert_run(_record(
+                    "synthetic-bad-rule-only", t + timedelta(seconds=8),
+                    qa={"passed": True, "violation_count": 1},
+                ))
+                db.insert_qa_snapshot(
+                    run_id=malformed_only_id,
+                    qa_summary_df=pd.DataFrame([{
+                        "rule_id": "R", "status": "PASS", "violations_count": 1,
+                    }]),
+                    qa_details_df=pd.DataFrame([{
+                        "rule_id": ["BROKEN"], "level": "P2", "student_id": 12,
+                    }]),
+                )
+                check(
+                    "malformed_rule_alone_not_positive", status="UNVERIFIED", reason="invalid",
+                    language="en", expected_text=UiTranslator("en").text("health.summary.invalid"),
+                    screenshot="invalid-rule-no-positive-en.png",
+                )
+                assert len(observations) == 16
                 environment = {
                     "source_sha": actual_sha,
                     "platform": platform.platform(),
