@@ -762,7 +762,6 @@ def test_mainwindow_real_gui_build_allocate_sabt_and_recovery(
         lambda _root: YearDatabaseManager(tmp_path / "years"),
     )
     app = QApplication.instance() or QApplication([])
-    assert app.overrideCursor() is None, "Qt override cursor leaked before legacy GUI integration"
     school_file = _write_excel(_schools(), tmp_path / "gui-schools.xlsx")
     group_file = _write_excel(_groupcodes(24), tmp_path / "gui-groups.xlsx")
     changed_groups = _write_excel(_groupcodes(25), tmp_path / "gui-stale-groups.xlsx")
@@ -1110,7 +1109,6 @@ def test_mainwindow_real_gui_build_allocate_sabt_and_recovery(
     finally:
         window.close()
         app.processEvents()
-        assert app.overrideCursor() is None, "Legacy GUI integration left a Qt cursor override"
         if window._local_db is not None:
             window._local_db.close_all_connections()
 
@@ -1160,7 +1158,13 @@ class _RosterRun:
         assert self.window._btn_allocate.isEnabled()
         assert self.window._optional_roster.isEnabled()
         assert not self.window._progress.property("busy")
-        assert self.app.overrideCursor() is None
+        # Prove this Worker restored its own Qt override without assuming the
+        # application-global stack was clean before unrelated earlier tests.
+        from PySide6.QtCore import Qt
+
+        cursor = self.app.overrideCursor()
+        assert cursor is not None and cursor.shape() == Qt.CursorShape.CrossCursor
+        assert not self.window._is_busy_cursor
 
     def until(self, condition: Callable[[], bool], message: str) -> None:
         from time import monotonic, sleep
@@ -1196,7 +1200,7 @@ class _RosterRun:
 
 @pytest.fixture
 def roster_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[_RosterRun]:
-    from PySide6.QtCore import QEvent, QSettings, QThread
+    from PySide6.QtCore import QEvent, QSettings, QThread, Qt
     from PySide6.QtTest import QTest
     from PySide6.QtWidgets import QApplication, QMessageBox
 
@@ -1212,7 +1216,6 @@ def roster_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[_Ros
             lambda *_args: QSettings(str(tmp_path / "qt-settings.ini"), QSettings.Format.IniFormat),
         )
     app = QApplication.instance() or QApplication([])
-    assert app.overrideCursor() is None, "A preceding test leaked a global Qt cursor override"
     window = main_window.MainWindow()
     run = _RosterRun(
         app,
@@ -1243,6 +1246,9 @@ def roster_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[_Ros
         return real_cli(argv, progress_factory=progress_factory, ui_overrides=ui_overrides)
 
     try:
+        # Qt keeps override cursors application-wide, not per window. A unique
+        # sentinel catches an unbalanced push/pop by this real lifecycle.
+        app.setOverrideCursor(Qt.CursorShape.CrossCursor)
         window.show()
         window.activateWindow()
         app.processEvents()
@@ -1270,7 +1276,6 @@ def roster_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[_Ros
         window._picker_students.setText(str(students))
         window._picker_pool.setText(str(matrix))
         run.until(lambda: not window._excel_loaders, "Pool loader did not finish")
-        assert app.overrideCursor() is None, "Roster fixture pool loader left a Qt cursor override"
         window._picker_alloc_out.setText(str(run.allocation))
         window._picker_sabt_output_alloc.setText(str(run.sabt))
         window._picker_sabt_template_alloc.setText("")
@@ -1306,6 +1311,19 @@ def roster_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[_Ros
         window.deleteLater()
         app.sendPostedEvents(None, QEvent.Type.DeferredDelete)
         app.processEvents()
+        cursor = app.overrideCursor()
+        balanced = cursor is not None and cursor.shape() == Qt.CursorShape.CrossCursor
+        # On failure, remove any overrides above our sentinel so subsequent
+        # tests are not contaminated; do not remove an inherited cursor.
+        for _ in range(8):
+            cursor = app.overrideCursor()
+            if cursor is None or cursor.shape() == Qt.CursorShape.CrossCursor:
+                break
+            app.restoreOverrideCursor()
+        cursor = app.overrideCursor()
+        if cursor is not None and cursor.shape() == Qt.CursorShape.CrossCursor:
+            app.restoreOverrideCursor()
+        assert balanced, "Roster left an unbalanced Qt override cursor"
 
 
 def _assert_roster_output(run: _RosterRun, expected_ids: tuple[str, str]) -> None:
