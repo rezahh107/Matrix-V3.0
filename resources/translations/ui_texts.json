@@ -362,7 +362,8 @@
     "roster.prior_ref.forgotten": "مرجع ذخیره‌شده Roster سال قبل فقط برای این سال تحصیلی پاک شد.",
     "roster.prior_ref.unavailable": "فایل Roster سال قبل قابل خواندن نیست. یک فایل محلی معتبر انتخاب کنید.",
     "roster.prior_ref.reselect": "Roster سال قبل نسبت به مرجع ذخیره‌شده تغییر کرده است. برای استفاده از نسخه جدید دوباره انتخاب کنید.",
-    "roster.prior_ref.stale_attempt": "انتخاب Roster یا فایل سال قبل هنگام پیش‌بررسی تغییر کرده است. ورودی‌ها را بازبینی و تخصیص را دوباره اجرا کنید."
+    "roster.prior_ref.stale_attempt": "انتخاب Roster یا فایل سال قبل هنگام پیش‌بررسی تغییر کرده است. ورودی‌ها را بازبینی و تخصیص را دوباره اجرا کنید.",
+    "roster.prior_ref.reader_accepted": "خوانشگر تخصیص، Roster سال قبل را پذیرفت؛ این به معنای تأیید رسمی هویت یا تازگی فایل نیست."
   },
   "en": {
     "app.title": "Mentor Allocation System",
@@ -727,6 +728,7 @@
     "roster.prior_ref.forgotten": "Saved prior Roster reference forgotten for this academic year.",
     "roster.prior_ref.unavailable": "The selected prior Roster cannot be read. Select a valid local file.",
     "roster.prior_ref.reselect": "Saved prior Roster changed. Select it again to use the new version.",
-    "roster.prior_ref.stale_attempt": "Roster choice or prior file changed during preflight. Review and retry Allocate."
+    "roster.prior_ref.stale_attempt": "Roster choice or prior file changed during preflight. Review and retry Allocate.",
+    "roster.prior_ref.reader_accepted": "Allocation reader accepted this prior Roster; this does not prove official identity or freshness."
   }
 }
