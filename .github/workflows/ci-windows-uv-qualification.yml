@@ -33,6 +33,19 @@ jobs:
         run: uv python install
       - name: Sync locked environment
         run: uv sync --locked
+      - name: Qualify academic-year selection and confirmation (Windows Qt)
+        env:
+          MATRIX_ACADEMIC_YEAR_EVIDENCE: ${{ runner.temp }}/matrix-academic-year
+        run: |
+          uv run --locked python -c "import platform, PySide6; from PySide6.QtCore import qVersion; print(platform.platform(), platform.python_version(), 'PySide6', PySide6.__version__, 'Qt', qVersion())"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          uv run --locked pytest -v -r a tests/ui/test_academic_year.py tests/ui/helpers/test_counter_helpers.py tests/unit/test_counter_ssot.py tests/unit/test_counter_engine.py tests/integration/test_counter_integration.py tests/integration/test_cli_counter_args.py
+      - name: Upload academic-year FA and EN offscreen captures
+        uses: actions/upload-artifact@v4
+        with:
+          name: matrix-academic-year-windows-qt
+          path: ${{ runner.temp }}/matrix-academic-year/*.png
+          if-no-files-found: error
       - name: Focused Windows filesystem qualification regressions
         run: uv run --locked pytest tests/unit/test_windows_uv_runtime_probe.py -q
       - name: Synthetic personal Git version upgrade and rollback (Windows)

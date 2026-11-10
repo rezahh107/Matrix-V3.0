@@ -7,6 +7,7 @@ import pandas as pd
 from app.core.build_matrix import REQUIRED_INSPACTOR_COLUMNS
 from app.core.common.columns import canonicalize_headers
 from app.infra import cli
+from app.infra.excel import export_allocations as sabt_exports
 from app.infra.groupcode.groupcode_repository import GroupCodeRepository
 from app.infra.local_database import LocalDatabase
 from app.infra.schools.school_repository import SchoolRepository
@@ -127,6 +128,19 @@ def test_cli_allocate_accepts_counter_args(tmp_path: Path) -> None:
 
     output_path = tmp_path / "allocations.xlsx"
     db = _prepare_reference_db(tmp_path)
+    profile_path = tmp_path / "synthetic-sabt-profile.xlsx"
+    _write_excel(
+        pd.DataFrame(
+            {
+                sabt_exports._HEADER_COLUMN: ["کد ثبت نام0"],
+                sabt_exports._VALUE_COLUMN: ["student_id"],
+                sabt_exports._ORDER_COLUMN: [1],
+                sabt_exports._SOURCE_COLUMN: [sabt_exports._SOURCE_STUDENT],
+            }
+        ),
+        profile_path,
+        sheet_name=sabt_exports._PROFILE_SHEET_NAME,
+    )
 
     argv = [
         "allocate",
@@ -148,6 +162,8 @@ def test_cli_allocate_accepts_counter_args(tmp_path: Path) -> None:
         str(current_path),
         "--local-db",
         str(db.path),
+        "--export-profile-path",
+        str(profile_path),
     ]
 
     exit_code = cli.main(argv)

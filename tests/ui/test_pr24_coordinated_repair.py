@@ -111,7 +111,11 @@ def test_allocate_rejections_do_not_commit_automatic_workspace(
 
     window._picker_students.setText(str(tmp_path / "students.xlsx"))
     window._picker_pool.setText(str(tmp_path / "pool.xlsx"))
+    profile = tmp_path / "synthetic-profile.xlsx"
+    profile.touch()
+    window._picker_sabt_profile_alloc.setText(str(profile))
     window._combo_academic_year.setEditText("1404")
+    window._academic_year_confirm.click()
     if reject_kind == "missing_required":
         window._picker_students.setText("")
     elif reject_kind == "missing_year":
@@ -197,7 +201,11 @@ def test_valid_allocate_commits_before_preflight_and_reuses_same_workspace(
     _install_repositories(window, tmp_path, ready=True)
     window._picker_students.setText(str(tmp_path / "students.xlsx"))
     window._picker_pool.setText(str(tmp_path / "pool.xlsx"))
+    profile = tmp_path / "synthetic-profile.xlsx"
+    profile.touch()
+    window._picker_sabt_profile_alloc.setText(str(profile))
     window._combo_academic_year.setEditText("1404")
+    window._academic_year_confirm.click()
     window._picker_sabt_output_alloc.setText(str(tmp_path / "requested-sabt.xlsx"))
 
     preflight: dict[str, Any] = {}

@@ -24,6 +24,7 @@ from PySide6.QtCore import (
     QObject,
     QPropertyAnimation,
     QSettings,
+    QSignalBlocker,
     Qt,
     QTimer,
     QUrl,
@@ -96,6 +97,7 @@ from app.ui.dialogs.unknown_data_dialog import (
     summarize_unknowns_report,
 )
 from app.ui.fonts import get_app_font
+from app.ui.helpers.academic_year import counter_accepts_year, suggest_academic_year
 from app.ui.helpers.counter_helpers import detect_year_candidates
 from app.ui.helpers.manager_helpers import extract_manager_names, load_manager_names_from_pool
 from app.ui.history_metrics import HistoryMetricsDialog
@@ -203,6 +205,11 @@ class UnknownsPreflightResult:
     report_path: Path
     exit_code: int
     summary: UnknownsReportSummary | None = None
+
+
+@dataclass(frozen=True)
+class _AcademicYearConfirmation:
+    year: int
 
 
 _EN_TEXT_DEFAULTS: dict[str, str] = {
@@ -545,9 +552,8 @@ class MainWindow(QMainWindow):
         self._tabs.addTab(
             self._wrap_page(self._build_build_page()), self._t("tabs.build", "ساخت ماتریس")
         )
-        self._tabs.addTab(
-            self._wrap_page(self._build_allocate_page()), self._t("tabs.allocate", "تخصیص")
-        )
+        self._allocate_tab = self._wrap_page(self._build_allocate_page())
+        self._tabs.addTab(self._allocate_tab, self._t("tabs.allocate", "تخصیص"))
         self._tabs.addTab(
             self._wrap_page(self._build_rule_engine_page()),
             self._t("tabs.rule_engine", "موتور قواعد"),
@@ -960,6 +966,8 @@ class MainWindow(QMainWindow):
         widget = self._tabs.widget(index)
         if widget is None:
             return
+        if widget is self._allocate_tab:
+            self._refresh_system_academic_year()
         # انیمیشن قبلی حذف شد تا از ایجاد افکت‌های مکرر جلوگیری شود.
         effect = widget.graphicsEffect()
         if isinstance(effect, SafeOpacityEffect):
@@ -1009,6 +1017,7 @@ class MainWindow(QMainWindow):
             )
         self._refresh_tab_texts()
         self._refresh_action_texts()
+        self._refresh_academic_year_texts()
         if self._database_status is not None:
             self._database_status.set_translator(self._translator)
         self._refresh_last_run_badge()
@@ -1460,12 +1469,28 @@ class MainWindow(QMainWindow):
         academic_line_edit = self._combo_academic_year.lineEdit()
         if academic_line_edit is not None:
             academic_line_edit.setPlaceholderText("مثلاً 1404")
-        self._combo_academic_year.setToolTip(
-            "سال تحصیلی شروع شمارنده‌ها را تعیین کنید تا کدها درست ادامه یابند"
-        )
         for year in range(1395, 1411):
             self._combo_academic_year.addItem(str(year))
+        self._combo_academic_year.setCurrentIndex(-1)
         register_layout.addRow("سال تحصیلی", self._combo_academic_year)
+
+        self._system_academic_year: int | None = None
+        self._academic_year_follows_system = True
+        self._academic_year_confirmation: _AcademicYearConfirmation | None = None
+        self._allocate_roster_year: int | None = None
+        self._allocate_roster_request = 0
+
+        self._academic_year_hint = QLabel(register_box)
+        self._academic_year_hint.setObjectName("academicYearHint")
+        self._academic_year_hint.setWordWrap(True)
+        register_layout.addRow(self._academic_year_hint)
+
+        self._academic_year_confirm = QCheckBox(register_box)
+        self._academic_year_confirm.setObjectName("academicYearConfirm")
+        self._academic_year_confirm.clicked.connect(self._confirm_academic_year)
+        self._academic_year_confirm.toggled.connect(self._academic_year_check_toggled)
+        self._combo_academic_year.currentTextChanged.connect(self._academic_year_changed)
+        register_layout.addRow(self._academic_year_confirm)
 
         self._picker_prior_roster = FilePicker(
             register_box,
@@ -1483,12 +1508,21 @@ class MainWindow(QMainWindow):
         self._picker_current_roster.setObjectName("currentRosterPicker")
         self._picker_current_roster.setToolTip("برای کشف آخرین شمارنده‌های سال جاری")
         self._set_picker_button_text(self._picker_current_roster)
+        self._picker_current_roster.line_edit().textChanged.connect(
+            self._clear_allocate_roster_suggestion
+        )
         register_layout.addRow("روستر سال جاری", self._picker_current_roster)
 
         self._btn_autodetect = QPushButton("پیشنهاد خودکار", register_box)
         self._btn_autodetect.setObjectName("autodetectCountersBtn")
         self._btn_autodetect.clicked.connect(self._autodetect_counters)
         register_layout.addRow("", self._btn_autodetect)
+
+        self._btn_use_roster_year = QPushButton(register_box)
+        self._btn_use_roster_year.setObjectName("useRosterAcademicYear")
+        self._btn_use_roster_year.clicked.connect(self._use_roster_academic_year)
+        register_layout.addRow(self._btn_use_roster_year)
+        self._refresh_system_academic_year()
 
         outer.addWidget(register_box)
 
@@ -1845,9 +1879,11 @@ class MainWindow(QMainWindow):
             self._picker_sabt_template_alloc,
             self._edit_capacity,
             self._combo_academic_year,
+            self._academic_year_confirm,
             self._picker_prior_roster,
             self._picker_current_roster,
             self._btn_autodetect,
+            self._btn_use_roster_year,
             self._picker_rule_matrix,
             self._picker_rule_students,
             self._picker_policy_rule,
@@ -2301,7 +2337,7 @@ class MainWindow(QMainWindow):
     def _start_allocate(self) -> None:
         """اجرای سناریوی تخصیص با فراخوانی CLI."""
 
-        if self._worker is not None and self._worker.isRunning():
+        if self._worker is not None:
             QMessageBox.warning(self, "تسک در حال اجرا", "لطفاً تا پایان عملیات جاری صبر کنید.")
             return
 
@@ -2380,22 +2416,27 @@ class MainWindow(QMainWindow):
             self._picker_policy_allocate.text() or self._default_policy_path or "config/policy.json"
         )
 
-        validation_overrides = self._build_allocate_overrides()
-        academic_year = validation_overrides.get("academic_year")
+        academic_year = self._get_academic_year()
         if academic_year is None:
-            QMessageBox.warning(
-                self,
-                "سال تحصیلی نامشخص",
-                "لطفاً سال تحصیلی را وارد کنید یا از پیشنهاد خودکار استفاده کنید.",
-            )
+            self._warn_invalid_academic_year()
             return
 
-        prior_path = str(validation_overrides.get("prior_roster") or "").strip()
-        current_path = str(validation_overrides.get("current_roster") or "").strip()
+        prior_path = self._picker_prior_roster.text()
+        current_path = self._picker_current_roster.text()
         for path, label in ((prior_path, "روستر سال قبل"), (current_path, "روستر سال جاری")):
             if path and not Path(path).exists():
                 QMessageBox.warning(self, "فایل یافت نشد", f"{label} قابل دسترسی نیست: {path}")
                 return
+
+        confirmation = self._academic_year_confirmation
+        if (
+            confirmation is None
+            or confirmation.year != academic_year
+            or not self._academic_year_confirm.isChecked()
+        ):
+            self._academic_year_confirm.setChecked(False)
+            self._warn_unconfirmed_academic_year()
+            return
 
         self._prepare_validated_output("allocate")
         if not self._ensure_filled([(self._picker_alloc_out, "خروجی تخصیص")]):
@@ -2498,6 +2539,21 @@ class MainWindow(QMainWindow):
             policy_path,
         ]
         def _run_allocation() -> None:
+            # Preflight can finish later. A new check of the same year does not
+            # revive an old attempt after the operator changes their choice.
+            if (
+                confirmation is not self._academic_year_confirmation
+                or not self._academic_year_confirm.isChecked()
+                or academic_year != self._get_academic_year()
+            ):
+                detail = self._warn_unconfirmed_academic_year()
+                label = self._t("status.cancelled", "لغو شد")
+                self._status.setText(label)
+                self._set_stage(label, detail)
+                self._progress.reset()
+                self._update_status_bar_state("cancelled")
+                self._update_progress_caption(None, None)
+                return
             run_overrides = dict(overrides)
             if sabt_output and not sabt_template:
                 try:
@@ -2524,6 +2580,7 @@ class MainWindow(QMainWindow):
                 overrides=run_overrides,
                 on_success=_remember_allocate_outputs,
             )
+            self._academic_year_confirm.setChecked(False)
 
         self._run_unknowns_preflight(
             preflight_argv,
@@ -3201,10 +3258,20 @@ class MainWindow(QMainWindow):
             )
             return
 
+        is_allocate = combo is self._combo_academic_year
+        if is_allocate:
+            self._clear_allocate_roster_suggestion()
+        request = self._allocate_roster_request
+
+        def _loaded(df: pd.DataFrame) -> None:
+            if is_allocate and request != self._allocate_roster_request:
+                return
+            self._process_counter_dataframe(df, combo)
+
         self._run_excel_loader(
             Path(path_text),
             description="پیشنهاد شمارنده",
-            on_loaded=lambda df: self._process_counter_dataframe(df, combo),
+            on_loaded=_loaded,
         )
 
     def _process_counter_dataframe(self, dataframe: pd.DataFrame, combo: QComboBox) -> None:
@@ -3222,9 +3289,19 @@ class MainWindow(QMainWindow):
 
         strict_year, fallback_year = detect_year_candidates(canonical)
         messages: list[str] = []
+        if combo is self._combo_academic_year:
+            self._allocate_roster_year = strict_year
+            self._refresh_roster_academic_year_button()
         if strict_year is not None:
-            self._set_year_for_combo(combo, strict_year)
-            messages.append(f"سال پیشنهادی: {strict_year}")
+            if combo is self._combo_academic_year:
+                messages.append(
+                    self._t("academic_year.roster_suggestion", "Roster suggests {year}.").format(
+                        year=strict_year
+                    )
+                )
+            else:
+                self._set_year_for_combo(combo, strict_year)
+                messages.append(f"سال پیشنهادی: {strict_year}")
         elif fallback_year is not None:
             messages.append(f"سال احتمالی (غیر یکتا): {fallback_year}")
         else:
@@ -3441,7 +3518,8 @@ class MainWindow(QMainWindow):
     def _get_academic_year(self) -> int | None:
         """دریافت سال تحصیلی معتبر از ورودی تب تخصیص."""
 
-        return self._get_year_value(self._combo_academic_year)
+        year = self._get_year_value(self._combo_academic_year)
+        return year if year is not None and counter_accepts_year(year) else None
 
     def _get_rule_engine_year(self) -> int | None:
         """دریافت سال تحصیلی از تب موتور قواعد."""
@@ -3456,7 +3534,105 @@ class MainWindow(QMainWindow):
     def _set_year_for_combo(self, combo: QComboBox, year: int) -> None:
         """کمک‌کننده برای تنظیم مقدار سال در ComboBox."""
 
+        if combo is self._combo_academic_year:
+            combo.setCurrentIndex(combo.findText(str(year)))
         combo.setEditText(str(year))
+
+    def _refresh_system_academic_year(self) -> None:
+        self._system_academic_year = suggest_academic_year()
+        if self._academic_year_follows_system:
+            with QSignalBlocker(self._combo_academic_year):
+                if self._system_academic_year is None:
+                    self._combo_academic_year.setCurrentIndex(-1)
+                    self._combo_academic_year.clearEditText()
+                else:
+                    self._set_academic_year(self._system_academic_year)
+        self._refresh_academic_year_texts()
+
+    def _refresh_academic_year_texts(self) -> None:
+        year = self._system_academic_year
+        if year is None:
+            hint = self._t(
+                "academic_year.date_unavailable",
+                "System-date suggestion unavailable. You can enter the academic year manually.",
+            )
+        else:
+            hint = self._t(
+                "academic_year.system_suggestion",
+                "The system date suggests {year}. The academic period starts on 1 Tir.",
+            ).format(year=year)
+        self._academic_year_hint.setText(hint)
+        self._combo_academic_year.setAccessibleName(
+            self._t("files.registration_year", "Academic year")
+        )
+        self._combo_academic_year.setAccessibleDescription(hint)
+        self._academic_year_confirm.setText(
+            self._t("academic_year.confirm", "Confirm this academic year for the next allocation")
+        )
+        self._refresh_roster_academic_year_button()
+
+    def _academic_year_changed(self) -> None:
+        self._academic_year_follows_system = False
+        self._academic_year_confirmation = None
+        self._academic_year_confirm.setChecked(False)
+        self._refresh_roster_academic_year_button()
+
+    def _academic_year_check_toggled(self, checked: bool) -> None:
+        if not checked:
+            self._academic_year_confirmation = None
+
+    def _confirm_academic_year(self, checked: bool) -> None:
+        if not checked:
+            return
+        year = self._get_academic_year()
+        if year is None:
+            self._academic_year_confirm.setChecked(False)
+            self._warn_invalid_academic_year()
+            return
+        self._academic_year_follows_system = False
+        self._academic_year_confirmation = _AcademicYearConfirmation(year)
+
+    def _clear_allocate_roster_suggestion(self) -> None:
+        self._allocate_roster_request += 1
+        self._allocate_roster_year = None
+        self._refresh_roster_academic_year_button()
+
+    def _refresh_roster_academic_year_button(self) -> None:
+        year = self._allocate_roster_year
+        self._btn_use_roster_year.setVisible(year is not None and year != self._get_academic_year())
+        if year is not None:
+            self._btn_use_roster_year.setText(
+                self._t("academic_year.use_roster", "Use roster year {year}").format(year=year)
+            )
+
+    def _use_roster_academic_year(self) -> None:
+        if self._allocate_roster_year is not None:
+            self._set_academic_year(self._allocate_roster_year)
+            self._academic_year_confirm.setFocus()
+
+    def _warn_invalid_academic_year(self) -> None:
+        self._warn_academic_year(
+            self._t("academic_year.invalid", "Enter a valid academic year from 1350 to 1449."),
+            self._combo_academic_year,
+        )
+
+    def _warn_unconfirmed_academic_year(self) -> str:
+        detail = self._t(
+            "academic_year.unconfirmed",
+            "Confirm the displayed academic year, then run Allocate again.",
+        )
+        self._warn_academic_year(detail, self._academic_year_confirm)
+        return detail
+
+    def _warn_academic_year(self, detail: str, field: QWidget) -> None:
+        QMessageBox.warning(self, self._t("files.registration_year", "Academic year"), detail)
+        self._tabs.setCurrentWidget(self._allocate_tab)
+        field.setFocus()
+        scroll = self._allocate_tab
+        if not isinstance(scroll, QScrollArea):
+            scroll = scroll.findChild(QScrollArea)
+        if isinstance(scroll, QScrollArea):
+            scroll.ensureWidgetVisible(field)
 
     def _apply_pref_default(self, picker: FilePicker, value: str | None) -> None:
         """اگر ورودی خالی بود، مقدار پیش‌فرض را از تنظیمات اعمال می‌کند."""

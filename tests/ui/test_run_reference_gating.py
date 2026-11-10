@@ -31,6 +31,7 @@ def qapp() -> QApplication:
 
 def _build_window(tmp_path: Path) -> MainWindow:
     window = MainWindow()
+    QApplication.processEvents()  # Finish the startup manager refresh before filling inputs.
     db = LocalDatabase(tmp_path / "local.sqlite")
     window._local_db = db
     window._school_repository = SchoolRepository(db)
@@ -39,12 +40,15 @@ def _build_window(tmp_path: Path) -> MainWindow:
     students = tmp_path / "students.xlsx"
     pool = tmp_path / "pool.xlsx"
     alloc_out = tmp_path / "alloc.xlsx"
-    for path in (students, pool, alloc_out):
+    profile = tmp_path / "synthetic-profile.xlsx"
+    for path in (students, alloc_out, profile):
         path.touch()
 
     window._picker_students.setText(str(students))
     window._picker_pool.setText(str(pool))
+    pool.touch()
     window._picker_alloc_out.setText(str(alloc_out))
+    window._picker_sabt_profile_alloc.setText(str(profile))
     window._combo_academic_year.setCurrentText("1402")
     return window
 
@@ -125,6 +129,7 @@ def test_run_allowed_when_references_ready(
         ),
     )
 
+    window._academic_year_confirm.click()
     window._start_allocate()
 
     assert not warnings, "no warnings expected when references are ready"
