@@ -183,3 +183,58 @@ jobs:
             throw "Console logging failed despite successful application exit"
           }
           Write-Output "Real app.main exited successfully with no console encoding exceptions."
+
+  qa-false-assurance-windows:
+    name: QA truthfulness repair (Windows Qt)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      QT_QPA_PLATFORM: offscreen
+      MATRIX_EXPECTED_SOURCE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact repair Head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+      - name: Verify exact source identity
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$MATRIX_EXPECTED_SOURCE_SHA"
+      - name: Set up pinned uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.7"
+      - name: Install pinned Python
+        run: uv python install
+      - name: Sync locked environment
+        run: uv sync --locked
+      - name: Focused lint
+        run: >
+          uv run --locked ruff check
+          app/infra/health.py app/ui/widgets/health_indicator.py
+          app/ui/main_window_base.py
+          tests/infra/test_health.py tests/infra/test_health_truthfulness.py
+          tests/infra/test_qa_evidence_independence.py
+          tests/ui/test_health_indicator.py
+          tools/ci/qualify_qa_health_windows.py
+      - name: Execute QA/SQLite and Qt regression cases
+        run: >
+          uv run --locked pytest -q --maxfail=1
+          tests/infra/test_health.py
+          tests/infra/test_health_truthfulness.py
+          tests/infra/test_qa_evidence_independence.py
+          tests/ui/test_health_indicator.py
+          tests/infra/test_history_strict_snapshot_reads.py
+          tests/infra/test_history_store_qa_snapshots.py
+      - name: Render actual MainWindow in FA and EN with synthetic QA
+        run: >
+          uv run --locked python -m tools.ci.qualify_qa_health_windows
+          --output-dir artifacts/qa-truthfulness-windows
+      - name: Upload sanitized evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: matrix-qa-truthfulness-windows
+          path: artifacts/qa-truthfulness-windows/
+          if-no-files-found: warn

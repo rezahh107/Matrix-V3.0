@@ -9,7 +9,7 @@ from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QMessageBox, QPushBut
 from app.infra.health import HealthStatus, HealthSummary
 from app.ui.texts import UiTranslator
 
-_HealthQssState = Literal["ok", "warning", "error"]
+_HealthQssState = Literal["ok", "warning", "error", "none"]
 _HealthVisualState = Literal["ok", "warning", "error", "none"]
 
 
@@ -22,6 +22,7 @@ _HEALTH_PRESENTATION: Final[dict[HealthStatus, _HealthPresentation]] = {
     "OK": _HealthPresentation(text_key="health.summary.ok", qss_state="ok"),
     "WARN": _HealthPresentation(text_key="health.summary.warn", qss_state="warning"),
     "ERROR": _HealthPresentation(text_key="health.summary.error", qss_state="error"),
+    "UNVERIFIED": _HealthPresentation(text_key="health.summary.unverified", qss_state="none"),
 }
 
 
@@ -76,23 +77,34 @@ class HealthIndicatorWidget(QFrame):
 
     def refresh(self) -> None:
         summary = None
+        unavailable = False
         try:
             summary = self._callbacks.fetch_summary()
         except Exception:
-            summary = None
+            unavailable = True
         self._current_summary = summary
         if summary is None:
-            self._status_label.setText(self._t("health.unavailable", "System health: unavailable"))
+            if unavailable:
+                self._status_label.setText(self._t("health.unavailable", "QA status unavailable; output not verified."))
+            else:
+                self._status_label.setText(self._t("health.no_run", "No run recorded; QA is unavailable."))
             self._set_health_state("none")
             self._btn_details.setEnabled(False)
             self._btn_export.setEnabled(False)
             return
 
         presentation = _HEALTH_PRESENTATION[summary.status]
+        reason_key = {
+            "missing_run": "health.summary.missing_run",
+            "not_recorded": "health.summary.not_recorded",
+            "invalid": "health.summary.invalid",
+            "incomplete": "health.summary.incomplete",
+            "run_failed": "health.summary.run_failed",
+        }.get(summary.reason, presentation.text_key)
         if self._translator is None:
             display_text = summary.summary_text
         else:
-            display_text = self._translator.text(presentation.text_key, summary.summary_text)
+            display_text = self._translator.text(reason_key, summary.summary_text)
         self._status_label.setText(display_text)
         self._set_health_state(presentation.qss_state)
         self._btn_details.setEnabled(True)

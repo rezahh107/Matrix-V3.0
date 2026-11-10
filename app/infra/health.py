@@ -8,17 +8,22 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 from dataclasses import dataclass
 from datetime import datetime
+from numbers import Integral
 from pathlib import Path
 from typing import Literal
 
 import pandas as pd
 
 from app.core.qa.law_mapping import all_law_mappings
+from app.infra.errors import DatabaseOperationError
 from app.infra.local_database import LocalDatabase
+from app.infra.qa.health_status import _normalize_severity
 
-HealthStatus = Literal["OK", "WARN", "ERROR"]
+HealthStatus = Literal["OK", "WARN", "ERROR", "UNVERIFIED"]
+HealthReason = Literal["missing_run", "not_recorded", "invalid", "incomplete", "run_failed"]
 
 
 @dataclass(frozen=True)
@@ -39,15 +44,12 @@ class HealthSummary:
     summary_text: str
     counts: dict[str, int]
     issues_summary: list[IssueSummary]
+    reason: HealthReason | None = None
 
 
 def _deduce_severity(raw_level: object) -> str:
-    text = str(raw_level).lower().strip()
-    if text == "error":
-        return "P0"
-    if text == "warning":
-        return "P1"
-    return "P2"
+    """Share runtime QA severity semantics for persisted details."""
+    return _normalize_severity(str(raw_level))
 
 
 def _describe_rule(rule_id: str) -> str | None:
@@ -69,6 +71,27 @@ def _resolve_run_row(db: LocalDatabase, run_id: str) -> dict[str, object] | None
     return dict(by_uuid) if by_uuid is not None else None
 
 
+def _valid_rule_id(value: object) -> bool:
+    """Core QaViolation.rule_id is a non-empty string, not a coercible identifier."""
+    return isinstance(value, str) and bool(value.strip())
+
+
+def _usable_detail_rules(
+    details: pd.DataFrame | None,
+) -> tuple[pd.DataFrame | None, bool]:
+    """Keep independently valid detail rows; flag unsupported rule identities.
+
+    This is diagnostic-only filtering. Invalid siblings must block positive OK
+    through the caller's snapshot_invalid flag, never disappear as clean QA.
+    """
+    if details is None or details.empty:
+        return details, False
+    if list(details.columns).count("rule_id") != 1:
+        return None, True
+    valid = details["rule_id"].map(_valid_rule_id)
+    return details.loc[valid].copy(), not bool(valid.all())
+
+
 def _summarize_issues(
     qa_details_df: pd.DataFrame | None, qa_summary_df: pd.DataFrame | None
 ) -> tuple[dict[str, int], list[IssueSummary]]:
@@ -84,7 +107,8 @@ def _summarize_issues(
                 else "P2"
             )
             count = int(len(frame.index))
-            counts[severity] += count
+            for level in severity_levels:
+                counts[level] += 1
             issues.append(
                 IssueSummary(
                     issue_code=str(rule_id),
@@ -97,7 +121,9 @@ def _summarize_issues(
 
     if qa_summary_df is not None and not qa_summary_df.empty:
         for _, row in qa_summary_df.iterrows():
-            rule_id = str(row.get("rule_id", ""))
+            rule_id = row.get("rule_id")
+            if not _valid_rule_id(rule_id):
+                continue
             violations = int(row.get("violations_count", 0) or 0)
             status = str(row.get("status", "")).upper()
             severity = "P1" if status == "FAIL" and violations > 0 else "P2"
@@ -113,32 +139,211 @@ def _summarize_issues(
     return counts, issues
 
 
+def _read_recorded_qa_outcome(run_row: dict[str, object]) -> tuple[bool, int] | None:
+    """Only the persisted overall QaOutcome is positive QA evidence.
+
+    This is written by history_store._build_run_record; the separate
+    qa_summary table and issue-free detail frames do not prove QA PASS.
+    """
+    raw = run_row.get("qa_summary_json")
+    if raw is None:
+        return None
+    try:
+        value = json.loads(raw) if isinstance(raw, str) else None
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Invalid recorded overall QA outcome") from exc
+    if not isinstance(value, dict):
+        raise ValueError("Overall QA outcome must be an object")
+    passed = value.get("passed")
+    count = value.get("violation_count")
+    if type(passed) is not bool or type(count) is not int or count < 0:
+        raise ValueError("Overall QA outcome has invalid or incomplete fields")
+    return passed, count
+
+
+def _check_snapshot_shape(
+    summary: pd.DataFrame | None, details: pd.DataFrame | None
+) -> tuple[bool, bool, int]:
+    """Validate the existing QaReport snapshot shape without inventing new QA rules.
+
+    A summary without a trustworthy overall outcome is diagnostic evidence,
+    not certification. Inconsistent counts or malformed rows cannot yield OK.
+    """
+    if summary is None or summary.empty:
+        return False, False, 0
+    if not {"rule_id", "status", "violations_count"}.issubset(summary.columns):
+        raise ValueError("QA snapshot summary is incomplete")
+    count = 0
+    has_failure = False
+    has_warning = False
+    for _, row in summary.iterrows():
+        rule_id = row["rule_id"]
+        status = str(row["status"]).strip().upper()
+        violations = row["violations_count"]
+        if (
+            not _valid_rule_id(rule_id)
+            or status not in {"PASS", "WARN", "FAIL"}
+            or isinstance(violations, bool)
+            or not isinstance(violations, Integral)
+            or violations < 0
+        ):
+            raise ValueError("Malformed QA snapshot summary row")
+        if status == "FAIL":
+            has_failure = True
+        elif status == "WARN":
+            has_warning = True
+        count += int(violations)
+    if details is not None and not details.empty:
+        if not {"rule_id", "level"}.issubset(details.columns):
+            raise ValueError("Malformed QA details columns")
+        if (
+            list(details.columns).count("rule_id") != 1
+            or not details["rule_id"].map(_valid_rule_id).all()
+            or details["level"].isna().any()
+        ):
+            raise ValueError("Malformed QA details row")
+        if len(details) != count:
+            raise ValueError("QA summary and details violation counts disagree")
+    elif count:
+        raise ValueError("QA violation details are absent")
+    return has_failure, has_warning, count
+
+
+def _observed_negative_rule_statuses(summary: pd.DataFrame | None) -> tuple[bool, bool]:
+    """Preserve readable FAIL/WARN signals even when a sibling row is invalid.
+
+    Only recorded QA statuses are interpreted here. This is *not* evidence
+    sufficient for OK; full snapshot shape validation remains mandatory.
+    """
+    if summary is None or "status" not in summary.columns:
+        return False, False
+    statuses = {str(value).strip().upper() for value in summary["status"]}
+    return "FAIL" in statuses, "WARN" in statuses
+
+
 def compute_run_health(run_id: str, *, db: LocalDatabase) -> HealthSummary:
-    """محاسبهٔ وضعیت سلامت یک اجرا بر اساس Snapshot های QA ذخیره‌شده."""
+    """Describe stored Run and QA evidence, never infer PASS from zero issues.
+
+    The status describes *recorded QA evidence*, not output file existence,
+    authenticity or suitability for operator use.
+    """
+    counts = {"P0": 0, "P1": 0, "P2": 0}
+
+    def result(
+        status: HealthStatus, reason: HealthReason | None = None,
+        issues: list[IssueSummary] | None = None,
+    ) -> HealthSummary:
+        text = {
+            "OK": "Recorded QA passed; output file not independently verified.",
+            "WARN": "QA warnings recorded; review before using the output.",
+            "ERROR": "QA failed or material errors were recorded; do not use the output.",
+            "UNVERIFIED": "QA is not verified; review the recorded QA evidence.",
+        }[status]
+        if reason == "missing_run":
+            text = "Run not found; no QA result is available."
+        elif reason == "not_recorded":
+            text = "No QA result recorded; output is not verified."
+        elif reason == "invalid":
+            text = "Stored QA evidence is unreadable or invalid; output is not verified."
+        elif reason == "incomplete":
+            text = "Stored QA evidence is incomplete; output is not verified."
+        elif reason == "run_failed":
+            text = "Run failed; no assurance about its output is available."
+        return HealthSummary(
+            status=status, summary_text=text, counts=counts.copy(),
+            issues_summary=issues or [], reason=reason,
+        )
 
     run_row = _resolve_run_row(db, run_id)
-    qa_summary_df: pd.DataFrame | None = None
-    qa_details_df: pd.DataFrame | None = None
-    if run_row is not None:
-        summary_df, details_df, _ = db.fetch_qa_snapshot(int(run_row.get("id")))
-        qa_summary_df = summary_df
-        qa_details_df = details_df
+    if run_row is None:
+        return result("UNVERIFIED", "missing_run")
+    if str(run_row.get("status", "")).lower() == "failed":
+        return result("ERROR", "run_failed")
+    if str(run_row.get("status", "")).lower() != "success":
+        return result("UNVERIFIED", "incomplete")
 
-    counts, issues = _summarize_issues(qa_details_df, qa_summary_df)
-    status: HealthStatus = "OK"
-    if counts["P0"] > 0:
-        status = "ERROR"
-    elif counts["P1"] > 0:
-        status = "WARN"
+    # Independently readable negative evidence remains authoritative even if
+    # another QA representation is broken. Invalid evidence can never grant OK.
+    outcome: tuple[bool, int] | None = None
+    aggregate_invalid = False
+    try:
+        outcome = _read_recorded_qa_outcome(run_row)
+    except (ValueError, TypeError):
+        aggregate_invalid = True
 
-    summary_text = {
-        "ERROR": "System health: ERROR 🔴 (do NOT use this output)",
-        "WARN": "System health: WARNING 🟡 (review warnings before using output)",
-        "OK": "System health: OK ✅ (output is safe to use)",
-    }[status]
-    return HealthSummary(
-        status=status, summary_text=summary_text, counts=counts, issues_summary=issues
-    )
+    summary_df: pd.DataFrame | None = None
+    details_df: pd.DataFrame | None = None
+    summary_failed = summary_warned = False
+    detail_count = 0
+    issues: list[IssueSummary] = []
+    snapshot_invalid = False
+    try:
+        summary_df, details_df, _, invalid_fields = db._fetch_qa_snapshot_evidence(
+            int(run_row["id"])
+        )
+        snapshot_invalid = bool(invalid_fields)
+    except (ValueError, TypeError, KeyError, DatabaseOperationError, sqlite3.Error):
+        snapshot_invalid = True
+
+    # Collect negative signals independently. Invalid or inconsistent sibling
+    # evidence cannot erase a readable P0/P1 detail or explicit FAIL record.
+    summary_failed, summary_warned = _observed_negative_rule_statuses(summary_df)
+    try:
+        validated_failed, validated_warned, detail_count = _check_snapshot_shape(
+            summary_df, details_df
+        )
+        summary_failed |= validated_failed
+        summary_warned |= validated_warned
+    except (ValueError, TypeError, KeyError):
+        snapshot_invalid = True
+
+    usable_details, invalid_rule_ids = _usable_detail_rules(details_df)
+    snapshot_invalid |= invalid_rule_ids
+    try:
+        # Do not attribute rejected detail rows to an unrelated summary rule.
+        counts, issues = _summarize_issues(
+            usable_details, None if invalid_rule_ids else summary_df
+        )
+    except (ValueError, TypeError, KeyError):
+        snapshot_invalid = True
+
+    separate_invalid = False
+    try:
+        # Legacy QA summary rows are independent negative evidence only.
+        separate_rows = db.fetch_qa_summary(int(run_row["id"]))
+    except (ValueError, TypeError, KeyError, DatabaseOperationError, sqlite3.Error):
+        separate_rows = []
+        separate_invalid = True
+    for row in separate_rows:
+        try:
+            level = _deduce_severity(row["severity"])
+            n = row["count"]
+            if isinstance(n, bool) or not isinstance(n, Integral) or n < 0:
+                raise ValueError("Invalid separately recorded QA violation count")
+            if level in {"P0", "P1"}:
+                counts[level] = max(counts[level], int(n))
+        except (ValueError, TypeError, KeyError):
+            separate_invalid = True
+
+    # Explicit recorded failure or P0 issue is never promoted to positive
+    # status by an empty or otherwise contradictory snapshot.
+    if counts["P0"] > 0 or summary_failed or (outcome is not None and not outcome[0]):
+        return result("ERROR", issues=issues)
+    if counts["P1"] > 0 or summary_warned:
+        return result("WARN", issues=issues)
+    if aggregate_invalid or snapshot_invalid or separate_invalid:
+        return result("UNVERIFIED", "invalid", issues)
+
+    if outcome is None:
+        return result("UNVERIFIED", "not_recorded" if summary_df is None else "incomplete", issues)
+    if summary_df is None or summary_df.empty:
+        return result("UNVERIFIED", "incomplete", issues)
+    if outcome[1] != detail_count:
+        return result("UNVERIFIED", "incomplete", issues)
+    if outcome[1] > 0:
+        # Recorded non-P0/P1 violations cannot certify a clean QA result.
+        return result("UNVERIFIED", "incomplete", issues)
+    return result("OK", issues=issues)
 
 
 def _coerce_timestamp() -> str:
@@ -213,11 +418,19 @@ def build_llm_debug_report(
     """تولید گزارش فشرده برای دیباگ توسط پشتیبانی یا مدل زبانی."""
 
     run_row = _resolve_run_row(db, run_id)
-    summary_df, details_df, extras = (None, None, {})
+    _summary_df, details_df, extras = (None, None, {})
     if run_row is not None:
-        summary_df, details_df, extras = db.fetch_qa_snapshot(int(run_row.get("id")))
+        try:
+            _summary_df, details_df, extras, _invalid = db._fetch_qa_snapshot_evidence(
+                int(run_row["id"])
+            )
+        except (DatabaseOperationError, sqlite3.Error):
+            # A failed database read cannot authorize positive QA, and must
+            # not prevent exporting available run-level diagnostics.
+            _summary_df, details_df, extras = None, None, {}
     health = compute_run_health(run_id, db=db)
-    samples = _build_samples(details_df, health.issues_summary, sample_limit=sample_limit)
+    usable_details, _invalid_rule_ids = _usable_detail_rules(details_df)
+    samples = _build_samples(usable_details, health.issues_summary, sample_limit=sample_limit)
     return {
         "meta": {
             "run_id": run_id,
@@ -228,6 +441,7 @@ def build_llm_debug_report(
         },
         "health": {
             "status": health.status,
+            "reason": health.reason,
             "summary_text": health.summary_text,
             "counts": health.counts,
         },

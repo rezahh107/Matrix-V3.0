@@ -9,7 +9,7 @@ from app.ui.texts import UiTranslator
 from app.ui.widgets.health_indicator import HealthCallbacks, HealthIndicatorWidget
 
 _SUMMARY_TEXT = {
-    "OK": "System health: OK ✅ (output is safe to use)",
+    "OK": "Recorded QA passed; output file not independently verified.",
     "WARN": "System health: WARNING 🟡 (review warnings before using output)",
     "ERROR": "System health: ERROR 🔴 (do NOT use this output)",
 }
@@ -59,16 +59,16 @@ def test_health_indicator_maps_status_to_existing_qss_state(
 @pytest.mark.parametrize(
     ("language", "status", "expected"),
     [
-        ("en", "OK", "System health is OK; the output is safe to use."),
-        ("en", "WARN", "System health has warnings; review warnings before using the output."),
-        ("en", "ERROR", "System health is in error; do not use this output."),
-        ("fa", "OK", "سلامت سیستم مطلوب است؛ استفاده از خروجی ایمن است."),
+        ("en", "OK", "Recorded QA passed; output file not independently verified."),
+        ("en", "WARN", "QA warnings recorded; review before using the output."),
+        ("en", "ERROR", "QA failed or material errors were recorded; do not use the output."),
+        ("fa", "OK", "نتیجهٔ ثبت‌شدهٔ QA موفق است؛ اعتبار فایل خروجی مستقلاً بررسی نشده است."),
         (
             "fa",
             "WARN",
-            "سلامت سیستم دارای هشدار است؛ پیش از استفاده از خروجی، هشدارها را بررسی کنید.",
+            "در QA هشدار ثبت شده است؛ پیش از استفاده از خروجی آن را بررسی کنید.",
         ),
-        ("fa", "ERROR", "سلامت سیستم در وضعیت خطا است؛ از این خروجی استفاده نکنید."),
+        ("fa", "ERROR", "QA ناموفق است یا خطای مهم ثبت شده؛ از خروجی استفاده نکنید."),
     ],
 )
 def test_health_indicator_uses_complete_localized_sentence(
@@ -98,10 +98,10 @@ def test_health_indicator_update_translator_changes_presentation_only(qtbot) -> 
 
     widget.update_translator(UiTranslator("fa"))
 
-    assert english_text == "System health has warnings; review warnings before using the output."
+    assert english_text == "QA warnings recorded; review before using the output."
     assert (
         widget._status_label.text()
-        == "سلامت سیستم دارای هشدار است؛ پیش از استفاده از خروجی، هشدارها را بررسی کنید."
+        == "در QA هشدار ثبت شده است؛ پیش از استفاده از خروجی آن را بررسی کنید."
     )
     assert widget._status_label.property("health") == "warning"
     assert widget._current_summary is summary
@@ -146,7 +146,58 @@ def test_health_indicator_unavailable_state_disables_actions(qtbot) -> None:
     qtbot.addWidget(widget)
 
     assert widget._current_summary is None
-    assert widget._status_label.text() == "System health: unavailable"
+    assert widget._status_label.text() == "No run recorded; no QA result is available."
     assert widget._status_label.property("health") == "none"
     assert not widget._btn_details.isEnabled()
     assert not widget._btn_export.isEnabled()
+
+
+@pytest.mark.parametrize(
+    ("language", "reason", "expected"),
+    [
+        ("en", "not_recorded", "No QA result recorded; output is not verified."),
+        ("en", "invalid", "Stored QA evidence is unreadable or invalid; output is not verified."),
+        ("en", "incomplete", "Stored QA evidence is incomplete; output is not verified."),
+        ("en", "run_failed", "Run failed; no assurance about its output is available."),
+        ("fa", "not_recorded", "نتیجهٔ QA ثبت نشده است؛ خروجی تأیید نشده است."),
+        ("fa", "invalid", "شواهد QA ناخوانا یا نامعتبر است؛ خروجی تأیید نشده است."),
+        ("fa", "incomplete", "شواهد QA ناقص است؛ خروجی تأیید نشده است."),
+        ("fa", "run_failed", "اجرا ناموفق بوده است؛ ایمن‌بودن خروجی تأیید نشده است."),
+    ],
+)
+def test_health_indicator_reason_specific_truthful_message(qtbot, language, reason, expected):
+    status = "ERROR" if reason == "run_failed" else "UNVERIFIED"
+    summary = HealthSummary(
+        status=status, reason=reason, summary_text="raw evidence reason",
+        counts={"P0": 0, "P1": 0, "P2": 0}, issues_summary=[],
+    )
+    widget = HealthIndicatorWidget(
+        HealthCallbacks(fetch_summary=lambda: summary, export_report=lambda: None),
+        translator=UiTranslator(language),
+    )
+    qtbot.addWidget(widget)
+    assert widget._status_label.text() == expected
+    assert widget._status_label.property("health") == (
+        "error" if status == "ERROR" else "none"
+    )
+
+
+def test_health_indicator_refresh_does_not_retain_prior_pass(qtbot):
+    active = [_summary("OK")]
+    widget = HealthIndicatorWidget(
+        HealthCallbacks(fetch_summary=lambda: active[0], export_report=lambda: None),
+        translator=UiTranslator("en"),
+    )
+    qtbot.addWidget(widget)
+    assert widget._status_label.property("health") == "ok"
+    active[0] = HealthSummary(
+        status="UNVERIFIED", reason="not_recorded", summary_text="unverified",
+        counts={"P0": 0, "P1": 0, "P2": 0}, issues_summary=[],
+    )
+    widget.refresh()
+    assert widget._status_label.property("health") == "none"
+    assert widget._status_label.text() == "No QA result recorded; output is not verified."
+    active[0] = None
+    widget.refresh()
+    assert widget._status_label.text() == "No run recorded; no QA result is available."
+    assert not widget._btn_details.isEnabled()

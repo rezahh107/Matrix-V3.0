@@ -10,6 +10,7 @@ from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from html import escape, unescape
+from numbers import Integral
 from pathlib import Path
 from tempfile import mkdtemp
 from typing import Literal
@@ -597,7 +598,7 @@ class MainWindow(QMainWindow):
             fetch_summary=self._fetch_health_summary,
             export_report=self._export_health_report,
         )
-        self._health_widget = HealthIndicatorWidget(callbacks, self)
+        self._health_widget = HealthIndicatorWidget(callbacks, self, translator=self._translator)
         status_column.addWidget(self._health_widget)
         status_layout.addLayout(status_column, 1)
 
@@ -1011,6 +1012,8 @@ class MainWindow(QMainWindow):
         if self._database_status is not None:
             self._database_status.set_translator(self._translator)
         self._refresh_last_run_badge()
+        if self._health_widget is not None:
+            self._health_widget.update_translator(self._translator)
         if hasattr(self, "_log_panel"):
             self._log_panel.update_translator(self._translator)
         if hasattr(self, "_busy_label"):
@@ -1054,18 +1057,19 @@ class MainWindow(QMainWindow):
 
     def _latest_run_identifier(self) -> str | None:
         if self._local_db is None:
-            return None
-        try:
-            runs = self._local_db.fetch_runs()
-        except Exception:
-            return None
+            raise RuntimeError("Run history is unavailable")
+        # None means a successful, genuinely empty query. A failed read must
+        # reach HealthIndicator's localized unavailable branch instead.
+        runs = self._local_db.fetch_runs()
         if not runs:
             return None
-        latest = runs[-1]
         try:
-            return str(latest["id"])
-        except Exception:
-            return None
+            run_key = runs[-1]["id"]
+            if isinstance(run_key, bool) or not isinstance(run_key, Integral) or run_key <= 0:
+                raise ValueError("Invalid latest Run identity")
+        except (KeyError, IndexError, TypeError) as exc:
+            raise ValueError("Invalid latest Run identity") from exc
+        return str(run_key)
 
     def _fetch_health_summary(self) -> object:
         run_id = self._latest_run_identifier()

@@ -922,10 +922,8 @@ class LocalDatabase:
         except sqlite3.Error as exc:  # pragma: no cover - مسیر غیرمنتظره
             raise DatabaseOperationError("ثبت Snapshot QA با خطا مواجه شد.") from exc
 
-    def fetch_qa_snapshot(
-        self, run_id: int, *, strict: bool = False
-    ) -> tuple[pd.DataFrame | None, pd.DataFrame | None, dict[str, pd.DataFrame]]:
-        """بازیابی QA؛ strict خرابی JSON را بدون تغییر رفتار قدیمی آشکار می‌کند."""
+    def _fetch_qa_snapshot_row(self, run_id: int) -> sqlite3.Row | None:
+        """Read the QA snapshot row once; callers own the decode policy."""
 
         with self._open_connection() as conn:
             cursor = conn.execute(
@@ -935,7 +933,14 @@ class LocalDatabase:
                 """,
                 (run_id,),
             )
-            row = cursor.fetchone()
+            return cursor.fetchone()
+
+    def fetch_qa_snapshot(
+        self, run_id: int, *, strict: bool = False
+    ) -> tuple[pd.DataFrame | None, pd.DataFrame | None, dict[str, pd.DataFrame]]:
+        """بازیابی QA؛ strict خرابی JSON را بدون تغییر رفتار قدیمی آشکار می‌کند."""
+
+        row = self._fetch_qa_snapshot_row(run_id)
         if row is None:
             return None, None, {}
         summary_df = _safe_deserialize_dataframe(
@@ -946,6 +951,36 @@ class LocalDatabase:
         )
         extras = _safe_deserialize_dataframe_map(row["qa_extras_json"], strict=strict)
         return summary_df, details_df, extras
+
+    def _fetch_qa_snapshot_evidence(
+        self, run_id: int
+    ) -> tuple[
+        pd.DataFrame | None, pd.DataFrame | None, dict[str, pd.DataFrame], frozenset[str]
+    ]:
+        """Decode stored QA parts independently for evidence-only consumers.
+
+        Corruption in one part must not hide a readable P0/P1 detail or FAIL
+        elsewhere. The returned invalid fields *must* block a positive QA PASS.
+        This does not change the existing strict/non-strict snapshot contract.
+        """
+
+        row = self._fetch_qa_snapshot_row(run_id)
+        if row is None:
+            return None, None, {}, frozenset()
+        invalid: set[str] = set()
+        decoded: list[pd.DataFrame | None] = []
+        for name in ("qa_summary_json", "qa_details_json"):
+            try:
+                decoded.append(_safe_deserialize_dataframe(row[name], label=name, strict=True))
+            except DatabaseOperationError:
+                decoded.append(None)
+                invalid.add(name)
+        try:
+            extras = _safe_deserialize_dataframe_map(row["qa_extras_json"], strict=True)
+        except DatabaseOperationError:
+            extras = {}
+            invalid.add("qa_extras_json")
+        return decoded[0], decoded[1], extras, frozenset(invalid)
 
     # ------------------------------------------------------------------
     # Snapshot بایگانی خروجی Exporter
