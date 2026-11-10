@@ -522,7 +522,7 @@ def test_unsupported_year_is_rejected_before_preflight(
 
 @pytest.mark.parametrize(("text", "year"), [("۱۳۵۰", 1350), ("1449", 1449)])
 def test_unavailable_date_allows_manual_entry_at_core_limits(
-    allocate_harness: _AllocateHarness, text: str, year: int
+    allocate_harness: _AllocateHarness, tmp_path: Path, text: str, year: int
 ) -> None:
     harness = allocate_harness
     window = harness.window
