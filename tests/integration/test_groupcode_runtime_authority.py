@@ -762,6 +762,7 @@ def test_mainwindow_real_gui_build_allocate_sabt_and_recovery(
         lambda _root: YearDatabaseManager(tmp_path / "years"),
     )
     app = QApplication.instance() or QApplication([])
+    assert app.overrideCursor() is None, "Qt override cursor leaked before legacy GUI integration"
     school_file = _write_excel(_schools(), tmp_path / "gui-schools.xlsx")
     group_file = _write_excel(_groupcodes(24), tmp_path / "gui-groups.xlsx")
     changed_groups = _write_excel(_groupcodes(25), tmp_path / "gui-stale-groups.xlsx")
@@ -1109,6 +1110,7 @@ def test_mainwindow_real_gui_build_allocate_sabt_and_recovery(
     finally:
         window.close()
         app.processEvents()
+        assert app.overrideCursor() is None, "Legacy GUI integration left a Qt cursor override"
         if window._local_db is not None:
             window._local_db.close_all_connections()
 
@@ -1210,6 +1212,7 @@ def roster_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[_Ros
             lambda *_args: QSettings(str(tmp_path / "qt-settings.ini"), QSettings.Format.IniFormat),
         )
     app = QApplication.instance() or QApplication([])
+    assert app.overrideCursor() is None, "A preceding test leaked a global Qt cursor override"
     window = main_window.MainWindow()
     run = _RosterRun(
         app,
@@ -1267,6 +1270,7 @@ def roster_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[_Ros
         window._picker_students.setText(str(students))
         window._picker_pool.setText(str(matrix))
         run.until(lambda: not window._excel_loaders, "Pool loader did not finish")
+        assert app.overrideCursor() is None, "Roster fixture pool loader left a Qt cursor override"
         window._picker_alloc_out.setText(str(run.allocation))
         window._picker_sabt_output_alloc.setText(str(run.sabt))
         window._picker_sabt_template_alloc.setText("")
