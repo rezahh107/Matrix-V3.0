@@ -1576,7 +1576,6 @@ class MainWindow(QMainWindow):
         self._allocate_counter_preview_label.setWordWrap(True)
         register_layout.addRow(self._allocate_counter_preview_label)
         self._refresh_system_academic_year()
-        self._sync_prior_roster_for_year()
 
         outer.addWidget(register_box)
 
@@ -3752,6 +3751,7 @@ class MainWindow(QMainWindow):
                 else:
                     self._set_academic_year(self._system_academic_year)
         self._refresh_academic_year_texts()
+        self._sync_prior_roster_for_year()
 
     def _refresh_academic_year_texts(self) -> None:
         year = self._system_academic_year
