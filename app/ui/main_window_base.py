@@ -2512,8 +2512,6 @@ class MainWindow(QMainWindow):
                     ),
                 )
                 return
-        optional_roster_mode = self._optional_roster.isChecked()
-
         self._prepare_validated_output("allocate")
         if not self._ensure_filled([(self._picker_alloc_out, "خروجی تخصیص")]):
             return
@@ -2644,9 +2642,7 @@ class MainWindow(QMainWindow):
             # Reject a stale UI selection after asynchronous preflight.
             # No current-year freshness check is imposed: only choice/path changes.
             if (
-                self._optional_roster.isChecked() != optional_roster_mode
-                or self._picker_prior_roster.text() != prior_path
-                or self._picker_current_roster.text() != current_path
+                self._picker_prior_roster.text() != prior_path
                 or (
                     prior_snapshot is not None
                     and probe_prior_roster(prior_snapshot) != "unchanged"

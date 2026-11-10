@@ -686,7 +686,7 @@ def test_deferred_allocate_rejects_modified_prior_file(
     assert "changed during preflight" in harness.warnings[-1]
 
 
-def test_deferred_allocate_rejects_optional_switch_with_full_paths(
+def test_deferred_allocate_optional_switch_changes_only_presence_gate(
     allocate_harness: _AllocateHarness
 ) -> None:
     harness = allocate_harness
@@ -696,5 +696,5 @@ def test_deferred_allocate_rejects_optional_switch_with_full_paths(
     assert len(harness.preflights) == 1
     window._optional_roster.setChecked(True)
     harness.preflights[0]()
-    assert not harness.launches
-    assert "changed during preflight" in harness.warnings[-1]
+    assert len(harness.launches) == 1
+    assert harness.launches[0][1]["prior_roster"] == window._picker_prior_roster.text()
