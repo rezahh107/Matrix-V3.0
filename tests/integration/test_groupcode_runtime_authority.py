@@ -1392,6 +1392,12 @@ def test_roster_real_allocate_outputs(
     run.finish("completed")
     run.assert_cli(run.prior if prior else None, run.current if current else None)
     _assert_roster_output(run, expected_ids)
+    # Only a real successful CLI Roster reader run can show reader-accepted.
+    if prior:
+        assert run.window._prior_reference_state == "reader_accepted"
+        assert "does not prove official identity" in run.window._prior_reference_status.text()
+    else:
+        assert run.window._prior_reference_state != "reader_accepted"
     assert not run.warnings and not run.errors
 
 

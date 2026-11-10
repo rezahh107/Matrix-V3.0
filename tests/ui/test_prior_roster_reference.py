@@ -269,10 +269,13 @@ def test_descriptor_local_file_evidence_catches_same_size_mutation(
     assert probe_prior_roster(before) == "changed"
 
 
-def test_restored_reference_reaches_allocate_and_reader_success_state(
+def test_restored_reference_reaches_allocate_and_success_callback(
     isolated_settings: tuple[Path, Path], qapp: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Reconstruction -> stored prior file -> actual MainWindow-to-CLI argument boundary."""
+    """Reconstruction -> restored input -> CLI arguments and success callback state.
+
+    The real reader acceptance is separately asserted in the integration suite.
+    """
     from types import SimpleNamespace
 
     import pandas as pd
