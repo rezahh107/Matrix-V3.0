@@ -532,6 +532,10 @@ def test_unavailable_date_allows_manual_entry_at_core_limits(
     assert not window._academic_year_confirm.isChecked()
     assert "System-date suggestion unavailable" in window._academic_year_hint.text()
     window._combo_academic_year.setEditText(text)
+    # Switching academic-year context clears any manually set prior-year path.
+    assert window._picker_prior_roster.text() == ""
+    prior = tmp_path / "synthetic-prior.csv"
+    window._picker_prior_roster.setText(str(prior))
     window._academic_year_confirm.click()
     window._start_allocate()
     assert len(harness.preflights) == 1
@@ -648,3 +652,49 @@ def test_academic_year_controls_fit_and_render_at_compact_width(
         registration = confirm.parentWidget()
         assert registration is not None and registration.objectName() == "registrationGroupBox"
         assert registration.grab().save(str(output_dir / f"academic-year-{language.code}.png"))
+
+
+def test_deferred_allocate_rejects_changed_explicit_prior_selection(
+    allocate_harness: _AllocateHarness, tmp_path: Path
+) -> None:
+    harness = allocate_harness
+    window = harness.window
+    window._academic_year_confirm.click()
+    window._start_allocate()
+    assert len(harness.preflights) == 1
+    other = tmp_path / "replacement.csv"
+    other.write_bytes(b"replacement")
+    window._picker_prior_roster.setText(str(other))
+    harness.preflights[0]()
+    assert not harness.launches
+    assert harness.warnings and "changed during preflight" in harness.warnings[-1]
+    assert window._operation_state == "cancelled"
+
+
+def test_deferred_allocate_rejects_modified_prior_file(
+    allocate_harness: _AllocateHarness
+) -> None:
+    harness = allocate_harness
+    window = harness.window
+    window._academic_year_confirm.click()
+    window._start_allocate()
+    assert len(harness.preflights) == 1
+    prior = Path(window._picker_prior_roster.text())
+    prior.write_bytes(b"synthetic changed after preflight")
+    harness.preflights[0]()
+    assert not harness.launches
+    assert "changed during preflight" in harness.warnings[-1]
+
+
+def test_deferred_allocate_rejects_optional_switch_with_full_paths(
+    allocate_harness: _AllocateHarness
+) -> None:
+    harness = allocate_harness
+    window = harness.window
+    window._academic_year_confirm.click()
+    window._start_allocate()
+    assert len(harness.preflights) == 1
+    window._optional_roster.setChecked(True)
+    harness.preflights[0]()
+    assert not harness.launches
+    assert "changed during preflight" in harness.warnings[-1]
