@@ -130,6 +130,7 @@ def test_run_allowed_when_references_ready(
     )
 
     window._academic_year_confirm.click()
+    window._optional_roster.setChecked(True)
     window._start_allocate()
 
     assert not warnings, "no warnings expected when references are ready"

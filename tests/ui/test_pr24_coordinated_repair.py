@@ -197,6 +197,7 @@ def test_valid_allocate_commits_before_preflight_and_reuses_same_workspace(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, qapp
 ) -> None:
     window = MainWindow()
+    window._optional_roster.setChecked(True)
     root, _sentinel = _set_output_state(window, tmp_path)
     _install_repositories(window, tmp_path, ready=True)
     window._picker_students.setText(str(tmp_path / "students.xlsx"))

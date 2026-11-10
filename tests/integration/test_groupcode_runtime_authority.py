@@ -865,6 +865,7 @@ def test_mainwindow_real_gui_build_allocate_sabt_and_recovery(
         sentinel_book.active["A1"] = "SYNTHETIC USER WORKBOOK - DO NOT MODIFY"
         sentinel_book.save(sentinel)
         sentinel_hash = sha256(sentinel.read_bytes()).hexdigest()
+        window._optional_roster.setChecked(True)
         window._academic_year_confirm.click()
         window._btn_allocate.click()
         wait_for_terminal("completed")

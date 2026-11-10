@@ -636,7 +636,7 @@ class MainWindow(_v1.MainWindow):
         self._add_field_help(
             self._picker_current_roster,
             "guidance.rosters",
-            "Prior/current rosters are optional inputs for continuity and counters; use them only when that history is available.",
+            "Both rosters are required in standard mode. Optional roster mode lets you omit one or both.",
             "fieldHelp_allocate_rosters",
         )
         # `remaining_capacity` is the runtime/domain column identifier, not a

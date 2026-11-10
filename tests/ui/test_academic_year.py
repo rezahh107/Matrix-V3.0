@@ -13,6 +13,7 @@ from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QLabel, QMessageBox, QScrollArea
 
 import app.ui.main_window_base as base
+from app.infra.cli_legacy import _read_optional_first_sheet
 from app.ui.helpers.academic_year import suggest_academic_year
 from app.ui.i18n import Language
 from app.ui.main_window import MainWindow
@@ -100,6 +101,8 @@ def allocate_harness(
         (window._picker_students, "synthetic-students.xlsx"),
         (window._picker_pool, "synthetic-pool.xlsx"),
         (window._picker_sabt_profile_alloc, "synthetic-profile.xlsx"),
+        (window._picker_prior_roster, "synthetic-prior.csv"),
+        (window._picker_current_roster, "synthetic-current.csv"),
     ):
         path = tmp_path / name
         # These files are never opened by the dispatch spy or preflight stub.
@@ -107,6 +110,164 @@ def allocate_harness(
         path.touch()
     window._picker_alloc_out.setText(str(tmp_path / "allocation.xlsx"))
     return harness
+
+
+@pytest.mark.parametrize("entry", ["button", "shortcut"])
+@pytest.mark.parametrize(
+    ("optional", "has_prior", "has_current", "allowed"),
+    [
+        (False, False, False, False),
+        (False, True, False, False),
+        (False, False, True, False),
+        (False, True, True, True),
+        (True, False, False, True),
+        (True, True, False, True),
+        (True, False, True, True),
+        (True, True, True, True),
+    ],
+)
+def test_allocate_roster_presence_gate(
+    allocate_harness: _AllocateHarness,
+    qapp: QApplication,
+    entry: str,
+    optional: bool,
+    has_prior: bool,
+    has_current: bool,
+    allowed: bool,
+) -> None:
+    harness = allocate_harness
+    window = harness.window
+    assert window.activate_surface("allocate")
+    assert not window._optional_roster.isChecked()
+    inputs = (
+        ("prior_roster", window._picker_prior_roster, has_prior, "Prior roster"),
+        ("current_roster", window._picker_current_roster, has_current, "Current roster"),
+    )
+    for _key, picker, present, _label in inputs:
+        if not present:
+            picker.setText("  ")
+    paths = {key: picker.text() for key, picker, _present, _label in inputs if picker.text()}
+    window._academic_year_confirm.click()
+    window._optional_roster.setChecked(optional)
+    assert window._academic_year_confirm.isChecked()
+    assert all(picker.text() == paths.get(key, "") for key, picker, _, _ in inputs)
+    assert not harness.preflights
+
+    if entry == "shortcut":
+        QTest.keyClick(window, Qt.Key.Key_L, Qt.KeyboardModifier.ControlModifier)
+    else:
+        scroll = window._allocate_tab.findChild(QScrollArea)
+        assert scroll is not None
+        scroll.ensureWidgetVisible(window._btn_allocate)
+        qapp.processEvents()
+        QTest.mouseClick(window._btn_allocate, Qt.MouseButton.LeftButton)
+    qapp.processEvents()
+
+    if not allowed:
+        assert not harness.preflights and not harness.launches
+        missing = [f"• {label}" for _key, _picker, present, label in inputs if not present]
+        assert harness.warnings == ["\n".join(["Select the required roster files.", *missing])]
+        assert window._academic_year_confirm.isChecked()
+        return
+
+    assert len(harness.preflights) == 1 and not harness.launches and not harness.warnings
+    harness.preflights[0]()
+    [(argv, overrides)] = harness.launches
+    for key, _picker, present, _label in inputs:
+        flag = "--" + key.replace("_", "-")
+        if present:
+            assert argv[argv.index(flag) + 1] == overrides[key] == paths[key]
+        else:
+            assert flag not in argv and key not in overrides
+
+
+def test_standard_mode_rechecks_paths_captured_before_preflight(
+    allocate_harness: _AllocateHarness,
+) -> None:
+    harness = allocate_harness
+    window = harness.window
+    prior = window._picker_prior_roster.text()
+    window._picker_prior_roster.setText("")
+    window._optional_roster.setChecked(True)
+    window._academic_year_confirm.click()
+    window._start_allocate()
+    assert len(harness.preflights) == 1
+
+    window._optional_roster.setChecked(False)
+    window._picker_prior_roster.setText(prior)
+    harness.preflights[0]()
+    assert not harness.launches
+    assert harness.warnings == ["Select the required roster files.\n• Prior roster"]
+    assert window._operation_state == "cancelled"
+    assert window._academic_year_confirm.isChecked()
+
+    # Retry with the now-complete inputs, then reuse the exact same files.
+    for attempt in (1, 2):
+        if not window._academic_year_confirm.isChecked():
+            window._academic_year_confirm.click()
+        window._start_allocate()
+        harness.preflights[attempt]()
+    assert len(harness.launches) == 2
+    assert harness.launches[0][0] == harness.launches[1][0]
+    assert harness.launches[0][1]["current_roster"] == harness.launches[1][1]["current_roster"]
+
+
+def test_optional_roster_mode_keeps_other_allocate_guards(
+    allocate_harness: _AllocateHarness, tmp_path: Path
+) -> None:
+    harness = allocate_harness
+    window = harness.window
+    window._optional_roster.setChecked(True)
+    assert not window._academic_year_confirm.isChecked()
+    window._start_allocate()
+    assert "Confirm the displayed academic year" in harness.warnings[-1]
+    window._academic_year_confirm.click()
+
+    worker = base.Worker(lambda **_: None)
+    window._worker = worker
+    try:
+        window._start_allocate()
+        assert "عملیات جاری" in harness.warnings[-1]
+    finally:
+        window._worker = None
+    missing = tmp_path / "unavailable-roster.csv"
+    window._picker_current_roster.setText(str(missing))
+    window._start_allocate()
+    assert str(missing) in harness.warnings[-1]
+    assert not harness.preflights and not harness.launches
+
+
+def test_optional_mode_forwards_malformed_roster_to_existing_reader(
+    allocate_harness: _AllocateHarness, tmp_path: Path
+) -> None:
+    harness = allocate_harness
+    window = harness.window
+    malformed = tmp_path / "not-a-workbook.xlsx"
+    malformed.write_bytes(b"synthetic invalid workbook")
+    window._picker_prior_roster.setText("")
+    window._picker_current_roster.setText(str(malformed))
+    window._optional_roster.setChecked(True)
+    window._academic_year_confirm.click()
+    window._start_allocate()
+    assert len(harness.preflights) == 1
+    harness.preflights[0]()
+    [(_argv, overrides)] = harness.launches
+    assert overrides["current_roster"] == str(malformed)
+    with pytest.raises(ValueError):
+        _read_optional_first_sheet(str(overrides["current_roster"]))
+
+
+def test_optional_roster_mode_is_not_restored_in_new_workspace(
+    allocate_harness: _AllocateHarness,
+) -> None:
+    window = allocate_harness.window
+    window._optional_roster.setChecked(True)
+    window.close()
+    reopened = MainWindow()
+    try:
+        assert not reopened._optional_roster.isChecked()
+    finally:
+        reopened.close()
 
 
 @pytest.mark.parametrize("entry", ["button", "shortcut", "direct"])
@@ -427,6 +588,34 @@ def test_academic_year_controls_fit_and_render_at_compact_width(
         assert viewport.rect().contains(control.mapTo(viewport, control.rect().bottomRight()))
     assert confirm.width() >= confirm.sizeHint().width()
     assert not confirm.isChecked()
+
+    optional = window._optional_roster
+    expected_text = "حالت اختیاری Roster" if language is Language.FA else "Optional roster mode"
+    assert optional.objectName() == "optionalRosterMode" and optional.text() == expected_text
+    assert optional.layoutDirection() == confirm.layoutDirection()
+    assert not optional.isChecked()
+    scroll.ensureWidgetVisible(optional)
+    optional.setFocus()
+    qapp.processEvents()
+    assert optional.hasFocus() and optional.width() >= optional.sizeHint().width()
+    QTest.keyClick(optional, Qt.Key.Key_Space)
+    assert optional.isChecked() and not confirm.isChecked()
+    QTest.keyClick(optional, Qt.Key.Key_Space)
+    assert not optional.isChecked()
+    QTest.keyClick(optional, Qt.Key.Key_Tab)
+    next_control = qapp.focusWidget()
+    assert next_control is not None and next_control is not optional
+    QTest.keyClick(next_control, Qt.Key.Key_Tab, Qt.KeyboardModifier.ShiftModifier)
+    assert optional.hasFocus()
+    if language is Language.FA:
+        window._picker_current_roster.setText("")
+        confirm.click()
+        window._start_allocate()
+        assert allocate_harness.warnings == [
+            "فایل‌های روستر الزامی را انتخاب کنید.\n• روستر سال جاری"
+        ]
+        assert not allocate_harness.preflights and confirm.isChecked()
+        confirm.click()
 
     window._process_counter_dataframe(
         pd.DataFrame({"student_id": ["543570007", "543730009"]}), window._combo_academic_year

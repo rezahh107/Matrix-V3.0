@@ -1509,7 +1509,7 @@ class MainWindow(QMainWindow):
 
         self._picker_prior_roster = FilePicker(
             register_box,
-            placeholder="روستر سال قبل (اختیاری)",
+            placeholder="روستر سال قبل",
         )
         self._picker_prior_roster.setObjectName("priorRosterPicker")
         self._picker_prior_roster.setToolTip("برای بازیابی شمارندهٔ سال قبل در صورت وجود")
@@ -1527,6 +1527,12 @@ class MainWindow(QMainWindow):
             self._clear_allocate_roster_suggestion
         )
         register_layout.addRow("روستر سال جاری", self._picker_current_roster)
+
+        self._optional_roster = QCheckBox(
+            self._t("roster.optional_mode", "Optional roster mode"), register_box
+        )
+        self._optional_roster.setObjectName("optionalRosterMode")
+        register_layout.addRow(self._optional_roster)
 
         self._btn_autodetect = QPushButton("پیشنهاد خودکار", register_box)
         self._btn_autodetect.setObjectName("autodetectCountersBtn")
@@ -1902,6 +1908,7 @@ class MainWindow(QMainWindow):
             self._academic_year_confirm,
             self._picker_prior_roster,
             self._picker_current_roster,
+            self._optional_roster,
             self._btn_autodetect,
             self._btn_use_roster_year,
             self._picker_rule_matrix,
@@ -2441,6 +2448,11 @@ class MainWindow(QMainWindow):
             self._warn_unconfirmed_academic_year()
             return
 
+        missing_rosters = self._missing_allocate_rosters(prior_path, current_path)
+        if missing_rosters:
+            QMessageBox.warning(self, self._t("status.error", "خطا"), missing_rosters)
+            return
+
         self._prepare_validated_output("allocate")
         if not self._ensure_filled([(self._picker_alloc_out, "خروجی تخصیص")]):
             return
@@ -2557,6 +2569,17 @@ class MainWindow(QMainWindow):
                 self._update_status_bar_state("cancelled")
                 self._update_progress_caption(None, None)
                 return
+            # Validate the same roster paths that this attempt will pass to CLI.
+            missing_rosters = self._missing_allocate_rosters(prior_path, current_path)
+            if missing_rosters:
+                QMessageBox.warning(self, self._t("status.error", "خطا"), missing_rosters)
+                label = self._t("status.cancelled", "لغو شد")
+                self._status.setText(label)
+                self._set_stage(label, missing_rosters)
+                self._progress.reset()
+                self._update_status_bar_state("cancelled")
+                self._update_progress_caption(None, None)
+                return
             run_overrides = dict(overrides)
             if sabt_output and not sabt_template:
                 try:
@@ -2592,6 +2615,23 @@ class MainWindow(QMainWindow):
             report_path=report_path,
             on_proceed=_run_allocation,
         )
+
+    def _missing_allocate_rosters(self, prior_path: str, current_path: str) -> str | None:
+        if self._optional_roster.isChecked():
+            return None
+        missing = [
+            self._t(key, fallback)
+            for path, key, fallback in (
+                (prior_path, "files.prior_roster", "Prior roster"),
+                (current_path, "files.current_roster", "Current roster"),
+            )
+            if not path
+        ]
+        if not missing:
+            return None
+        return self._t(
+            "roster.missing_paths", "Select the required roster files.\n{inputs}"
+        ).format(inputs="\n".join(f"• {label}" for label in missing))
 
     def _start_rule_engine(self) -> None:
         """اجرای موتور قواعد با استفاده از ماتریس موجود."""
