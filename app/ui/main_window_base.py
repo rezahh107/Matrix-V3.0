@@ -2631,6 +2631,17 @@ class MainWindow(QMainWindow):
                 self._update_status_bar_state("cancelled")
                 self._update_progress_caption(None, None)
                 return
+            # Validate the same roster paths that this attempt will pass to CLI.
+            missing_rosters = self._missing_allocate_rosters(prior_path, current_path)
+            if missing_rosters:
+                QMessageBox.warning(self, self._t("status.error", "خطا"), missing_rosters)
+                label = self._t("status.cancelled", "لغو شد")
+                self._status.setText(label)
+                self._set_stage(label, missing_rosters)
+                self._progress.reset()
+                self._update_status_bar_state("cancelled")
+                self._update_progress_caption(None, None)
+                return
             # Reject a stale UI selection after asynchronous preflight.
             # No current-year freshness check is imposed: only choice/path changes.
             if (
@@ -2650,17 +2661,6 @@ class MainWindow(QMainWindow):
                 label = self._t("status.cancelled", "لغو شد")
                 self._status.setText(label)
                 self._set_stage(label, detail)
-                self._progress.reset()
-                self._update_status_bar_state("cancelled")
-                self._update_progress_caption(None, None)
-                return
-            # Validate the same roster paths that this attempt will pass to CLI.
-            missing_rosters = self._missing_allocate_rosters(prior_path, current_path)
-            if missing_rosters:
-                QMessageBox.warning(self, self._t("status.error", "خطا"), missing_rosters)
-                label = self._t("status.cancelled", "لغو شد")
-                self._status.setText(label)
-                self._set_stage(label, missing_rosters)
                 self._progress.reset()
                 self._update_status_bar_state("cancelled")
                 self._update_progress_caption(None, None)
