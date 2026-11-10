@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import threading
 from argparse import Namespace
 from collections.abc import Callable, Iterator, Sequence
@@ -1194,6 +1195,7 @@ class _RosterRun:
 @pytest.fixture
 def roster_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[_RosterRun]:
     from PySide6.QtCore import QEvent, QSettings, QThread
+    from PySide6.QtTest import QTest
     from PySide6.QtWidgets import QApplication, QMessageBox
 
     from app.infra.config_flags import UserSettings
@@ -1241,6 +1243,9 @@ def roster_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[_Ros
         window.show()
         window.activateWindow()
         app.processEvents()
+        if expected_qpa := os.environ.get("MATRIX_ROSTER_EXPECTED_QPA"):
+            assert app.platformName() == expected_qpa
+            assert QTest.qWaitForWindowExposed(window, 5000)
         assert not window._optional_roster.isChecked()
         db = window._local_db
         assert db is not None and db.path.is_relative_to(tmp_path)

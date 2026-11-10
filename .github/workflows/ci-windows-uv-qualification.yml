@@ -84,6 +84,11 @@ jobs:
           version: "0.12.7"
       - name: Sync locked environment
         run: uv sync --locked
+      - name: Install Qt offscreen system libraries (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libegl1 libgl1
       - name: Exercise Roster inputs, real Preflight and allocation
         shell: bash
         run: |
@@ -120,6 +125,8 @@ jobs:
             exit 0
           }
           uv run --locked pytest -v -ra tests/ui/test_academic_year.py -k 'controls_fit_and_render_at_compact_width or allocate_roster_presence_gate'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          uv run --locked pytest -v -ra tests/integration/test_groupcode_runtime_authority.py -k 'standard-both or deferred_preflight_rechecks_captured_paths_and_retries'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           "ran=true" >> $env:GITHUB_OUTPUT
       - name: Upload synthetic native Qt Roster captures
