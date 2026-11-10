@@ -2586,6 +2586,15 @@ class MainWindow(QMainWindow):
             alloc_argv.extend(["--current-roster", current_path])
 
         def _remember_allocate_outputs() -> None:
+            # A successful CLI allocation has passed the existing optional Roster
+            # reader. This is not official identity/freshness certification.
+            if (
+                prior_path
+                and self._get_academic_year() == academic_year
+                and self._picker_prior_roster.text() == prior_path
+            ):
+                self._prior_reference_state = "reader_accepted"
+                self._refresh_prior_roster_status()
             alloc_out = self._picker_alloc_out.text().strip()
             if alloc_out:
                 self._prefs.last_alloc_output = alloc_out
@@ -3890,6 +3899,7 @@ class MainWindow(QMainWindow):
             "unsaved": "Prior Roster selected, but its reference was not saved. Check path/settings.",
             "omitted": "Prior Roster omitted for this attempt. Saved reference is untouched.",
             "forgotten": "Saved prior Roster reference forgotten for this academic year.",
+            "reader_accepted": "Allocation reader accepted this prior Roster; this does not prove official identity or freshness.",
         }
         self._prior_reference_status.setText(
             self._t(f"roster.prior_ref.{state}", fallback.get(state, fallback["unsaved"]))
