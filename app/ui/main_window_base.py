@@ -8,6 +8,7 @@ import threading
 import traceback
 from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
+from contextlib import suppress
 from dataclasses import dataclass
 from html import escape, unescape
 from numbers import Integral
@@ -24,6 +25,7 @@ from PySide6.QtCore import (
     QObject,
     QPropertyAnimation,
     QSettings,
+    QSignalBlocker,
     Qt,
     QTimer,
     QUrl,
@@ -96,6 +98,7 @@ from app.ui.dialogs.unknown_data_dialog import (
     summarize_unknowns_report,
 )
 from app.ui.fonts import get_app_font
+from app.ui.helpers.academic_year import counter_accepts_year, suggest_academic_year
 from app.ui.helpers.counter_helpers import detect_year_candidates
 from app.ui.helpers.manager_helpers import extract_manager_names, load_manager_names_from_pool
 from app.ui.history_metrics import HistoryMetricsDialog
@@ -203,6 +206,24 @@ class UnknownsPreflightResult:
     report_path: Path
     exit_code: int
     summary: UnknownsReportSummary | None = None
+
+
+@dataclass(frozen=True)
+class _AcademicYearConfirmation:
+    year: int
+
+
+@dataclass(frozen=True)
+class _CounterPreview:
+    selected_year: int | None
+    strict_year: int | None
+    fallback_year: int | None
+    basis_year: int | None
+    sequences: tuple[tuple[str | None, int], ...]
+
+
+class _WorkerStartupError(RuntimeError):
+    """A startup failure already reported through the window."""
 
 
 _EN_TEXT_DEFAULTS: dict[str, str] = {
@@ -468,7 +489,7 @@ class MainWindow(QMainWindow):
         self._ensure_year_loaded()
 
         self._worker: Worker | None = None
-        self._handoff_failed_worker: Worker | None = None
+        self._failed_worker: tuple[Worker, str] | None = None
         self._pending_worker_result: tuple[bool, object | None] | None = None
         # Worker.finished(bool, object) is a result signal, not native QThread
         # termination. Poll wait(0) on the GUI event loop before releasing it.
@@ -545,9 +566,8 @@ class MainWindow(QMainWindow):
         self._tabs.addTab(
             self._wrap_page(self._build_build_page()), self._t("tabs.build", "ساخت ماتریس")
         )
-        self._tabs.addTab(
-            self._wrap_page(self._build_allocate_page()), self._t("tabs.allocate", "تخصیص")
-        )
+        self._allocate_tab = self._wrap_page(self._build_allocate_page())
+        self._tabs.addTab(self._allocate_tab, self._t("tabs.allocate", "تخصیص"))
         self._tabs.addTab(
             self._wrap_page(self._build_rule_engine_page()),
             self._t("tabs.rule_engine", "موتور قواعد"),
@@ -960,6 +980,8 @@ class MainWindow(QMainWindow):
         widget = self._tabs.widget(index)
         if widget is None:
             return
+        if widget is self._allocate_tab:
+            self._refresh_system_academic_year()
         # انیمیشن قبلی حذف شد تا از ایجاد افکت‌های مکرر جلوگیری شود.
         effect = widget.graphicsEffect()
         if isinstance(effect, SafeOpacityEffect):
@@ -1009,6 +1031,7 @@ class MainWindow(QMainWindow):
             )
         self._refresh_tab_texts()
         self._refresh_action_texts()
+        self._refresh_academic_year_texts()
         if self._database_status is not None:
             self._database_status.set_translator(self._translator)
         self._refresh_last_run_badge()
@@ -1460,12 +1483,29 @@ class MainWindow(QMainWindow):
         academic_line_edit = self._combo_academic_year.lineEdit()
         if academic_line_edit is not None:
             academic_line_edit.setPlaceholderText("مثلاً 1404")
-        self._combo_academic_year.setToolTip(
-            "سال تحصیلی شروع شمارنده‌ها را تعیین کنید تا کدها درست ادامه یابند"
-        )
         for year in range(1395, 1411):
             self._combo_academic_year.addItem(str(year))
+        self._combo_academic_year.setCurrentIndex(-1)
         register_layout.addRow("سال تحصیلی", self._combo_academic_year)
+
+        self._system_academic_year: int | None = None
+        self._academic_year_follows_system = True
+        self._academic_year_confirmation: _AcademicYearConfirmation | None = None
+        self._allocate_roster_year: int | None = None
+        self._allocate_counter_preview: _CounterPreview | None = None
+        self._allocate_roster_request = 0
+
+        self._academic_year_hint = QLabel(register_box)
+        self._academic_year_hint.setObjectName("academicYearHint")
+        self._academic_year_hint.setWordWrap(True)
+        register_layout.addRow(self._academic_year_hint)
+
+        self._academic_year_confirm = QCheckBox(register_box)
+        self._academic_year_confirm.setObjectName("academicYearConfirm")
+        self._academic_year_confirm.clicked.connect(self._confirm_academic_year)
+        self._academic_year_confirm.toggled.connect(self._academic_year_check_toggled)
+        self._combo_academic_year.currentTextChanged.connect(self._academic_year_changed)
+        register_layout.addRow(self._academic_year_confirm)
 
         self._picker_prior_roster = FilePicker(
             register_box,
@@ -1483,12 +1523,26 @@ class MainWindow(QMainWindow):
         self._picker_current_roster.setObjectName("currentRosterPicker")
         self._picker_current_roster.setToolTip("برای کشف آخرین شمارنده‌های سال جاری")
         self._set_picker_button_text(self._picker_current_roster)
+        self._picker_current_roster.line_edit().textChanged.connect(
+            self._clear_allocate_roster_suggestion
+        )
         register_layout.addRow("روستر سال جاری", self._picker_current_roster)
 
         self._btn_autodetect = QPushButton("پیشنهاد خودکار", register_box)
         self._btn_autodetect.setObjectName("autodetectCountersBtn")
         self._btn_autodetect.clicked.connect(self._autodetect_counters)
         register_layout.addRow("", self._btn_autodetect)
+
+        self._btn_use_roster_year = QPushButton(register_box)
+        self._btn_use_roster_year.setObjectName("useRosterAcademicYear")
+        self._btn_use_roster_year.clicked.connect(self._use_roster_academic_year)
+        register_layout.addRow(self._btn_use_roster_year)
+        self._allocate_counter_preview_label = QLabel(register_box)
+        self._allocate_counter_preview_label.setObjectName("allocateCounterPreview")
+        self._allocate_counter_preview_label.setTextFormat(Qt.TextFormat.PlainText)
+        self._allocate_counter_preview_label.setWordWrap(True)
+        register_layout.addRow(self._allocate_counter_preview_label)
+        self._refresh_system_academic_year()
 
         outer.addWidget(register_box)
 
@@ -1845,9 +1899,11 @@ class MainWindow(QMainWindow):
             self._picker_sabt_template_alloc,
             self._edit_capacity,
             self._combo_academic_year,
+            self._academic_year_confirm,
             self._picker_prior_roster,
             self._picker_current_roster,
             self._btn_autodetect,
+            self._btn_use_roster_year,
             self._picker_rule_matrix,
             self._picker_rule_students,
             self._picker_policy_rule,
@@ -1925,9 +1981,10 @@ class MainWindow(QMainWindow):
 
         overrides = self._build_matrix_overrides()
 
-        self._launch_cli(
-            argv, "ساخت ماتریس", overrides=overrides, on_success=_remember_build_output
-        )
+        with suppress(_WorkerStartupError):
+            self._launch_cli(
+                argv, "ساخت ماتریس", overrides=overrides, on_success=_remember_build_output
+            )
 
     def _build_matrix_overrides(self) -> dict[str, object]:
         """تنظیم پارامترهای حاکمیت برای تب ساخت ماتریس."""
@@ -2121,37 +2178,12 @@ class MainWindow(QMainWindow):
         def _finish_preflight(preflight: UnknownsPreflightResult) -> None:
             try:
                 proceeded = self._handle_preflight_result(preflight, on_proceed=on_proceed)
+            except _WorkerStartupError:
+                return  # The shared launch boundary already reported and recovered.
             except Exception as exc:
-                # Retain any Worker that actually started for its queued finish.
-                # A failed start can leave the UI busy and the Worker assigned.
-                worker = self._worker
-                started = worker is not None and (worker.isRunning() or worker.isFinished())
-                if started:
-                    self._handoff_failed_worker = worker
-                    self._success_hook = None
-                    worker.request_cancel()
-                else:
-                    self._worker = None
-                    self._success_hook = None
-                    self._disable_controls(False)
-                    self._set_busy_cursor(False)
                 # Exception details might contain student data or local paths.
                 logger.warning("Preflight continuation failed (%s)", type(exc).__name__)
-                label = self._t("status.error", "خطا")
-                detail = self._t(
-                    "error.unknowns.continuation_failed",
-                    "ادامهٔ تخصیص پس از پیش‌بررسی با خطا مواجه شد. پیش از تلاش دوباره خروجی‌ها را بررسی کنید.",
-                )
-                self._status.setText(label)
-                self._set_stage(label, detail)
-                self._progress.setRange(0, 100)
-                self._progress.reset()
-                self._progress.setProperty("busy", False)
-                self._update_status_bar_state("failed")
-                self._update_progress_caption(None, None)
-                self._append_log(f"❌ {detail}")
-                if not started:
-                    self._show_async_message(QMessageBox.Icon.Critical, label, detail)
+                self._report_worker_launch_failure(self._preflight_handoff_error())
                 return
             if proceeded:
                 return
@@ -2205,7 +2237,14 @@ class MainWindow(QMainWindow):
             "status.preflight_unknowns",
             "پیش‌بررسی داده‌های ناشناخته",
         )
-        self._launch_worker(_task, action, on_success=_after)
+        with suppress(_WorkerStartupError):
+            self._launch_worker(_task, action, on_success=_after)
+
+    def _preflight_handoff_error(self) -> str:
+        return self._t(
+            "error.unknowns.continuation_failed",
+            "Allocation handoff failed after preflight. Check existing outputs before retrying.",
+        )
 
     def _handle_preflight_result(
         self,
@@ -2301,7 +2340,7 @@ class MainWindow(QMainWindow):
     def _start_allocate(self) -> None:
         """اجرای سناریوی تخصیص با فراخوانی CLI."""
 
-        if self._worker is not None and self._worker.isRunning():
+        if self._worker is not None:
             QMessageBox.warning(self, "تسک در حال اجرا", "لطفاً تا پایان عملیات جاری صبر کنید.")
             return
 
@@ -2380,22 +2419,27 @@ class MainWindow(QMainWindow):
             self._picker_policy_allocate.text() or self._default_policy_path or "config/policy.json"
         )
 
-        validation_overrides = self._build_allocate_overrides()
-        academic_year = validation_overrides.get("academic_year")
+        academic_year = self._get_academic_year()
         if academic_year is None:
-            QMessageBox.warning(
-                self,
-                "سال تحصیلی نامشخص",
-                "لطفاً سال تحصیلی را وارد کنید یا از پیشنهاد خودکار استفاده کنید.",
-            )
+            self._warn_invalid_academic_year()
             return
 
-        prior_path = str(validation_overrides.get("prior_roster") or "").strip()
-        current_path = str(validation_overrides.get("current_roster") or "").strip()
+        prior_path = self._picker_prior_roster.text()
+        current_path = self._picker_current_roster.text()
         for path, label in ((prior_path, "روستر سال قبل"), (current_path, "روستر سال جاری")):
             if path and not Path(path).exists():
                 QMessageBox.warning(self, "فایل یافت نشد", f"{label} قابل دسترسی نیست: {path}")
                 return
+
+        confirmation = self._academic_year_confirmation
+        if (
+            confirmation is None
+            or confirmation.year != academic_year
+            or not self._academic_year_confirm.isChecked()
+        ):
+            self._academic_year_confirm.setChecked(False)
+            self._warn_unconfirmed_academic_year()
+            return
 
         self._prepare_validated_output("allocate")
         if not self._ensure_filled([(self._picker_alloc_out, "خروجی تخصیص")]):
@@ -2498,6 +2542,21 @@ class MainWindow(QMainWindow):
             policy_path,
         ]
         def _run_allocation() -> None:
+            # Preflight can finish later. A new check of the same year does not
+            # revive an old attempt after the operator changes their choice.
+            if (
+                confirmation is not self._academic_year_confirmation
+                or not self._academic_year_confirm.isChecked()
+                or academic_year != self._get_academic_year()
+            ):
+                detail = self._warn_unconfirmed_academic_year()
+                label = self._t("status.cancelled", "لغو شد")
+                self._status.setText(label)
+                self._set_stage(label, detail)
+                self._progress.reset()
+                self._update_status_bar_state("cancelled")
+                self._update_progress_caption(None, None)
+                return
             run_overrides = dict(overrides)
             if sabt_output and not sabt_template:
                 try:
@@ -2523,7 +2582,9 @@ class MainWindow(QMainWindow):
                 "تخصیص",
                 overrides=run_overrides,
                 on_success=_remember_allocate_outputs,
+                startup_error_detail=self._preflight_handoff_error(),
             )
+            self._academic_year_confirm.setChecked(False)
 
         self._run_unknowns_preflight(
             preflight_argv,
@@ -2612,12 +2673,13 @@ class MainWindow(QMainWindow):
             self._prefs.record_last_run("rule-engine")
             self._refresh_last_run_badge()
 
-        self._launch_cli(
-            argv,
-            "موتور قواعد",
-            overrides=overrides,
-            on_success=_remember_rule_engine_outputs,
-        )
+        with suppress(_WorkerStartupError):
+            self._launch_cli(
+                argv,
+                "موتور قواعد",
+                overrides=overrides,
+                on_success=_remember_rule_engine_outputs,
+            )
 
     def _build_allocate_overrides(self) -> dict[str, object]:
         """ساخت دیکشنری پارامترهای شمارنده بر اساس ورودی UI."""
@@ -3175,7 +3237,8 @@ class MainWindow(QMainWindow):
             for pct, msg in ((0, "آغاز"), (30, "در حال پردازش"), (60, "گام پایانی"), (100, "کامل")):
                 progress(pct, msg)
 
-        self._launch_worker(_demo_task, "دموی پیشرفت")
+        with suppress(_WorkerStartupError):
+            self._launch_worker(_demo_task, "دموی پیشرفت")
 
     def _autodetect_counters(self) -> None:
         """خواندن روستر سال جاری و پیشنهاد سال و آخرین شمارنده‌ها."""
@@ -3201,10 +3264,20 @@ class MainWindow(QMainWindow):
             )
             return
 
+        is_allocate = combo is self._combo_academic_year
+        if is_allocate:
+            self._clear_allocate_roster_suggestion()
+        request = self._allocate_roster_request
+
+        def _loaded(df: pd.DataFrame) -> None:
+            if is_allocate and request != self._allocate_roster_request:
+                return
+            self._process_counter_dataframe(df, combo)
+
         self._run_excel_loader(
             Path(path_text),
             description="پیشنهاد شمارنده",
-            on_loaded=lambda df: self._process_counter_dataframe(df, combo),
+            on_loaded=_loaded,
         )
 
     def _process_counter_dataframe(self, dataframe: pd.DataFrame, combo: QComboBox) -> None:
@@ -3221,14 +3294,12 @@ class MainWindow(QMainWindow):
             return
 
         strict_year, fallback_year = detect_year_candidates(canonical)
-        messages: list[str] = []
-        if strict_year is not None:
+        is_allocate = combo is self._combo_academic_year
+        if is_allocate:
+            self._allocate_roster_year = strict_year
+            self._refresh_roster_academic_year_button()
+        elif strict_year is not None:
             self._set_year_for_combo(combo, strict_year)
-            messages.append(f"سال پیشنهادی: {strict_year}")
-        elif fallback_year is not None:
-            messages.append(f"سال احتمالی (غیر یکتا): {fallback_year}")
-        else:
-            messages.append("سال قابل تشخیص نیست")
 
         try:
             policy = get_policy()
@@ -3241,37 +3312,75 @@ class MainWindow(QMainWindow):
             self._status.setText("بارگذاری policy ناموفق")
             return
 
-        year = strict_year or self._get_year_value(combo)
-        if year is not None:
-            try:
-                yy = year_to_yy(year)
-            except ValueError:
-                yy = None
-            if yy is not None:
-                male_mid3 = str(policy.gender_codes.male.counter_code).zfill(3)
-                female_mid3 = str(policy.gender_codes.female.counter_code).zfill(3)
-                male_prefix = f"{yy:02d}{male_mid3}"
-                female_prefix = f"{yy:02d}{female_mid3}"
-                last_male = find_max_sequence_by_prefix(canonical, male_prefix)
-                last_female = find_max_sequence_by_prefix(canonical, female_prefix)
-                next_male = last_male + 1 if last_male else 1
-                next_female = last_female + 1 if last_female else 1
-                if last_male:
-                    messages.append(f"آخرین پسر: {yy:02d}{male_mid3}{last_male:04d}")
-                else:
-                    messages.append("آخرین پسر یافت نشد")
-                messages.append(f"شروع بعدی پسر: {next_male:04d}")
-                if last_female:
-                    messages.append(f"آخرین دختر: {yy:02d}{female_mid3}{last_female:04d}")
-                else:
-                    messages.append("آخرین دختر یافت نشد")
-                messages.append(f"شروع بعدی دختر: {next_female:04d}")
-        else:
-            messages.append("برای محاسبهٔ شمارندهٔ آخر، سال را مشخص کنید")
+        selected_year = self._get_academic_year() if is_allocate else self._get_year_value(combo)
+        basis_year = strict_year or selected_year
+        if basis_year is not None and not counter_accepts_year(basis_year):
+            basis_year = None
+        sequences: list[tuple[str | None, int]] = []
+        if basis_year is not None:
+            yy = year_to_yy(basis_year)
+            for gender in (policy.gender_codes.male, policy.gender_codes.female):
+                prefix = f"{yy:02d}{str(gender.counter_code).zfill(3)}"
+                last = find_max_sequence_by_prefix(canonical, prefix)
+                sequences.append((f"{prefix}{last:04d}" if last else None, last + 1))
 
-        status = " | ".join(messages)
-        self._status.setText(status or "پیشنهاد خودکار انجام شد")
-        self._append_log(f"ℹ️ پیشنهاد شمارنده: {status}")
+        preview = _CounterPreview(
+            selected_year, strict_year, fallback_year, basis_year, tuple(sequences)
+        )
+        if is_allocate:
+            self._allocate_counter_preview = preview
+            self._refresh_allocate_counter_preview()
+            summary = self._allocate_counter_preview_label.text().replace("\n", " | ")
+        else:
+            summary = " | ".join(self._counter_preview_lines(preview, is_allocate=False))
+            self._status.setText(summary)
+        self._append_log(f"ℹ️ {summary}")
+
+    def _counter_preview_lines(self, preview: _CounterPreview, *, is_allocate: bool) -> list[str]:
+        if preview.strict_year is not None:
+            roster = self._t("academic_year.roster_suggestion", "Roster suggests {year}.").format(
+                year=preview.strict_year
+            )
+        elif preview.fallback_year is not None:
+            roster = self._t(
+                "counter.preview.roster_possible", "Possible roster year is {year}."
+            ).format(year=preview.fallback_year)
+        else:
+            roster = self._t("counter.preview.roster_unknown", "Roster year could not be detected.")
+        lines = [roster]
+        if is_allocate:
+            selection = (
+                self._t("counter.preview.selection_unset", "Selected Allocate year is unset.")
+                if preview.selected_year is None
+                else self._t(
+                    "counter.preview.selection", "Selected Allocate year is {year}."
+                ).format(year=preview.selected_year)
+            )
+            lines.append(selection)
+        if preview.basis_year is None:
+            lines.append(
+                self._t("counter.preview.basis_unavailable", "Counter basis year is unavailable.")
+            )
+            return lines
+        lines.append(
+            self._t("counter.preview.basis", "Counter basis year is {year}.").format(
+                year=preview.basis_year
+            )
+        )
+        templates = (
+            self._t(
+                "counter.preview.boys",
+                "Latest boys’ ID {latest}. Next boys’ sequence {sequence:04d}.",
+            ),
+            self._t(
+                "counter.preview.girls",
+                "Latest girls’ ID {latest}. Next girls’ sequence {sequence:04d}.",
+            ),
+        )
+        for template, (last_id, next_sequence) in zip(templates, preview.sequences, strict=True):
+            latest = last_id or self._t("counter.preview.id_unavailable", "Unavailable")
+            lines.append(template.format(latest=latest, sequence=next_sequence))
+        return lines
 
     def _launch_cli(
         self,
@@ -3280,6 +3389,7 @@ class MainWindow(QMainWindow):
         *,
         overrides: dict[str, object] | None = None,
         on_success: Callable[[], None] | None = None,
+        startup_error_detail: str | None = None,
     ) -> None:
         """اجرای فرمان CLI با Worker و رعایت قرارداد progress."""
 
@@ -3296,7 +3406,9 @@ class MainWindow(QMainWindow):
             if exit_code != 0:
                 raise RuntimeError(f"کد خروج غیرصفر: {exit_code}")
 
-        self._launch_worker(_task, action, on_success=on_success)
+        self._launch_worker(
+            _task, action, on_success=on_success, startup_error_detail=startup_error_detail
+        )
 
     def run_task(
         self,
@@ -3310,10 +3422,8 @@ class MainWindow(QMainWindow):
         def _task(*, progress: ProgressFn) -> None:
             func(stop_event, progress)
 
-        self._worker_stop_event = stop_event
         action = description or "background task"
-        worker = self._launch_worker(_task, action)
-        return worker
+        return self._launch_worker(_task, action, stop_event=stop_event)
 
     def _launch_worker(
         self,
@@ -3321,18 +3431,20 @@ class MainWindow(QMainWindow):
         action: str,
         *,
         on_success: Callable[[], None] | None = None,
+        stop_event: threading.Event | None = None,
+        startup_error_detail: str | None = None,
     ) -> Worker:
         """اجرای تابع در Worker با آماده‌سازی UI."""
 
         if self._worker is not None:
             raise RuntimeError("A previous Worker is still owned by MainWindow")
+        self._worker_stop_event = stop_event
         self._last_progress_pct = None
         self._last_progress_message = None
         self._current_action = action
         running_text = f"{action} در حال اجرا…"
         self._status.setText(running_text)
         self._set_stage(action, "در انتظار گزارش پیشرفت")
-        self._append_log(f"<b>▶️ شروع {action}</b>")
         self._disable_controls(True)
         self._set_busy_cursor(True)
         self._progress.setRange(0, 0)
@@ -3341,12 +3453,56 @@ class MainWindow(QMainWindow):
         self._update_progress_caption(None, None)
         self._success_hook = on_success
 
-        worker = Worker(func)
-        worker.progress.connect(self._on_progress)
-        worker.finished.connect(self._on_finished)
-        self._worker = worker
-        worker.start()
+        try:
+            worker = Worker(func)
+            worker.progress.connect(self._on_progress)
+            worker.finished.connect(self._on_finished)
+            self._worker = worker
+            worker.start()
+            if not (worker.isRunning() or worker.isFinished()):
+                raise RuntimeError("Qt did not start the Worker")
+        except Exception as exc:
+            detail = startup_error_detail or self._t(
+                "error.worker.start_failed",
+                "The background operation could not start. Check existing outputs before retrying.",
+            )
+            logger.warning("Worker startup failed (%s)", type(exc).__name__)
+            self._report_worker_launch_failure(detail)
+            raise _WorkerStartupError(detail) from None
+        self._append_log(f"<b>▶️ شروع {action}</b>")
         return worker
+
+    def _report_worker_launch_failure(self, detail: str) -> None:
+        """Recover idle UI, or defer cleanup until the started Worker joins."""
+        worker = self._worker
+        if worker is not None and (worker.isRunning() or worker.isFinished() or not worker.wait(0)):
+            self._failed_worker = (worker, detail)
+            if self._pending_worker_result is not None:
+                self._pending_worker_result = (False, RuntimeError(detail))
+            if self._worker_stop_event is not None:
+                self._worker_stop_event.set()
+            worker.request_cancel()
+        else:
+            self._worker = None
+            self._success_hook = None
+            self._worker_stop_event = None
+            self._restore_idle_worker_controls()
+
+        label = self._t("status.error", "خطا")
+        self._status.setText(label)
+        self._set_stage(label, detail)
+        self._update_status_bar_state("failed")
+        self._update_progress_caption(None, None)
+        if self._worker is None:
+            self._append_log(f"❌ {detail}")
+            self._show_async_message(QMessageBox.Icon.Critical, label, detail)
+
+    def _restore_idle_worker_controls(self) -> None:
+        self._disable_controls(False)
+        self._set_busy_cursor(False)
+        self._progress.setRange(0, 100)
+        self._progress.reset()
+        self._progress.setProperty("busy", False)
 
     # ----------------------------------------------------------------- Helpers
     def _disable_controls(self, disabled: bool) -> None:
@@ -3441,7 +3597,8 @@ class MainWindow(QMainWindow):
     def _get_academic_year(self) -> int | None:
         """دریافت سال تحصیلی معتبر از ورودی تب تخصیص."""
 
-        return self._get_year_value(self._combo_academic_year)
+        year = self._get_year_value(self._combo_academic_year)
+        return year if year is not None and counter_accepts_year(year) else None
 
     def _get_rule_engine_year(self) -> int | None:
         """دریافت سال تحصیلی از تب موتور قواعد."""
@@ -3456,7 +3613,119 @@ class MainWindow(QMainWindow):
     def _set_year_for_combo(self, combo: QComboBox, year: int) -> None:
         """کمک‌کننده برای تنظیم مقدار سال در ComboBox."""
 
+        if combo is self._combo_academic_year:
+            combo.setCurrentIndex(combo.findText(str(year)))
         combo.setEditText(str(year))
+
+    def _refresh_system_academic_year(self) -> None:
+        self._system_academic_year = suggest_academic_year()
+        if self._academic_year_follows_system:
+            with QSignalBlocker(self._combo_academic_year):
+                if self._system_academic_year is None:
+                    self._combo_academic_year.setCurrentIndex(-1)
+                    self._combo_academic_year.clearEditText()
+                else:
+                    self._set_academic_year(self._system_academic_year)
+        self._refresh_academic_year_texts()
+
+    def _refresh_academic_year_texts(self) -> None:
+        year = self._system_academic_year
+        if year is None:
+            hint = self._t(
+                "academic_year.date_unavailable",
+                "System-date suggestion unavailable. You can enter the academic year manually.",
+            )
+        else:
+            hint = self._t(
+                "academic_year.system_suggestion",
+                "The system date suggests {year}. The academic period starts on 1 Tir.",
+            ).format(year=year)
+        self._academic_year_hint.setText(hint)
+        self._combo_academic_year.setAccessibleName(
+            self._t("files.registration_year", "Academic year")
+        )
+        self._combo_academic_year.setAccessibleDescription(hint)
+        self._academic_year_confirm.setText(
+            self._t("academic_year.confirm", "Confirm this academic year for the next allocation")
+        )
+        self._refresh_roster_academic_year_button()
+        self._refresh_allocate_counter_preview()
+
+    def _academic_year_changed(self) -> None:
+        self._academic_year_follows_system = False
+        self._academic_year_confirmation = None
+        self._academic_year_confirm.setChecked(False)
+        self._refresh_roster_academic_year_button()
+        self._refresh_allocate_counter_preview()
+
+    def _academic_year_check_toggled(self, checked: bool) -> None:
+        if not checked:
+            self._academic_year_confirmation = None
+
+    def _confirm_academic_year(self, checked: bool) -> None:
+        if not checked:
+            return
+        year = self._get_academic_year()
+        if year is None:
+            self._academic_year_confirm.setChecked(False)
+            self._warn_invalid_academic_year()
+            return
+        self._academic_year_follows_system = False
+        self._academic_year_confirmation = _AcademicYearConfirmation(year)
+
+    def _clear_allocate_roster_suggestion(self) -> None:
+        self._allocate_roster_request += 1
+        self._allocate_roster_year = None
+        self._allocate_counter_preview = None
+        self._refresh_roster_academic_year_button()
+        self._refresh_allocate_counter_preview()
+
+    def _refresh_allocate_counter_preview(self) -> None:
+        preview = self._allocate_counter_preview
+        if preview is not None and preview.selected_year != self._get_academic_year():
+            self._allocate_counter_preview = preview = None
+        label = self._allocate_counter_preview_label
+        label.setText(
+            "\n".join(self._counter_preview_lines(preview, is_allocate=True)) if preview else ""
+        )
+        label.setVisible(preview is not None)
+
+    def _refresh_roster_academic_year_button(self) -> None:
+        year = self._allocate_roster_year
+        self._btn_use_roster_year.setVisible(year is not None and year != self._get_academic_year())
+        if year is not None:
+            self._btn_use_roster_year.setText(
+                self._t("academic_year.use_roster", "Use roster year {year}").format(year=year)
+            )
+
+    def _use_roster_academic_year(self) -> None:
+        if self._allocate_roster_year is not None:
+            self._set_academic_year(self._allocate_roster_year)
+            self._academic_year_confirm.setFocus()
+
+    def _warn_invalid_academic_year(self) -> None:
+        self._warn_academic_year(
+            self._t("academic_year.invalid", "Enter a valid academic year from 1350 to 1449."),
+            self._combo_academic_year,
+        )
+
+    def _warn_unconfirmed_academic_year(self) -> str:
+        detail = self._t(
+            "academic_year.unconfirmed",
+            "Confirm the displayed academic year, then run Allocate again.",
+        )
+        self._warn_academic_year(detail, self._academic_year_confirm)
+        return detail
+
+    def _warn_academic_year(self, detail: str, field: QWidget) -> None:
+        QMessageBox.warning(self, self._t("files.registration_year", "Academic year"), detail)
+        self._tabs.setCurrentWidget(self._allocate_tab)
+        field.setFocus()
+        scroll = self._allocate_tab
+        if not isinstance(scroll, QScrollArea):
+            scroll = scroll.findChild(QScrollArea)
+        if isinstance(scroll, QScrollArea):
+            scroll.ensureWidgetVisible(field)
 
     def _apply_pref_default(self, picker: FilePicker, value: str | None) -> None:
         """اگر ورودی خالی بود، مقدار پیش‌فرض را از تنظیمات اعمال می‌کند."""
@@ -3642,7 +3911,10 @@ class MainWindow(QMainWindow):
     def _on_progress(self, pct: int, message: str) -> None:
         """به‌روزرسانی نوار پیشرفت و ثبت لاگ."""
 
-        if self._handoff_failed_worker is not None:
+        sender = self.sender()
+        if sender is not None and sender is not self._worker:
+            return
+        if self._failed_worker is not None:
             return  # Never show post-failure progress from a partially started Worker.
         # Values outside [0, 100] are unknown, not a number to clamp into a
         # plausible-looking progress report.
@@ -3676,20 +3948,19 @@ class MainWindow(QMainWindow):
         """Receive the application result; native QThread termination is separate."""
 
         worker = self._worker
+        sender = self.sender()
+        if sender is not None and sender is not worker:
+            return  # A late signal must not finalize a replacement Worker or the idle UI.
         if worker is None:
             # Retain the previous behavior for direct status-only UI updates.
             self._apply_worker_result(success, error)
             return
         if self._pending_worker_result is not None:
             return  # A single Worker result must never be finalized twice.
-        if self._handoff_failed_worker is worker:
+        failed = self._failed_worker
+        if failed is not None and failed[0] is worker:
             success = False
-            error = RuntimeError(
-                self._t(
-                    "error.unknowns.continuation_failed",
-                    "ادامهٔ تخصیص پس از پیش‌بررسی با خطا مواجه شد. پیش از تلاش دوباره خروجی‌ها را بررسی کنید.",
-                )
-            )
+            error = RuntimeError(failed[1])
         self._pending_worker_result = (success, error)
         self._poll_worker_termination()
 
@@ -3708,7 +3979,7 @@ class MainWindow(QMainWindow):
             return
         self._worker_termination_timer.stop()
         self._pending_worker_result = None
-        self._handoff_failed_worker = None
+        self._failed_worker = None
         self._apply_worker_result(*pending)
 
     def _apply_worker_result(self, success: bool, error: object | None) -> None:
@@ -3720,11 +3991,7 @@ class MainWindow(QMainWindow):
             self._success_hook = None
             return
         self._flush_log_pending()
-        self._disable_controls(False)
-        self._set_busy_cursor(False)
-        self._progress.setRange(0, 100)
-        self._progress.reset()  # A terminal failure/cancellation must not keep stale fill.
-        self._progress.setProperty("busy", False)
+        self._restore_idle_worker_controls()
         self._worker = None
         hook, self._success_hook = self._success_hook, None
         if error is not None:
