@@ -575,6 +575,12 @@ def test_academic_year_controls_fit_and_render_at_compact_width(
     window.resize(960, 640)
     window._apply_language(language)
     assert window.activate_surface("allocate")
+    if expected_qpa := os.environ.get("MATRIX_ROSTER_EXPECTED_QPA"):
+        assert qapp.platformName() == expected_qpa
+        assert window.windowHandle() is not None
+        assert QTest.qWaitForWindowExposed(window, 5000)
+    if expected_dpr := os.environ.get("MATRIX_ROSTER_EXPECTED_DPR"):
+        assert window.devicePixelRatioF() == pytest.approx(float(expected_dpr))
     confirm = window._academic_year_confirm
     scroll = window._allocate_tab.findChild(QScrollArea)
     assert scroll is not None
@@ -592,11 +598,19 @@ def test_academic_year_controls_fit_and_render_at_compact_width(
     optional = window._optional_roster
     expected_text = "حالت اختیاری Roster" if language is Language.FA else "Optional roster mode"
     assert optional.objectName() == "optionalRosterMode" and optional.text() == expected_text
-    assert optional.layoutDirection() == confirm.layoutDirection()
+    direction = (
+        Qt.LayoutDirection.RightToLeft
+        if language is Language.FA
+        else Qt.LayoutDirection.LeftToRight
+    )
+    assert optional.layoutDirection() == confirm.layoutDirection() == direction
     assert not optional.isChecked()
     scroll.ensureWidgetVisible(optional)
     optional.setFocus()
     qapp.processEvents()
+    assert optional.isVisible()
+    assert viewport.rect().contains(optional.mapTo(viewport, optional.rect().topLeft()))
+    assert viewport.rect().contains(optional.mapTo(viewport, optional.rect().bottomRight()))
     assert optional.hasFocus() and optional.width() >= optional.sizeHint().width()
     QTest.keyClick(optional, Qt.Key.Key_Space)
     assert optional.isChecked() and not confirm.isChecked()

@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import json
+import threading
 from argparse import Namespace
+from collections.abc import Callable, Iterator, Sequence
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pandas as pd
 import pytest
@@ -13,6 +17,12 @@ from app.infra.groupcode.groupcode_repository import GroupCodeRepository
 from app.infra.local_database import LocalDatabase
 from app.infra.schools.school_repository import SchoolRepository
 from app.infra.year_database_manager import YearDatabaseManager
+
+if TYPE_CHECKING:
+    from PySide6.QtWidgets import QApplication
+
+    from app.ui.main_window import MainWindow
+    from app.ui.task_runner import ProgressFn
 
 POLICY_PATH = Path("config/policy.json")
 
@@ -707,6 +717,26 @@ def test_excel_student_import_mixed_national_codes_to_sabt_readback(tmp_path: Pa
     db.close_all_connections()
 
 
+def _write_synthetic_sabt_profile(path: Path) -> Path:
+    from app.infra.excel import export_allocations as sabt_exports
+
+    pd.DataFrame(
+        {
+            sabt_exports._HEADER_COLUMN: [
+                "کد ثبت نام0",
+                "پیدا کردن ردیف پشتیبان از فیلد 141",
+            ],
+            sabt_exports._VALUE_COLUMN: ["student_id", ""],
+            sabt_exports._ORDER_COLUMN: [1, 2],
+            sabt_exports._SOURCE_COLUMN: [
+                sabt_exports._SOURCE_STUDENT,
+                sabt_exports._SOURCE_ALLOCATION,
+            ],
+        }
+    ).to_excel(path, sheet_name=sabt_exports._PROFILE_SHEET_NAME, index=False)
+    return path
+
+
 def test_mainwindow_real_gui_build_allocate_sabt_and_recovery(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -722,7 +752,6 @@ def test_mainwindow_real_gui_build_allocate_sabt_and_recovery(
 
     from app.core.common.types import CANONICAL_TRACE_ORDER
     from app.infra.config_flags import UserSettings
-    from app.infra.excel import export_allocations as sabt_exports
     from app.ui import main_window_base as window_base
     from app.ui.main_window import MainWindow
 
@@ -737,21 +766,7 @@ def test_mainwindow_real_gui_build_allocate_sabt_and_recovery(
     changed_groups = _write_excel(_groupcodes(25), tmp_path / "gui-stale-groups.xlsx")
     inspactor_file = _write_excel(_inspactor(24), tmp_path / "gui-inspactor.xlsx")
     students_file = _write_excel(_student(24), tmp_path / "gui-students.xlsx")
-    profile_file = tmp_path / "authorized-synthetic-profile.xlsx"
-    pd.DataFrame(
-        {
-            sabt_exports._HEADER_COLUMN: [
-                "کد ثبت نام0",
-                "پیدا کردن ردیف پشتیبان از فیلد 141",
-            ],
-            sabt_exports._VALUE_COLUMN: ["student_id", ""],
-            sabt_exports._ORDER_COLUMN: [1, 2],
-            sabt_exports._SOURCE_COLUMN: [
-                sabt_exports._SOURCE_STUDENT,
-                sabt_exports._SOURCE_ALLOCATION,
-            ],
-        }
-    ).to_excel(profile_file, sheet_name=sabt_exports._PROFILE_SHEET_NAME, index=False)
+    profile_file = _write_synthetic_sabt_profile(tmp_path / "authorized-synthetic-profile.xlsx")
 
     matrix = tmp_path / "gui-matrix.xlsx"
     allocation = tmp_path / "gui-allocation.xlsx"
@@ -1095,3 +1110,410 @@ def test_mainwindow_real_gui_build_allocate_sabt_and_recovery(
         app.processEvents()
         if window._local_db is not None:
             window._local_db.close_all_connections()
+
+
+@dataclass
+class _RosterRun:
+    app: QApplication
+    window: MainWindow
+    allocation: Path
+    sabt: Path
+    output_root: Path
+    prior: Path
+    current: Path
+    warnings: list[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
+    calls: list[tuple[list[str], dict[str, object]]] = field(default_factory=list)
+    preflight_started: threading.Event = field(default_factory=threading.Event)
+    release_preflight: threading.Event = field(default_factory=threading.Event)
+
+    def select(self, *, optional: bool, prior: bool, current: bool) -> None:
+        self.window._optional_roster.setChecked(optional)
+        self.window._picker_prior_roster.setText(str(self.prior) if prior else "")
+        self.window._picker_current_roster.setText(str(self.current) if current else "")
+        self.window._academic_year_confirm.click()
+
+    def submit(self, entry: str) -> None:
+        from PySide6.QtCore import Qt
+        from PySide6.QtTest import QTest
+
+        if entry == "button":
+            assert self.window._btn_allocate.isEnabled()
+            self.window._btn_allocate.click()
+        else:
+            self.window._btn_allocate.setFocus()
+            QTest.keyClick(
+                self.window._btn_allocate, Qt.Key.Key_L, Qt.KeyboardModifier.ControlModifier
+            )
+
+    def finish(self, expected: str) -> None:
+        self.until(
+            lambda: self.window._worker is None and self.window._operation_state != "running",
+            "Allocation or Preflight did not finish",
+        )
+        assert self.window._operation_state == expected, (self.warnings, self.errors)
+        assert self.window._success_hook is None
+        assert self.window._pending_worker_result is None
+        assert self.window._btn_allocate.isEnabled()
+        assert self.window._optional_roster.isEnabled()
+        assert not self.window._progress.property("busy")
+        assert self.app.overrideCursor() is None
+
+    def until(self, condition: Callable[[], bool], message: str) -> None:
+        from time import monotonic, sleep
+
+        deadline = monotonic() + 30
+        while not condition() and monotonic() < deadline:
+            self.app.processEvents()
+            sleep(0.01)
+        assert condition(), (message, self.window._operation_state, self.warnings, self.errors)
+
+    def assert_cli(self, prior: Path | None, current: Path | None) -> None:
+        preflight, allocate = self.calls[-2:]
+        assert [preflight[0][0], allocate[0][0]] == ["preflight-unknowns", "allocate"]
+        argv, overrides = allocate
+        assert argv[argv.index("--academic-year") + 1] == str(overrides["academic_year"]) == "1404"
+        for key, path in (("prior_roster", prior), ("current_roster", current)):
+            flag = "--" + key.replace("_", "-")
+            if path is None:
+                assert flag not in argv and all(
+                    key not in call[1] for call in (preflight, allocate)
+                )
+            else:
+                assert (
+                    argv[argv.index(flag) + 1] == overrides[key] == preflight[1][key] == str(path)
+                )
+
+    def assert_no_success(self) -> None:
+        assert not self.window._prefs.last_alloc_output
+        db = self.window._local_db
+        assert db is not None
+        assert all(row["status"] != "success" for row in db.fetch_runs())
+
+
+@pytest.fixture
+def roster_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[_RosterRun]:
+    from PySide6.QtCore import QEvent, QSettings, QThread
+    from PySide6.QtWidgets import QApplication, QMessageBox
+
+    from app.infra.config_flags import UserSettings
+    from app.ui import app_preferences, main_window, main_window_base, main_window_presentation_base
+    from app.ui.task_runner import Worker
+
+    monkeypatch.setattr(Path, "home", classmethod(lambda _cls: tmp_path))
+    for module in (app_preferences, main_window, main_window_base, main_window_presentation_base):
+        monkeypatch.setattr(
+            module,
+            "QSettings",
+            lambda *_args: QSettings(str(tmp_path / "qt-settings.ini"), QSettings.Format.IniFormat),
+        )
+    app = QApplication.instance() or QApplication([])
+    window = main_window.MainWindow()
+    run = _RosterRun(
+        app,
+        window,
+        tmp_path / "allocation.xlsx",
+        tmp_path / "sabt.xlsx",
+        tmp_path / "automatic-output",
+        tmp_path / "prior.xlsx",
+        tmp_path / "current.xlsx",
+    )
+    real_cli = cli.main
+    workers: list[Worker] = []
+
+    def observe_cli(
+        argv: Sequence[str],
+        *,
+        progress_factory: Callable[[], ProgressFn],
+        ui_overrides: dict[str, object],
+    ) -> int:
+        worker = QThread.currentThread()
+        assert isinstance(worker, Worker), "The real CLI must run in a Qt Worker"
+        workers.append(worker)
+        run.calls.append((list(argv), dict(ui_overrides)))
+        if argv[0] == "preflight-unknowns":
+            run.preflight_started.set()
+            if not run.release_preflight.wait(30):
+                raise TimeoutError("Test did not release the real Preflight Worker")
+        return real_cli(argv, progress_factory=progress_factory, ui_overrides=ui_overrides)
+
+    try:
+        window.show()
+        window.activateWindow()
+        app.processEvents()
+        assert not window._optional_roster.isChecked()
+        db = window._local_db
+        assert db is not None and db.path.is_relative_to(tmp_path)
+        SchoolRepository(db).import_from_excel(_write_excel(_schools(), tmp_path / "schools.xlsx"))
+        GroupCodeRepository(db).import_from_excel(
+            _write_excel(_groupcodes(24), tmp_path / "groups.xlsx")
+        )
+        matrix = _build_matrix(tmp_path=tmp_path, db_path=db.path, group_code=24)
+        first = _student()
+        second = first.assign(student_id="synthetic-student-2", **{"کد ملی": "0000000002"})
+        students = _write_excel(
+            pd.concat([first, second], ignore_index=True), tmp_path / "students.xlsx"
+        )
+        _write_excel(
+            pd.DataFrame({"کد ملی": ["0000000001"], "student_id": ["533570123"]}), run.prior
+        )
+        _write_excel(pd.DataFrame({"student_id": ["543570050", "553570999"]}), run.current)
+        assert window.activate_surface("allocate")
+        window._picker_students.setText(str(students))
+        window._picker_pool.setText(str(matrix))
+        run.until(lambda: not window._excel_loaders, "Pool loader did not finish")
+        window._picker_alloc_out.setText(str(run.allocation))
+        window._picker_sabt_output_alloc.setText(str(run.sabt))
+        window._picker_sabt_template_alloc.setText("")
+        window._picker_sabt_profile_alloc.setText(
+            str(_write_synthetic_sabt_profile(tmp_path / "profile.xlsx"))
+        )
+        window._set_academic_year(1404)
+        window._user_settings = UserSettings(enable_trace_export=True)
+        window._prefs.output_root_dir = str(run.output_root)
+        window._prefs.last_output_dir = ""
+        monkeypatch.setattr(
+            QMessageBox,
+            "warning",
+            staticmethod(lambda _window, _title, detail: run.warnings.append(str(detail))),
+        )
+        monkeypatch.setattr(
+            window,
+            "_show_async_message",
+            lambda _icon, _title, detail: run.errors.append(str(detail)),
+        )
+        monkeypatch.setattr(cli, "main", observe_cli)
+        run.release_preflight.set()
+        yield run
+    finally:
+        run.release_preflight.set()
+        if window._worker is not None:
+            assert window._worker.wait(30000), "Active QThread did not terminate"
+        for worker in workers:
+            assert worker.wait(30000), "Test-owned QThread did not terminate"
+        assert window.close()
+        if window._local_db is not None:
+            window._local_db.close_all_connections()
+        window.deleteLater()
+        app.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        app.processEvents()
+
+
+def _assert_roster_output(run: _RosterRun, expected_ids: tuple[str, str]) -> None:
+    from app.core.common.types import CANONICAL_TRACE_ORDER
+
+    with pd.ExcelFile(run.allocation) as book:
+        assert {"allocations", "logs", "updated_pool", "trace"} <= set(book.sheet_names)
+        ids = pd.read_excel(book, "allocations", dtype=str)["student_id"]
+        trace = pd.read_excel(book, "trace", dtype=str)
+    assert sorted(ids) == sorted(expected_ids)
+    assert ids.is_unique
+    assert set(trace["student_id"]) == set(expected_ids)
+    for student_id in expected_ids:
+        assert trace.loc[trace["student_id"] == student_id, "stage"].tolist() == list(
+            CANONICAL_TRACE_ORDER
+        )
+    qa = pd.read_excel(run.allocation.with_stem("allocation_validation"), "summary")
+    assert not qa.empty and set(qa["status"]) <= {"PASS", "WARN"}
+    with pd.ExcelFile(run.sabt) as book:
+        assert {"Sheet2", "Summary", "Errors"} <= set(book.sheet_names)
+        rows = pd.read_excel(book, "Sheet2", dtype=str)
+    assert dict(zip(rows["کد ملی"], rows["شناسه دانش آموز"], strict=True)) == dict(
+        zip(("0000000001", "0000000002"), expected_ids, strict=True)
+    )
+    assert run.window._prefs.last_alloc_output == str(run.allocation)
+    assert not run.window._academic_year_confirm.isChecked()
+    db = run.window._local_db
+    assert db is not None
+    assert any(
+        row["entrypoint"] == "allocate"
+        and row["status"] == "success"
+        and json.loads(row["input_files_json"])["output"] == str(run.allocation)
+        for row in db.fetch_runs()
+    )
+
+
+@pytest.mark.parametrize(
+    ("optional", "prior", "current", "entry", "expected_ids"),
+    [
+        (False, True, True, "button", ("533570123", "543570051")),
+        (True, False, False, "shortcut", ("543570001", "543570002")),
+        (True, True, False, "button", ("533570123", "543570001")),
+        (True, False, True, "shortcut", ("543570051", "543570052")),
+        (True, True, True, "button", ("533570123", "543570051")),
+    ],
+    ids=[
+        "standard-both",
+        "optional-neither",
+        "optional-prior",
+        "optional-current",
+        "optional-both",
+    ],
+)
+def test_roster_real_allocate_outputs(
+    roster_run: _RosterRun,
+    optional: bool,
+    prior: bool,
+    current: bool,
+    entry: str,
+    expected_ids: tuple[str, str],
+) -> None:
+    run = roster_run
+    run.select(optional=optional, prior=prior, current=current)
+    run.submit(entry)
+    assert run.window._worker is not None, (run.warnings, run.errors)
+    run.finish("completed")
+    run.assert_cli(run.prior if prior else None, run.current if current else None)
+    _assert_roster_output(run, expected_ids)
+    assert not run.warnings and not run.errors
+
+
+@pytest.mark.parametrize(("prior", "current"), [(False, False), (True, False), (False, True)])
+def test_roster_standard_rejection_has_no_output_or_worker(
+    roster_run: _RosterRun,
+    monkeypatch: pytest.MonkeyPatch,
+    prior: bool,
+    current: bool,
+) -> None:
+    run = roster_run
+    run.select(optional=False, prior=prior, current=current)
+    run.allocation.write_bytes(b"synthetic protected workbook bytes")
+    existing = run.allocation.read_bytes()
+    run.window._picker_alloc_out.setText(
+        ""
+    )  # A gate regression would commit an automatic directory.
+    before = run.window._operation_state
+    paths_before = set(run.allocation.parent.rglob("*"))
+
+    def unexpected(*_args: object, **_kwargs: object) -> None:
+        pytest.fail("Roster validation must precede output preparation and Preflight")
+
+    monkeypatch.setattr(run.window, "_prepare_validated_output", unexpected)
+    monkeypatch.setattr(run.window, "_run_unknowns_preflight", unexpected)
+    run.submit("button")
+    assert len(run.warnings) == 1 and not run.errors
+    assert run.window._worker is None and not run.calls
+    assert run.window._operation_state == before != "completed"
+    assert run.window._academic_year_confirm.isChecked()
+    assert not run.output_root.exists() and not run.sabt.exists()
+    assert run.allocation.read_bytes() == existing
+    assert set(run.allocation.parent.rglob("*")) == paths_before
+    run.assert_no_success()
+
+
+@pytest.mark.parametrize("bad_roster", ["prior", "current"])
+def test_roster_invalid_file_fails_real_worker_and_can_retry(
+    roster_run: _RosterRun,
+    bad_roster: str,
+) -> None:
+    run = roster_run
+    path = run.prior if bad_roster == "prior" else run.current
+    good_bytes = path.read_bytes()
+    path.write_bytes(b"synthetic non-Excel content")
+    run.select(optional=True, prior=bad_roster == "prior", current=bad_roster == "current")
+    run.allocation.write_bytes(b"synthetic protected allocation")
+    run.sabt.write_bytes(b"synthetic protected Sabt")
+    run.submit("button")
+    run.finish("failed")
+    assert run.errors and not run.warnings
+    run.assert_cli(
+        run.prior if bad_roster == "prior" else None,
+        run.current if bad_roster == "current" else None,
+    )
+    assert run.allocation.read_bytes() == b"synthetic protected allocation"
+    assert run.sabt.read_bytes() == b"synthetic protected Sabt"
+    assert not run.allocation.with_stem("allocation_validation").exists()
+    assert not list(run.sabt.parent.glob("sabt-template-*/*.xlsx"))
+    assert not run.window._academic_year_confirm.isChecked()
+    run.assert_no_success()
+
+    path.write_bytes(good_bytes)
+    run.window._academic_year_confirm.click()
+    run.submit("shortcut")
+    run.finish("completed")
+    expected = ("533570123", "543570001") if bad_roster == "prior" else ("543570051", "543570052")
+    _assert_roster_output(run, expected)
+
+
+def test_roster_deferred_preflight_rechecks_captured_paths_and_retries(
+    roster_run: _RosterRun,
+) -> None:
+    run = roster_run
+    run.select(optional=True, prior=False, current=True)
+    run.release_preflight.clear()
+    run.submit("shortcut")
+    run.until(run.preflight_started.is_set, "No real Preflight Worker was started")
+    worker = run.window._worker
+    assert worker is not None and worker.isRunning()
+    assert not run.window._optional_roster.isEnabled()
+    assert not run.window._btn_allocate.isEnabled()
+
+    # Normal controls are disabled. Programmatic changes model a pending stale
+    # attempt without replacing its real Worker, CLI, result, or continuation.
+    run.window._optional_roster.setChecked(False)
+    run.window._picker_prior_roster.setText(str(run.prior))
+    assert run.window._academic_year_confirm.isChecked()
+    assert run.window._picker_current_roster.text() == str(run.current)
+    run.release_preflight.set()
+    run.finish("cancelled")
+    assert worker.wait(0)
+    assert [call[0][0] for call in run.calls] == ["preflight-unknowns"]
+    assert "prior_roster" not in run.calls[0][1]
+    assert len(run.warnings) == 1 and not run.errors
+    assert not run.allocation.exists() and not run.sabt.exists()
+    assert not list(run.sabt.parent.glob("sabt-template-*"))
+    assert run.window._academic_year_confirm.isChecked()
+    run.assert_no_success()
+
+    for entry in ("button", "shortcut"):
+        if not run.window._academic_year_confirm.isChecked():
+            run.window._academic_year_confirm.click()
+        run.submit(entry)
+        run.finish("completed")
+        run.assert_cli(run.prior, run.current)
+        _assert_roster_output(run, ("533570123", "543570051"))
+    assert [call[0][0] for call in run.calls] == [
+        "preflight-unknowns",
+        "preflight-unknowns",
+        "allocate",
+        "preflight-unknowns",
+        "allocate",
+    ]
+
+
+def test_roster_deferred_preflight_uses_captured_current_file(
+    roster_run: _RosterRun,
+) -> None:
+    run = roster_run
+    later = _write_excel(
+        pd.DataFrame({"student_id": ["543570090"]}), run.current.with_stem("later-current")
+    )
+    run.select(optional=True, prior=False, current=True)
+    run.release_preflight.clear()
+    run.submit("button")
+    run.until(run.preflight_started.is_set, "No real Preflight Worker was started")
+    run.window._picker_current_roster.setText(str(later))
+    run.release_preflight.set()
+    run.finish("completed")
+    run.assert_cli(None, run.current)
+    _assert_roster_output(run, ("543570051", "543570052"))
+
+
+def test_roster_standard_duplicate_prior_id_uses_existing_assign_new(
+    roster_run: _RosterRun,
+) -> None:
+    run = roster_run
+    _write_excel(
+        pd.DataFrame(
+            {
+                "کد ملی": ["0000000001", "0000000002"],
+                "student_id": ["533570123", "533570123"],
+            }
+        ),
+        run.prior,
+    )
+    run.select(optional=False, prior=True, current=True)
+    run.submit("button")
+    run.finish("completed")
+    run.assert_cli(run.prior, run.current)
+    _assert_roster_output(run, ("533570123", "543570051"))
