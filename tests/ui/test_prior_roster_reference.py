@@ -267,3 +267,121 @@ def test_descriptor_local_file_evidence_catches_same_size_mutation(
     assert prior.stat().st_size == before.size
     assert prior.stat().st_mtime_ns == before.mtime_ns
     assert probe_prior_roster(before) == "changed"
+
+
+def test_restored_reference_reaches_allocate_and_reader_success_state(
+    isolated_settings: tuple[Path, Path], qapp: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Reconstruction -> stored prior file -> actual MainWindow-to-CLI argument boundary."""
+    from types import SimpleNamespace
+
+    import pandas as pd
+    from PySide6.QtWidgets import QMessageBox
+
+    _settings, root = isolated_settings
+    prior = root / "prior.xlsx"
+    pd.DataFrame(
+        {"کد ملی": ["0000000001"], "student_id": ["533570123"]}
+    ).to_excel(prior, index=False)
+    first = _new_window(qapp)
+    _operator_select(first, prior)
+    first.close()
+    restored = _new_window(qapp)
+    assert restored._prior_reference_state == "restored"
+    assert restored._picker_prior_roster.text() == str(prior)
+    for picker, name in (
+        (restored._picker_students, "students.xlsx"),
+        (restored._picker_pool, "pool.xlsx"),
+        (restored._picker_sabt_profile_alloc, "profile.xlsx"),
+        (restored._picker_current_roster, "current.xlsx"),
+    ):
+        path = root / name
+        path.touch()
+        picker.setText(str(path))
+    restored._picker_alloc_out.setText(str(root / "result.xlsx"))
+    monkeypatch.setattr(
+        base, "compute_reference_readiness",
+        lambda **_: SimpleNamespace(is_ready_for_run=True),
+    )
+
+    def unexpected_warning(_parent: object, _title: str, detail: str) -> None:
+        pytest.fail(f"Unexpected Allocate warning: {detail}")
+
+    monkeypatch.setattr(QMessageBox, "warning", unexpected_warning)
+    monkeypatch.setattr(
+        restored, "_run_unknowns_preflight",
+        lambda _args, *, on_proceed, **_: on_proceed(),
+    )
+    captured: list[tuple[list[str], dict[str, object]]] = []
+
+    def launch(argv: list[str], _action: str, *, overrides: dict[str, object], on_success, **_) -> None:
+        captured.append((list(argv), dict(overrides)))
+        on_success()
+
+    monkeypatch.setattr(restored, "_launch_cli", launch)
+    for _attempt in range(2):
+        if not restored._academic_year_confirm.isChecked():
+            restored._academic_year_confirm.click()
+        restored._start_allocate()
+    assert len(captured) == 2
+    for argv, overrides in captured:
+        assert argv[argv.index("--prior-roster") + 1] == str(prior)
+        assert overrides["prior_roster"] == str(prior)
+        assert overrides["academic_year"] == 1405
+        assert overrides["current_roster"] == str(root / "current.xlsx")
+    assert restored._prior_reference_state == "reader_accepted"
+    assert "does not prove official identity" in restored._prior_reference_status.text()
+    assert _read_optional_first_sheet(str(prior)) is not None
+    assert restored._prefs.read_prior_roster_reference(1405)[1] == "stored"
+
+
+def test_reference_controls_keyboard_and_language(
+    isolated_settings: tuple[Path, Path], qapp: QApplication
+) -> None:
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QScrollArea
+
+    _settings, root = isolated_settings
+    prior = root / "prior.csv"
+    prior.write_bytes(b"synthetic")
+    window = _new_window(qapp)
+    _operator_select(window, prior)
+    window.resize(960, 640)
+    window._apply_language(Language.FA)
+    assert window.activate_surface("allocate")
+    assert "حذف موقت" in window._btn_omit_prior_reference.text()
+    assert "فراموش" in window._btn_forget_prior_reference.text()
+    assert window._prior_reference_status.layoutDirection() == Qt.LayoutDirection.RightToLeft
+    scroll = window._allocate_tab.findChild(QScrollArea)
+    assert scroll is not None
+    scroll.ensureWidgetVisible(window._btn_omit_prior_reference)
+    qapp.processEvents()
+    window._btn_omit_prior_reference.setFocus()
+    QTest.keyClick(window._btn_omit_prior_reference, Qt.Key.Key_Space)
+    assert window._prior_reference_state == "omitted"
+    assert window._picker_prior_roster.text() == ""
+    window._apply_language(Language.EN)
+    assert window._btn_forget_prior_reference.isEnabled()
+    window._btn_forget_prior_reference.setFocus()
+    QTest.keyClick(window._btn_forget_prior_reference, Qt.Key.Key_Space)
+    assert window._prior_reference_state == "forgotten"
+    assert window._prefs.read_prior_roster_reference(1405)[1] == "absent"
+    assert window._btn_forget_prior_reference.layoutDirection() == Qt.LayoutDirection.LeftToRight
+
+
+def test_inaccessible_file_is_reported_without_using_it(
+    isolated_settings: tuple[Path, Path], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import app.ui.prior_roster_reference as reference_module
+
+    _settings, root = isolated_settings
+    path = root / "roster.csv"
+    path.write_bytes(b"synthetic")
+    ref = capture_prior_roster(1405, str(path))
+
+    def blocked(_year: int, _path: str) -> PriorRosterReference:
+        raise PermissionError("synthetic denied access")
+
+    monkeypatch.setattr(reference_module, "capture_prior_roster", blocked)
+    assert probe_prior_roster(ref) == "inaccessible"
