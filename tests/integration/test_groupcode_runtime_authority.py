@@ -1200,7 +1200,7 @@ class _RosterRun:
 
 @pytest.fixture
 def roster_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[_RosterRun]:
-    from PySide6.QtCore import QEvent, QSettings, QThread, Qt
+    from PySide6.QtCore import QEvent, QSettings, Qt, QThread
     from PySide6.QtTest import QTest
     from PySide6.QtWidgets import QApplication, QMessageBox
 
