@@ -24,7 +24,7 @@ __all__ = ["FilePicker"]
 class FilePicker(QWidget):
     """ویجت ساده برای انتخاب مسیر فایل ورودی یا خروجی."""
 
-    selectionCommitted = Signal(str)
+    selection_committed = Signal(str)
 
     def __init__(
         self,
@@ -115,12 +115,12 @@ class FilePicker(QWidget):
 
         if path:
             self._edit.setText(path)
-            self.selectionCommitted.emit(self.text())
+            self.selection_committed.emit(self.text())
 
     def _commit_edited_path(self) -> None:
         if self._edit.isModified():
             self._edit.setModified(False)
-            self.selectionCommitted.emit(self.text())
+            self.selection_committed.emit(self.text())
 
     def _sync_icon(self, text: str) -> None:
         """همگام‌سازی آیکون native فایل/پوشه بر اساس مسیر فعلی."""

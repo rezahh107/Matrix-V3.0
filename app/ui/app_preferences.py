@@ -7,6 +7,7 @@ import logging
 from datetime import datetime
 from typing import Any
 
+from PySide6 import QtCore
 from PySide6.QtCore import QByteArray, QSettings
 
 from app.core.policy_loader import load_policy
@@ -107,7 +108,7 @@ class AppPreferences:
         """Read a strict year-scoped descriptor; never infer file validity."""
         key = reference_key(academic_year)
         self._settings.sync()
-        if self._settings.status() != QSettings.Status.NoError:
+        if self._settings.status() != QtCore.QSettings.Status.NoError:
             return None, "settings_error"
         if not self._settings.contains(key):
             return None, "absent"
@@ -132,7 +133,7 @@ class AppPreferences:
         self._settings.setValue(key, payload)
         self._settings.sync()
         if (
-            self._settings.status() != QSettings.Status.NoError
+            self._settings.status() != QtCore.QSettings.Status.NoError
             or self._settings.value(key) != payload
         ):
             raise OSError("Prior Roster reference settings write failed")
@@ -143,7 +144,7 @@ class AppPreferences:
         key = reference_key(academic_year)
         self._settings.remove(key)
         self._settings.sync()
-        if self._settings.status() != QSettings.Status.NoError or self._settings.contains(key):
+        if self._settings.status() != QtCore.QSettings.Status.NoError or self._settings.contains(key):
             raise OSError("Prior Roster reference settings clear failed")
 
     # ------------------------------------------------------------------ مسیرهای فایل

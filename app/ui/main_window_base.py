@@ -110,7 +110,6 @@ from app.ui.viewmodels.join_key_validation_vm import JoinKeyValidationVM
 from app.utils.path_utils import resource_path
 
 from .app_preferences import AppPreferences
-from .prior_roster_reference import PriorRosterReference, capture_prior_roster, probe_prior_roster
 from .effects import SafeOpacityEffect
 from .i18n import Language
 from .log_panel import LogPanel
@@ -119,6 +118,7 @@ from .preferences import (
     read_last_run_info,
 )
 from .preferences.language_dialog import LanguageDialog
+from .prior_roster_reference import PriorRosterReference, capture_prior_roster, probe_prior_roster
 from .task_runner import ProgressFn, Worker
 from .texts import UiTranslator
 from .theme import (
@@ -1520,7 +1520,7 @@ class MainWindow(QMainWindow):
         self._prior_reference: PriorRosterReference | None = None
         self._prior_reference_state = "empty"
         self._prior_reference_suppressed_years: set[int] = set()
-        self._picker_prior_roster.selectionCommitted.connect(self._on_prior_roster_selected)
+        self._picker_prior_roster.selection_committed.connect(self._on_prior_roster_selected)
 
         self._prior_reference_status = QLabel(register_box)
         self._prior_reference_status.setObjectName("priorRosterReferenceStatus")

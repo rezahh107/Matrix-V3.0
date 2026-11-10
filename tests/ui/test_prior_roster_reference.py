@@ -239,7 +239,7 @@ def test_unavailable_or_bad_settings_cannot_claim_success(
         def status(self) -> QSettings.Status:
             return QSettings.Status.AccessError
 
-        def setValue(self, key: str, value: str) -> None:
+        def setValue(self, key: str, value: str) -> None:  # noqa: N802 - Qt API
             pass
 
         def remove(self, key: str) -> None:
