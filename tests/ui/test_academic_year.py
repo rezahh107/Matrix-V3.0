@@ -10,7 +10,7 @@ import pandas as pd
 import pytest
 from PySide6.QtCore import QCalendar, QDate, QSignalBlocker, Qt
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QMessageBox, QScrollArea
+from PySide6.QtWidgets import QApplication, QLabel, QMessageBox, QScrollArea
 
 import app.ui.main_window_base as base
 from app.ui.helpers.academic_year import suggest_academic_year
@@ -257,19 +257,93 @@ def test_roster_offer_preserves_manual_choice_and_explicit_use_requires_reconfir
 
     callbacks[0](roster)
     assert window._btn_use_roster_year.isHidden()
+    assert window._allocate_counter_preview_label.isHidden()
     callbacks[1](roster)
     assert window._combo_academic_year.currentText() == "1403"
     assert confirm.isChecked()
     assert window._btn_use_roster_year.isVisible()
     assert window._btn_use_roster_year.text() == "Use roster year 1404"
     assert "The system date suggests 1405" in window._academic_year_hint.text()
-    assert window._status is not None
-    assert "543570007" in window._status.text() and "543730009" in window._status.text()
+    assert "543570007" in window._allocate_counter_preview_label.text()
+    assert "543730009" in window._allocate_counter_preview_label.text()
 
     window._btn_use_roster_year.click()
     assert window._combo_academic_year.currentText() == "1404"
     assert not confirm.isChecked()
     assert window._btn_use_roster_year.isHidden()
+    assert window._allocate_counter_preview_label.isHidden()
+
+
+@pytest.mark.parametrize(
+    ("selected", "ids", "basis", "latest"),
+    [
+        (1404, ["543570007", "543730009"], 1404, "543570007"),
+        (1403, ["543570007", "543730009"], 1404, "543570007"),
+        (1403, ["543570007", "533570005"], 1403, "533570005"),
+        (1403, [], 1403, None),
+        (None, [], None, None),
+    ],
+    ids=["same-year", "different-year", "fallback", "unknown-roster", "no-basis"],
+)
+def test_counter_preview_identifies_basis_and_tracks_selection(
+    allocate_harness: _AllocateHarness,
+    selected: int | None,
+    ids: list[str],
+    basis: int | None,
+    latest: str | None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    window = allocate_harness.window
+    monkeypatch.setattr(window._prefs, "set_language", lambda _language: None)
+    window._apply_language(Language.EN)
+    assert window.activate_surface("allocate")
+    window._combo_academic_year.setEditText(str(selected) if selected is not None else "")
+    confirm = window._academic_year_confirm
+    if selected is not None:
+        confirm.click()
+    window._process_counter_dataframe(
+        pd.DataFrame({"student_id": ids}), window._combo_academic_year
+    )
+    preview = window.findChild(QLabel, "allocateCounterPreview")
+    assert preview is not None and preview.isVisible(), "Counter values need a scoped preview"
+    assert preview.wordWrap()
+    assert preview.layoutDirection() == Qt.LayoutDirection.LeftToRight
+    english = preview.text()
+    expected_selection = (
+        "Selected Allocate year is unset."
+        if selected is None
+        else f"Selected Allocate year is {selected}."
+    )
+    expected_basis = (
+        "Counter basis year is unavailable." if basis is None else f"Counter basis year is {basis}."
+    )
+    assert expected_selection in english
+    assert expected_basis in english
+    if ids and basis == 1403:
+        assert "Possible roster year is 1404." in english
+        assert "Next boys’ sequence 0006" in english
+    if not ids:
+        assert "Roster year could not be detected." in english
+    if latest is not None:
+        assert f"Latest boys’ ID {latest}" in english
+    if basis == 1404:
+        assert "Next boys’ sequence 0008" in english
+        assert "Next girls’ sequence 0010" in english
+    assert window._get_academic_year() == selected
+    assert confirm.isChecked() == (selected is not None)
+
+    window._apply_language(Language.FA)
+    assert preview.layoutDirection() == Qt.LayoutDirection.RightToLeft
+    persian = preview.text()
+    assert "سال انتخاب‌شده برای تخصیص" in persian
+    assert "سال مبنای شمارنده" in persian
+    if latest is not None:
+        assert latest in persian and "آخرین شناسهٔ پسران" in persian
+    assert confirm.isChecked() == (selected is not None)
+
+    window._set_academic_year(1405)
+    assert preview.isHidden() and not preview.text()
+    assert not confirm.isChecked()
 
 
 @pytest.mark.parametrize("value", ["", "abc", "1349", "1450"])
@@ -353,6 +427,18 @@ def test_academic_year_controls_fit_and_render_at_compact_width(
         assert viewport.rect().contains(control.mapTo(viewport, control.rect().bottomRight()))
     assert confirm.width() >= confirm.sizeHint().width()
     assert not confirm.isChecked()
+
+    window._process_counter_dataframe(
+        pd.DataFrame({"student_id": ["543570007", "543730009"]}), window._combo_academic_year
+    )
+    preview = window._allocate_counter_preview_label
+    qapp.processEvents()  # Give the form layout a chance to size the newly visible preview.
+    scroll.ensureWidgetVisible(preview)
+    qapp.processEvents()
+    assert preview.isVisible()
+    assert viewport.rect().contains(preview.mapTo(viewport, preview.rect().topLeft()))
+    assert viewport.rect().contains(preview.mapTo(viewport, preview.rect().bottomRight()))
+
     if evidence_dir := os.environ.get("MATRIX_ACADEMIC_YEAR_EVIDENCE"):
         output_dir = Path(evidence_dir)
         output_dir.mkdir(parents=True, exist_ok=True)

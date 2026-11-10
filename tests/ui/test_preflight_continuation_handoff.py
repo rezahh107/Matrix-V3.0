@@ -218,6 +218,7 @@ def test_partial_allocation_worker_start_exception_releases_ui(
                 lambda *, progress: None,
                 "synthetic-allocation-worker",
                 on_success=lambda: None,
+                startup_error_detail=window._preflight_handoff_error(),
             ),
         )
         preflight_worker = window._worker
@@ -301,13 +302,13 @@ def test_start_raises_after_launch_preserves_worker_and_blocks_false_success(
             time.sleep(0.01)
         assert len(attempted) == 1
         assert window._worker is attempted[0]
-        assert window._handoff_failed_worker is attempted[0]
+        assert window._failed_worker is not None and window._failed_worker[0] is attempted[0]
         assert not window._btn_allocate.isEnabled()
         assert window._operation_state == "failed"
         released.set()
         _wait_for_idle(qapp, window)
         assert attempted[0].wait(5000)
-        assert window._handoff_failed_worker is None
+        assert window._failed_worker is None
         assert window._operation_state == "failed"
         assert window._btn_allocate.isEnabled()
         assert not successful_hooks
