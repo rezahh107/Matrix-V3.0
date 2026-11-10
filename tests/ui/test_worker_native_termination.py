@@ -42,6 +42,86 @@ def _result_delivered_or_old_owner_released(window: MainWindow) -> bool:
     )
 
 
+@pytest.mark.parametrize("failure", ["construction", "before-start", "no-thread"])
+def test_initial_preflight_start_failure_restores_ui_and_can_retry(
+    qapp, monkeypatch, tmp_path, failure: str
+) -> None:
+    window = MainWindow()
+    real_worker = main_window_base.Worker
+    calls: list[str] = []
+    messages: list[str] = []
+    monkeypatch.setattr(main_window_base.cli, "main", lambda argv, **_: calls.append(argv[0]) or 0)
+    monkeypatch.setattr(window, "_show_async_message", lambda *_a: messages.append(str(_a[-1])))
+
+    def fail(*_args: object) -> None:
+        raise RuntimeError("SYNTHETIC_PRIVATE_MARKER")
+
+    try:
+        with monkeypatch.context() as fault:
+            if failure == "construction":
+                fault.setattr(main_window_base, "Worker", fail)
+            elif failure == "no-thread":
+                fault.setattr(real_worker, "start", lambda _worker: None)
+            else:
+                fault.setattr(real_worker, "start", fail)
+            window._run_unknowns_preflight(
+                ["preflight-unknowns"],
+                overrides={},
+                report_path=tmp_path / "report.json",
+                on_proceed=lambda: calls.append("proceed"),
+            )
+        assert calls == []
+        assert window._worker is None and window._success_hook is None
+        assert window._worker_stop_event is None
+        assert window._operation_state == "failed"
+        assert window._btn_allocate.isEnabled() and not window._is_busy_cursor
+        assert window._progress.maximum() == 100 and window._progress.value() in (-1, 0)
+        assert not window._progress.property("busy")
+        assert len(messages) == 1 and "SYNTHETIC_PRIVATE_MARKER" not in messages[0]
+        assert "SYNTHETIC_PRIVATE_MARKER" not in window._log.toPlainText()
+
+        window._run_unknowns_preflight(
+            ["preflight-unknowns"],
+            overrides={},
+            report_path=tmp_path / "report.json",
+            on_proceed=lambda: calls.append("proceed"),
+        )
+        worker = window._worker
+        assert worker is not None
+        assert _pump(qapp, lambda: window._worker is None)
+        assert worker.wait(0)
+        assert calls == ["preflight-unknowns", "proceed"]
+        assert window._operation_state == "completed"
+        assert window._btn_allocate.isEnabled() and not window._is_busy_cursor
+    finally:
+        window.close()
+        qapp.processEvents()
+
+
+def test_demo_start_failure_uses_shared_recovery(qapp, monkeypatch) -> None:
+    window = MainWindow()
+    messages: list[str] = []
+    monkeypatch.setattr(window, "_show_async_message", lambda *_a: messages.append(str(_a[-1])))
+
+    def fail_before_start(_worker: object) -> None:
+        raise OSError("SYNTHETIC_PRIVATE_MARKER")
+
+    try:
+        with monkeypatch.context() as fault:
+            fault.setattr(main_window_base.Worker, "start", fail_before_start)
+            window._start_demo_task()
+        assert window._operation_state == "failed"
+        assert window._worker is None and window._success_hook is None
+        assert window._btn_allocate.isEnabled() and not window._is_busy_cursor
+        assert len(messages) == 1 and "SYNTHETIC_PRIVATE_MARKER" not in messages[0]
+        window._start_demo_task()
+        assert _pump(qapp, lambda: window._worker is None)
+        assert window._operation_state == "completed"
+    finally:
+        window.close()
+        qapp.processEvents()
+
+
 @pytest.mark.parametrize("outcome", ["success", "failure", "cancelled"])
 def test_custom_result_cannot_release_native_worker(
     qapp, monkeypatch, outcome: str
@@ -166,7 +246,8 @@ def test_after_start_handoff_failure_keeps_both_references_until_join(
         assert _pump(qapp, lambda: _result_delivered_or_old_owner_released(window))
         assert worker.isRunning() and not worker.wait(0)
         assert window._worker is worker, "EARLY_OWNERSHIP_RELEASE after handoff failure"
-        assert window._handoff_failed_worker is worker
+        assert window._failed_worker is not None and window._failed_worker[0] is worker
+        assert window._success_hook is not None
         assert not window._btn_allocate.isEnabled()
         assert window._operation_state == "failed"
         worker.progress.emit(99, "synthetic late progress")
@@ -179,10 +260,14 @@ def test_after_start_handoff_failure_keeps_both_references_until_join(
         released.set()
         assert _pump(qapp, lambda: window._worker is None)
         assert worker.wait(0)
-        assert window._handoff_failed_worker is None
+        assert window._failed_worker is None
+        assert window._success_hook is None
         assert window._operation_state == "failed"
         assert window._btn_allocate.isEnabled()
         assert not success_hooks
+        worker.finished.emit(True, None)
+        qapp.processEvents()
+        assert window._operation_state == "failed", "A stale result must not finalize idle UI"
         # Recovery cannot be blocked by stale state after the true join.
         retry = window._launch_worker(
             lambda *, progress: None,

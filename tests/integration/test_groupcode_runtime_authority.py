@@ -865,6 +865,7 @@ def test_mainwindow_real_gui_build_allocate_sabt_and_recovery(
         sentinel_book.active["A1"] = "SYNTHETIC USER WORKBOOK - DO NOT MODIFY"
         sentinel_book.save(sentinel)
         sentinel_hash = sha256(sentinel.read_bytes()).hexdigest()
+        window._academic_year_confirm.click()
         window._btn_allocate.click()
         wait_for_terminal("completed")
 
@@ -1037,6 +1038,7 @@ def test_mainwindow_real_gui_build_allocate_sabt_and_recovery(
             launched_cli.append(str(_argv))
             raise AssertionError("Unsafe path collision must not launch CLI")
 
+        window._academic_year_confirm.click()
         try:
             window_base.cli.main = deny_cli
             for case_name, picker, path in cases:
@@ -1081,6 +1083,7 @@ def test_mainwindow_real_gui_build_allocate_sabt_and_recovery(
         tab._groupcodes_button.click()
         assert set(window._groupcode_repository.load_canonical_frame()["group_code"].astype(int)) == {25}
         assert window.activate_surface("allocate")
+        assert window._academic_year_confirm.isChecked()
         window._btn_allocate.click()
         wait_for_terminal("failed")
         assert all(sha256(path.read_bytes()).hexdigest() == digest
