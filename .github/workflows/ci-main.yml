@@ -99,7 +99,8 @@ jobs:
     name: UI tests (Windows, Qt/PySide6)
     runs-on: windows-latest
     timeout-minutes: 30
-    needs: [core-windows]
+    # Keep the full UI evidence runnable even when an independent Core gate fails.
+    # Both jobs remain separate, required, failure-capable checks.
     env:
       QT_QPA_PLATFORM: offscreen
       PYTEST_QT_API: pyside6
