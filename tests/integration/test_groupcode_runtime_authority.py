@@ -1645,7 +1645,7 @@ def test_native_windows_operator_journey_via_real_app_main(
 
     from PySide6.QtCore import QCoreApplication, QSettings, Qt, QTimer, qVersion
     from PySide6.QtTest import QTest
-    from PySide6.QtWidgets import QDialogButtonBox, QFileDialog, QLineEdit, QMessageBox
+    from PySide6.QtWidgets import QCheckBox, QDialogButtonBox, QFileDialog, QLineEdit, QMessageBox
 
     from app.core.common.types import CANONICAL_TRACE_ORDER
     from app.ui.main_window import MainWindow
@@ -1769,13 +1769,19 @@ def test_native_windows_operator_journey_via_real_app_main(
                     assert ok is not None, "Refusing to approve non-OK confirmation"
                     ok.click()
                     return
-                if settings_pending[0] and type(modal).__name__ == "SettingsDialog":
-                    settings_pending[0] = False
-                    assert not modal._trace_checkbox.isChecked()
-                    modal._trace_checkbox.click()
+                if settings_pending[0] and modal.objectName() == "unifiedSettingsDialog":
+                    trace_checkbox = modal.findChild(
+                        QCheckBox, "settings_enable_trace_export"
+                    )
+                    assert trace_checkbox is not None, "Current Settings lacks Trace toggle"
+                    assert not trace_checkbox.isChecked()
+                    trace_checkbox.click()
                     box = modal.findChild(QDialogButtonBox)
                     assert box is not None
-                    box.button(QDialogButtonBox.StandardButton.Ok).click()
+                    ok = box.button(QDialogButtonBox.StandardButton.Ok)
+                    assert ok is not None
+                    ok.click()
+                    settings_pending[0] = False
                     return
         except BaseException:
             failures.append("Qt modal interaction:\n" + traceback.format_exc())
@@ -1869,7 +1875,9 @@ def test_native_windows_operator_journey_via_real_app_main(
             stages.append("genuine-file-chooser-all-standard-roster-inputs")
 
             settings_pending[0] = True
-            window._btn_settings.click()
+            settings_action = window._support_toolbar_actions["settings"]
+            assert settings_action.isVisible() and settings_action.isEnabled()
+            settings_action.trigger()
             assert not settings_pending[0] and window._user_settings.enable_trace_export
             window._academic_year_confirm.click()
             assert window._academic_year_confirm.isChecked()
