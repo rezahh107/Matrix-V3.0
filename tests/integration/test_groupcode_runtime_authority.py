@@ -1721,49 +1721,47 @@ def test_native_windows_operator_journey_via_real_app_main(
                     continue
                 if isinstance(modal, QFileDialog):
                     assert expected_files, "Unexpected real QFileDialog"
-                    path = expected_files[0]  # Remain pending until the dialog returns.
+                    path = expected_files[0]  # Remains pending until dialog actually returns.
                     now = time.monotonic()
                     if choice_state["path"] != str(path):
-                        # The Qt filesystem model populates asynchronously. Enter
-                        # the real directory, then allow its event loop to settle.
                         modal.setDirectory(str(path.parent))
-                        modal.selectFile(path.name)
                         choice_state.update(
-                            path=str(path), attempts=0, next_action=now + 0.20
+                            path=str(path), attempts=0, next_action=now + 0.25
                         )
                         return
                     if now < choice_state["next_action"]:
                         return
-                    selected = modal.selectedFiles()
-                    assert selected and Path(selected[0]).resolve() == path.resolve(), (
-                        str(path), selected, modal.directory().absolutePath()
-                    )
+                    edit = modal.findChild(QLineEdit, "fileNameEdit")
+                    assert edit is not None, "Visible Qt QFileDialog lacks filename QLineEdit"
                     attempt = int(choice_state["attempts"])
-                    if attempt >= 3:
-                        raise AssertionError(
-                            "Real Qt file dialog did not close after 3 UI attempts: "
-                            + repr((str(path), selected, modal.directory().absolutePath()))
-                        )
-                    choice_state["attempts"] = attempt + 1
-                    choice_state["next_action"] = now + 0.35
                     if attempt == 0:
+                        # Use the visible filename control and actual Qt key
+                        # events, not QFileDialog.selectFile() internal state.
+                        edit.setFocus()
+                        edit.selectAll()
+                        QTest.keyClicks(edit, str(path))
+                        assert edit.text() == str(path), (edit.text(), str(path))
+                        QTest.keyClick(edit, Qt.Key.Key_Return)
+                    elif attempt == 1:
+                        # The directory model may finish loading after Enter.
+                        # Activate the visible Open/Save command if still needed.
                         box = modal.findChild(QDialogButtonBox)
                         accept = next(
                             (b for b in box.buttons()
                              if box.buttonRole(b) == QDialogButtonBox.ButtonRole.AcceptRole),
                             None,
                         ) if box is not None else None
-                        assert accept is not None, "Qt chooser has no accept button"
+                        assert accept is not None, "Qt chooser has no accept command"
                         accept.click()
-                    elif attempt == 1:
-                        modal.accept()  # Real QFileDialog validation, never a stub.
                     else:
-                        edit = modal.findChild(QLineEdit, "fileNameEdit")
-                        assert edit is not None, "Qt chooser filename control missing"
-                        edit.setFocus()
-                        edit.selectAll()
-                        QTest.keyClicks(edit, path.name)
-                        QTest.keyClick(edit, Qt.Key.Key_Return)
+                        modal.grab().save(str(evidence / "file-dialog-blocked.png"))
+                        raise AssertionError(
+                            "Qt dialog remained open after real keyboard and "
+                            "accept-button input: "
+                            + repr((str(path), edit.text(), modal.selectedFiles()))
+                        )
+                    choice_state["attempts"] = attempt + 1
+                    choice_state["next_action"] = now + 0.40
                     return
                 if isinstance(modal, QMessageBox):
                     notices.append(f"{modal.icon().name}: {modal.text()}")
