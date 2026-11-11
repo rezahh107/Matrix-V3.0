@@ -6,7 +6,11 @@ from pathlib import Path
 import pandas as pd
 
 from app.infra.common.school_report_normalization import normalize_school_report_frame
-from app.infra.db.reference_tables import ReferenceTableStatus, status_from_meta
+from app.infra.db.reference_tables import (
+    ReferenceTableStatus,
+    observed_reference_status,
+    status_from_meta,
+)
 from app.infra.io_utils import read_excel_first_sheet
 from app.infra.local_database import LocalDatabase
 from app.infra.reference_repository import SQLiteReferenceRepository
@@ -63,7 +67,7 @@ class SchoolRepository:
         return status_from_meta("schools", self._repo.last_refresh_meta())
 
     def status(self) -> ReferenceTableStatus:
-        return status_from_meta("schools", self._repo.last_refresh_meta())
+        return observed_reference_status(db=self._db, table_name="schools")
 
     @property
     def database(self) -> LocalDatabase:

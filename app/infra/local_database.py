@@ -216,6 +216,14 @@ class LocalDatabase:
 
         return self._open_connection()
 
+    def connect_readonly(self) -> sqlite3.Connection:
+        """Open an existing database for WAL-aware observation without creating it.
+
+        The caller must close this connection. Unlike normal operational
+        connections, this never changes connection PRAGMAs or repairs schema.
+        """
+        return sqlite3.connect(self.path.resolve().as_uri() + "?mode=ro", uri=True)
+
     def close_all_connections(self) -> None:
         """بستن تمام اتصال‌های باز برای آزادسازی هندل فایل (ویژه ویندوز)."""
 
@@ -452,6 +460,16 @@ class LocalDatabase:
         """
 
         with self._open_connection() as conn:
+            # Only a genuinely blank database receives built-in references.
+            # Existing reference data (including missing/empty tables) belongs
+            # to its stored operator/import authority, not to reopen/repair.
+            first_bootstrap = (
+                conn.execute(
+                    "SELECT 1 FROM sqlite_master "
+                    "WHERE type='table' AND name NOT LIKE 'sqlite_%' LIMIT 1"
+                ).fetchone()
+                is None
+            )
             self._ensure_schema_meta_table(conn)
             existing_version = self._get_schema_version(conn)
             if existing_version is None:
@@ -498,7 +516,8 @@ class LocalDatabase:
             self._ensure_year_meta(conn)
             self._validate_schema_version(conn)
             self._assert_required_schema(conn)
-            self._ensure_builtin_groupcodes(conn)
+            if first_bootstrap:
+                self._ensure_builtin_groupcodes(conn)
             conn.commit()
 
     def _repair_required_schema(
