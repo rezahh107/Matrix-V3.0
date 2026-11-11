@@ -298,6 +298,12 @@ jobs:
         run: uv python install
       - name: Sync locked environment
         run: uv sync --locked
+      - name: Qualify SQLite reference observation and real operator entrypoints
+        run: >
+          uv run --locked pytest -v -ra --maxfail=1
+          tests/infra/test_reference_readiness_observation.py
+          tests/ui/test_reference_readiness_observation_ui.py
+          tests/integration/test_groupcode_runtime_authority.py::test_cli_build_and_allocate_cannot_reseed_deleted_imported_groupcodes
       - name: Focused lint
         run: >
           uv run --locked ruff check

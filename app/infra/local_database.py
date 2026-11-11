@@ -216,6 +216,14 @@ class LocalDatabase:
 
         return self._open_connection()
 
+    def connect_readonly(self) -> sqlite3.Connection:
+        """Open an existing database for WAL-aware observation without creating it.
+
+        The caller must close this connection. Unlike normal operational
+        connections, this never changes connection PRAGMAs or repairs schema.
+        """
+        return sqlite3.connect(self.path.resolve().as_uri() + "?mode=ro", uri=True)
+
     def close_all_connections(self) -> None:
         """بستن تمام اتصال‌های باز برای آزادسازی هندل فایل (ویژه ویندوز)."""
 
@@ -451,7 +459,18 @@ class LocalDatabase:
         دادهٔ خراب بر عهدهٔ ``initialize`` است.
         """
 
+        # An existing *file* can be empty after external loss of its schema.
+        # Its absence, not just an empty sqlite_master, is required for seed.
+        file_was_missing = not self.path.exists()
         with self._open_connection() as conn:
+            # A concurrent opener may have established tables in the meantime.
+            first_bootstrap = file_was_missing and (
+                conn.execute(
+                    "SELECT 1 FROM sqlite_master "
+                    "WHERE type='table' AND name NOT LIKE 'sqlite_%' LIMIT 1"
+                ).fetchone()
+                is None
+            )
             self._ensure_schema_meta_table(conn)
             existing_version = self._get_schema_version(conn)
             if existing_version is None:
@@ -498,7 +517,8 @@ class LocalDatabase:
             self._ensure_year_meta(conn)
             self._validate_schema_version(conn)
             self._assert_required_schema(conn)
-            self._ensure_builtin_groupcodes(conn)
+            if first_bootstrap:
+                self._ensure_builtin_groupcodes(conn)
             conn.commit()
 
     def _repair_required_schema(

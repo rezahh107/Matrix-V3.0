@@ -8,7 +8,11 @@ import pandas as pd
 from app.core.common.columns import HEADER_ALIASES_V3
 from app.core.common.domain import VALID_GROUP_CODES
 from app.infra.common.header_pipeline_v3 import HeaderPipelineV3
-from app.infra.db.reference_tables import ReferenceTableStatus, status_from_meta
+from app.infra.db.reference_tables import (
+    ReferenceTableStatus,
+    observed_reference_status,
+    status_from_meta,
+)
 from app.infra.errors import DatabasePreparationError
 from app.infra.io_utils import read_excel_first_sheet
 from app.infra.local_database import LocalDatabase
@@ -88,28 +92,7 @@ class GroupCodeRepository:
         return status_from_meta("groupcodes", self._repo.last_refresh_meta())
 
     def status(self) -> ReferenceTableStatus:
-        self._db.initialize()
-        meta = self._repo.last_refresh_meta()
-        if meta is not None and meta.row_count > 0:
-            return status_from_meta("groupcodes", meta)
-
-        count = 0
-        try:
-            with self._db.connect() as conn:
-                cursor = conn.execute("SELECT COUNT(*) FROM groupcodes")
-                row = cursor.fetchone()
-                count = int(row[0]) if row and row[0] is not None else 0
-        except Exception:
-            count = 0
-
-        if count > 0:
-            return ReferenceTableStatus(
-                table_name="groupcodes",
-                row_count=count,
-                version_tag="builtin:ssot",
-            )
-
-        return status_from_meta("groupcodes", meta)
+        return observed_reference_status(db=self._db, table_name="groupcodes")
 
     def _normalize_import_frame(self, df: pd.DataFrame) -> pd.DataFrame:
         resolution = self._header_pipeline.resolve(df, source="groupcode")
