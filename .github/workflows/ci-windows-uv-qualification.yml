@@ -137,6 +137,27 @@ jobs:
           path: ${{ runner.temp }}/matrix-roster-native/*.png
           if-no-files-found: error
 
+      - name: Connected native Windows operator journey
+        if: runner.os == 'Windows'
+        timeout-minutes: 5
+        env:
+          QT_QPA_PLATFORM: windows
+          MATRIX_NATIVE_OPERATOR_JOURNEY: "1"
+          MATRIX_EXPECTED_SOURCE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          MATRIX_OPERATOR_JOURNEY_EVIDENCE: ${{ runner.temp }}/matrix-operator-journey
+        run: |
+          uv run --locked python -c "import platform, PySide6; from PySide6.QtCore import qVersion; print(platform.platform(), platform.python_version(), 'PySide6', PySide6.__version__, 'Qt', qVersion())"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          uv run --locked pytest -v -ra --maxfail=1 tests/integration/test_groupcode_runtime_authority.py::test_native_windows_operator_journey_via_real_app_main
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Upload native operator journey diagnostics
+        if: runner.os == 'Windows' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: matrix-native-operator-journey
+          path: ${{ runner.temp }}/matrix-operator-journey/*
+          if-no-files-found: warn
+
   source-candidate-linux:
     name: Exact-blob source archive (Linux)
     runs-on: ubuntu-latest
