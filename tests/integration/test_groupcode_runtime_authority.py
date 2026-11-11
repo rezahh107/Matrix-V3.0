@@ -1619,3 +1619,349 @@ def test_cli_build_and_allocate_cannot_reseed_deleted_imported_groupcodes(tmp_pa
         ]
     )
     assert not allocation_output.exists()
+
+
+@pytest.mark.skipif(
+    os.environ.get("MATRIX_NATIVE_OPERATOR_JOURNEY") != "1",
+    reason="Only the dedicated native Windows QPA job runs this journey",
+)
+@pytest.mark.timeout(240)
+def test_native_windows_operator_journey_via_real_app_main(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Start real app.main and exercise Qt pickers, standard Roster, QA and recovery.
+
+    The file chooser is the genuine *Qt* QFileDialog on QPA=windows, not a
+    simulated getOpenFileName and not the Windows shell-native file chooser.
+    All user files, settings and DBs live under the disposable home.
+    """
+    import hashlib
+    import platform
+    import subprocess
+    import sys
+    import time
+    import traceback
+    from collections import deque
+
+    from PySide6.QtCore import QCoreApplication, QSettings, Qt, QTimer, qVersion
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QApplication, QDialogButtonBox, QFileDialog, QMessageBox
+
+    from app.core.common.types import CANONICAL_TRACE_ORDER
+    from app.ui.main_window import MainWindow
+
+    assert sys.platform == "win32"
+    assert os.environ.get("QT_QPA_PLATFORM") == "windows"
+    expected_sha = os.environ["MATRIX_EXPECTED_SOURCE_SHA"]
+    actual_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+    assert actual_sha == expected_sha
+
+    home = tmp_path / "isolated-user"
+    for directory in (home, home / "AppData" / "Roaming", home / "AppData" / "Local"):
+        directory.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+    monkeypatch.setenv("APPDATA", str(home / "AppData" / "Roaming"))
+    monkeypatch.setenv("LOCALAPPDATA", str(home / "AppData" / "Local"))
+    monkeypatch.delenv("MATRIX_CI_SMOKE_CLOSE_MS", raising=False)
+    assert Path.home() == home
+
+    old_format = QSettings.defaultFormat()
+    QSettings.setDefaultFormat(QSettings.Format.IniFormat)
+    QSettings.setPath(QSettings.Format.IniFormat, QSettings.Scope.UserScope, str(home))
+    no_native = Qt.ApplicationAttribute.AA_DontUseNativeDialogs
+    old_no_native = QCoreApplication.testAttribute(no_native)
+    QCoreApplication.setAttribute(no_native, True)
+
+    import app.main as app_main
+
+    app = app_main.setup_application()
+    assert app.platformName() == "windows", app.platformName()
+    old_org, old_application = app.organizationName(), app.applicationName()
+
+    fixtures = tmp_path / "synthetic"
+    fixtures.mkdir()
+    schools = _write_excel(_schools(), fixtures / "schools.xlsx")
+    groups = _write_excel(_groupcodes(24), fixtures / "groupcodes.xlsx")
+    inspactor = _write_excel(_inspactor(24), fixtures / "inspactor.xlsx")
+    students = _write_excel(_student(24), fixtures / "students.xlsx")
+    prior = _write_excel(
+        pd.DataFrame({"کد ملی": ["0000000001"], "student_id": ["533570123"]}),
+        fixtures / "prior.xlsx",
+    )
+    current = _write_excel(
+        pd.DataFrame({"student_id": ["543570050"]}), fixtures / "current.xlsx"
+    )
+    profile = _write_synthetic_sabt_profile(fixtures / "profile.xlsx")
+    matrix = fixtures / "matrix.xlsx"
+    allocation = fixtures / "allocation.xlsx"
+    sabt = fixtures / "sabt.xlsx"
+    protected = {
+        path: hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in (schools, groups, inspactor, students, prior, current, profile)
+    }
+
+    expected_files: deque[Path] = deque()
+    accepted_files: list[str] = []
+    notices: list[str] = []
+    failures: list[str] = []
+    stages: list[str] = []
+    settings_pending = [False]
+    evidence = Path(os.environ.get(
+        "MATRIX_OPERATOR_JOURNEY_EVIDENCE", str(tmp_path / "evidence")
+    ))
+    evidence.mkdir(parents=True, exist_ok=True)
+
+    def service_real_modals() -> None:
+        try:
+            for modal in app.topLevelWidgets():
+                if not modal.isVisible():
+                    continue
+                if isinstance(modal, QFileDialog):
+                    assert expected_files, "Unexpected real QFileDialog"
+                    path = expected_files.popleft()
+                    modal.selectFile(str(path))
+                    box = modal.findChild(QDialogButtonBox)
+                    accept = next(
+                        (b for b in box.buttons()
+                         if box.buttonRole(b) == QDialogButtonBox.ButtonRole.AcceptRole),
+                        None,
+                    ) if box is not None else None
+                    assert accept is not None, "Qt chooser has no accept control"
+                    accept.click()
+                    accepted_files.append(path.name)
+                    return
+                if isinstance(modal, QMessageBox):
+                    notices.append(f"{modal.icon().name}: {modal.text()}")
+                    ok = modal.button(QMessageBox.StandardButton.Ok)
+                    assert ok is not None, "Refusing to approve non-OK confirmation"
+                    ok.click()
+                    return
+                if settings_pending[0] and type(modal).__name__ == "SettingsDialog":
+                    settings_pending[0] = False
+                    assert not modal._trace_checkbox.isChecked()
+                    modal._trace_checkbox.click()
+                    box = modal.findChild(QDialogButtonBox)
+                    assert box is not None
+                    box.button(QDialogButtonBox.StandardButton.Ok).click()
+                    return
+        except BaseException:
+            failures.append("Qt modal interaction:\n" + traceback.format_exc())
+            for modal in app.topLevelWidgets():
+                if isinstance(modal, (QFileDialog, QMessageBox)) and modal.isVisible():
+                    modal.reject()
+
+    modal_timer = QTimer(app)
+    modal_timer.setInterval(35)
+    modal_timer.timeout.connect(service_real_modals)
+    modal_timer.start()
+
+    def choose(button, path: Path, picker=None) -> None:
+        assert not expected_files
+        expected_files.append(path)
+        before = len(accepted_files)
+        assert button.isEnabled(), path.name
+        button.click()  # Product signal -> actual Qt static dialog -> accepted file.
+        assert not expected_files and len(accepted_files) == before + 1, path.name
+        if picker is not None:
+            assert Path(picker.text()) == path, (picker.text(), str(path))
+
+    def until(condition, label: str, timeout: float = 90) -> None:
+        end = time.monotonic() + timeout
+        while not condition() and time.monotonic() < end and not failures:
+            app.processEvents()
+            time.sleep(0.02)
+        assert not failures, failures
+        assert condition(), label
+
+    def operator_journey() -> None:
+        window = None
+        try:
+            windows = [w for w in app.topLevelWidgets() if isinstance(w, MainWindow)]
+            assert len(windows) == 1, "Real app.main did not produce one MainWindow"
+            window = windows[0]
+            assert window.isVisible() and QTest.qWaitForWindowExposed(window, 7000)
+            assert window._local_db is not None
+            assert window._local_db.path.is_relative_to(home)
+            assert window._groupcode_repository.status().row_count > 0
+            assert window._school_repository.status().row_count == 0
+            assert not window._optional_roster.isChecked()
+            stages.append("real-main-first-bootstrap")
+
+            assert window.activate_surface("database")
+            tab = window._database_tab
+            assert tab is not None
+            choose(tab._schools_button, schools)
+            choose(tab._groupcodes_button, groups)
+            assert window._school_repository.status().row_count == 1
+            assert window._groupcode_repository.status().row_count == 1
+            assert window._groupcode_repository.status().source_filename == groups.name
+            stages.append("reference-import-through-database-tab")
+
+            assert window.activate_surface("build")
+            choose(window._picker_inspactor._button, inspactor, window._picker_inspactor)
+            choose(window._picker_output_matrix._button, matrix, window._picker_output_matrix)
+            window._btn_build.click()
+            until(
+                lambda: window._worker is None and window._operation_state == "completed",
+                "Build button -> Worker -> CLI did not complete",
+            )
+            assert matrix.is_file() and _matrix_group_values(matrix) == {24}
+            stages.append("build-through-worker-cli")
+
+            assert window.activate_surface("allocate")
+            year_input = window._combo_academic_year.lineEdit()
+            assert year_input is not None
+            year_input.setFocus()
+            year_input.selectAll()
+            QTest.keyClicks(year_input, "1404")
+            assert window._combo_academic_year.currentText() == "1404"
+            choose(window._picker_students._button, students, window._picker_students)
+            choose(window._picker_pool._button, matrix, window._picker_pool)
+            until(lambda: not window._excel_loaders, "Pool loader", 25)
+            choose(window._picker_prior_roster._button, prior, window._picker_prior_roster)
+            choose(window._picker_current_roster._button, current, window._picker_current_roster)
+            choose(
+                window._picker_sabt_profile_alloc._button, profile,
+                window._picker_sabt_profile_alloc,
+            )
+            choose(window._picker_alloc_out._button, allocation, window._picker_alloc_out)
+            choose(
+                window._picker_sabt_output_alloc._button, sabt,
+                window._picker_sabt_output_alloc,
+            )
+            assert not window._optional_roster.isChecked(), "Standard Roster mode required"
+            stages.append("genuine-file-chooser-all-standard-roster-inputs")
+
+            settings_pending[0] = True
+            window._btn_settings.click()
+            assert not settings_pending[0] and window._user_settings.enable_trace_export
+            window._academic_year_confirm.click()
+            assert window._academic_year_confirm.isChecked()
+
+            # Negative control: enter an output path that aliases protected input.
+            out_edit = window._picker_alloc_out.line_edit()
+            out_edit.setFocus()
+            out_edit.selectAll()
+            QTest.keyClicks(out_edit, str(students))
+            out_edit.editingFinished.emit()
+            assert window._picker_alloc_out.text() == str(students)
+            before = len(notices)
+            window._btn_allocate.click()
+            assert window._worker is None and len(notices) > before
+            assert not allocation.exists() and not sabt.exists()
+            assert all(
+                hashlib.sha256(path.read_bytes()).hexdigest() == digest
+                for path, digest in protected.items()
+            )
+            stages.append("unsafe-output-path-rejected-no-clobber")
+
+            choose(window._picker_alloc_out._button, allocation, window._picker_alloc_out)
+            if not window._academic_year_confirm.isChecked():
+                window._academic_year_confirm.click()
+            window._btn_allocate.click()
+            until(
+                lambda: window._worker is None and window._operation_state == "completed",
+                "Standard Roster allocate or deferred preflight did not finish",
+            )
+            assert allocation.is_file() and sabt.is_file()
+            with pd.ExcelFile(allocation) as book:
+                assert {"allocations", "logs", "updated_pool", "trace"} <= set(book.sheet_names)
+                rows = pd.read_excel(book, "allocations", dtype=str)
+                trace = pd.read_excel(book, "trace", dtype=str)
+            assert len(rows) == 1
+            allocated_id = rows.iloc[0]["student_id"]
+            assert allocated_id == "533570123", allocated_id
+            assert trace.loc[trace["student_id"] == allocated_id, "stage"].tolist() == list(
+                CANONICAL_TRACE_ORDER
+            )
+            with pd.ExcelFile(allocation.with_stem("allocation_validation")) as book:
+                qa = pd.read_excel(book, "summary")
+            assert not qa.empty and set(qa["status"]) <= {"PASS", "WARN"}
+            with pd.ExcelFile(sabt) as book:
+                assert {"Sheet2", "Summary", "Errors"} <= set(book.sheet_names)
+                sabt_rows = pd.read_excel(book, "Sheet2", dtype=str)
+            assert len(sabt_rows) == 1
+            assert sabt_rows.iloc[0]["کد ملی"] == "0000000001"
+            assert sabt_rows.iloc[0]["شناسه دانش آموز"] == allocated_id
+            assert all(
+                hashlib.sha256(path.read_bytes()).hexdigest() == digest
+                for path, digest in protected.items()
+            )
+            stages.append("standard-roster-allocate-qa-trace-synthetic-sabt")
+
+            window._support_toolbar_actions["run_history"].trigger()
+            dialog = window._run_history_dialog
+            assert dialog is not None and dialog.isVisible()
+            matches = [
+                i for i, row in enumerate(dialog._runs)
+                if row["entrypoint"] == "allocate" and row["status"] == "success"
+            ]
+            assert len(matches) == 1, matches
+            dialog._run_list.setCurrentRow(matches[0])
+            assert dialog._selected_run_id == int(dialog._runs[matches[0]]["id"])
+            assert dialog.trace_model.rowCount() == len(trace)
+            assert dialog.qa_summary_model.rowCount() > 0
+            assert dialog._output_path_edit.text() == str(allocation)
+            assert dialog._path_note.text().strip() and dialog._path_note.isVisible()
+            assert dialog._copy_path_button.isEnabled()
+            dialog._copy_path_button.click()
+            assert app.clipboard().text() == str(allocation)
+            assert Path(app.clipboard().text()).is_file()
+            assert dialog.grab().save(str(evidence / "run-dossier.png"))
+            dialog.close()
+            assert window.grab().save(str(evidence / "operator-window.png"))
+            stages.append("selected-history-dossier-output-readable")
+        except BaseException:
+            failures.append("Operator journey:\n" + traceback.format_exc())
+            if window is not None:
+                window.grab().save(str(evidence / "failure-window.png"))
+        finally:
+            if window is not None:
+                window.close()
+            app.quit()
+
+    def wait_for_window() -> None:
+        if any(isinstance(w, MainWindow) for w in app.topLevelWidgets()):
+            operator_journey()
+        else:
+            QTimer.singleShot(100, wait_for_window)
+
+    def watchdog() -> None:
+        failures.append("Native Windows Qt journey exceeded 180-second watchdog")
+        for widget in app.topLevelWidgets():
+            widget.close()
+        app.quit()
+
+    QTimer.singleShot(0, wait_for_window)
+    QTimer.singleShot(180000, watchdog)
+    try:
+        return_code = app_main.main()
+    finally:
+        modal_timer.stop()
+        QCoreApplication.setAttribute(no_native, old_no_native)
+        QSettings.setDefaultFormat(old_format)
+        app.setOrganizationName(old_org)
+        app.setApplicationName(old_application)
+
+    import json
+
+    report = {
+        "source_sha": actual_sha,
+        "windows": platform.platform(),
+        "python": platform.python_version(),
+        "qt": qVersion(),
+        "qpa": app.platformName(),
+        "stages": stages,
+        "file_dialogs": accepted_files,
+        "notices": notices,
+        "errors": failures,
+        "result": "PASS" if return_code == 0 and len(stages) == 7 and not failures else "FAIL",
+        "scope": "QPA=windows; real Qt non-native QFileDialog; synthetic files",
+    }
+    (evidence / "operator-journey.json").write_text(
+        json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    assert return_code == 0, report
+    assert not failures, report
+    assert len(stages) == 7, report
