@@ -46,6 +46,24 @@ def _logical_snapshot(path: Path) -> tuple[object, ...]:
     return (schema, rows, version)
 
 
+def _reference_snapshot(path: Path) -> tuple[object, ...]:
+    """Compare authoritative reference rows and metadata across ordinary reopen.
+
+    Reopen may legitimately restore a schema index after an import-table swap;
+    the reference data and provenance must still remain unchanged.
+    """
+    with closing(sqlite3.connect(path.resolve().as_uri() + "?mode=ro", uri=True)) as conn:
+        return tuple(
+            (
+                name,
+                tuple(sorted(repr(row) for row in conn.execute(
+                    'SELECT * FROM "' + name + '"'
+                ).fetchall())),
+            )
+            for name in ("schools", "groupcodes", "reference_meta")
+        )
+
+
 def _import_schools(repo: SchoolRepository, path: Path) -> None:
     pd.DataFrame(
         {
@@ -121,6 +139,7 @@ def test_c3_deleted_imported_groupcodes_remain_missing_after_status_and_reopen(
         conn.execute("DELETE FROM groupcodes")
         conn.commit()
     before = _logical_snapshot(db.path)
+    reference_before = _reference_snapshot(db.path)
     ready = compute_reference_readiness(school_repo=schools, groupcode_repo=groups)
     assert not ready.is_ready_for_run
     assert ready.groupcodes.row_count == 0
@@ -132,7 +151,7 @@ def test_c3_deleted_imported_groupcodes_remain_missing_after_status_and_reopen(
     assert GroupCodeRepository(reopened).status().row_count == 0
     with pytest.raises(DatabasePreparationError, match="خالی"):
         GroupCodeRepository(reopened).load_crosswalk_groups_frame()
-    assert _logical_snapshot(db.path) == before
+    assert _reference_snapshot(db.path) == reference_before
     reopened.close_all_connections()
 
 
