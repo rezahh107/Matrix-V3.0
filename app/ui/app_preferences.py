@@ -2,14 +2,21 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime
 from typing import Any
 
+from PySide6 import QtCore
 from PySide6.QtCore import QByteArray, QSettings
 
 from app.core.policy_loader import load_policy
 from app.ui.i18n import Language
+from app.ui.prior_roster_reference import (
+    PriorRosterReference,
+    capture_prior_roster,
+    reference_key,
+)
 from app.ui.run_output import default_output_root
 from app.ui.texts import DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES
 
@@ -93,6 +100,52 @@ class AppPreferences:
 
         logger = logging.getLogger(__name__)
         logger.warning("تنظیمات نامعتبر: key=%s, value=%s, reason=%s", key, value, reason)
+
+    # ----------------------------------------------------- Prior-year Roster reference
+    def read_prior_roster_reference(
+        self, academic_year: int
+    ) -> tuple[PriorRosterReference | None, str]:
+        """Read a strict year-scoped descriptor; never infer file validity."""
+        key = reference_key(academic_year)
+        self._settings.sync()
+        if self._settings.status() != QtCore.QSettings.Status.NoError:
+            return None, "settings_error"
+        if not self._settings.contains(key):
+            return None, "absent"
+        raw = self._settings.value(key)
+        if not isinstance(raw, str) or len(raw) > 8192:
+            return None, "malformed"
+        try:
+            ref = PriorRosterReference.from_json(raw)
+        except (ValueError, TypeError, json.JSONDecodeError):
+            return None, "malformed"
+        if ref.academic_year != academic_year:
+            return None, "malformed"
+        return ref, "stored"
+
+    def store_prior_roster_reference(
+        self, academic_year: int, path: str
+    ) -> PriorRosterReference:
+        """Persist only path, year and local fingerprint with sync/readback."""
+        ref = capture_prior_roster(academic_year, path)
+        key = reference_key(academic_year)
+        payload = ref.to_json()
+        self._settings.setValue(key, payload)
+        self._settings.sync()
+        if (
+            self._settings.status() != QtCore.QSettings.Status.NoError
+            or self._settings.value(key) != payload
+        ):
+            raise OSError("Prior Roster reference settings write failed")
+        return ref
+
+    def forget_prior_roster_reference(self, academic_year: int) -> None:
+        """Forget this year's reference without touching other years."""
+        key = reference_key(academic_year)
+        self._settings.remove(key)
+        self._settings.sync()
+        if self._settings.status() != QtCore.QSettings.Status.NoError or self._settings.contains(key):
+            raise OSError("Prior Roster reference settings clear failed")
 
     # ------------------------------------------------------------------ مسیرهای فایل
     @property

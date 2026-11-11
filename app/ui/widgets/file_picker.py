@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QFileInfo, Qt
+from PySide6.QtCore import QFileInfo, Qt, Signal
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QFileDialog,
@@ -23,6 +23,8 @@ __all__ = ["FilePicker"]
 
 class FilePicker(QWidget):
     """ویجت ساده برای انتخاب مسیر فایل ورودی یا خروجی."""
+
+    selection_committed = Signal(str)
 
     def __init__(
         self,
@@ -43,6 +45,7 @@ class FilePicker(QWidget):
         self._edit.setPlaceholderText(placeholder)
         self._edit.setAlignment(Qt.AlignmentFlag.AlignLeading | Qt.AlignmentFlag.AlignVCenter)
         self._edit.textChanged.connect(self._sync_icon)
+        self._edit.editingFinished.connect(self._commit_edited_path)
 
         self._button = QPushButton(self._t("action.browse", "انتخاب…"), self)
         self._button.setObjectName("secondaryButton")
@@ -112,6 +115,12 @@ class FilePicker(QWidget):
 
         if path:
             self._edit.setText(path)
+            self.selection_committed.emit(self.text())
+
+    def _commit_edited_path(self) -> None:
+        if self._edit.isModified():
+            self._edit.setModified(False)
+            self.selection_committed.emit(self.text())
 
     def _sync_icon(self, text: str) -> None:
         """همگام‌سازی آیکون native فایل/پوشه بر اساس مسیر فعلی."""

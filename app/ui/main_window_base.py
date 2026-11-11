@@ -118,6 +118,7 @@ from .preferences import (
     read_last_run_info,
 )
 from .preferences.language_dialog import LanguageDialog
+from .prior_roster_reference import PriorRosterReference, capture_prior_roster, probe_prior_roster
 from .task_runner import ProgressFn, Worker
 from .texts import UiTranslator
 from .theme import (
@@ -1515,6 +1516,32 @@ class MainWindow(QMainWindow):
         self._picker_prior_roster.setToolTip("برای بازیابی شمارندهٔ سال قبل در صورت وجود")
         self._set_picker_button_text(self._picker_prior_roster)
         register_layout.addRow("روستر سال قبل", self._picker_prior_roster)
+        self._prior_reference_year: int | None = None
+        self._prior_reference: PriorRosterReference | None = None
+        self._prior_reference_state = "empty"
+        self._prior_reference_suppressed_years: set[int] = set()
+        self._picker_prior_roster.selection_committed.connect(self._on_prior_roster_selected)
+
+        self._prior_reference_status = QLabel(register_box)
+        self._prior_reference_status.setObjectName("priorRosterReferenceStatus")
+        self._prior_reference_status.setWordWrap(True)
+        self._prior_reference_status.setTextFormat(Qt.TextFormat.PlainText)
+        register_layout.addRow("", self._prior_reference_status)
+
+        prior_actions = QWidget(register_box)
+        prior_actions_layout = QHBoxLayout(prior_actions)
+        prior_actions_layout.setContentsMargins(0, 0, 0, 0)
+        prior_actions_layout.setSpacing(8)
+        self._btn_omit_prior_reference = QPushButton(prior_actions)
+        self._btn_omit_prior_reference.setObjectName("omitPriorRosterForAttempt")
+        self._btn_omit_prior_reference.clicked.connect(self._omit_prior_roster_for_attempt)
+        self._btn_forget_prior_reference = QPushButton(prior_actions)
+        self._btn_forget_prior_reference.setObjectName("forgetPriorRosterReference")
+        self._btn_forget_prior_reference.clicked.connect(self._forget_prior_roster_reference)
+        prior_actions_layout.addWidget(self._btn_omit_prior_reference)
+        prior_actions_layout.addWidget(self._btn_forget_prior_reference)
+        prior_actions_layout.addStretch(1)
+        register_layout.addRow("", prior_actions)
 
         self._picker_current_roster = FilePicker(
             register_box,
@@ -2453,6 +2480,38 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, self._t("status.error", "خطا"), missing_rosters)
             return
 
+        # Local file identity is not an authority for Roster rows or official freshness.
+        # It only prevents a saved/selected prior reference changing under one attempt.
+        prior_snapshot: PriorRosterReference | None = None
+        if prior_path:
+            try:
+                prior_snapshot = capture_prior_roster(academic_year, prior_path)
+            except (OSError, ValueError):
+                QMessageBox.warning(
+                    self,
+                    self._t("status.error", "خطا"),
+                    self._t(
+                        "roster.prior_ref.unavailable",
+                        "The selected prior Roster cannot be read. Select a valid local file.",
+                    ),
+                )
+                return
+            if (
+                self._prior_reference is not None
+                and self._prior_reference.path == prior_snapshot.path
+                and probe_prior_roster(self._prior_reference) != "unchanged"
+            ):
+                self._prior_reference_state = "changed"
+                self._refresh_prior_roster_status()
+                QMessageBox.warning(
+                    self,
+                    self._t("status.error", "خطا"),
+                    self._t(
+                        "roster.prior_ref.reselect",
+                        "Saved prior Roster changed. Select it again to use the new version.",
+                    ),
+                )
+                return
         self._prepare_validated_output("allocate")
         if not self._ensure_filled([(self._picker_alloc_out, "خروجی تخصیص")]):
             return
@@ -2527,6 +2586,15 @@ class MainWindow(QMainWindow):
             alloc_argv.extend(["--current-roster", current_path])
 
         def _remember_allocate_outputs() -> None:
+            # A successful CLI allocation has passed the existing optional Roster
+            # reader. This is not official identity/freshness certification.
+            if (
+                prior_path
+                and self._get_academic_year() == academic_year
+                and self._picker_prior_roster.text() == prior_path
+            ):
+                self._prior_reference_state = "reader_accepted"
+                self._refresh_prior_roster_status()
             alloc_out = self._picker_alloc_out.text().strip()
             if alloc_out:
                 self._prefs.last_alloc_output = alloc_out
@@ -2576,6 +2644,27 @@ class MainWindow(QMainWindow):
                 label = self._t("status.cancelled", "لغو شد")
                 self._status.setText(label)
                 self._set_stage(label, missing_rosters)
+                self._progress.reset()
+                self._update_status_bar_state("cancelled")
+                self._update_progress_caption(None, None)
+                return
+            # Reject a stale UI selection after asynchronous preflight.
+            # No current-year freshness check is imposed: only choice/path changes.
+            if (
+                self._picker_prior_roster.text() != prior_path
+                or (
+                    prior_snapshot is not None
+                    and probe_prior_roster(prior_snapshot) != "unchanged"
+                )
+            ):
+                detail = self._t(
+                    "roster.prior_ref.stale_attempt",
+                    "Roster choice or prior file changed during preflight. Review and retry Allocate.",
+                )
+                QMessageBox.warning(self, self._t("status.error", "خطا"), detail)
+                label = self._t("status.cancelled", "لغو شد")
+                self._status.setText(label)
+                self._set_stage(label, detail)
                 self._progress.reset()
                 self._update_status_bar_state("cancelled")
                 self._update_progress_caption(None, None)
@@ -3667,6 +3756,7 @@ class MainWindow(QMainWindow):
                 else:
                     self._set_academic_year(self._system_academic_year)
         self._refresh_academic_year_texts()
+        self._sync_prior_roster_for_year()
 
     def _refresh_academic_year_texts(self) -> None:
         year = self._system_academic_year
@@ -3690,6 +3780,7 @@ class MainWindow(QMainWindow):
         )
         self._refresh_roster_academic_year_button()
         self._refresh_allocate_counter_preview()
+        self._refresh_prior_roster_status()
 
     def _academic_year_changed(self) -> None:
         self._academic_year_follows_system = False
@@ -3697,6 +3788,7 @@ class MainWindow(QMainWindow):
         self._academic_year_confirm.setChecked(False)
         self._refresh_roster_academic_year_button()
         self._refresh_allocate_counter_preview()
+        self._sync_prior_roster_for_year()
 
     def _academic_year_check_toggled(self, checked: bool) -> None:
         if not checked:
@@ -3712,6 +3804,117 @@ class MainWindow(QMainWindow):
             return
         self._academic_year_follows_system = False
         self._academic_year_confirmation = _AcademicYearConfirmation(year)
+
+    def _sync_prior_roster_for_year(self) -> None:
+        """Restore only when entering a different academic-year context."""
+        year = self._get_academic_year()
+        if year == self._prior_reference_year:
+            return  # Locale, checkbox and deferred callbacks may not rehydrate omission.
+        self._prior_reference_year = year
+        self._prior_reference = None
+        self._picker_prior_roster.setText("")
+        if year is None:
+            self._prior_reference_state = "choose_year"
+        elif year in self._prior_reference_suppressed_years:
+            self._prior_reference_state = "omitted"
+        else:
+            reference, state = self._prefs.read_prior_roster_reference(year)
+            if state == "stored" and reference is not None:
+                state = probe_prior_roster(reference)
+                if state == "unchanged":
+                    self._prior_reference = reference
+                    self._picker_prior_roster.setText(reference.path)
+                    self._prior_reference_state = "restored"
+                else:
+                    self._prior_reference_state = state
+            else:
+                self._prior_reference_state = state
+        self._refresh_prior_roster_status()
+
+    def _on_prior_roster_selected(self, path: str) -> None:
+        """Only an operator-committed selection is eligible for local storage."""
+        year = self._get_academic_year()
+        if year is None:
+            self._prior_reference_state = "choose_year"
+        elif not path:
+            self._prior_reference_suppressed_years.add(year)
+            self._prior_reference = None
+            self._prior_reference_state = "omitted"
+        else:
+            self._prior_reference_suppressed_years.discard(year)
+            self._prior_reference = None
+            try:
+                reference = self._prefs.store_prior_roster_reference(year, path)
+            except (OSError, ValueError):
+                self._prior_reference_state = "unsaved"
+            else:
+                self._prior_reference = reference
+                self._picker_prior_roster.setText(reference.path)
+                self._prior_reference_state = "stored"
+        self._refresh_prior_roster_status()
+
+    def _omit_prior_roster_for_attempt(self) -> None:
+        """A deliberate blank input is sticky for this year in this window."""
+        year = self._get_academic_year()
+        if year is not None:
+            self._prior_reference_suppressed_years.add(year)
+        self._prior_reference = None
+        self._prior_reference_state = "omitted"
+        self._picker_prior_roster.setText("")
+        self._refresh_prior_roster_status()
+
+    def _forget_prior_roster_reference(self) -> None:
+        """Clear only this year's stored descriptor, never other years."""
+        year = self._get_academic_year()
+        if year is None:
+            self._prior_reference_state = "choose_year"
+        else:
+            try:
+                self._prefs.forget_prior_roster_reference(year)
+            except OSError:
+                self._prior_reference_state = "settings_error"
+            else:
+                self._prior_reference_suppressed_years.add(year)
+                self._prior_reference = None
+                self._picker_prior_roster.setText("")
+                self._prior_reference_state = "forgotten"
+        self._refresh_prior_roster_status()
+
+    def _refresh_prior_roster_status(self) -> None:
+        """Local identity and Roster reader validity are distinct statements."""
+        if not hasattr(self, "_prior_reference_status"):
+            return
+        state = self._prior_reference_state
+        fallback = {
+            "absent": "No saved prior Roster for this academic year.",
+            "empty": "No saved prior Roster for this academic year.",
+            "choose_year": "Choose the academic year before saving a prior Roster.",
+            "stored": "Prior Roster saved locally for {year}; its rows are not yet validated.",
+            "restored": "Prior Roster restored for {year}: local file unchanged; rows not yet validated.",
+            "changed": "Saved prior Roster changed. Select a replacement or omit explicitly.",
+            "missing": "Saved prior Roster is missing. Select a replacement or omit explicitly.",
+            "inaccessible": "Saved prior Roster is inaccessible. Select a replacement or omit explicitly.",
+            "malformed": "Saved Roster reference is invalid. Replace or forget it.",
+            "settings_error": "Could not read or update saved Roster settings. Check access.",
+            "unsaved": "Prior Roster selected, but its reference was not saved. Check path/settings.",
+            "omitted": "Prior Roster omitted for this attempt. Saved reference is untouched.",
+            "forgotten": "Saved prior Roster reference forgotten for this academic year.",
+            "reader_accepted": "Allocation reader accepted this prior Roster; this does not prove official identity or freshness.",
+        }
+        self._prior_reference_status.setText(
+            self._t(f"roster.prior_ref.{state}", fallback.get(state, fallback["unsaved"]))
+            .format(year=self._get_academic_year() or "")
+        )
+        self._prior_reference_status.setAccessibleName(
+            self._t("roster.prior_ref.status", "Prior Roster reference status")
+        )
+        self._btn_omit_prior_reference.setText(
+            self._t("roster.prior_ref.omit", "Omit for this attempt")
+        )
+        self._btn_forget_prior_reference.setText(
+            self._t("roster.prior_ref.forget", "Forget saved reference")
+        )
+        self._btn_forget_prior_reference.setEnabled(self._get_academic_year() is not None)
 
     def _clear_allocate_roster_suggestion(self) -> None:
         self._allocate_roster_request += 1
