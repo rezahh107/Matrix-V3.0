@@ -1645,7 +1645,7 @@ def test_native_windows_operator_journey_via_real_app_main(
 
     from PySide6.QtCore import QCoreApplication, QSettings, Qt, QTimer, qVersion
     from PySide6.QtTest import QTest
-    from PySide6.QtWidgets import QApplication, QDialogButtonBox, QFileDialog, QMessageBox
+    from PySide6.QtWidgets import QDialogButtonBox, QFileDialog, QMessageBox
 
     from app.core.common.types import CANONICAL_TRACE_ORDER
     from app.ui.main_window import MainWindow
