@@ -1550,3 +1550,72 @@ def test_roster_standard_duplicate_prior_id_uses_existing_assign_new(
     run.finish("completed")
     run.assert_cli(run.prior, run.current)
     _assert_roster_output(run, ("533570123", "543570051"))
+
+
+def test_cli_build_and_allocate_cannot_reseed_deleted_imported_groupcodes(tmp_path: Path) -> None:
+    """Real CLI entrypoints must not turn a missing imported reference into builtins."""
+    from app.infra.errors import DatabasePreparationError
+
+    db_path, _, _ = _prepare_reference_db(tmp_path, group_code=24)
+    matrix_path = _build_matrix(tmp_path=tmp_path, db_path=db_path, group_code=24)
+    students_path = _write_excel(_student(24), tmp_path / "students-missing-ref.xlsx")
+    inspactor_path = _write_excel(_inspactor(24), tmp_path / "inspactor-missing-ref.xlsx")
+
+    db = LocalDatabase(db_path)
+    with db.connect() as conn:
+        conn.execute("DELETE FROM groupcodes")
+        conn.commit()
+    db.close_all_connections()
+
+    def run_expected_failure(args: list[str]) -> None:
+        try:
+            result = cli_legacy.main(args)
+        except (DatabasePreparationError, ValueError):
+            result = 2
+        assert result != 0
+        assert GroupCodeRepository(LocalDatabase(db_path)).status().row_count == 0
+
+    build_output = tmp_path / "build-must-not-succeed.xlsx"
+    run_expected_failure(
+        [
+            "build-matrix",
+            "--inspactor",
+            str(inspactor_path),
+            "--output",
+            str(build_output),
+            "--policy",
+            str(POLICY_PATH),
+            "--local-db",
+            str(db_path),
+            "--min-coverage",
+            "0",
+            "--use-v3-mentor-pipeline",
+        ]
+    )
+    assert not build_output.exists()
+
+    allocation_output = tmp_path / "allocate-must-not-succeed.xlsx"
+    run_expected_failure(
+        [
+            "allocate",
+            "--students",
+            str(students_path),
+            "--pool",
+            str(matrix_path),
+            "--pool-type",
+            "matrix",
+            "--pool-sheet",
+            "matrix",
+            "--policy",
+            str(POLICY_PATH),
+            "--academic-year",
+            "1404",
+            "--counter-duplicate-strategy",
+            "assign-new",
+            "--output",
+            str(allocation_output),
+            "--local-db",
+            str(db_path),
+        ]
+    )
+    assert not allocation_output.exists()
