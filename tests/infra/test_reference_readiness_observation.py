@@ -105,6 +105,25 @@ def test_c1_missing_path_is_observed_without_creating_database(tmp_path: Path) -
         assert not Path(str(path) + "-wal").exists()
 
 
+def test_existing_blank_sqlite_file_is_not_mistaken_for_new_bootstrap(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "preexisting-blank.sqlite"
+    with closing(sqlite3.connect(path)):
+        pass
+    assert path.exists()
+
+    with LocalDatabase(path) as db:
+        db.initialize()
+        status = GroupCodeRepository(db).status()
+        assert status.row_count == 0
+        assert status.version_tag is None
+        with closing(db.connect_readonly()) as conn:
+            assert conn.execute(
+                "SELECT COUNT(*) FROM reference_meta WHERE table_name='groupcodes'"
+            ).fetchone()[0] == 0
+
+
 def test_c2_repeated_readiness_has_no_logical_mutation(tmp_path: Path) -> None:
     path = tmp_path / "healthy.sqlite"
     with LocalDatabase(path) as db:
