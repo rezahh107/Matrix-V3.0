@@ -459,11 +459,12 @@ class LocalDatabase:
         دادهٔ خراب بر عهدهٔ ``initialize`` است.
         """
 
+        # An existing *file* can be empty after external loss of its schema.
+        # Its absence, not just an empty sqlite_master, is required for seed.
+        file_was_missing = not self.path.exists()
         with self._open_connection() as conn:
-            # Only a genuinely blank database receives built-in references.
-            # Existing reference data (including missing/empty tables) belongs
-            # to its stored operator/import authority, not to reopen/repair.
-            first_bootstrap = (
+            # A concurrent opener may have established tables in the meantime.
+            first_bootstrap = file_was_missing and (
                 conn.execute(
                     "SELECT 1 FROM sqlite_master "
                     "WHERE type='table' AND name NOT LIKE 'sqlite_%' LIMIT 1"
