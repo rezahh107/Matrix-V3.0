@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import json
 import os
@@ -71,7 +72,14 @@ def capture_prior_roster(academic_year: int, raw_path: str) -> PriorRosterRefere
     path = Path(raw_path.strip()).expanduser()
     if not path.is_absolute():
         raise ValueError("Prior Roster path must be absolute")
-    path = path.resolve(strict=True)
+    try:
+        path = path.resolve(strict=True)
+    except RuntimeError as exc:
+        # Python 3.11/3.12 translate filesystem ELOOP into this RuntimeError.
+        # Keep unrelated programming errors visible; the callers handle OSError.
+        if not str(exc).startswith("Symlink loop from "):
+            raise
+        raise OSError(errno.ELOOP, os.strerror(errno.ELOOP), str(path)) from exc
     if len(str(path)) > _MAX_PATH_LENGTH:
         raise ValueError("Prior Roster path too long")
     digest = hashlib.sha256()
