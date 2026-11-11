@@ -1645,7 +1645,7 @@ def test_native_windows_operator_journey_via_real_app_main(
 
     from PySide6.QtCore import QCoreApplication, QSettings, Qt, QTimer, qVersion
     from PySide6.QtTest import QTest
-    from PySide6.QtWidgets import QDialogButtonBox, QFileDialog, QMessageBox
+    from PySide6.QtWidgets import QDialogButtonBox, QFileDialog, QLineEdit, QMessageBox
 
     from app.core.common.types import CANONICAL_TRACE_ORDER
     from app.ui.main_window import MainWindow
@@ -1712,6 +1712,8 @@ def test_native_windows_operator_journey_via_real_app_main(
     ))
     evidence.mkdir(parents=True, exist_ok=True)
 
+    choice_state: dict[str, object] = {"path": None, "attempts": 0, "next_action": 0.0}
+
     def service_real_modals() -> None:
         try:
             for modal in app.topLevelWidgets():
@@ -1719,17 +1721,49 @@ def test_native_windows_operator_journey_via_real_app_main(
                     continue
                 if isinstance(modal, QFileDialog):
                     assert expected_files, "Unexpected real QFileDialog"
-                    path = expected_files.popleft()
-                    modal.selectFile(str(path))
-                    box = modal.findChild(QDialogButtonBox)
-                    accept = next(
-                        (b for b in box.buttons()
-                         if box.buttonRole(b) == QDialogButtonBox.ButtonRole.AcceptRole),
-                        None,
-                    ) if box is not None else None
-                    assert accept is not None, "Qt chooser has no accept control"
-                    accept.click()
-                    accepted_files.append(path.name)
+                    path = expected_files[0]  # Remain pending until the dialog returns.
+                    now = time.monotonic()
+                    if choice_state["path"] != str(path):
+                        # The Qt filesystem model populates asynchronously. Enter
+                        # the real directory, then allow its event loop to settle.
+                        modal.setDirectory(str(path.parent))
+                        modal.selectFile(path.name)
+                        choice_state.update(
+                            path=str(path), attempts=0, next_action=now + 0.20
+                        )
+                        return
+                    if now < choice_state["next_action"]:
+                        return
+                    selected = modal.selectedFiles()
+                    assert selected and Path(selected[0]).resolve() == path.resolve(), (
+                        str(path), selected, modal.directory().absolutePath()
+                    )
+                    attempt = int(choice_state["attempts"])
+                    if attempt >= 3:
+                        raise AssertionError(
+                            "Real Qt file dialog did not close after 3 UI attempts: "
+                            + repr((str(path), selected, modal.directory().absolutePath()))
+                        )
+                    choice_state["attempts"] = attempt + 1
+                    choice_state["next_action"] = now + 0.35
+                    if attempt == 0:
+                        box = modal.findChild(QDialogButtonBox)
+                        accept = next(
+                            (b for b in box.buttons()
+                             if box.buttonRole(b) == QDialogButtonBox.ButtonRole.AcceptRole),
+                            None,
+                        ) if box is not None else None
+                        assert accept is not None, "Qt chooser has no accept button"
+                        accept.click()
+                    elif attempt == 1:
+                        modal.accept()  # Real QFileDialog validation, never a stub.
+                    else:
+                        edit = modal.findChild(QLineEdit, "fileNameEdit")
+                        assert edit is not None, "Qt chooser filename control missing"
+                        edit.setFocus()
+                        edit.selectAll()
+                        QTest.keyClicks(edit, path.name)
+                        QTest.keyClick(edit, Qt.Key.Key_Return)
                     return
                 if isinstance(modal, QMessageBox):
                     notices.append(f"{modal.icon().name}: {modal.text()}")
@@ -1759,10 +1793,13 @@ def test_native_windows_operator_journey_via_real_app_main(
     def choose(button, path: Path, picker=None) -> None:
         assert not expected_files
         expected_files.append(path)
-        before = len(accepted_files)
         assert button.isEnabled(), path.name
-        button.click()  # Product signal -> actual Qt static dialog -> accepted file.
-        assert not expected_files and len(accepted_files) == before + 1, path.name
+        button.click()  # Product signal -> actual Qt static dialog.
+        assert not failures, failures
+        assert list(expected_files) == [path], "Qt picker bypassed expected dialog"
+        expected_files.popleft()
+        accepted_files.append(path.name)  # Only after the real dialog returned.
+        choice_state["path"] = None
         if picker is not None:
             assert Path(picker.text()) == path, (picker.text(), str(path))
 
