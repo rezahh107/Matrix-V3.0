@@ -362,8 +362,22 @@ assert ini.status() == QSettings.Status.NoError
             git(seed, "tag", "-a", "v0.2.1", "-m", "DISPOSABLE MISMATCH")
             git(seed, "push", "origin", "refs/tags/v0.2.1")
             personal("activate", "v0.2.1", ok=False)
+            # Independent root lock inconsistency on a synthetic local-only tag.
+            pyproject = seed / "pyproject.toml"
+            project_text = pyproject.read_text(encoding="utf-8")
+            assert 'version = "0.2.0"' in project_text
+            pyproject.write_text(
+                project_text.replace('version = "0.2.0"', 'version = "0.2.2"', 1),
+                encoding="utf-8",
+            )
+            git(seed, "add", "pyproject.toml")
+            git(seed, "commit", "-m", "DISPOSABLE mismatched version-lock fixture")
+            git(seed, "tag", "-a", "v0.2.2", "-m", "DISPOSABLE BAD LOCK")
+            git(seed, "push", "origin", "refs/tags/v0.2.2")
+            bad_lock = personal("activate", "v0.2.2", ok=False)
+            assert "uv.lock" in bad_lock.stderr
             assert state() == previous_state
-            passed("N3", "annotated tag/version mismatch rejected before activation")
+            passed("N3", "tag/source mismatch and independently injected root uv.lock mismatch refused")
 
             # N4: genuine uv sync rejection under an empty offline dependency cache.
             offline = personal("activate", candidate_tag, ok=False, settings={
@@ -375,16 +389,33 @@ assert ini.status() == QSettings.Status.NoError
             assert state() == previous_state
             passed("N4", "actual uv sync failed offline; previous active release preserved")
 
-            # N5/N6: an invalid SQLite file causes the real online-backup prerequisite to fail.
+            # N5: independently obstruct the backup destination, with valid SQLite.
+            backup_dir = client / ".matrix-personal" / "backups"
+            backup_hold = client / ".matrix-personal" / "backups-ci-held"
+            assert backup_dir.is_dir() and not backup_hold.exists()
+            backup_dir.rename(backup_hold)
+            try:
+                backup_dir.write_text("not-a-directory", encoding="utf-8")
+                personal("activate", candidate_tag, ok=False)
+                assert state() == previous_state and semantic(db_path) == baseline
+                assert backup_dir.read_text(encoding="utf-8") == "not-a-directory"
+            finally:
+                if backup_dir.is_file():
+                    backup_dir.unlink()  # The disposable obstruction only.
+                backup_hold.rename(backup_dir)
+            passed("N5", "independent backup-destination failure safely refused")
+
+            # N6: genuine corrupt SQLite causes online backup failure.
             bad = years / "broken.sqlite"
             bad.write_bytes(b"controlled-invalid-sqlite")
-            backup_failure = personal("activate", candidate_tag, ok=False)
-            assert "PERSONAL RELEASE FAILED" in backup_failure.stderr
-            assert bad.read_bytes() == b"controlled-invalid-sqlite"
-            assert state() == previous_state and semantic(db_path) == baseline
-            bad.unlink()  # Synthetic test file only, never real user data.
-            passed("N5", "backup prerequisite failed without changing active version")
-            passed("N6", "invalid SQLite rejected without deleting the source database")
+            try:
+                backup_failure = personal("activate", candidate_tag, ok=False)
+                assert "PERSONAL RELEASE FAILED" in backup_failure.stderr
+                assert bad.read_bytes() == b"controlled-invalid-sqlite"
+                assert state() == previous_state and semantic(db_path) == baseline
+            finally:
+                bad.unlink()  # Synthetic test file only, never real user data.
+            passed("N6", "independent invalid SQLite refused without deleting source")
 
             personal("activate", candidate_tag)
             upgraded = state()
