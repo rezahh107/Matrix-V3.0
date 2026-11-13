@@ -181,7 +181,6 @@ def main() -> None:
 def qualify_published_two_version_upgrade() -> None:
     """Actual published v0.1.0 -> candidate Git+uv/Qt upgrade on disposable Windows."""
     import shutil
-    from datetime import UTC, datetime
 
     from tools.personal_release import TAG_PATTERN
 
@@ -424,9 +423,11 @@ assert ini.value('ci/d4-two-version') == 'preserved'
             valid_backups = [b for b in backups if (b / db_path.name).is_file()]
             assert valid_backups
             restore_copy = base / "restored-copy.sqlite"
-            with closing(sqlite3.connect(valid_backups[-1] / db_path.name)) as source:
-                with closing(sqlite3.connect(restore_copy)) as dest:
-                    source.backup(dest)
+            with (
+                closing(sqlite3.connect(valid_backups[-1] / db_path.name)) as source,
+                closing(sqlite3.connect(restore_copy)) as dest,
+            ):
+                source.backup(dest)
             assert semantic(restore_copy) == baseline
             passed("RECOVERY", "SQLite preactivation backup restored into separate synthetic copy")
 
